@@ -37,8 +37,22 @@ def test_render_summary_prompt_keeps_protected_field_requirements():
     assert "地块/作物名" in prompt
     assert "人名" in prompt
     assert "pending action 类型与关键参数" in prompt
-    assert "追加段落" in prompt
-    assert "不要重写" in prompt
+    assert "完整新版会话摘要" in prompt
+    assert "不要只输出追加段落" in prompt
+
+
+def test_render_summary_prompt_requires_full_replacement_summary():
+    from app.memory.summarizer import render_summary_prompt
+
+    prompt = render_summary_prompt(
+        current_summary="旧摘要：西棚预算 250 元。",
+        recent_messages=[HumanMessage(content="不对，预算是 200 元。")],
+        persona=None,
+    )
+
+    assert "生成一份完整新版会话摘要" in prompt
+    assert "不要只输出追加段落" in prompt
+    assert "以新增消息中的最后一次更正为准" in prompt
 
 
 def test_render_summary_prompt_uses_registry_template(monkeypatch):

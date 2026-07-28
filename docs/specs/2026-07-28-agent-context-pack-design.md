@@ -373,7 +373,7 @@ pending_action / task_state 的安全摘要
 ```text
 默认保留最近 8 条消息，最多 12 条。
 如果 summary 为空，可保留最近 12 条。
-如果 summary 存在，优先保留 summarized_until_message_id 之后的新消息，再补最近窗口。
+如果 summary 存在且有 summarized_until_message_id，只保留该边界之后的新消息，不回填已被 summary 覆盖的旧消息。
 当前用户消息如果已在 DB 中，构建 LLM messages 时去重，避免重复出现。
 ```
 

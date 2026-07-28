@@ -25,8 +25,10 @@ Context 工程的目标是：**按当前意图、工具依赖和安全边界，�
 | Task Context | `agent_task_states` 保存同 farm/user/session 最近一个 active 或 waiting_user 任务，`active_task_state` 进入 Task 分区 | 已落地 |
 | TaskState 写入闭环 | `task_state_updater.update_task_state_after_turn()` 在聊天轮次结束后保守更新任务状态，pending 确认链路会跳过 | 已落地 |
 | 显式长期记忆 | 用户明确说“记住/以后默认/帮我记一下”时写入 MySQL `memory_records` confirmed 记忆，下一轮经 `long_term_memory` block 注入 | 已落地 |
-| 会话摘要 | `conversations.summary` / `summary_updated_at` 承载 running summary；`ConversationSelector` 可注入 `conversation_summary` | 已落地 |
+| 会话摘要与压缩边界 | `conversations.summary` / `summary_updated_at` 承载完整新版 running summary；`conversations.meta_json.context_cursor` 记录摘要覆盖边界 | 已落地 |
+| ContextPack | `ContextPackService` 从持久化 conversation/messages 构建唯一会话上下文包，输出 `conversation_summary`、`recent_messages` 和诊断信息 | 已落地 |
 | Trace 摘要证据链 | `build_context_trace_payload()` 生成安全摘要，ContextBuilder 通过 TraceCollector 写 Mongo，失败静默降级 | 已落地 |
+| LLM Context 可观测 | `final_llm_context` trace 记录最终送入 LLM 的 system prompt、messages、runtime context 和 `context_pack` 诊断；admin-web Playground 可视化展示 | 已落地 |
 | 预算与压缩 | `TokenBudget` 按 priority、required、compressible 做预算裁剪；文本压缩仍是截断式压缩 | 已落地，压缩能力有限 |
 | 旧 `RetrievalSelector` | 仅消费调用方传入的 `results`，用于兼容语义检索 block；外部 RAG 主路径由 `KnowledgeSelector` 承担 | 兼容保留 |
 
@@ -40,7 +42,7 @@ Farm Manager 当前把上下文按用途分为六类，渲染时再映射到五�
 | Task Context | `pending_action`、`active_task_state`、`pending_action_pointer`、`pending_plan_pointer`、`temporary_task_state` | `[Task]` | 当前轮必须优先遵守的任务状态、确认链路和待补充信息。 |
 | Evidence / Knowledge Context | `rag_knowledge`、`retrieval`、`tool_result_summary` | `[Evidence]` | 外部 QuillRAG 只读知识、工具结果摘要或其他证据；用于回答依据，不承载系统相信的业务状态。 |
 | Business Context | `farm`、`cycle`、`weather`、`ledger`、`planting_units`、`operation_work_orders`、`workers`、`unpaid_labor`、`cost_categories` | `[Context]` | MySQL 中当前系统相信的业务事实。 |
-| Memory Context | `short_term_recent`、`short_term_summary`、`conversation`、`conversation_summary`、`long_term_memory` | `[Context]` | 最近对话、会话摘要和 confirmed 长期记忆。长期记忆不进入 Evidence，不触发 RAG。 |
+| Memory Context | `conversation_summary`、`recent_messages`、`pending_action`、`temporary_task_state`、`long_term_memory`；兼容期仍保留 `short_term_recent`、`short_term_summary`、`conversation` | `[Context]` / `[Task]` | 主聊天链路以 ContextPack 的唯一会话摘要和最近原文为准；pending 状态进入 Task；长期记忆不进入 Evidence，不触发 RAG。 |
 | Output Contract | `output_contract`、`citation_rule`、`clarification_rule` | `[Output]` | 输出格式、澄清策略、引用规则等对最终回复的约束。 |
 
 当前代码中的 `ContextRenderer.KEY_TO_SECTION` 是分区映射的事实来源。未知 block key 会 fallback 到 `[Context]`，避免因为新增 selector 未登记而丢失上下文。
@@ -61,9 +63,10 @@ ContextPolicy.resolve()
   - 计算 max_tokens 和 dependency_map
         ↓
 ContextBuilder.build_runtime_context_bundle()
+  - 可接收 ContextPack
         ↓
 Selectors
-  - 业务事实、会话摘要、TaskState、Memory、外部 RAG 等
+  - 业务事实、ContextPack 会话上下文、TaskState、Memory、外部 RAG 等
         ↓
 Allowlist + TokenBudget
   - 过滤未允许 key
@@ -125,6 +128,24 @@ class ContextBundle:
 
 当前 prompt 文本以 Markdown section heading 渲染，trace/debug summary 只输出 section、block key、source、token_estimate、required、is_compressed、purpose、reason 等摘要字段，不保存完整正文。
 
+### 4.4 ContextPack
+
+`ContextPack` 是会话历史进入主链路的稳定结构，目的是避免同一轮 prompt 同时出现 `conversation`、`short_term_recent`、`short_term_summary` 和 `conversation_summary` 多套历史来源。
+
+当前结构包括：
+
+- `conversation_id` / `session_id` / `farm_id` / `user_id`：会话身份。
+- `summary`：来自 `conversations.summary` 的完整新版 running summary，携带 `summary_version` 和摘要覆盖边界。
+- `recent_messages`：来自持久化 `conversation_messages` 的最近原文窗口。
+- `diagnostics`：`recent_message_ids`、`summary_version`、`summary_hash`、`token_estimate`、selected/compressed/dropped blocks 和压缩原因。
+
+当前选择规则：
+
+- 没有 summary 时，保留最多 12 条最近原文。
+- 有 summary 且有 `summarized_until_message_id` 时，只保留该边界之后的新消息，不回填已被 summary 覆盖的旧消息。
+- 当前用户消息如果已经写入 DB，Advisor history 构建时会去重，避免同一条用户输入重复出现在最终 messages。
+- `ContextPack.to_context_blocks()` 输出 `conversation_summary` 和 `recent_messages`，供 `ContextBuilder` 预算和渲染。
+
 ## 5. Selector 与触发策略
 
 | Selector | 数据来源 | 典型 block | 触发条件 |
@@ -133,8 +154,8 @@ class ContextBundle:
 | `UserSettingsSelector` | MySQL 用户设置 | `user_settings` | base selector，总是尝试 |
 | `CycleSelector` | MySQL 种植周期 | `cycle` | base selector；作物/农事工具依赖也会要求 |
 | `TaskStateSelector` | MySQL `agent_task_states` | `active_task_state` | base selector；同 farm/user/session 有 active 或 waiting_user 状态时注入 |
-| `MemorySelector` | MemoryService / conversation summary / long-term store | `short_term_recent`、`short_term_summary`、`conversation_summary`、`long_term_memory` | base selector；有内容才注入 |
-| `ConversationSelector` | MySQL conversation messages / summary | `conversation`、`conversation_summary` | base selector；当前 session 有历史时注入 |
+| `MemorySelector` | ContextPack / MemoryService / long-term store | `conversation_summary`、`recent_messages`、`pending_action`、`temporary_task_state`、`long_term_memory`；兼容期可输出 `short_term_recent`、`short_term_summary` | base selector；有 `context_pack` 时优先使用 ContextPack 并跳过旧短时对话块 |
+| `ConversationSelector` | MySQL conversation messages / summary | `conversation`、`conversation_summary` | 兼容 selector；有 `context_pack` 时让位，避免与 ContextPack 重复注入 |
 | `LedgerSelector` | MySQL 账务 | `ledger` | 记账、查账、人工、成本分类等工具依赖触发 |
 | `WeatherSelector` | 天气缓存/天气服务结果 | `weather` | 天气工具或天气相关依赖触发 |
 | `PlantingUnitSelector` | MySQL 种植单元 | `planting_units` | 种植单元、工单等工具依赖触发 |
@@ -169,7 +190,7 @@ class ContextBundle:
 
 | 存储 | 保存内容 | 是否参与主问答决策 | 边界 |
 | --- | --- | --- | --- |
-| MySQL | 业务事实、Farm/Cycle/Ledger/Worker/WorkOrder 等业务表、`agent_task_states`、`memory_records` confirmed 长期记忆、`conversations.summary` 会话摘要 | 是 | 系统相信的当前状态以 MySQL 为准；写入必须走对应 store/service，不从 trace 或 RAG 反写。 |
+| MySQL | 业务事实、Farm/Cycle/Ledger/Worker/WorkOrder 等业务表、`agent_task_states`、`memory_records` confirmed 长期记忆、`conversations.summary` 会话摘要、`conversations.meta_json.context_cursor` 摘要边界 | 是 | 系统相信的当前状态以 MySQL 为准；写入必须走对应 store/service，不从 trace 或 RAG 反写。 |
 | Mongo | context/rag/tool trace 摘要证据链 | 否 | 只用于调试、回放和质量定位；不作为 prompt 输入、工具输入或状态恢复来源。 |
 | RAG | 外部知识语义召回结果 | 只读证据 | Farm Manager 只调用 retrieve，不做普通问答 ingest，不保存 embedding key，不把未确认记忆同步到 RAG。 |
 
@@ -180,7 +201,7 @@ MySQL 承载 Farm Manager 当前相信的状态：
 - 业务事实：农场、茬口、账务、工人、工单、成本分类、用户设置等。
 - Task Context：`agent_task_states` 保存每个 farm/user/session 最近一个未过期 active 或 waiting_user 任务状态。
 - Memory Context：`memory_records` 保存用户显式确认的长期记忆；当前只写 confirmed，读取时按 farm/user 隔离。
-- 会话摘要：`conversations.summary` 与 `summary_updated_at` 保存 running summary。
+- 会话摘要：`conversations.summary` 与 `summary_updated_at` 保存完整新版 running summary；`conversations.meta_json.context_cursor` 保存摘要覆盖边界。
 
 ### 6.2 Mongo
 
@@ -243,13 +264,20 @@ Task Context 解决“多轮任务在同一 session 内可恢复”的问题。
 
 ## 9. Memory Context 生命周期
 
-Memory Context 分为短时、会话摘要和显式长期记忆。
+Memory Context 分为会话压缩包、结构化短时状态和显式长期记忆。
 
-短时与摘要：
+会话摘要与最近原文：
 
-- `short_term_recent` 来自 MemoryService 的最近消息窗口。
-- `short_term_summary` / `conversation_summary` 来自会话摘要。
-- 会话摘要写入 `conversations.summary`，并可同步到短时 memory store。
+- 主聊天链路通过 `ContextPackService` 读取 `conversations.summary`、`context_cursor` 和持久化 `conversation_messages`。
+- `conversation_summary` 来自 `conversations.summary`，摘要 prompt 输出完整新版摘要，`maybe_summarize()` 覆盖写入。
+- `recent_messages` 来自 `conversation_messages`；有 cursor 时只保留 `summarized_until_message_id` 之后的新消息。
+- `maybe_summarize()` 成功后同步更新 `context_cursor`，失败、输出为空或乐观锁冲突时保留旧 summary 和旧 cursor。
+- `short_term_recent` 和 `short_term_summary` 作为兼容路径保留；当 `MemorySelector` 收到 `context_pack` 时不再注入这两个 block。
+
+结构化短时状态：
+
+- `pending_action` 和 `temporary_task_state` 不依赖自然语言 summary 恢复，仍由 `MemorySelector` 以结构化 block 注入。
+- pending action / pending plan 优先级高于会话摘要和最近原文。
 
 显式长期记忆：
 
@@ -279,6 +307,16 @@ Memory Context 分为短时、会话摘要和显式长期记忆。
 - section 摘要：分区名、token 估算、block key/source/purpose/required/compressed/reason。
 - 每个 block 的短 preview，经过截断和敏感信息脱敏。
 - RAG 摘要：collection、requested/actual mode、warning、source_count、top_score、前 5 条安全 source metadata。
+- ContextPack 诊断：`summary_version`、`summary_hash`、`recent_message_ids`、`selected_blocks`、`compressed_blocks`、`dropped_blocks`。
+- `final_llm_context` 快照：最终送入 LLM 的 system prompt 预览、runtime context sections、messages、budget/compression 摘要和 `runtime_context.context_pack`。
+
+admin-web Playground 的 LLM Context 可观测面板会展示：
+
+- Context Blocks：最终被选中并注入模型的上下文 block。
+- ContextPack：summary 版本、hash、token、recent message ids、selected/compressed/dropped。
+- Runtime Context：system prompt 中的分区和 block 内容预览。
+- Messages：最终送入 LLM 的消息序列、tool message 元数据和压缩状态。
+- 原始快照 JSON：完整 trace payload，默认折叠。
 
 禁止保存：
 
@@ -306,10 +344,11 @@ Trace 写入失败不能影响主链路。Mongo trace 只能服务调试、质�
 
 ### 11.3 兼容入口
 
-`RetrievalSelector` 和 `ContextBuilder.build_farm_runtime_context()` 属于兼容入口：
+`RetrievalSelector`、`ConversationSelector`、`short_term_recent`、`short_term_summary` 和 `ContextBuilder.build_farm_runtime_context()` 属于兼容入口：
 
 - `RetrievalSelector` 只把调用方已提供的 `results` 转成 `retrieval` block。
 - 外部 RAG 主入口是 `KnowledgeSelector` / `RAGKnowledgeProvider`。
+- `ConversationSelector`、`short_term_recent`、`short_term_summary` 是会话历史兼容路径；主聊天链路有 `context_pack` 时不能再注入这些重复历史 block。
 - `build_farm_runtime_context()` 仍返回旧 runtime 需要的 farm context 字典形状，不能作为新 Context 架构的扩展点。
 
 ## 12. 边界与禁止
@@ -317,6 +356,8 @@ Trace 写入失败不能影响主链路。Mongo trace 只能服务调试、质�
 - Runtime 不能直接调用 selector，只能消费 `ContextBundle` 或 `ContextRenderer` 渲染结果。
 - Selector 不能调用 LLM、Prompt Composer 或 Runtime 节点。
 - Context 层不直接修改 Memory/Task/业务状态；写入必须走对应 service/store/updater。
+- 同一轮最终 prompt 中，会话历史只能保留 `conversation_summary + recent_messages` 一套主入口；不能同时注入 `conversation`、`short_term_recent`、`short_term_summary`。
+- 有 `summarized_until_message_id` 时，最近原文不能回填已被 summary 覆盖的旧消息。
 - 普通问答不调用 RAG ingest；Farm Manager 当前不调用 QuillRAG `/ingest`。
 - 未确认 memory candidate 不进入 RAG；当前长期记忆第一版只写用户显式 confirmed 记忆。
 - Trace 不保存完整 prompt、完整 context、RAG 原文、请求头或任何密钥。
@@ -329,25 +370,28 @@ Trace 写入失败不能影响主链路。Mongo trace 只能服务调试、质�
 
 实现入口：
 
-- [context/engine.py](../../../backend/app/context/engine.py)
-- [context/contracts.py](../../../backend/app/context/contracts.py)
-- [context/planner.py](../../../backend/app/context/planner.py)
-- [context/render.py](../../../backend/app/context/render.py)
-- [context/legacy.py](../../../backend/app/context/legacy.py)
-- [context/builder.py](../../../backend/app/context/builder.py)：旧 API 兼容门面，委托 `ContextEngine`
-- [context/models.py](../../../backend/app/context/models.py)
-- [context/policy.py](../../../backend/app/context/policy.py)
-- [context/registry.py](../../../backend/app/context/registry.py)
-- [context/compression.py](../../../backend/app/context/compression.py)
-- [context/trace.py](../../../backend/app/context/trace.py)
-- [context/providers/rag.py](../../../backend/app/context/providers/rag.py)
-- [context/sources/](../../../backend/app/context/sources/)
+- [context/builder.py](../../../backend/app/context/builder.py)：Context 构建唯一入口。
+- [context/pack.py](../../../backend/app/context/pack.py)：ContextPack 数据结构与 `ContextPackService`。
+- [context/core/models.py](../../../backend/app/context/core/models.py)：`ContextBlock` / `ContextBundle`。
+- [context/core/policy.py](../../../backend/app/context/core/policy.py)：`ContextPolicy` / `ContextBuildRequest`。
+- [context/core/registry.py](../../../backend/app/context/core/registry.py)：block registry、allowlist 和分区元数据。
+- [context/runtime.py](../../../backend/app/context/runtime.py)：trace payload、缓存、预加载和兼容模块导出。
+- [context/pipeline.py](../../../backend/app/context/pipeline.py)：预算、渲染、压缩和安全 trace 工具。
+- [context/sources.py](../../../backend/app/context/sources.py)：selector 分组、默认顺序和 dependency 映射。
+- [context/knowledge.py](../../../backend/app/context/knowledge.py)：外部 RAG provider。
 - [context/selectors/knowledge.py](../../../backend/app/context/selectors/knowledge.py)
 - [context/selectors/task_state.py](../../../backend/app/context/selectors/task_state.py)
 - [context/selectors/memory.py](../../../backend/app/context/selectors/memory.py)
+- [context/selectors/core.py](../../../backend/app/context/selectors/core.py)
+- [agent/runtime/llm_support.py](../../../backend/app/agent/runtime/llm_support.py)：Runtime 自动构建 ContextPack 并传给 ContextBuilder。
+- [agent/runtime/node_helpers.py](../../../backend/app/agent/runtime/node_helpers.py)：`final_llm_context` trace。
+- [application/advice/advisor.py](../../../backend/app/application/advice/advisor.py)：Advisor history 优先消费 ContextPack recent messages。
 - [application/chat/task_state_updater.py](../../../backend/app/application/chat/task_state_updater.py)
 - [memory/explicit.py](../../../backend/app/memory/explicit.py)
 - [memory/long_term/store.py](../../../backend/app/memory/long_term/store.py)
+- [memory/service.py](../../../backend/app/memory/service.py)：summary 生成、cursor 更新和增量压缩。
+- [memory/prompts/summary.md](../../../backend/app/memory/prompts/summary.md)：完整新版摘要 prompt。
+- [admin-web Playground LLM Context 可观测](../../../admin-web/src/pages/Playground/LlmContextVisualView.tsx)
 
 相关 specs：
 
@@ -357,6 +401,7 @@ Trace 写入失败不能影响主链路。Mongo trace 只能服务调试、质�
 - [Agent Context 显式长期记忆最小版](../../specs/2026-07-22-agent-context-explicit-long-term-memory.md)
 - [Agent Context Trace 摘要证据链](../../specs/2026-07-22-agent-context-trace-payload.md)
 - [Agent Context Engine 与 LLM Context 可观测设计](../../specs/2026-07-26-agent-context-engine-and-observability-design.md)
+- [Agent ContextPack 设计](../../specs/2026-07-28-agent-context-pack-design.md)
 - [01_Agent平台架构](./01_Agent平台架构.md)
 - [04_Memory工程](./04_Memory工程.md)
 - [05_Prompt工程](./05_Prompt工程.md)

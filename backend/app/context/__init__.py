@@ -19,6 +19,13 @@ from app.context.core.policy import (
     ContextPolicy,
     ContextPolicyResult,
 )
+from app.context.pack import (
+    ContextPack,
+    ContextPackDiagnostics,
+    ContextPackService,
+    ConversationSummaryBlock,
+    MessageSnapshot,
+)
 from app.context.pipeline import ContextRenderer
 
 __all__ = [
@@ -28,10 +35,15 @@ __all__ = [
     "ContextBundle",
     "ContextDocument",
     "ContextLayer",
+    "ContextPack",
+    "ContextPackDiagnostics",
+    "ContextPackService",
     "ContextPolicy",
     "ContextPolicyResult",
     "ContextRenderer",
     "ContextSection",
+    "ConversationSummaryBlock",
+    "MessageSnapshot",
     "TokenBudget",
     "default_context_selectors",
     "estimate_tokens",

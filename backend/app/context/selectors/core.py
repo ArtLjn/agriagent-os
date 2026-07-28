@@ -7,6 +7,7 @@ from sqlalchemy import extract, func
 from sqlalchemy.orm import Session
 
 from app.context.core.models import ContextBlock
+from app.context.pack import ContextPack
 from app.infra.repository_runtime import (
     get_conversation_message_repository,
     run_maybe_awaitable,
@@ -35,8 +36,11 @@ class ConversationSelector:
         farm_id: int | None = None,
         session_id: str | None = None,
         messages: list[str] | None = None,
+        context_pack: ContextPack | None = None,
         **_kwargs,
     ) -> list[ContextBlock]:
+        if context_pack is not None:
+            return []
         lines = messages or []
         summary = None
         if not lines and db is not None and farm_id is not None:

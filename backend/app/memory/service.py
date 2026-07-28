@@ -1,5 +1,6 @@
 """Memory Service in-memory 骨架。"""
 
+import hashlib
 import logging
 from collections.abc import Callable
 from datetime import datetime, timedelta
@@ -30,6 +31,7 @@ from app.observability import increment_counter
 
 TraceRecorder = Callable[..., None]
 logger = logging.getLogger(__name__)
+CONTEXT_CURSOR_KEY = "context_cursor"
 
 
 class EmptyLongTermMemoryStore:
@@ -188,6 +190,7 @@ class InMemoryMemoryService:
                 farm_id=farm_id,
                 session_id=conversation.session_id,
                 fallback_messages=messages,
+                after_message_id=_cursor_message_id(conversation),
             )
             message_count = len(summary_messages)
             if message_count < settings.ai.session_summary_message_threshold:
@@ -242,11 +245,17 @@ class InMemoryMemoryService:
                 )
                 return
 
+            next_cursor = _build_next_cursor(
+                previous_cursor=_summary_cursor(conversation),
+                latest_message=summary_messages[-1] if summary_messages else None,
+                summary=summary,
+            )
             if not _update_summary_if_version_matches(
                 db=db,
                 conversation_id=conversation_id,
                 previous_updated_at=original_summary_updated_at,
                 summary=summary,
+                cursor=next_cursor,
             ):
                 _log_summary_event(
                     "会话摘要写入跳过",
@@ -413,12 +422,62 @@ def _as_aware_utc(value: datetime) -> datetime:
     return value.astimezone(UTC)
 
 
+def _summary_hash(summary: str) -> str:
+    return "sha256:" + hashlib.sha256(summary.encode("utf-8")).hexdigest()
+
+
+def _conversation_meta(conversation: Conversation) -> dict[str, Any]:
+    return dict(conversation.meta_json or {})
+
+
+def _summary_cursor(conversation: Conversation) -> dict[str, Any]:
+    cursor = _conversation_meta(conversation).get(CONTEXT_CURSOR_KEY)
+    return dict(cursor) if isinstance(cursor, dict) else {}
+
+
+def _cursor_message_id(conversation: Conversation) -> int | None:
+    value = _summary_cursor(conversation).get("summarized_until_message_id")
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _iso_datetime(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return _as_aware_utc(value).isoformat()
+    return str(value)
+
+
+def _build_next_cursor(
+    *,
+    previous_cursor: dict[str, Any],
+    latest_message: Any | None,
+    summary: str,
+) -> dict[str, Any]:
+    previous_version = int(previous_cursor.get("summary_version") or 0)
+    return {
+        "summary_version": previous_version + 1,
+        "summarized_until_message_id": getattr(latest_message, "id", None),
+        "summarized_until_created_at": _iso_datetime(
+            getattr(latest_message, "created_at", None)
+        ),
+        "summary_hash": _summary_hash(summary),
+        "updated_at": datetime.now(UTC).isoformat(),
+    }
+
+
 async def _load_summary_messages(
     *,
     db,
     farm_id: int,
     session_id: str,
     fallback_messages: list[Any] | None,
+    after_message_id: int | None = None,
 ) -> list[Any]:
     stored_messages = await resolve_maybe_awaitable(
         get_conversation_message_repository(db).list_by_session(
@@ -426,7 +485,23 @@ async def _load_summary_messages(
             session_id=session_id,
         )
     )
-    return stored_messages or list(fallback_messages or [])
+    if stored_messages:
+        return _messages_after_cursor(stored_messages, after_message_id)
+    return list(fallback_messages or [])
+
+
+def _messages_after_cursor(
+    messages: list[Any],
+    after_message_id: int | None,
+) -> list[Any]:
+    if after_message_id is None:
+        return list(messages)
+    filtered = []
+    for message in messages:
+        message_id = getattr(message, "id", None)
+        if message_id is None or int(message_id) > after_message_id:
+            filtered.append(message)
+    return filtered
 
 
 def _update_summary_if_version_matches(
@@ -435,15 +510,21 @@ def _update_summary_if_version_matches(
     conversation_id: int,
     previous_updated_at: datetime | None,
     summary: str,
+    cursor: dict[str, Any],
 ) -> bool:
     now = datetime.now(UTC)
+    conversation = db.get(Conversation, conversation_id)
+    if conversation is None:
+        return False
+    meta_json = _conversation_meta(conversation)
+    meta_json[CONTEXT_CURSOR_KEY] = cursor
     stmt = update(Conversation).where(Conversation.id == conversation_id)
     if previous_updated_at is None:
         stmt = stmt.where(Conversation.summary_updated_at.is_(None))
     else:
         stmt = stmt.where(Conversation.summary_updated_at == previous_updated_at)
     result = db.execute(
-        stmt.values(summary=summary, summary_updated_at=now),
+        stmt.values(summary=summary, summary_updated_at=now, meta_json=meta_json),
         execution_options={"synchronize_session": False},
     )
     if result.rowcount != 1:

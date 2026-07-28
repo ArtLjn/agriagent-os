@@ -77,6 +77,52 @@ def test_context_trace_payload_keeps_only_safe_block_preview() -> None:
     assert payload["allowlist_filtered_keys"] == ["weather_snapshot"]
 
 
+def test_context_trace_payload_includes_context_pack_diagnostics() -> None:
+    bundle = ContextBundle(
+        blocks=[
+            ContextBlock(
+                key="conversation_summary",
+                source="context_pack.conversation",
+                purpose="会话摘要",
+                content="摘要正文 password=secret",
+                priority=65,
+            ),
+            ContextBlock(
+                key="recent_messages",
+                source="context_pack.conversation",
+                purpose="最近对话",
+                content="#12 user: 新消息",
+                priority=70,
+            ),
+        ],
+        token_budget=300,
+        token_estimate=80,
+        metadata={
+            "context_pack": {
+                "recent_message_ids": [12],
+                "summary_version": 4,
+                "summary_hash": "sha256:abc",
+                "token_estimate": 80,
+                "selected_blocks": ["conversation_summary", "recent_messages"],
+                "compressed_blocks": [],
+                "dropped_blocks": [],
+                "compaction_reason": "password=secret",
+            }
+        },
+    )
+
+    payload = build_context_trace_payload(bundle)
+
+    assert payload["context_pack"]["summary_version"] == 4
+    assert payload["context_pack"]["recent_message_ids"] == [12]
+    assert payload["context_pack"]["summary_hash"] == "sha256:abc"
+    assert payload["context_pack"]["selected_blocks"] == [
+        "conversation_summary",
+        "recent_messages",
+    ]
+    assert payload["context_pack"]["compaction_reason"] == "password=[REDACTED]"
+
+
 def test_context_trace_payload_preserves_rag_diagnostics_without_raw_chunks() -> None:
     raw_chunk = "黄瓜霜霉病原始 chunk 全文不应保存。" * 30
     bundle = ContextBundle(
