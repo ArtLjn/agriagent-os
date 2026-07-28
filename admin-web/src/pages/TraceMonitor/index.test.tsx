@@ -372,12 +372,9 @@ describe('TraceMonitor query 初始化', () => {
     expect(screen.getByText('Blocks')).toBeInTheDocument();
     expect(screen.getByText('农场：管理员农场；位置：苏州市')).toBeInTheDocument();
 
-    const inputRaw = screen.getByText('查看原始输入 JSON').closest('details');
-    const outputRaw = screen.getByText('查看原始输出 JSON').closest('details');
-    expect(inputRaw).not.toBeNull();
-    expect(outputRaw).not.toBeNull();
-    expect(inputRaw).not.toHaveAttribute('open');
-    expect(outputRaw).not.toHaveAttribute('open');
+    const raw = screen.getByText('查看完整节点 JSON').closest('details');
+    expect(raw).not.toBeNull();
+    expect(raw).not.toHaveAttribute('open');
   });
 
   it('双层编码的 context 输出会自动格式化为摘要', async () => {
@@ -452,7 +449,7 @@ describe('TraceMonitor query 初始化', () => {
     expect(screen.getByText('Blocks')).toBeInTheDocument();
     expect(screen.getByText('农场：管理员农场；位置：苏州市')).toBeInTheDocument();
 
-    const outputRaw = screen.getByText('查看原始输出 JSON').closest('details');
+    const outputRaw = screen.getByText('查看完整节点 JSON').closest('details');
     expect(outputRaw).not.toBeNull();
     expect(outputRaw).not.toHaveAttribute('open');
     expect(within(outputRaw!).getByRole('button', { name: /复制 JSON/ })).toBeInTheDocument();
@@ -582,15 +579,108 @@ describe('TraceMonitor query 初始化', () => {
     expect(screen.getByText('已选择候选')).toBeInTheDocument();
     expect(screen.getByText('计划草案')).toBeInTheDocument();
     expect(screen.getByText('query_cost_summary')).toBeInTheDocument();
-    expect(screen.getByText('这个月花了多少钱')).toBeInTheDocument();
+    expect(screen.getAllByText('这个月花了多少钱').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('manage_cost').length).toBeGreaterThan(1);
     expect(screen.getAllByText('query_summary').length).toBeGreaterThan(1);
     expect(screen.getByText('cost_records')).toBeInTheDocument();
 
-    const raw = screen.getByText('查看原始输出 JSON').closest('details');
+    const raw = screen.getByText('查看完整节点 JSON').closest('details');
     expect(raw).not.toBeNull();
     expect(raw).not.toHaveAttribute('open');
     expect(within(raw!).getByRole('button', { name: /复制 JSON/ })).toBeInTheDocument();
+  });
+
+  it('新版 skill_router trace 展示召回路径、候选解释和完整节点 JSON', async () => {
+    mockedGetTimeline.mockResolvedValueOnce({
+      request_id: 'req-1',
+      rounds: [
+        {
+          round_index: 1,
+          nodes: [
+            {
+              node_type: 'skill_router',
+              node_name: 'skill_router',
+              duration_ms: 22,
+              status: 'success',
+              token_usage: null,
+              start_time: '2026-07-28T10:00:00+08:00',
+              error_message: null,
+              input_data: { message: '查一下成本' },
+              output_data: {
+                schema_version: 2,
+                summary: {
+                  selection_path: 'hybrid_retrieval',
+                  selection_reason: '按混合召回候选选择工具',
+                  selected_routes: ['manage_cost.query_summary'],
+                  candidate_count: 13,
+                },
+                selected: {
+                  tools: ['manage_cost'],
+                  operations: { manage_cost: ['query_summary'] },
+                  tool_choice: 'auto',
+                },
+                recall: {
+                  status: 'used',
+                  path: 'bm25_vector_hybrid',
+                  retrieval_engine: 'hybrid_operation_retriever',
+                  strategy: 'bm25 + quillrag_vector',
+                  rag_service_used: true,
+                  external_embedding_requested: true,
+                  embedding_location: 'quillrag_service',
+                  vector_status: 'success',
+                  vector_scored_count: 5,
+                  scoring_formula: '0.35*bm25 + 0.35*vector',
+                },
+                candidate_explanations: [
+                  {
+                    route: 'manage_cost.query_summary',
+                    skill: 'manage_cost',
+                    operation: 'query_summary',
+                    risk: 'read',
+                    selected: true,
+                    why_selected: '混合召回候选排名靠前并被 policy 选中',
+                    scores: {
+                      final: 0.82,
+                      bm25: 0.71,
+                      vector: 0.88,
+                    },
+                  },
+                ],
+                plan: {
+                  route_type: 'read_plan',
+                  steps: [
+                    {
+                      step_id: 'query_cost',
+                      skill_name: 'manage_cost',
+                      operation: 'query_summary',
+                      risk: 'read',
+                    },
+                  ],
+                  validation: { status: 'valid' },
+                },
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/dev/traces?request_id=req-1']}>
+        <TraceMonitor />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: '打开节点 skill_router' }));
+
+    expect(await screen.findByText('召回路径')).toBeInTheDocument();
+    expect(screen.getByText('hybrid_operation_retriever')).toBeInTheDocument();
+    expect(screen.getAllByText(/quillrag_service/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/0\.35\*bm25/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('manage_cost.query_summary').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('混合召回候选排名靠前并被 policy 选中')).toBeInTheDocument();
+    expect(screen.getByText('候选评分')).toBeInTheDocument();
+    expect(screen.getByText('查看完整节点 JSON').closest('details')).not.toHaveAttribute('open');
   });
 
   it('普通非 context trace 仍按原始输出展示', async () => {

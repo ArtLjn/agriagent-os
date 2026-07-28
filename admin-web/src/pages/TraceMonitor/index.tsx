@@ -29,7 +29,6 @@ import { useLocation } from 'react-router-dom';
 import GanttTimeline from '../../components/GanttTimeline';
 import type { GanttNode } from '../../components/GanttTimeline/types';
 import { getNodeLabel } from '../../constants/trace';
-import SkillOutputFormatter from '../../components/SkillOutputFormatter';
 import {
   formatTracePayload,
   hasTracePayload,
@@ -273,6 +272,12 @@ function isRouterTracePayload(value: unknown): boolean {
   if (!record) return false;
   const planDraft = asRecord(record.plan_draft);
   return Boolean(
+    record.schema_version === 2 ||
+    record.summary ||
+    record.selected ||
+    record.recall ||
+    record.candidate_explanations ||
+    record.plan ||
     record.frames ||
     record.selected_tools ||
     record.selected_operations ||
@@ -285,7 +290,13 @@ function isRouterTracePayload(value: unknown): boolean {
   );
 }
 
-function ContextTraceSummary({ outputData }: { outputData: unknown }) {
+function ContextTraceSummary({
+  outputData,
+  showRaw = true,
+}: {
+  outputData: unknown;
+  showRaw?: boolean;
+}) {
   const payload = payloadRecord(outputData);
   if (!payload) {
     return <RawTraceDetails label="查看原始输出" value={outputData} />;
@@ -328,7 +339,7 @@ function ContextTraceSummary({ outputData }: { outputData: unknown }) {
         </section>
       )}
 
-      <RawTraceDetails label="查看原始输出 JSON" value={payload} />
+      {showRaw && <RawTraceDetails label="查看原始输出 JSON" value={payload} />}
     </Space>
   );
 }
@@ -354,25 +365,48 @@ function ContextInputSummary({ inputData }: { inputData: unknown }) {
   );
 }
 
-function RouterTraceSummary({ outputData }: { outputData: unknown }) {
+function RouterTraceSummary({
+  outputData,
+  showRaw = true,
+}: {
+  outputData: unknown;
+  showRaw?: boolean;
+}) {
   const payload = payloadRecord(outputData);
   if (!payload) {
     return <RawTraceDetails label="查看原始输出 JSON" value={outputData} />;
   }
 
+  const summary = asRecord(payload.summary);
+  const selected = asRecord(payload.selected);
+  const recall = asRecord(payload.recall);
+  const plan = asRecord(payload.plan);
   const planDraft = asRecord(payload.plan_draft);
+  const planPayload = plan ?? planDraft;
   const evidence = asRecord(payload.evidence);
-  const validation = asRecord(planDraft?.validation);
+  const validation = asRecord(planPayload?.validation);
   const frames = asRecordList(payload.frames ?? planDraft?.intent_frames);
-  const steps = asRecordList(planDraft?.steps);
-  const selectedCandidates = asRecordList(evidence?.selected_candidates);
+  const steps = asRecordList(planPayload?.steps);
+  const selectedTools = selected?.tools ?? payload.selected_tools;
+  const selectedOperations = selected?.operations ?? payload.selected_operations;
+  const forceBinding = selected?.force_binding ?? payload.force_binding;
+  const toolChoice = selected?.tool_choice ?? payload.tool_choice;
+  const selectedCandidates = asRecordList(
+    payload.candidate_explanations ?? evidence?.selected_candidates,
+  );
   const rejectedCandidates = [
     ...asRecordList(payload.rejected_candidates),
     ...asRecordList(evidence?.rejected_candidates),
   ];
-  const violations = Array.isArray(payload.policy_violations)
-    ? payload.policy_violations
+  const violations = Array.isArray(summary?.policy_violations)
+    ? summary?.policy_violations
+    : Array.isArray(payload.policy_violations)
+      ? payload.policy_violations
     : [];
+  const fallback = summary?.fallback ?? payload.fallback;
+  const fallbackReason = summary?.fallback_reason ?? payload.fallback_reason;
+  const reason = summary?.selection_reason ?? payload.reason;
+  const selectedRoutes = summary?.selected_routes;
 
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
@@ -380,34 +414,39 @@ function RouterTraceSummary({ outputData }: { outputData: unknown }) {
         <div style={{ ...sectionTitleStyle, justifyContent: 'space-between' }}>
           <span>路由决策</span>
           <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            <Tag color="processing">tool_choice: {displayValue(payload.tool_choice)}</Tag>
-            <Tag color={payload.fallback ? 'warning' : 'success'}>
-              fallback: {displayValue(payload.fallback)}
+            <Tag color="processing">tool_choice: {displayValue(toolChoice)}</Tag>
+            <Tag color={fallback ? 'warning' : 'success'}>
+              fallback: {displayValue(fallback)}
             </Tag>
           </span>
         </div>
         <div style={metricGridStyle}>
-          <Metric label="reason" value={payload.reason} />
-          <Metric label="route_type" value={planDraft?.route_type} />
+          <Metric label="selection_path" value={summary?.selection_path ?? recall?.path} />
+          <Metric label="retrieval_engine" value={recall?.retrieval_engine} />
+          <Metric label="reason" value={reason} />
+          <Metric label="route_type" value={planPayload?.route_type} />
           <Metric label="source" value={planDraft?.source} />
           <Metric label="validation" value={validation?.status} />
           <Metric label="safe_route_type" value={validation?.safe_route_type} />
           <Metric label="clarification" value={payload.clarification} />
         </div>
-        {hasTracePayload(payload.fallback_reason) && (
+        {hasTracePayload(fallbackReason) && (
           <div style={{ ...previewStyle, marginTop: 10 }}>
-            fallback_reason: {displayValue(payload.fallback_reason)}
+            fallback_reason: {displayValue(fallbackReason)}
           </div>
         )}
       </section>
 
+      {recall && <RecallSummary recall={recall} />}
+
       <section style={summaryPanelStyle}>
         <div style={sectionTitleStyle}>命中范围</div>
         <Space direction="vertical" style={{ width: '100%' }} size="small">
-          <PillRow label="selected_tools" value={payload.selected_tools} color="blue" />
-          <OperationMatrix operations={payload.selected_operations} />
+          <PillRow label="selected_routes" value={selectedRoutes} color="blue" />
+          <PillRow label="selected_tools" value={selectedTools} color="blue" />
+          <OperationMatrix operations={selectedOperations} />
           <PillRow label="context_dependencies" value={payload.context_dependencies} color="cyan" />
-          <PillRow label="force_binding" value={payload.force_binding} color="geekblue" />
+          <PillRow label="force_binding" value={forceBinding} color="geekblue" />
           <PillRow label="rejected_tools" value={payload.rejected_tools} color="red" />
           <PillRow label="policy_violations" value={violations} color="volcano" />
         </Space>
@@ -451,8 +490,93 @@ function RouterTraceSummary({ outputData }: { outputData: unknown }) {
         </section>
       )}
 
-      <RawTraceDetails label="查看原始输出 JSON" value={payload} />
+      {showRaw && <RawTraceDetails label="查看原始输出 JSON" value={payload} />}
     </Space>
+  );
+}
+
+function RecallSummary({ recall }: { recall: Record<string, unknown> }) {
+  const status = String(recall.status ?? 'unknown');
+  const ragUsed = Boolean(recall.rag_service_used ?? recall.quillrag_retrieve_used);
+  const embeddingLocation = displayValue(recall.embedding_location);
+  const embeddingUsed =
+    Boolean(recall.external_embedding_requested) ||
+    (embeddingLocation !== '-' && embeddingLocation !== 'none');
+  const localDocEmbeds = recall.local_doc_embedding_calls ?? recall.local_doc_embeds ?? 0;
+  const headline =
+    status === 'used'
+      ? '已执行 BM25 + RAG 混合召回'
+      : '规则或策略已命中，未执行向量召回';
+  const meaning =
+    recall.meaning ??
+    (status === 'used'
+      ? '本轮通过混合检索生成候选 Skill，再交给路由策略选择。'
+      : '本轮直接使用规则分类器结果，RAG 与外部 embedding 均未调用。');
+
+  return (
+    <section style={summaryPanelStyle}>
+      <div style={sectionTitleStyle}>召回路径</div>
+      <div style={recallOverviewStyle}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <Tag color={status === 'used' ? 'success' : 'default'}>{displayValue(status)}</Tag>
+            <span style={{ color: TEXT, fontSize: 16, fontWeight: 700 }}>{headline}</span>
+          </div>
+          <div style={{ color: TEXT_DIM, fontSize: 12, marginTop: 8, lineHeight: 1.6 }}>
+            {displayValue(meaning)}
+          </div>
+        </div>
+        <div style={recallSignalGridStyle}>
+          <RecallSignal label="外部 RAG" value={ragUsed ? '已调用' : '未调用'} active={ragUsed} />
+          <RecallSignal label="Embedding" value={embeddingUsed ? embeddingLocation : '未调用'} active={embeddingUsed} />
+          <RecallSignal label="本地文档向量" value={`${displayValue(localDocEmbeds)} 次`} active={Number(localDocEmbeds) > 0} />
+        </div>
+      </div>
+
+      <div style={recallDetailGridStyle}>
+        <Metric label="path" value={recall.path} />
+        <Metric label="strategy" value={recall.strategy} />
+        <Metric label="skip_reason" value={recall.skip_reason} />
+        <Metric label="vector_status" value={recall.vector_status} />
+        <Metric label="vector_scored_count" value={recall.vector_scored_count} />
+      </div>
+      {hasTracePayload(recall.scoring_formula) && (
+        <div style={formulaStyle}>
+          <span style={{ color: TEXT_DIM }}>评分公式</span>
+          <span style={{ color: ACCENT, fontFamily: 'monospace' }}>
+            {displayValue(recall.scoring_formula)}
+          </span>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function RecallSignal({
+  label,
+  value,
+  active,
+}: {
+  label: string;
+  value: string;
+  active: boolean;
+}) {
+  return (
+    <div style={{
+      ...recallSignalStyle,
+      borderColor: active ? '#1f6feb' : BORDER,
+      background: active ? 'rgba(31, 111, 235, 0.12)' : '#111923',
+    }}>
+      <div style={{ color: TEXT_DIM, fontSize: 11 }}>{label}</div>
+      <div style={{
+        color: active ? ACCENT : TEXT,
+        fontSize: 13,
+        fontWeight: 700,
+        overflowWrap: 'anywhere',
+      }}>
+        {value}
+      </div>
+    </div>
   );
 }
 
@@ -505,6 +629,7 @@ function PlanStepCard({ step, index }: { step: Record<string, unknown>; index: n
       </div>
       <div style={metricGridStyle}>
         <Metric label="skill_name" value={step.skill_name} />
+        <Metric label="operation" value={step.operation} />
         <Metric label="depends_on" value={displayList(step.depends_on)} />
         <Metric label="params" value={step.params} />
       </div>
@@ -529,11 +654,16 @@ function CandidateList({
       <div style={sectionTitleStyle}>{title}</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {candidates.map((candidate, index) => (
-          <div key={`${displayValue(candidate.name)}-${index}`} style={sourceCardStyle}>
+          <div key={`${candidateDisplayName(candidate)}-${index}`} style={sourceCardStyle}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <span style={{ color: ACCENT, fontFamily: 'monospace', fontWeight: 600 }}>
-                {displayValue(candidate.name)}
+                {candidateDisplayName(candidate)}
               </span>
+              {candidate.selected !== undefined && (
+                <Tag color={candidate.selected ? 'success' : 'default'}>
+                  {candidate.selected ? 'selected' : 'candidate'}
+                </Tag>
+              )}
               <Tag color={candidateTagColor(tone)}>{displayValue(candidate.operation)}</Tag>
               <Tag>{displayValue(candidate.domain)}</Tag>
               <Tag color={riskTagColor(candidate.risk)}>{displayValue(candidate.risk)}</Tag>
@@ -547,11 +677,23 @@ function CandidateList({
               <Metric label="capability" value={candidate.capability} />
               <Metric label="legacy_alias" value={candidate.legacy_alias} />
               <Metric label="reason" value={candidate.reason} />
+              <Metric label="why_selected" value={candidate.why_selected} />
             </div>
+            <ScoreMatrix title="候选评分" scores={candidate.scores} compact />
           </div>
         ))}
       </div>
     </section>
+  );
+}
+
+function candidateDisplayName(candidate: Record<string, unknown>): string {
+  return displayValue(
+    candidate.route ??
+    candidate.name ??
+    candidate.skill ??
+    candidate.capability ??
+    '-',
   );
 }
 
@@ -670,9 +812,14 @@ function frameScoreGroups(evidence: Record<string, unknown> | null): Record<stri
 function scoreGroups(scores: unknown): Array<[string, Array<[string, number]>]> {
   const record = asRecord(scores);
   if (!record) return [];
-  return Object.entries(record)
+  const flatEntries = scoreEntries(record);
+  const nestedGroups = Object.entries(record)
     .map(([group, nested]) => [group, scoreEntries(nested)] as [string, Array<[string, number]>])
     .filter(([, entries]) => entries.length > 0);
+  if (flatEntries.length > 0) {
+    return [['score', flatEntries], ...nestedGroups];
+  }
+  return nestedGroups;
 }
 
 function scoreEntries(value: unknown): Array<[string, number]> {
@@ -797,6 +944,338 @@ function Metric({ label, value }: { label: string; value: unknown }) {
       </div>
     </div>
   );
+}
+
+function NodeTraceVisualization({ node }: { node: TraceNodeDetail }) {
+  return (
+    <Space direction="vertical" style={{ width: '100%' }} size="middle">
+      <NodeHeader node={node} />
+      {hasTracePayload(node.input_data) && (
+        <TracePayloadSummary title="输入数据" value={node.input_data} nodeType={node.node_type} mode="input" />
+      )}
+      {hasTracePayload(node.output_data) && (
+        <TracePayloadSummary title="输出数据" value={node.output_data} nodeType={node.node_type} nodeName={node.node_name} mode="output" />
+      )}
+      <RawTraceDetails label="查看完整节点 JSON" value={nodeDetailPayload(node)} />
+    </Space>
+  );
+}
+
+function NodeHeader({ node }: { node: TraceNodeDetail }) {
+  const tokenUsage = payloadRecord(node.token_usage);
+  return (
+    <section style={nodeHeroStyle}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
+            <Tag color={statusTagColor(node.status)}>{node.status}</Tag>
+            <Tag color="processing">{getNodeLabel(node.node_type)}</Tag>
+            <span style={{ color: TEXT, fontSize: 20, fontWeight: 700, lineHeight: 1.2 }}>
+              {node.node_name}
+            </span>
+          </div>
+          <div style={{ color: TEXT_DIM, fontFamily: 'monospace', fontSize: 12 }}>
+            request_id: {node.request_id}
+          </div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ color: ACCENT, fontSize: 22, fontWeight: 700 }}>
+            {node.duration_ms?.toLocaleString() ?? '-'} ms
+          </div>
+          <div style={{ color: TEXT_DIM, fontSize: 12 }}>
+            round {node.round_index}
+          </div>
+        </div>
+      </div>
+      <div style={{ ...metricGridStyle, marginTop: 14 }}>
+        <Metric label="开始时间" value={formatTraceTime(node.start_time)} />
+        <Metric label="结束时间" value={formatTraceTime(node.end_time)} />
+        <Metric label="error_code" value={node.error_code} />
+        <Metric label="recover" value={node.recover} />
+        <Metric label="tokens" value={tokenUsage?.total_tokens ?? tokenUsage?.prompt_tokens} />
+      </div>
+      {node.error_message && (
+        <div style={{ ...previewStyle, marginTop: 12, borderColor: '#7c2d12', background: '#1f130c', color: '#ffb86c' }}>
+          {node.error_message}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function TracePayloadSummary({
+  title,
+  value,
+  nodeType,
+  nodeName,
+  mode,
+}: {
+  title: string;
+  value: unknown;
+  nodeType: string;
+  nodeName?: string;
+  mode: 'input' | 'output';
+}) {
+  const payload = payloadRecord(value);
+  if (!payload) {
+    return (
+      <section style={summaryPanelStyle}>
+        <div style={sectionTitleStyle}>{title}</div>
+        <div style={previewStyle}>{displayValue(value)}</div>
+      </section>
+    );
+  }
+  if (mode === 'input') {
+    if (isContextInputPayload(payload)) return <ContextInputSummary inputData={payload} />;
+    return <GenericPayloadSummary title={title} payload={payload} />;
+  }
+  if (isContextTracePayload(payload)) return <ContextTraceSummary outputData={payload} showRaw={false} />;
+  if (isRouterTracePayload(payload)) return <RouterTraceSummary outputData={payload} showRaw={false} />;
+  if (nodeType === 'llm_call') return <LlmTraceSummary outputData={payload} />;
+  if (nodeType === 'skill_call') return <SkillCallTraceSummary outputData={payload} />;
+  if (nodeType === 'tool_selection') return <ToolSelectionTraceSummary outputData={payload} />;
+  if (nodeType === 'prompt_budget') return <PromptBudgetTraceSummary outputData={payload} nodeName={nodeName} />;
+  if (nodeType === 'prompt_render') return <PromptRenderTraceSummary outputData={payload} />;
+  if (nodeType === 'response') return <ResponseTraceSummary outputData={payload} />;
+  if (nodeType === 'agent_response') return <AgentResponseTraceSummary outputData={payload} />;
+  return <GenericPayloadSummary title={title} payload={payload} />;
+}
+
+function LlmTraceSummary({ outputData }: { outputData: Record<string, unknown> }) {
+  const error = asRecord(outputData.error);
+  const toolCalls = asRecordList(outputData.tool_calls);
+  return (
+    <section style={summaryPanelStyle}>
+      <div style={{ ...sectionTitleStyle, justifyContent: 'space-between' }}>
+        <span>LLM 结果</span>
+        <Tag color={error ? 'error' : outputData.finish_reason === 'tool_calls' ? 'blue' : 'success'}>
+          {displayValue(error?.code ?? outputData.finish_reason)}
+        </Tag>
+      </div>
+      <div style={metricGridStyle}>
+        <Metric label="finish_reason" value={outputData.finish_reason} />
+        <Metric label="reply_len" value={outputData.reply_len} />
+        <Metric label="tool_call_count" value={toolCalls.length} />
+        <Metric label="recover" value={error?.recover} />
+      </div>
+      {hasTracePayload(outputData.reply_preview) && (
+        <div style={{ ...previewStyle, marginTop: 10 }}>{displayValue(outputData.reply_preview)}</div>
+      )}
+      {toolCalls.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+          {toolCalls.map((toolCall, index) => (
+            <div key={`${displayValue(toolCall.id)}-${index}`} style={sourceCardStyle}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <Tag color="blue">{displayValue(toolCall.name)}</Tag>
+                <span style={{ color: TEXT_DIM, fontFamily: 'monospace', fontSize: 12 }}>
+                  {displayValue(toolCall.id)}
+                </span>
+              </div>
+              <Metric label="args_summary" value={toolCall.args_summary} />
+            </div>
+          ))}
+        </div>
+      )}
+      {error && <div style={{ ...previewStyle, marginTop: 10, borderColor: '#7c2d12' }}>{displayValue(error.message)}</div>}
+    </section>
+  );
+}
+
+function SkillCallTraceSummary({ outputData }: { outputData: Record<string, unknown> }) {
+  const error = asRecord(outputData.error);
+  return (
+    <section style={summaryPanelStyle}>
+      <div style={{ ...sectionTitleStyle, justifyContent: 'space-between' }}>
+        <span>Skill 执行结果</span>
+        <Tag color={error ? 'error' : statusTagColor(String(outputData.status ?? 'success'))}>
+          {displayValue(error?.code ?? outputData.status ?? 'success')}
+        </Tag>
+      </div>
+      <div style={metricGridStyle}>
+        <Metric label="permission_level" value={outputData.permission_level} />
+        <Metric label="operation_risk" value={outputData.operation_risk} />
+        <Metric label="legacy_tool_name" value={outputData.legacy_tool_name} />
+        <Metric label="resolved_operation" value={outputData.resolved_operation} />
+        <Metric label="requires_confirmation" value={outputData.requires_confirmation} />
+        <Metric label="recover" value={error?.recover} />
+      </div>
+      {hasTracePayload(outputData.reply_preview) && (
+        <div style={{ ...previewStyle, marginTop: 10 }}>{displayValue(outputData.reply_preview)}</div>
+      )}
+      {error && <div style={{ ...previewStyle, marginTop: 10, borderColor: '#7c2d12' }}>{displayValue(error.message)}</div>}
+    </section>
+  );
+}
+
+function ToolSelectionTraceSummary({ outputData }: { outputData: Record<string, unknown> }) {
+  return (
+    <section style={summaryPanelStyle}>
+      <div style={sectionTitleStyle}>工具绑定策略</div>
+      <div style={metricGridStyle}>
+        <Metric label="tool_choice" value={outputData.tool_choice} />
+        <Metric label="reason" value={outputData.reason} />
+      </div>
+      <div style={{ marginTop: 10 }}>
+        <PillRow label="selected_tools" value={outputData.selected_tools} color="blue" />
+      </div>
+      <div style={{ marginTop: 10 }}>
+        <PillRow label="bind_tools" value={outputData.bind_tools} color="geekblue" />
+      </div>
+      <div style={{ marginTop: 10 }}>
+        <PillRow label="forced_skills" value={outputData.forced_skills} color="volcano" />
+      </div>
+    </section>
+  );
+}
+
+function PromptBudgetTraceSummary({
+  outputData,
+  nodeName,
+}: {
+  outputData: Record<string, unknown>;
+  nodeName?: string;
+}) {
+  const budget = asRecord(outputData.budget) ?? outputData;
+  const messages = asRecordList(outputData.messages);
+  const compression = asRecord(outputData.compression);
+  return (
+    <section style={summaryPanelStyle}>
+      <div style={sectionTitleStyle}>{nodeName === 'final_llm_context' ? '最终 LLM 上下文' : 'Prompt 预算'}</div>
+      <div style={metricGridStyle}>
+        <Metric label="max_tokens" value={budget.max_tokens} />
+        <Metric label="total_tokens" value={budget.total_tokens} />
+        <Metric label="system_tokens" value={budget.system_tokens} />
+        <Metric label="message_tokens" value={budget.message_tokens} />
+        <Metric label="tool_result_tokens" value={budget.tool_result_tokens} />
+        <Metric label="over_budget" value={budget.over_budget} />
+      </div>
+      <div style={{ marginTop: 10 }}>
+        <PillRow label="context_blocks" value={outputData.context_blocks} color="cyan" />
+      </div>
+      {messages.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+          {messages.slice(0, 8).map((messageItem, index) => (
+            <div key={`${displayValue(messageItem.role)}-${index}`} style={sourceCardStyle}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <Tag>{displayValue(messageItem.role)}</Tag>
+                <span style={{ color: TEXT_DIM, fontSize: 12 }}>#{displayValue(messageItem.index ?? index)}</span>
+              </div>
+              <div style={previewStyle}>
+                {displayValue(messageItem.content_preview ?? messageItem.content)}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {compression && (
+        <div style={{ ...previewStyle, marginTop: 10 }}>
+          compression: {displayValue(compression)}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function PromptRenderTraceSummary({ outputData }: { outputData: Record<string, unknown> }) {
+  return (
+    <section style={summaryPanelStyle}>
+      <div style={sectionTitleStyle}>Prompt 渲染</div>
+      <div style={metricGridStyle}>
+        <Metric label="template" value={outputData.template} />
+        <Metric label="prompt_len" value={outputData.prompt_len} />
+        <Metric label="prompt_hash" value={outputData.prompt_hash} />
+      </div>
+      <div style={{ marginTop: 10 }}>
+        <PillRow label="context_blocks" value={outputData.context_blocks} color="cyan" />
+      </div>
+      {hasTracePayload(outputData.prompt_preview ?? outputData) && (
+        <div style={{ ...previewStyle, marginTop: 10 }}>
+          {displayValue(outputData.prompt_preview ?? outputData)}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ResponseTraceSummary({ outputData }: { outputData: Record<string, unknown> }) {
+  return (
+    <section style={summaryPanelStyle}>
+      <div style={sectionTitleStyle}>回复数据来源</div>
+      <div style={metricGridStyle}>
+        <Metric label="data_source" value={outputData.data_source} />
+        <Metric label="has_tool_results" value={outputData.has_tool_results} />
+      </div>
+    </section>
+  );
+}
+
+function AgentResponseTraceSummary({ outputData }: { outputData: Record<string, unknown> }) {
+  return (
+    <section style={summaryPanelStyle}>
+      <div style={sectionTitleStyle}>最终回复</div>
+      <div style={metricGridStyle}>
+        <Metric label="reason" value={outputData.reason} />
+        <Metric label="reply_len" value={outputData.reply_len} />
+        <Metric label="data_source" value={outputData.data_source} />
+      </div>
+      {hasTracePayload(outputData.reply_preview ?? outputData.reply) && (
+        <div style={{ ...previewStyle, marginTop: 10 }}>
+          {displayValue(outputData.reply_preview ?? outputData.reply)}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function GenericPayloadSummary({
+  title,
+  payload,
+}: {
+  title: string;
+  payload: Record<string, unknown>;
+}) {
+  const entries = Object.entries(payload).filter(([, value]) => {
+    if (Array.isArray(value)) return value.length <= 3;
+    return typeof value !== 'object' || value === null;
+  });
+  const complexEntries = Object.entries(payload).filter(([, value]) => value && typeof value === 'object');
+  return (
+    <section style={summaryPanelStyle}>
+      <div style={sectionTitleStyle}>{title}</div>
+      {entries.length > 0 && (
+        <div style={metricGridStyle}>
+          {entries.slice(0, 12).map(([key, value]) => (
+            <Metric key={key} label={key} value={value} />
+          ))}
+        </div>
+      )}
+      {complexEntries.slice(0, 3).map(([key, value]) => (
+        <div key={key} style={{ ...previewStyle, marginTop: 10 }}>
+          {key}: {displayValue(value)}
+        </div>
+      ))}
+    </section>
+  );
+}
+
+function nodeDetailPayload(node: TraceNodeDetail): Record<string, unknown> {
+  return {
+    id: node.id,
+    request_id: node.request_id,
+    round_index: node.round_index,
+    node_type: node.node_type,
+    node_name: node.node_name,
+    status: node.status,
+    duration_ms: node.duration_ms,
+    start_time: node.start_time,
+    end_time: node.end_time,
+    token_usage: node.token_usage,
+    error_code: node.error_code,
+    recover: node.recover,
+    error_message: node.error_message,
+    input_data: node.input_data,
+    output_data: node.output_data,
+  };
 }
 
 async function copyRawTracePayload(value: unknown) {
@@ -967,6 +1446,46 @@ const scoreGroupStyle: CSSProperties = {
   minWidth: 0,
 };
 
+const recallOverviewStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'minmax(0, 1.4fr) minmax(260px, 0.9fr)',
+  gap: 12,
+  alignItems: 'stretch',
+};
+
+const recallSignalGridStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+  gap: 8,
+};
+
+const recallSignalStyle: CSSProperties = {
+  border: `1px solid ${BORDER}`,
+  borderRadius: 6,
+  padding: '8px 10px',
+  minWidth: 0,
+};
+
+const recallDetailGridStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+  gap: '10px 14px',
+  marginTop: 12,
+};
+
+const formulaStyle: CSSProperties = {
+  display: 'flex',
+  gap: 10,
+  alignItems: 'center',
+  flexWrap: 'wrap',
+  background: '#111923',
+  border: `1px solid ${BORDER}`,
+  borderRadius: 6,
+  padding: '8px 10px',
+  marginTop: 12,
+  fontSize: 12,
+};
+
 const scoreTrackStyle: CSSProperties = {
   height: 7,
   width: '100%',
@@ -998,6 +1517,13 @@ const sourceStyle: CSSProperties = {
   gap: 8,
   color: TEXT_DIM,
   fontSize: 12,
+};
+
+const nodeHeroStyle: CSSProperties = {
+  background: 'linear-gradient(180deg, #111923 0%, #0d1117 100%)',
+  border: `1px solid ${BORDER}`,
+  borderRadius: 8,
+  padding: 14,
 };
 
 export default function TraceMonitor() {
@@ -1476,110 +2002,12 @@ export default function TraceMonitor() {
       <Drawer
         title="节点详情"
         placement="right"
-        width={640}
+        width={760}
         onClose={() => setDrawerOpen(false)}
         open={drawerOpen}
       >
         {nodeDetail ? (
-          <Space direction="vertical" style={{ width: '100%' }} size="middle">
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-              <Tag color={nodeDetail.status === 'success' ? 'success' : 'error'}>
-                {nodeDetail.status}
-              </Tag>
-              <Tag color="processing">{getNodeLabel(nodeDetail.node_type)}</Tag>
-              <span style={{ color: TEXT_DIM }}>
-                {nodeDetail.duration_ms?.toLocaleString() ?? '-'} ms
-              </span>
-            </div>
-            <div>
-              <div style={{ color: TEXT_DIM, marginBottom: 4, fontSize: 12 }}>节点名称</div>
-              <div style={{ fontSize: 15, fontWeight: 500 }}>{nodeDetail.node_name}</div>
-            </div>
-            <div>
-              <div style={{ color: TEXT_DIM, marginBottom: 4, fontSize: 12 }}>Request ID</div>
-              <div style={{ fontFamily: 'monospace', fontSize: 12 }}>{nodeDetail.request_id}</div>
-            </div>
-            {nodeDetail.start_time && (
-              <div>
-                <div style={{ color: TEXT_DIM, marginBottom: 4, fontSize: 12 }}>开始时间</div>
-                <div>{new Date(nodeDetail.start_time).toLocaleString('zh-CN')}</div>
-              </div>
-            )}
-            {nodeDetail.error_message && (
-              <div>
-                <div style={{ color: '#ff4d4f', marginBottom: 4, fontSize: 12 }}>错误信息</div>
-                <pre style={{
-                  backgroundColor: '#2a1215',
-                  padding: 12,
-                  borderRadius: 6,
-                  border: '1px solid #58181c',
-                  color: '#ff4d4f',
-                  fontSize: 12,
-                  margin: 0,
-                  whiteSpace: 'pre-wrap',
-                }}>
-                  {nodeDetail.error_message}
-                </pre>
-              </div>
-            )}
-            {(nodeDetail.error_code || nodeDetail.recover) && (
-              <section style={summaryPanelStyle}>
-                <div style={sectionTitleStyle}>错误诊断</div>
-                <div style={metricGridStyle}>
-                  <Metric label="error_code" value={nodeDetail.error_code} />
-                  <Metric label="recover" value={nodeDetail.recover} />
-                </div>
-              </section>
-            )}
-            {hasTracePayload(nodeDetail.input_data) && (
-              <div>
-                <div style={{ color: TEXT_DIM, marginBottom: 4, fontSize: 12 }}>输入数据</div>
-                {isContextInputPayload(nodeDetail.input_data) ? (
-                  <ContextInputSummary inputData={nodeDetail.input_data} />
-                ) : (
-                  <pre style={{
-                    backgroundColor: '#161b22',
-                    padding: 12,
-                    borderRadius: 6,
-                    border: '1px solid #30363d',
-                    fontSize: 12,
-                    margin: 0,
-                    maxHeight: 300,
-                    overflow: 'auto',
-                    whiteSpace: 'pre-wrap',
-                  }}>
-                    {formatTracePayload(nodeDetail.input_data)}
-                  </pre>
-                )}
-              </div>
-            )}
-            {hasTracePayload(nodeDetail.output_data) && (
-              <div>
-                <div style={{ color: TEXT_DIM, marginBottom: 4, fontSize: 12 }}>输出数据</div>
-                {isContextTracePayload(nodeDetail.output_data) ? (
-                  <ContextTraceSummary outputData={nodeDetail.output_data} />
-                ) : isRouterTracePayload(nodeDetail.output_data) ? (
-                  <RouterTraceSummary outputData={nodeDetail.output_data} />
-                ) : nodeDetail.node_type === 'skill_call' ? (
-                  <SkillOutputFormatter outputData={nodeDetail.output_data} />
-                ) : (
-                  <pre style={{
-                    backgroundColor: '#161b22',
-                    padding: 12,
-                    borderRadius: 6,
-                    border: '1px solid #30363d',
-                    fontSize: 12,
-                    margin: 0,
-                    maxHeight: 500,
-                    overflow: 'auto',
-                    whiteSpace: 'pre-wrap',
-                  }}>
-                    {formatTracePayload(nodeDetail.output_data)}
-                  </pre>
-                )}
-              </div>
-            )}
-          </Space>
+          <NodeTraceVisualization node={nodeDetail} />
         ) : null}
       </Drawer>
     </div>
