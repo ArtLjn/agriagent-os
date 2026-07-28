@@ -207,60 +207,77 @@ export default function SkillRegistry() {
             </div>
 
             {recallResult && (
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                  gap: 12,
-                  marginBottom: evalResult ? 16 : 0,
-                }}
-              >
-                {recallResult.candidates.length === 0 ? (
-                  <div style={{ color: TEXT_DIM }}>未召回候选 Skill</div>
-                ) : (
-                  recallResult.candidates.map((candidate, index) => (
-                    <div
-                      key={`${candidate.skill}-${candidate.operation ?? 'none'}`}
-                      style={{
-                        backgroundColor: '#0d1117',
-                        border: `1px solid ${BORDER}`,
-                        borderRadius: 6,
-                        padding: 12,
-                      }}
-                    >
+              <>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 8,
+                    marginBottom: 12,
+                  }}
+                >
+                  <Tag color={recallResult.vector_index_enabled ? 'cyan' : 'orange'}>
+                    {recallResult.recall_mode === 'hybrid_vector' ? '混合向量召回' : '本地混合召回'}
+                  </Tag>
+                  <Tag color={recallResult.vector_index_enabled ? 'green' : 'default'}>
+                    {recallResult.vector_index_enabled ? '向量索引已启用' : '向量索引未启用'}
+                  </Tag>
+                </div>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                    gap: 12,
+                    marginBottom: evalResult ? 16 : 0,
+                  }}
+                >
+                  {recallResult.candidates.length === 0 ? (
+                    <div style={{ color: TEXT_DIM }}>未召回候选 Skill</div>
+                  ) : (
+                    recallResult.candidates.map((candidate, index) => (
                       <div
+                        key={`${candidate.skill}-${candidate.operation ?? 'none'}`}
                         style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          gap: 8,
-                          marginBottom: 8,
+                          backgroundColor: '#0d1117',
+                          border: `1px solid ${BORDER}`,
+                          borderRadius: 6,
+                          padding: 12,
                         }}
                       >
-                        <Typography.Text strong style={{ color: TEXT }}>
-                          #{index + 1} {candidate.skill}
-                        </Typography.Text>
-                        <Typography.Text style={{ color: '#58a6ff' }}>
-                          hybrid {candidate.score.toFixed(3)}
-                        </Typography.Text>
-                      </div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                        {candidate.operation && (
-                          <Tag color="blue">{candidate.operation}</Tag>
-                        )}
-                        <Tag color={riskColor(candidate.operation_risk || candidate.risk)}>
-                          {candidate.operation_risk || candidate.risk}
-                        </Tag>
-                        {evidenceSources(candidate.evidence).map((source) => (
-                          <Tag key={source} color={sourceColor(source)}>
-                            {source}
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            gap: 8,
+                            marginBottom: 8,
+                          }}
+                        >
+                          <Typography.Text strong style={{ color: TEXT }}>
+                            #{index + 1} {candidate.skill}
+                          </Typography.Text>
+                          <Typography.Text style={{ color: '#58a6ff' }}>
+                            hybrid {candidate.score.toFixed(3)}
+                          </Typography.Text>
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                          {candidate.operation && (
+                            <Tag color="blue">{candidate.operation}</Tag>
+                          )}
+                          <Tag color={riskColor(candidate.operation_risk || candidate.risk)}>
+                            {candidate.operation_risk || candidate.risk}
                           </Tag>
-                        ))}
+                          {evidenceSources(candidate.evidence).map((source) => (
+                            <Tag key={source} color={sourceColor(source)}>
+                              {source}
+                            </Tag>
+                          ))}
+                        </div>
+                        <EvidenceMetrics evidence={candidate.evidence} />
                       </div>
-                      <EvidenceMetrics evidence={candidate.evidence} />
-                    </div>
-                  ))
-                )}
-              </div>
+                    ))
+                  )}
+                </div>
+              </>
             )}
 
             {recallResult?.skill_router && (

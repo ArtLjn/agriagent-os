@@ -83,15 +83,7 @@ import {
   type SmartCreateMeta,
   type SmartCreateResult,
 } from './smartCreateModel';
-
-type UnitForm = {
-  cycle_id: number;
-  name: string;
-  area_mu?: number | null;
-  planted_date?: dayjs.Dayjs | null;
-  status: string;
-  note?: string;
-};
+import { UnitCreateModal } from './UnitCreateModal';
 
 type WorkerForm = {
   name: string;
@@ -552,7 +544,6 @@ function PlantingPanel({ cycles, initialCycleId }: { cycles: CropCycleListItem[]
   const [loading, setLoading] = useState(false);
   const [unitOpen, setUnitOpen] = useState(false);
   const [orderOpen, setOrderOpen] = useState(false);
-  const [unitForm] = Form.useForm<UnitForm>();
   const [orderForm] = Form.useForm<WorkOrderForm>();
   const [orderTotal, setOrderTotal] = useState(0);
 
@@ -586,19 +577,6 @@ function PlantingPanel({ cycles, initialCycleId }: { cycles: CropCycleListItem[]
   useEffect(() => {
     setSelectedCycle(initialCycleId);
   }, [initialCycleId]);
-
-  const createUnit = async () => {
-    const values = await unitForm.validateFields();
-    const payload = buildRequestBody({
-      ...values,
-      planted_date: values.planted_date?.format('YYYY-MM-DD'),
-    });
-    await operationsApi.createUnit(payload as Omit<PlantingUnit, 'id' | 'farm_id' | 'created_at'>);
-    message.success('种植单元已创建');
-    setUnitOpen(false);
-    unitForm.resetFields();
-    await refresh();
-  };
 
   const createWorkOrder = async () => {
     const values = await orderForm.validateFields();
@@ -673,10 +651,7 @@ function PlantingPanel({ cycles, initialCycleId }: { cycles: CropCycleListItem[]
               onChange={setSelectedCycle}
               options={cycles.map((cycle) => ({ value: cycle.id, label: cycle.name }))}
             />
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => {
-              unitForm.setFieldsValue({ cycle_id: selectedCycle, status: 'active' });
-              setUnitOpen(true);
-            }}>新建种植单元</Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setUnitOpen(true)}>新建种植单元</Button>
             <Button icon={<FormOutlined />} onClick={() => {
               orderForm.setFieldsValue({ cycle_id: selectedCycle, operation_date: dayjs(), scope_type: 'cycle', quantity: 1, paid_amount: 0 });
               setOrderOpen(true);
@@ -716,20 +691,15 @@ function PlantingPanel({ cycles, initialCycleId }: { cycles: CropCycleListItem[]
         <Table rowKey="id" size="small" loading={loading} dataSource={workOrders} columns={orderColumns} pagination={false} scroll={{ x: 880 }} />
       </Card>
 
-      <Modal title="新建种植单元" open={unitOpen} onOk={createUnit} onCancel={() => setUnitOpen(false)} width={560}>
-        <Form form={unitForm} layout="vertical">
-          <Form.Item name="cycle_id" label="茬口" rules={[{ required: true, message: '请选择茬口' }]}>
-            <Select options={cycles.map((cycle) => ({ value: cycle.id, label: cycle.name }))} />
-          </Form.Item>
-          <Form.Item name="name" label="单元名称" rules={[{ required: true, message: '请输入单元名称' }]}><Input placeholder="东棚 A 区" /></Form.Item>
-          <Row gutter={12}>
-            <Col span={12}><Form.Item name="area_mu" label="面积（亩）"><InputNumber min={0} precision={2} style={{ width: '100%' }} /></Form.Item></Col>
-            <Col span={12}><Form.Item name="planted_date" label="种植日期"><DatePicker style={{ width: '100%' }} /></Form.Item></Col>
-          </Row>
-          <Form.Item name="status" label="状态" initialValue="active"><Select options={statusOptions} /></Form.Item>
-          <Form.Item name="note" label="备注"><Input.TextArea rows={3} /></Form.Item>
-        </Form>
-      </Modal>
+      <UnitCreateModal
+        open={unitOpen}
+        cycles={cycles}
+        selectedCycle={selectedCycle}
+        existingUnits={units}
+        statusOptions={statusOptions}
+        onClose={() => setUnitOpen(false)}
+        onCreated={refresh}
+      />
 
       <Modal title="新建农事作业单" open={orderOpen} onOk={createWorkOrder} onCancel={() => setOrderOpen(false)} width={680}>
         <Form form={orderForm} layout="vertical">
@@ -831,6 +801,7 @@ function LaborPanel({ cycles }: { cycles: CropCycleListItem[] }) {
     { title: '工人', dataIndex: 'name', render: (text: string, record) => <Space><strong>{text}</strong>{statusTag(record.status)}</Space> },
     { title: '电话', dataIndex: 'phone', render: (value) => value || '-' },
     { title: '默认计薪', dataIndex: 'default_pay_type', render: (value) => payTypeOptions.find((item) => item.value === value)?.label || value },
+    { title: '默认单价', dataIndex: 'default_unit_price', render: (value) => (value === null || value === undefined || value === '' ? '-' : formatMoney(value)) },
     { title: '应付', dataIndex: 'total_payable', render: formatMoney },
     { title: '已付', dataIndex: 'total_paid', render: formatMoney },
     { title: '未付', dataIndex: 'total_unpaid', render: (value) => <strong style={{ color: Number(value) > 0 ? palette.warning : palette.textMuted }}>{formatMoney(value)}</strong> },
@@ -860,7 +831,7 @@ function LaborPanel({ cycles }: { cycles: CropCycleListItem[] }) {
         right={<Button icon={<ReloadOutlined />} onClick={refresh} loading={loading}>刷新</Button>}
       />
       <Card style={cardStyle} styles={{ body: { padding: 12 } }}>
-        <Table rowKey="id" size="small" loading={loading} dataSource={summaries} columns={columns} scroll={{ x: 920 }} />
+        <Table rowKey="id" size="small" loading={loading} dataSource={summaries} columns={columns} scroll={{ x: 1040 }} />
       </Card>
       <Card title="未结人工原始响应" style={cardStyle}>
         <pre style={{ margin: 0, color: palette.textMuted, whiteSpace: 'pre-wrap' }}>{JSON.stringify(unsettled ?? {}, null, 2)}</pre>

@@ -339,6 +339,8 @@ export interface SkillRouteRecallRequest {
 export interface SkillRouteRecallResponse {
   message: string;
   top_k: number;
+  recall_mode: string;
+  vector_index_enabled: boolean;
   candidates: SkillRouteRecallCandidate[];
   skill_router?: Record<string, unknown>;
 }

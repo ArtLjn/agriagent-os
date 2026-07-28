@@ -9,7 +9,6 @@ const BORDER = palette.border;
 const TEXT = palette.text;
 const TEXT_DIM = palette.textMuted;
 const PANEL_BG = '#0d1117';
-const PRE_BG = '#161b22';
 const ACCENT = palette.accent;
 const HEADER_BG = '#161b22';
 

@@ -85,20 +85,11 @@ export default function Crops() {
   };
 
   const openCreate = () => {
-    Modal.confirm({
-      title: '是否从系统模版库选择？',
-      content: '系统模版可一键导入为当前农场的可编辑副本，也可以继续手填新模版。',
-      okText: '去系统库',
-      cancelText: '继续手填',
-      onOk: () => navigate('/crops/system'),
-      onCancel: () => {
-        setEditingId(null);
-        setSmartText('');
-        setSmartResult(null);
-        form.resetFields();
-        setModalOpen(true);
-      },
-    });
+    setEditingId(null);
+    setSmartText('');
+    setSmartResult(null);
+    form.resetFields();
+    setModalOpen(true);
   };
 
   const handleSmartParse = async () => {
@@ -197,6 +188,7 @@ export default function Crops() {
         left={(
           <>
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新建模板</Button>
+            <Button icon={<ReadOutlined />} onClick={() => navigate('/crops/system')}>系统库</Button>
             <Button icon={<BugOutlined />} onClick={() => setDebugOpen(true)}>调试</Button>
           </>
         )}

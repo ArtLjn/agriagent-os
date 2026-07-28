@@ -124,6 +124,8 @@ describe('SkillRegistry', () => {
     mockedPreviewSkillRouteRecall.mockResolvedValueOnce({
       message: '我有哪些欠款',
       top_k: 5,
+      recall_mode: 'hybrid_vector',
+      vector_index_enabled: true,
       candidates: [
         {
           skill: 'manage_cost',
@@ -132,9 +134,9 @@ describe('SkillRegistry', () => {
           risk: 'read',
           operation_risk: 'read',
           evidence: {
-            sources: ['strong_rule', 'bm25'],
+            sources: ['strong_rule', 'bm25', 'vector'],
             bm25: 1,
-            embedding: 0,
+            vector: 0.8,
             lexical: 0.9,
             lexical_hits: ['欠款'],
             low_signal_hits: ['有哪些'],
@@ -186,9 +188,12 @@ describe('SkillRegistry', () => {
       });
     });
     expect(await screen.findByText('query_debt')).toBeInTheDocument();
+    expect(screen.getByText('混合向量召回')).toBeInTheDocument();
+    expect(screen.getByText('向量索引已启用')).toBeInTheDocument();
     expect(screen.getByText('hybrid 0.630')).toBeInTheDocument();
     expect(screen.getByText('strong_rule')).toBeInTheDocument();
     expect(screen.getByText('bm25')).toBeInTheDocument();
+    expect(screen.getByText('vector')).toBeInTheDocument();
     expect(screen.getByText('lexical: 0.90')).toBeInTheDocument();
     expect(screen.getByLabelText('完整 skill_router JSON')).toHaveTextContent(
       '"selected_operations"'

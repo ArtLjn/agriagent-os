@@ -268,10 +268,27 @@ function isContextInputPayload(value: unknown): boolean {
   return Boolean(record.block_count || record.selected_keys || record.policy_intent);
 }
 
+function isRouterTracePayload(value: unknown): boolean {
+  const record = payloadRecord(value);
+  if (!record) return false;
+  const planDraft = asRecord(record.plan_draft);
+  return Boolean(
+    record.frames ||
+    record.selected_tools ||
+    record.selected_operations ||
+    record.context_dependencies ||
+    record.rejected_tools ||
+    record.policy_violations ||
+    record.tool_choice ||
+    planDraft?.steps ||
+    planDraft?.intent_frames
+  );
+}
+
 function ContextTraceSummary({ outputData }: { outputData: unknown }) {
   const payload = payloadRecord(outputData);
   if (!payload) {
-    return <RawTraceDetails label="查看原始输出" value={outputData} defaultOpen />;
+    return <RawTraceDetails label="查看原始输出" value={outputData} />;
   }
 
   const policy = asRecord(payload.policy);
@@ -311,7 +328,7 @@ function ContextTraceSummary({ outputData }: { outputData: unknown }) {
         </section>
       )}
 
-      <RawTraceDetails label="查看原始输出 JSON" value={payload} defaultOpen />
+      <RawTraceDetails label="查看原始输出 JSON" value={payload} />
     </Space>
   );
 }
@@ -319,7 +336,7 @@ function ContextTraceSummary({ outputData }: { outputData: unknown }) {
 function ContextInputSummary({ inputData }: { inputData: unknown }) {
   const payload = payloadRecord(inputData);
   if (!payload) {
-    return <RawTraceDetails label="查看原始输入 JSON" value={inputData} defaultOpen />;
+    return <RawTraceDetails label="查看原始输入 JSON" value={inputData} />;
   }
 
   return (
@@ -332,9 +349,356 @@ function ContextInputSummary({ inputData }: { inputData: unknown }) {
           <Metric label="policy intent" value={payload.policy_intent} />
         </div>
       </section>
-      <RawTraceDetails label="查看原始输入 JSON" value={payload} defaultOpen />
+      <RawTraceDetails label="查看原始输入 JSON" value={payload} />
     </Space>
   );
+}
+
+function RouterTraceSummary({ outputData }: { outputData: unknown }) {
+  const payload = payloadRecord(outputData);
+  if (!payload) {
+    return <RawTraceDetails label="查看原始输出 JSON" value={outputData} />;
+  }
+
+  const planDraft = asRecord(payload.plan_draft);
+  const evidence = asRecord(payload.evidence);
+  const validation = asRecord(planDraft?.validation);
+  const frames = asRecordList(payload.frames ?? planDraft?.intent_frames);
+  const steps = asRecordList(planDraft?.steps);
+  const selectedCandidates = asRecordList(evidence?.selected_candidates);
+  const rejectedCandidates = [
+    ...asRecordList(payload.rejected_candidates),
+    ...asRecordList(evidence?.rejected_candidates),
+  ];
+  const violations = Array.isArray(payload.policy_violations)
+    ? payload.policy_violations
+    : [];
+
+  return (
+    <Space direction="vertical" style={{ width: '100%' }} size="middle">
+      <section style={summaryPanelStyle}>
+        <div style={{ ...sectionTitleStyle, justifyContent: 'space-between' }}>
+          <span>路由决策</span>
+          <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <Tag color="processing">tool_choice: {displayValue(payload.tool_choice)}</Tag>
+            <Tag color={payload.fallback ? 'warning' : 'success'}>
+              fallback: {displayValue(payload.fallback)}
+            </Tag>
+          </span>
+        </div>
+        <div style={metricGridStyle}>
+          <Metric label="reason" value={payload.reason} />
+          <Metric label="route_type" value={planDraft?.route_type} />
+          <Metric label="source" value={planDraft?.source} />
+          <Metric label="validation" value={validation?.status} />
+          <Metric label="safe_route_type" value={validation?.safe_route_type} />
+          <Metric label="clarification" value={payload.clarification} />
+        </div>
+        {hasTracePayload(payload.fallback_reason) && (
+          <div style={{ ...previewStyle, marginTop: 10 }}>
+            fallback_reason: {displayValue(payload.fallback_reason)}
+          </div>
+        )}
+      </section>
+
+      <section style={summaryPanelStyle}>
+        <div style={sectionTitleStyle}>命中范围</div>
+        <Space direction="vertical" style={{ width: '100%' }} size="small">
+          <PillRow label="selected_tools" value={payload.selected_tools} color="blue" />
+          <OperationMatrix operations={payload.selected_operations} />
+          <PillRow label="context_dependencies" value={payload.context_dependencies} color="cyan" />
+          <PillRow label="force_binding" value={payload.force_binding} color="geekblue" />
+          <PillRow label="rejected_tools" value={payload.rejected_tools} color="red" />
+          <PillRow label="policy_violations" value={violations} color="volcano" />
+        </Space>
+      </section>
+
+      <ScoreMatrix title="全局评分" scores={payload.scores} />
+
+      {frames.length > 0 && (
+        <section style={summaryPanelStyle}>
+          <div style={sectionTitleStyle}>意图帧</div>
+          <Space direction="vertical" style={{ width: '100%' }} size="small">
+            {frames.map((frame, index) => (
+              <IntentFrameCard key={`${displayValue(frame.intent)}-${index}`} frame={frame} />
+            ))}
+          </Space>
+        </section>
+      )}
+
+      {selectedCandidates.length > 0 && (
+        <CandidateList title="已选择候选" candidates={selectedCandidates} tone="selected" />
+      )}
+
+      {rejectedCandidates.length > 0 && (
+        <CandidateList title="已拒绝候选" candidates={rejectedCandidates} tone="rejected" />
+      )}
+
+      {steps.length > 0 && (
+        <section style={summaryPanelStyle}>
+          <div style={sectionTitleStyle}>计划草案</div>
+          <div style={metricGridStyle}>
+            <Metric label="session_id" value={planDraft?.session_id} />
+            <Metric label="farm_id" value={planDraft?.farm_id} />
+            <Metric label="raw_user_input" value={planDraft?.raw_user_input} />
+            <Metric label="missing_fields" value={displayList(planDraft?.missing_fields)} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+            {steps.map((step, index) => (
+              <PlanStepCard key={`${displayValue(step.step_id)}-${index}`} step={step} index={index} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      <RawTraceDetails label="查看原始输出 JSON" value={payload} />
+    </Space>
+  );
+}
+
+function IntentFrameCard({ frame }: { frame: Record<string, unknown> }) {
+  const evidence = asRecord(frame.evidence);
+  const matchedCandidates = asRecordList(evidence?.matched_candidates);
+
+  return (
+    <div style={blockStyle}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ color: ACCENT, fontFamily: 'monospace', fontWeight: 600 }}>
+            {displayValue(frame.intent)}
+          </span>
+          <Tag>{displayValue(frame.domain)}</Tag>
+          <Tag color={riskTagColor(frame.risk)}>{displayValue(frame.risk)}</Tag>
+          {frame.requires_confirmation ? <Tag color="warning">需要确认</Tag> : <Tag>无需确认</Tag>}
+        </div>
+        <span style={{ color: TEXT_DIM, fontSize: 12 }}>
+          confidence {displayValue(frame.confidence)} · score {displayValue(frame.score)}
+        </span>
+      </div>
+      <div style={metricGridStyle}>
+        <Metric label="capability" value={frame.capability} />
+        <Metric label="operation" value={frame.operation} />
+        <Metric label="operation_hint" value={frame.operation_hint} />
+        <Metric label="missing_fields" value={displayList(frame.missing_fields)} />
+        <Metric label="depends_on" value={displayList(frame.depends_on)} />
+      </div>
+      <Space direction="vertical" style={{ width: '100%' }} size={6}>
+        <PillRow label="entities" value={frame.entities} color="cyan" />
+        <PillRow label="candidate_tools" value={frame.candidate_tools} color="blue" />
+      </Space>
+      <ScoreMatrix title="帧评分证据" scores={frameScoreGroups(evidence)} compact />
+      {matchedCandidates.length > 0 && (
+        <CandidateList title="匹配候选" candidates={matchedCandidates} tone="matched" nested />
+      )}
+    </div>
+  );
+}
+
+function PlanStepCard({ step, index }: { step: Record<string, unknown>; index: number }) {
+  return (
+    <div style={sourceCardStyle}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ color: ACCENT, fontFamily: 'monospace', fontWeight: 600 }}>
+          {index + 1}. {displayValue(step.step_id)}
+        </span>
+        <Tag color={riskTagColor(step.risk)}>{displayValue(step.risk)}</Tag>
+      </div>
+      <div style={metricGridStyle}>
+        <Metric label="skill_name" value={step.skill_name} />
+        <Metric label="depends_on" value={displayList(step.depends_on)} />
+        <Metric label="params" value={step.params} />
+      </div>
+    </div>
+  );
+}
+
+function CandidateList({
+  title,
+  candidates,
+  tone,
+  nested = false,
+}: {
+  title: string;
+  candidates: Record<string, unknown>[];
+  tone: 'selected' | 'rejected' | 'matched';
+  nested?: boolean;
+}) {
+  const sectionStyle = nested ? nestedPanelStyle : summaryPanelStyle;
+  return (
+    <section style={sectionStyle}>
+      <div style={sectionTitleStyle}>{title}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {candidates.map((candidate, index) => (
+          <div key={`${displayValue(candidate.name)}-${index}`} style={sourceCardStyle}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ color: ACCENT, fontFamily: 'monospace', fontWeight: 600 }}>
+                {displayValue(candidate.name)}
+              </span>
+              <Tag color={candidateTagColor(tone)}>{displayValue(candidate.operation)}</Tag>
+              <Tag>{displayValue(candidate.domain)}</Tag>
+              <Tag color={riskTagColor(candidate.risk)}>{displayValue(candidate.risk)}</Tag>
+              {candidate.enabled !== undefined && (
+                <Tag color={candidate.enabled ? 'success' : 'default'}>
+                  enabled: {displayValue(candidate.enabled)}
+                </Tag>
+              )}
+            </div>
+            <div style={blockMetaGridStyle}>
+              <Metric label="capability" value={candidate.capability} />
+              <Metric label="legacy_alias" value={candidate.legacy_alias} />
+              <Metric label="reason" value={candidate.reason} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function OperationMatrix({ operations }: { operations: unknown }) {
+  const record = asRecord(operations);
+  if (!record || Object.keys(record).length === 0) {
+    return <PillRow label="selected_operations" value={[]} color="blue" />;
+  }
+
+  return (
+    <div>
+      <div style={{ color: TEXT_DIM, fontSize: 11, marginBottom: 6 }}>selected_operations</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {Object.entries(record).map(([tool, operationList]) => (
+          <div key={tool} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ color: ACCENT, fontFamily: 'monospace', fontSize: 12 }}>{tool}</span>
+            {Array.isArray(operationList) && operationList.length > 0 ? (
+              operationList.map((operation) => (
+                <Tag key={`${tool}-${displayValue(operation)}`} color="blue">
+                  {displayValue(operation)}
+                </Tag>
+              ))
+            ) : (
+              <Tag>{displayValue(operationList)}</Tag>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PillRow({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: unknown;
+  color: string;
+}) {
+  const values = Array.isArray(value) ? value : hasTracePayload(value) ? [value] : [];
+  return (
+    <div>
+      <div style={{ color: TEXT_DIM, fontSize: 11, marginBottom: 6 }}>{label}</div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {values.length > 0 ? (
+          values.map((item, index) => (
+            <Tag key={`${label}-${displayValue(item)}-${index}`} color={color}>
+              {displayValue(item)}
+            </Tag>
+          ))
+        ) : (
+          <span style={{ color: TEXT_DIM, fontSize: 12 }}>无</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ScoreMatrix({
+  title,
+  scores,
+  compact = false,
+}: {
+  title: string;
+  scores: unknown;
+  compact?: boolean;
+}) {
+  const groups = scoreGroups(scores);
+  if (groups.length === 0) return null;
+
+  return (
+    <section style={compact ? nestedPanelStyle : summaryPanelStyle}>
+      <div style={sectionTitleStyle}>{title}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
+        {groups.map(([group, entries]) => (
+          <div key={group} style={scoreGroupStyle}>
+            <div style={{ color: TEXT_DIM, fontSize: 11, marginBottom: 8 }}>{group}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {entries.map(([label, score]) => (
+                <ScoreBar key={`${group}-${label}`} label={label} value={score} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ScoreBar({ label, value }: { label: string; value: number }) {
+  const percent = Math.max(0, Math.min(100, value <= 1 ? value * 100 : value));
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+        <span style={{ color: TEXT, fontSize: 12, fontFamily: 'monospace' }}>{label}</span>
+        <span style={{ color: TEXT_DIM, fontSize: 12 }}>{displayValue(value)}</span>
+      </div>
+      <div style={scoreTrackStyle}>
+        <div style={{ ...scoreFillStyle, width: `${percent}%`, background: scoreColor(percent) }} />
+      </div>
+    </div>
+  );
+}
+
+function frameScoreGroups(evidence: Record<string, unknown> | null): Record<string, unknown> {
+  if (!evidence) return {};
+  return {
+    domain: evidence.domain_scores,
+    capability: evidence.capability_scores,
+    operation: evidence.operation_scores,
+  };
+}
+
+function scoreGroups(scores: unknown): Array<[string, Array<[string, number]>]> {
+  const record = asRecord(scores);
+  if (!record) return [];
+  return Object.entries(record)
+    .map(([group, nested]) => [group, scoreEntries(nested)] as [string, Array<[string, number]>])
+    .filter(([, entries]) => entries.length > 0);
+}
+
+function scoreEntries(value: unknown): Array<[string, number]> {
+  const record = asRecord(value);
+  if (!record) return [];
+  return Object.entries(record)
+    .map(([key, score]) => [key, Number(score)] as [string, number])
+    .filter(([, score]) => Number.isFinite(score));
+}
+
+function scoreColor(percent: number): string {
+  if (percent >= 80) return '#2ea043';
+  if (percent >= 50) return '#d29922';
+  return '#f85149';
+}
+
+function candidateTagColor(tone: 'selected' | 'rejected' | 'matched'): string {
+  if (tone === 'rejected') return 'red';
+  if (tone === 'matched') return 'cyan';
+  return 'green';
+}
+
+function riskTagColor(risk: unknown): string {
+  if (risk === 'write' || risk === 'delete') return 'warning';
+  if (risk === 'read') return 'success';
+  return 'default';
 }
 
 function ContextSection({ section }: { section: Record<string, unknown> }) {
@@ -576,6 +940,45 @@ const blockStyle: CSSProperties = {
   border: `1px solid ${BORDER}`,
   borderRadius: 6,
   padding: 10,
+};
+
+const nestedPanelStyle: CSSProperties = {
+  background: '#111923',
+  border: `1px solid ${BORDER}`,
+  borderRadius: 6,
+  padding: 10,
+};
+
+const sourceCardStyle: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 8,
+  background: '#0f1720',
+  border: `1px solid ${BORDER}`,
+  borderRadius: 6,
+  padding: 10,
+};
+
+const scoreGroupStyle: CSSProperties = {
+  background: CARD,
+  border: `1px solid ${BORDER}`,
+  borderRadius: 6,
+  padding: 10,
+  minWidth: 0,
+};
+
+const scoreTrackStyle: CSSProperties = {
+  height: 7,
+  width: '100%',
+  background: '#21262d',
+  borderRadius: 999,
+  overflow: 'hidden',
+};
+
+const scoreFillStyle: CSSProperties = {
+  height: '100%',
+  minWidth: 2,
+  borderRadius: 999,
 };
 
 const previewStyle: CSSProperties = {
@@ -1155,6 +1558,8 @@ export default function TraceMonitor() {
                 <div style={{ color: TEXT_DIM, marginBottom: 4, fontSize: 12 }}>输出数据</div>
                 {isContextTracePayload(nodeDetail.output_data) ? (
                   <ContextTraceSummary outputData={nodeDetail.output_data} />
+                ) : isRouterTracePayload(nodeDetail.output_data) ? (
+                  <RouterTraceSummary outputData={nodeDetail.output_data} />
                 ) : nodeDetail.node_type === 'skill_call' ? (
                   <SkillOutputFormatter outputData={nodeDetail.output_data} />
                 ) : (
