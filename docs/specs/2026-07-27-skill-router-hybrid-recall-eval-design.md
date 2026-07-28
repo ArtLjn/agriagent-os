@@ -156,34 +156,41 @@ BM25 输出必须保留：
 
 如果候选只命中低信号泛词，允许进入候选并集，但 rerank 时降权。
 
-### 6.3 EmbeddingRecall
+### 6.3 QuillRAGVectorRecall
 
-embedding 负责语义召回，尤其覆盖短句、口语表达和同义改写。
+QuillRAG 负责语义召回，尤其覆盖短句、口语表达和同义改写。
 
-第一版不接向量数据库，原因是 operation 数量有限。启动或 registry 变更时为 operation 文档计算 embedding，存入进程内缓存；查询时只计算 query embedding，并对全量 operation 文档做余弦相似度。
+当前版本不再由 Farm Manager 直接调用 embedding provider。启动或 registry 变更时，Farm Manager 把 operation 文档通过 QuillRAG 公共 `/ingest` 接口写入 Skill 专用 collection；查询时只调用 QuillRAG `/retrieve`，传 query 文本、collection、mode、top_k 和 filters。embedding、dense/sparse 检索、Qdrant 存储和可选 rerank 都在 QuillRAG 内部完成。
 
 推荐参数：
 
 ```text
-embedding_limit = min(30, operation_count)
-embedding_timeout_ms = 800
-embedding_cache_key = provider + model + registry_version + operation_doc_hash
+vector_limit = min(30, operation_count)
+vector_timeout_ms = 1500
+collection = farm_manager_skill_routes_v1
+mode = hybrid
 ```
 
-embedding 配置只允许从配置系统和环境变量读取。文档、测试样例、trace 中禁止出现认证密码。trace 只能记录 provider、model、endpoint host、耗时、是否降级和错误 code。
+Farm Manager 不配置 embedding provider，不保存 embedding key。文档、测试样例、trace 中禁止出现 QuillRAG API key。trace 只能记录 provider、collection、mode、耗时、是否降级和错误 code。
 
 第一版使用显式开关控制外部请求：
 
 ```yaml
-embedding:
+skill_vector_store:
   enabled: false
-  provider: "ollama"
-  model: "qwen3-embedding:0.6b"
-  base_url: "https://ollama.example.com"
-  endpoint: "/api/embed"
+  provider: "quillrag"
+  url: ""
+  collection: "farm_manager_skill_routes_v1"
+  mode: "hybrid"
+  top_k: 8
+  sync_timeout_seconds: 30.0
+  create_collection_on_startup: true
+  sync_on_startup: true
 ```
 
-`enabled=false` 或 `base_url` 为空时，Router 不访问 embedding 服务，自动使用 StrongRuleRecall + BM25Recall。线上启用时只在私密配置或环境变量中放认证信息，例如 `EMBEDDING__PASSWORD`。
+`enabled=false` 或有效 RAG URL 为空时，Router 不访问 QuillRAG，自动使用 StrongRuleRecall + BM25Recall。线上启用时只在私密配置或环境变量中放认证信息，例如 `SKILL_VECTOR_STORE__API_KEY` 或复用 `RAG_SERVICE__API_KEY`。
+
+`sync_on_startup=true` 表示启动后创建后台同步任务，不阻塞 FastAPI 对外服务。后台任务先读取远端 `skill:__manifest__` 的 `registry_hash`，hash 一致时直接跳过；只有 Skill Registry 变化时才重新入库并更新 manifest。
 
 ## 7. 混合重排
 
@@ -194,7 +201,7 @@ embedding:
 ```text
 hybrid_score =
   0.35 * bm25_norm
-+ 0.35 * embedding_norm
++ 0.35 * vector_norm
 + 0.20 * lexical_intent_score
 + 0.10 * registry_prior
 - anti_example_penalty
@@ -206,7 +213,7 @@ hybrid_score =
 | 分数 | 含义 |
 | --- | --- |
 | `bm25_norm` | BM25 分数在候选并集内归一化 |
-| `embedding_norm` | cosine similarity 映射到 0 到 1 |
+| `vector_norm` | QuillRAG 返回的检索 score 映射到 0 到 1 |
 | `lexical_intent_score` | tag、operation alias、领域强词和同义词命中 |
 | `registry_prior` | active capability、risk 与 coarse intent 一致、domain 命中 |
 | `anti_example_penalty` | 命中 anti_examples 或冲突域表达时降权 |
@@ -294,18 +301,18 @@ PYTHONPATH=. .venv/bin/python -m app.ops.skill_route_eval app/ops/skill_route_ca
   "recall_sources": {
     "strong_rule": ["manage_cost.query_debt"],
     "bm25": ["get_farm_status.query_status", "manage_cost_categories.query_categories"],
-    "embedding": ["manage_cost.query_debt", "manage_cost.query_summary"]
+    "vector": ["manage_cost.query_debt", "manage_cost.query_summary"]
   },
   "scores": {
     "manage_cost.query_debt": {
       "hybrid": 0.82,
       "bm25": 0.31,
-      "embedding": 0.77,
+      "vector": 0.77,
       "lexical": 1.0,
       "penalty": 0.0
     }
   },
-  "diagnosis": "bm25_miss_recovered_by_strong_rule_and_embedding"
+  "diagnosis": "bm25_miss_recovered_by_strong_rule_and_vector"
 }
 ```
 
