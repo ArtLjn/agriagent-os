@@ -238,6 +238,16 @@ describe('extractLatestLlmContextSnapshot', () => {
                 schema_version: 2,
                 system_prompt: '系统提示',
                 runtime_context: {
+                  context_pack: {
+                    recent_message_ids: [1235, '1236'],
+                    summary_version: 4,
+                    summary_hash: 'sha256:abc',
+                    token_estimate: 88,
+                    selected_blocks: ['conversation_summary', 'recent_messages'],
+                    compressed_blocks: [],
+                    dropped_blocks: [],
+                    compaction_reason: '',
+                  },
                   sections: [
                     {
                       name: 'Task',
@@ -306,6 +316,13 @@ describe('extractLatestLlmContextSnapshot', () => {
     expect(snapshot.schemaVersion).toBe(2);
     expect(snapshot.runtimeSections[0]?.name).toBe('Task');
     expect(snapshot.runtimeSections[0]?.blocks[0]?.key).toBe('active_task_state');
+    expect(snapshot.contextPack).toMatchObject({
+      recentMessageIds: [1235, 1236],
+      summaryVersion: 4,
+      summaryHash: 'sha256:abc',
+      tokenEstimate: 88,
+      selectedBlocks: ['conversation_summary', 'recent_messages'],
+    });
     expect(snapshot.contextBlockDetails[0]).toMatchObject({
       key: 'active_task_state',
       category: 'task',

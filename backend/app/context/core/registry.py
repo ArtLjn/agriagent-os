@@ -140,6 +140,7 @@ _BLOCK_SPECS: tuple[ContextBlockSpec, ...] = (
         prompt_allowed=False,
     ),
     _spec("short_term_recent", ContextCategory.MEMORY, "Context", 64),
+    _spec("recent_messages", ContextCategory.MEMORY, "Context", 66),
     _spec(
         "short_term_summary",
         ContextCategory.MEMORY,
@@ -153,7 +154,6 @@ _BLOCK_SPECS: tuple[ContextBlockSpec, ...] = (
         ContextCategory.MEMORY,
         "Context",
         62,
-        prompt_allowed=False,
     ),
     _spec("long_term_memory", ContextCategory.MEMORY, "Context", 64),
     _spec("memory", ContextCategory.MEMORY, "Context", 60, prompt_allowed=False),

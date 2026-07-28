@@ -29,6 +29,7 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -127,6 +128,7 @@ class ContextBuilder:
         db: Session,
         request: ContextBuildRequest,
         memory_context: MemoryContext | None = None,
+        context_pack: Any | None = None,
     ) -> ContextBundle:
         """按策略构建 Runtime ContextBundle。"""
         policy = self.policy or ContextPolicy()
@@ -143,6 +145,7 @@ class ContextBuilder:
                 user_id=request.user_id,
                 session_id=request.session_id,
                 memory_context=memory_context,
+                context_pack=context_pack,
                 context_dependency_map=policy_result.dependency_map,
                 policy_trace={
                     "intent": request.intent,
@@ -166,6 +169,7 @@ class ContextBuilder:
             ),
             "context_dependency_map": policy_result.dependency_map,
         }
+        _attach_context_pack_metadata(bundle, context_pack)
         return bundle
 
     def build_farm_runtime_context(self, db: Session, farm_id: int) -> dict:
@@ -372,6 +376,18 @@ def _build_farm_runtime_context_dict(db: Session, farm_id: int) -> dict:
         "assistant_role": assistant_role,
         "assistant_role_prompt": assistant_role_prompt(assistant_role),
     }
+
+
+def _attach_context_pack_metadata(
+    bundle: ContextBundle,
+    context_pack: Any | None,
+) -> None:
+    if context_pack is None:
+        return
+    diagnostics = getattr(context_pack, "diagnostics", None)
+    if diagnostics is None:
+        return
+    bundle.metadata["context_pack"] = asdict(diagnostics)
 
 
 __all__ = ["ContextBuilder", "default_context_selectors"]

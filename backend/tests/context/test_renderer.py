@@ -72,6 +72,7 @@ def test_renderer_maps_common_keys_to_expected_sections() -> None:
         "weather": "Context",
         "conversation": "Context",
         "conversation_summary": "Context",
+        "recent_messages": "Context",
         "short_term_recent": "Context",
         "short_term_summary": "Context",
         "user_settings": "Context",

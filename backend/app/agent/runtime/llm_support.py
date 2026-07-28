@@ -4,6 +4,7 @@ import asyncio
 import importlib
 import logging
 from datetime import date
+from typing import Any
 
 from app.prompt.cache import get_farm_ctx_cache
 from app.agent.router.tool_selector import ToolSelectionResult
@@ -144,39 +145,33 @@ async def _get_runtime_context_bundle(
         db = SessionLocal()
         try:
             from app.context.builder import ContextBuilder
-            from app.context.core.policy import ContextBuildRequest
 
-            memory_context = None
-            if user_id:
-                loader = memory_context_loader
-                if loader is None:
-                    from app.application.chat.helpers import (
-                        load_memory_context,
-                    )
-
-                    loader = load_memory_context
-                memory_context = asyncio.run(
-                    loader(
-                        user_id=user_id,
-                        farm_id=farm_id,
-                        session_id=session_id,
-                    )
-                )
-
-            context_builder = ContextBuilder()
-            request = ContextBuildRequest(
-                intent=intent,
-                query=query,
-                selected_tool_names=list(selected_tool_names),
-                context_dependencies=list(context_dependencies or []),
-                farm_id=farm_id,
+            memory_context = _load_runtime_memory_context(
                 user_id=user_id,
+                farm_id=farm_id,
                 session_id=session_id,
+                memory_context_loader=memory_context_loader,
             )
+            context_pack = _load_runtime_context_pack(
+                db=db,
+                farm_id=farm_id,
+                session_id=session_id,
+                user_id=user_id,
+            )
+            context_builder = ContextBuilder()
             bundle = context_builder.build_runtime_context_bundle(
                 db=db,
-                request=request,
+                request=_runtime_context_request(
+                    intent=intent,
+                    query=query,
+                    selected_tool_names=selected_tool_names,
+                    context_dependencies=context_dependencies,
+                    farm_id=farm_id,
+                    user_id=user_id,
+                    session_id=session_id,
+                ),
                 memory_context=memory_context,
+                context_pack=context_pack,
             )
             farm_ctx = context_builder.build_farm_runtime_context(
                 db=db,
@@ -200,6 +195,76 @@ async def _get_runtime_context_bundle(
             ),
             farm_ctx,
         )
+
+
+def _load_runtime_memory_context(
+    *,
+    user_id: str | None,
+    farm_id: int,
+    session_id: str | None,
+    memory_context_loader,
+) -> Any | None:
+    if not user_id:
+        return None
+    loader = memory_context_loader
+    if loader is None:
+        from app.application.chat.helpers import load_memory_context
+
+        loader = load_memory_context
+    return asyncio.run(
+        loader(
+            user_id=user_id,
+            farm_id=farm_id,
+            session_id=session_id,
+        )
+    )
+
+
+def _load_runtime_context_pack(
+    *,
+    db,
+    farm_id: int,
+    session_id: str | None,
+    user_id: str | None,
+) -> Any | None:
+    if not session_id:
+        return None
+    from app.context.pack import ContextPackService
+
+    loaded_pack = asyncio.run(
+        ContextPackService().build(
+            db=db,
+            farm_id=farm_id,
+            session_id=session_id,
+            user_id=user_id,
+        )
+    )
+    if loaded_pack.summary is None and not loaded_pack.recent_messages:
+        return None
+    return loaded_pack
+
+
+def _runtime_context_request(
+    *,
+    intent: str,
+    query: str,
+    selected_tool_names: list[str],
+    context_dependencies: list[str] | None,
+    farm_id: int,
+    user_id: str | None,
+    session_id: str | None,
+):
+    from app.context.core.policy import ContextBuildRequest
+
+    return ContextBuildRequest(
+        intent=intent,
+        query=query,
+        selected_tool_names=list(selected_tool_names),
+        context_dependencies=list(context_dependencies or []),
+        farm_id=farm_id,
+        user_id=user_id,
+        session_id=session_id,
+    )
 
 
 async def _warm_tool_caches(

@@ -351,6 +351,88 @@ async def test_maybe_summarize_正常生成后写入数据库并同步短时缓�
 
 
 @pytest.mark.asyncio
+async def test_maybe_summarize_成功后写入摘要边界(db_session, monkeypatch):
+    from app.memory import service as service_module
+
+    conversation = _新建会话(db_session, summary="旧摘要")
+    conversation.meta_json = {"source": "playground"}
+    db_session.commit()
+    _补充消息(db_session, conversation, 12)
+    _配置摘要(monkeypatch, service_module)
+    _收集_trace(monkeypatch, service_module)
+    monkeypatch.setattr(service_module, "get_llm", lambda role: object())
+    monkeypatch.setattr(
+        service_module,
+        "generate_summary",
+        AsyncMock(return_value="【当前目标】\n- 用户关注西棚黄瓜预算 200 元。"),
+    )
+
+    service = InMemoryMemoryService()
+    await service.maybe_summarize(db_session, conversation.id, 1, "summary-session", [])
+
+    db_session.refresh(conversation)
+    last_message = (
+        db_session.query(ConversationMessage)
+        .filter(ConversationMessage.conversation_id == conversation.id)
+        .order_by(ConversationMessage.id.desc())
+        .first()
+    )
+    assert conversation.meta_json["source"] == "playground"
+    cursor = conversation.meta_json["context_cursor"]
+    assert cursor["summary_version"] == 1
+    assert cursor["summarized_until_message_id"] == last_message.id
+    assert cursor["summarized_until_created_at"] == last_message.created_at.replace(
+        tzinfo=UTC
+    ).isoformat()
+    assert cursor["summary_hash"].startswith("sha256:")
+    assert cursor["updated_at"]
+
+
+@pytest.mark.asyncio
+async def test_maybe_summarize_只总结摘要边界后的新增消息(db_session, monkeypatch):
+    from app.memory import service as service_module
+
+    conversation = _新建会话(db_session, summary="旧摘要")
+    _补充消息(db_session, conversation, 8)
+    boundary_message = (
+        db_session.query(ConversationMessage)
+        .filter(ConversationMessage.conversation_id == conversation.id)
+        .order_by(ConversationMessage.id.desc())
+        .first()
+    )
+    conversation.meta_json = {
+        "context_cursor": {
+            "summary_version": 1,
+            "summarized_until_message_id": boundary_message.id,
+            "summarized_until_created_at": boundary_message.created_at.replace(
+                tzinfo=UTC
+            ).isoformat(),
+            "summary_hash": "sha256:old",
+        }
+    }
+    db_session.commit()
+    _补充消息(db_session, conversation, 4)
+    _配置摘要(monkeypatch, service_module, threshold=4)
+    _收集_trace(monkeypatch, service_module)
+    monkeypatch.setattr(service_module, "get_llm", lambda role: object())
+    generate_summary = AsyncMock(return_value="完整新版摘要：新增 4 条。")
+    monkeypatch.setattr(service_module, "generate_summary", generate_summary)
+
+    service = InMemoryMemoryService()
+    await service.maybe_summarize(db_session, conversation.id, 1, "summary-session", [])
+
+    new_message_ids = [
+        message.id for message in generate_summary.await_args.kwargs["old_messages"]
+    ]
+    assert len(new_message_ids) == 4
+    assert all(message_id > boundary_message.id for message_id in new_message_ids)
+    db_session.refresh(conversation)
+    cursor = conversation.meta_json["context_cursor"]
+    assert cursor["summary_version"] == 2
+    assert cursor["summarized_until_message_id"] == max(new_message_ids)
+
+
+@pytest.mark.asyncio
 async def test_maybe_summarize_异常时记录结构化日志且不抛出(
     db_session,
     monkeypatch,

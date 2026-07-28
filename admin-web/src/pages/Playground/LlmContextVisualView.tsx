@@ -5,6 +5,7 @@ import { palette } from '../../styles/theme';
 import { formatTracePayload } from '../../utils/tracePayload';
 import type {
   PlaygroundLlmContextBlockDetail,
+  PlaygroundLlmContextPackDiagnostics,
   PlaygroundLlmContextSnapshot,
 } from './traceMetrics';
 
@@ -215,6 +216,72 @@ function DetailChip({ label, value, accent }: {
     }}>
       {label}: {value}
     </span>
+  );
+}
+
+function formatMessageIds(ids: number[]): string {
+  if (ids.length === 0) return '-';
+  return ids.map((id) => `#${id}`).join(' ');
+}
+
+function formatBlockList(blocks: string[]): string {
+  return blocks.length > 0 ? blocks.join(', ') : '-';
+}
+
+function ContextPackPanel({ contextPack }: {
+  contextPack: PlaygroundLlmContextPackDiagnostics | null;
+}) {
+  if (!contextPack) return null;
+
+  return (
+    <SectionPanel title="ContextPack" subtitle="会话压缩边界与最近原文选择">
+      <div style={{
+        display: 'grid',
+        gap: 10,
+      }}>
+        <div style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 6,
+        }}>
+          <DetailChip
+            label="summary"
+            value={contextPack.summaryVersion === null ? '-' : `v${contextPack.summaryVersion}`}
+            accent
+          />
+          <DetailChip label="hash" value={contextPack.summaryHash || '-'} />
+          <DetailChip label="token" value={formatDetailNumber(contextPack.tokenEstimate)} />
+        </div>
+        <div style={{
+          color: TEXT,
+          fontFamily: 'monospace',
+          fontSize: 13,
+          lineHeight: 1.7,
+          wordBreak: 'break-word',
+        }}>
+          recent_message_ids: {formatMessageIds(contextPack.recentMessageIds)}
+        </div>
+        <div style={{
+          display: 'grid',
+          gap: 6,
+        }}>
+          <div style={{ color: TEXT_DIM, fontSize: 12 }}>
+            selected: {formatBlockList(contextPack.selectedBlocks)}
+          </div>
+          <div style={{ color: TEXT_DIM, fontSize: 12 }}>
+            compressed: {formatBlockList(contextPack.compressedBlocks)}
+          </div>
+          <div style={{ color: TEXT_DIM, fontSize: 12 }}>
+            dropped: {formatBlockList(contextPack.droppedBlocks)}
+          </div>
+          {contextPack.compactionReason && (
+            <div style={{ color: TEXT_DIM, fontSize: 12 }}>
+              reason: {contextPack.compactionReason}
+            </div>
+          )}
+        </div>
+      </div>
+    </SectionPanel>
   );
 }
 
@@ -521,6 +588,7 @@ export function LlmContextVisualView({ snapshot }: { snapshot: PlaygroundLlmCont
         <MetricTile label="Prompt Token" value={formatMetricNumber(snapshot.promptTokens)} />
         <MetricTile label="Token Budget" value={formatMetricNumber(snapshot.maxTokens)} />
       </div>
+      <ContextPackPanel contextPack={snapshot.contextPack} />
       <div style={{
         display: 'grid',
         gap: 14,
