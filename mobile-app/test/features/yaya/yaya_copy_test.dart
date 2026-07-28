@@ -76,7 +76,7 @@ void main() {
     expect(find.text('收到'), findsOneWidget);
   });
 
-  testWidgets('换一批问题入口存在且点击不报错', (tester) async {
+  testWidgets('换一批入口存在且点击不报错', (tester) async {
     await tester.binding.setSurfaceSize(const Size(393, 852));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -85,7 +85,7 @@ void main() {
 
     expect(find.text('今天适合干什么'), findsWidgets);
 
-    await tester.tap(find.widgetWithText(TextButton, '换一批问题'));
+    await tester.tap(find.widgetWithText(TextButton, '换一批'));
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
@@ -99,10 +99,10 @@ void main() {
     await tester.pump();
 
     expect(find.text('芽芽'), findsWidgets);
-    expect(find.text('在线'), findsOneWidget);
-    expect(find.textContaining('告诉我你想处理的农场问题'), findsOneWidget);
-    expect(find.textContaining('可以帮你整理农事记录'), findsOneWidget);
-    expect(find.text('你可以问'), findsOneWidget);
+    expect(find.textContaining('在线'), findsOneWidget);
+    expect(find.textContaining('我是芽芽，你的农场助手'), findsOneWidget);
+    expect(find.textContaining('整理成可确认的记录'), findsOneWidget);
+    expect(find.text('常用问题'), findsOneWidget);
     expect(find.text('记录今天农活'), findsOneWidget);
     expect(find.text('今天适合干什么'), findsWidgets);
     expect(find.text('田间问答'), findsNothing);

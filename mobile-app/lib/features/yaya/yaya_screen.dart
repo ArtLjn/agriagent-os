@@ -740,16 +740,16 @@ class _YayaEmptyPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final greeting = _greetingText(DateTime.now());
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(color: AppColors.lineSoft),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x07000000),
-            blurRadius: 18,
-            offset: Offset(0, 8),
+            color: Color(0x080B2447),
+            blurRadius: 24,
+            offset: Offset(0, 10),
           ),
         ],
       ),
@@ -769,22 +769,13 @@ class _YayaEmptyPanel extends StatelessWidget {
                         Text(
                           '芽芽',
                           style: AppTextStyles.sectionTitle.copyWith(
-                            fontSize: 17,
+                            fontSize: 18,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Container(
-                          width: 6,
-                          height: 6,
-                          decoration: const BoxDecoration(
-                            color: AppColors.green,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 5),
                         Text(
-                          '在线',
+                          '在线 · 操作前确认',
                           style: AppTextStyles.small.copyWith(
                             color: AppColors.greenDark,
                             fontWeight: FontWeight.w700,
@@ -794,9 +785,8 @@ class _YayaEmptyPanel extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      '$greeting，我是芽芽。告诉我你想处理的农场问题。',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                      '$greeting，我是芽芽，你的农场助手。',
+                      maxLines: 2,
                       style: AppTextStyles.body.copyWith(
                         color: AppColors.muted,
                         fontSize: 13,
@@ -810,15 +800,15 @@ class _YayaEmptyPanel extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           Text(
-            '可以帮你整理农事记录、查看天气安排、复盘账本，并在保存或执行前让你确认。',
+            '把今天要处理的农事、天气、账本说给我，我会整理成可确认的记录。',
             style: AppTextStyles.body.copyWith(
-              color: AppColors.ink2,
+              color: AppColors.ink,
               fontSize: 14,
-              height: 1.45,
+              height: 1.5,
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           _SuggestionPills(onSelected: onSelected),
         ],
       ),

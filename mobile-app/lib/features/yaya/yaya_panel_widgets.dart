@@ -71,35 +71,51 @@ class _SuggestionPillsState extends State<_SuggestionPills> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '你可以问',
-            style: AppTextStyles.small.copyWith(
-              color: AppColors.subtle,
-              fontWeight: FontWeight.w800,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '常用问题',
+                  style: AppTextStyles.small.copyWith(
+                    color: AppColors.subtle,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: _shuffleSuggestions,
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.subtle,
+                  minimumSize: const Size(0, 28),
+                  padding: EdgeInsets.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  textStyle: AppTextStyles.small.copyWith(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                child: const Text('换一批'),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          for (var index = 0; index < suggestions.length; index++)
-            _SuggestionRow(
-              spec: suggestions[index],
-              showDivider: index != suggestions.length - 1,
-              onTap: () => widget.onSelected(suggestions[index].label),
-            ),
           const SizedBox(height: 2),
-          TextButton(
-            onPressed: _shuffleSuggestions,
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.subtle,
-              minimumSize: const Size(0, 30),
-              padding: EdgeInsets.zero,
-              alignment: Alignment.centerLeft,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              textStyle: AppTextStyles.small.copyWith(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
+          Container(
+            decoration: const BoxDecoration(
+              border: Border(
+                top: BorderSide(color: AppColors.lineSoft),
               ),
             ),
-            child: const Text('换一批问题'),
+            child: Column(
+              children: [
+                for (var index = 0; index < suggestions.length; index++)
+                  _SuggestionRow(
+                    number: index + 1,
+                    spec: suggestions[index],
+                    showDivider: index != suggestions.length - 1,
+                    onTap: () => widget.onSelected(suggestions[index].label),
+                  ),
+              ],
+            ),
           ),
         ],
       ),
@@ -109,11 +125,13 @@ class _SuggestionPillsState extends State<_SuggestionPills> {
 
 class _SuggestionRow extends StatelessWidget {
   const _SuggestionRow({
+    required this.number,
     required this.spec,
     required this.showDivider,
     required this.onTap,
   });
 
+  final int number;
   final _SuggestionSpec spec;
   final bool showDivider;
   final VoidCallback onTap;
@@ -125,7 +143,7 @@ class _SuggestionRow extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Container(
-          height: 42,
+          height: 44,
           alignment: Alignment.centerLeft,
           padding: const EdgeInsets.symmetric(horizontal: 2),
           decoration: BoxDecoration(
@@ -133,16 +151,33 @@ class _SuggestionRow extends StatelessWidget {
                 ? const Border(bottom: BorderSide(color: AppColors.lineSoft))
                 : null,
           ),
-          child: Text(
-            spec.label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.body.copyWith(
-              color: AppColors.ink2,
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              height: 1.2,
-            ),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 28,
+                child: Text(
+                  number.toString().padLeft(2, '0'),
+                  style: AppTextStyles.small.copyWith(
+                    color: AppColors.subtle,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  spec.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.body.copyWith(
+                    color: AppColors.ink2,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    height: 1.2,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
