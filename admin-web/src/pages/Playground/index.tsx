@@ -15,7 +15,7 @@ import { buildConversationRows } from './conversationRows';
 import { usersApi, type CurrentUser } from '../../api/users';
 import { chooseDefaultUserId } from './currentUser';
 import { buildSessionDebugExport, type DebugExportMessage } from './sessionDebugExport';
-import { canConfirmAssistantMessage, hasPendingConfirmationControls, type PendingResolution } from './pendingPlanControls';
+import { applyHistoricalPendingResolution, canConfirmAssistantMessage, hasPendingConfirmationControls, type PendingResolution } from './pendingPlanControls';
 import {
   buildPlaygroundTraceMetrics,
   extractLatestLlmContextSnapshot,
@@ -141,7 +141,7 @@ function TraceMetricPill({ label, value, accent }: { label: string; value: strin
 /* ── 聊天气泡组件 ── */
 function ChatBubble({ role, content, skills, pendingAction, pendingPlan, pendingResolution, onAction }: { role: 'user' | 'assistant'; content: string; skills?: string[]; pendingAction?: PendingAction | null; pendingPlan?: PendingPlan | null; pendingResolution?: PendingResolution | null; onAction?: (action: string) => void }) {
   const isUser = role === 'user';
-  const hasConfirmationControls = hasPendingConfirmationControls({ role, content, pendingAction, pendingPlan });
+  const hasConfirmationControls = hasPendingConfirmationControls({ role, content, pendingAction, pendingPlan, pendingResolution });
   const canConfirm = canConfirmAssistantMessage({ role, content, pendingAction, pendingPlan, pendingResolution });
   const confirmationDisabled = !canConfirm || !onAction;
   return (
@@ -390,17 +390,21 @@ export default function Playground() {
     updateSession(sid, () => ({ ...emptySessionState(), loading: true }));
     try {
       const msgs = await getConversationMessages(sid, selectedUserId);
+      const loaded: Message[] = msgs.map((m: ConversationMessage) => ({
+        id: `history-${m.id}`,
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+        skills: m.skills,
+        pendingAction: m.pending_action,
+        pendingPlan: m.pending_plan,
+      }));
+      // pendingResolution 只存在前端，切换会话会丢。根据消息顺序推断：
+      // 非 last 的 pending 消息 → 当时的确认/取消已让对话往下走，标记为已确认。
+      const resolved = applyHistoricalPendingResolution(loaded);
       updateSession(sid, (state) => ({
         ...state,
         loading: false,
-        messages: msgs.map((m: ConversationMessage) => ({
-          id: `history-${m.id}`,
-          role: m.role as 'user' | 'assistant',
-          content: m.content,
-          skills: m.skills,
-          pendingAction: m.pending_action,
-          pendingPlan: m.pending_plan,
-        })),
+        messages: resolved,
         timeline: null,
       }));
     } catch {
