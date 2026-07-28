@@ -30,6 +30,7 @@ const snapshot: PlaygroundLlmContextSnapshot = {
   contextBlocks: ['farm', 'ledger'],
   contextBlockDetails: [],
   runtimeSections: [],
+  contextPack: null,
   budget: {
     total_tokens: 420,
     max_tokens: 6000,
@@ -132,6 +133,16 @@ const v2Snapshot = {
       ],
     },
   ],
+  contextPack: {
+    recentMessageIds: [1235, 1236],
+    summaryVersion: 4,
+    summaryHash: 'sha256:abc',
+    tokenEstimate: 88,
+    selectedBlocks: ['conversation_summary', 'recent_messages'],
+    compressedBlocks: [],
+    droppedBlocks: [],
+    compactionReason: '',
+  },
   budget: {
     total_tokens: 3315,
     max_tokens: 6000,
@@ -208,5 +219,9 @@ describe('LlmContextInspector', () => {
     expect(document.body.textContent).toContain('call-1');
     expect(document.body.textContent).toContain('get_task_state');
     expect(document.body.textContent).toContain('success');
+    expect(document.body.textContent).toContain('ContextPack');
+    expect(document.body.textContent).toContain('summary: v4');
+    expect(document.body.textContent).toContain('#1235');
+    expect(document.body.textContent).toContain('#1236');
   });
 });

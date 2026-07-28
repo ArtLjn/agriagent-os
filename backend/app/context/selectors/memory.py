@@ -3,6 +3,7 @@
 import json
 
 from app.context.core.models import ContextBlock
+from app.context.pack import ContextPack
 from app.memory.models import (
     LongTermMemoryContext,
     MemoryContext,
@@ -19,9 +20,19 @@ class MemorySelector:
         memory_summary: str | None = None,
         memory_hits: list[str] | None = None,
         memory_context: MemoryContext | None = None,
+        context_pack: ContextPack | None = None,
         **_kwargs,
     ) -> list[ContextBlock]:
         blocks = []
+        if context_pack is not None:
+            blocks.extend(context_pack.to_context_blocks())
+            if memory_context is not None:
+                blocks.extend(self._select_active_state(memory_context))
+                long_term_block = self._select_long_term(memory_context.long_term)
+                if long_term_block is not None:
+                    blocks.append(long_term_block)
+            return blocks
+
         if memory_context is not None:
             blocks.extend(self._select_short_term(memory_context))
             long_term_block = self._select_long_term(memory_context.long_term)
@@ -118,6 +129,20 @@ class MemorySelector:
                     metadata=dict(session_metadata),
                 )
             )
+
+        blocks.extend(self._select_active_state(memory_context, session_metadata))
+        return blocks
+
+    def _select_active_state(
+        self,
+        memory_context: MemoryContext,
+        session_metadata: dict | None = None,
+    ) -> list[ContextBlock]:
+        blocks = []
+        session_metadata = session_metadata or {
+            "layer": "working",
+            "cache_scope": "session",
+        }
 
         if memory_context.pending_action is not None:
             blocks.append(

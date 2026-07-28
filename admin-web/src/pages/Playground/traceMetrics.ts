@@ -56,6 +56,17 @@ export interface PlaygroundLlmContextCompression {
   events: unknown[];
 }
 
+export interface PlaygroundLlmContextPackDiagnostics {
+  recentMessageIds: number[];
+  summaryVersion: number | null;
+  summaryHash: string;
+  tokenEstimate: number | null;
+  selectedBlocks: string[];
+  compressedBlocks: string[];
+  droppedBlocks: string[];
+  compactionReason: string;
+}
+
 export interface PlaygroundLlmContextSnapshot {
   schemaVersion: number | null;
   systemPrompt: string;
@@ -63,6 +74,7 @@ export interface PlaygroundLlmContextSnapshot {
   contextBlocks: string[];
   contextBlockDetails: PlaygroundLlmContextBlockDetail[];
   runtimeSections: PlaygroundLlmContextRuntimeSection[];
+  contextPack: PlaygroundLlmContextPackDiagnostics | null;
   budget: Record<string, unknown>;
   compression: PlaygroundLlmContextCompression | null;
   promptTokens: number | null;
@@ -173,6 +185,31 @@ function readCompression(value: unknown): PlaygroundLlmContextCompression | null
   };
 }
 
+function readContextPackDiagnostics(
+  value: unknown,
+): PlaygroundLlmContextPackDiagnostics | null {
+  const contextPack = asRecord(value);
+  if (!contextPack) return null;
+  return {
+    recentMessageIds: asArray(contextPack.recent_message_ids)
+      .map(toNumber)
+      .filter((item): item is number => item !== null),
+    summaryVersion: toNumber(contextPack.summary_version),
+    summaryHash: toStringValue(contextPack.summary_hash),
+    tokenEstimate: toNumber(contextPack.token_estimate),
+    selectedBlocks: asArray(contextPack.selected_blocks).filter(
+      (item): item is string => typeof item === 'string',
+    ),
+    compressedBlocks: asArray(contextPack.compressed_blocks).filter(
+      (item): item is string => typeof item === 'string',
+    ),
+    droppedBlocks: asArray(contextPack.dropped_blocks).filter(
+      (item): item is string => typeof item === 'string',
+    ),
+    compactionReason: toStringValue(contextPack.compaction_reason),
+  };
+}
+
 export function buildPlaygroundTraceMetrics(timeline: TraceTimeline | null): PlaygroundTraceMetrics {
   if (!timeline?.rounds) return EMPTY_METRICS;
 
@@ -236,6 +273,8 @@ export function extractLatestLlmContextSnapshot(
   const budget = asRecord(output.budget) ?? {};
   const usage = contextNode ? readTokenUsage(contextNode) : null;
   const runtimeSections = readRuntimeSections(output.runtime_context);
+  const runtimeContext = asRecord(output.runtime_context);
+  const contextPack = readContextPackDiagnostics(runtimeContext?.context_pack);
   const contextBlockDetails = runtimeSections.flatMap((section) => section.blocks);
   const compression = readCompression(output.compression);
   const messages = asArray(output.messages)
@@ -268,6 +307,7 @@ export function extractLatestLlmContextSnapshot(
     ),
     contextBlockDetails,
     runtimeSections,
+    contextPack,
     budget,
     compression,
     promptTokens: toNumber(budget.total_tokens) ?? toNumber(usage?.prompt_tokens),

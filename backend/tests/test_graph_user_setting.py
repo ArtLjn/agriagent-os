@@ -7,7 +7,9 @@ import pytest
 from app.agent.runtime.nodes import _llm_node
 from app.prompt.cache import clear_all_caches
 from app.context.core.models import ContextBundle
+from app.domains.conversation.models import Conversation, ConversationMessage
 from app.memory.models import MemoryContext, MemoryMessage
+from app.shared.compatibility import UTC
 
 
 class _FakeFarm:
@@ -253,6 +255,78 @@ class TestRuntimeContextBundleHelper:
             "farm_id": 1,
             "session_id": "session-1",
         }
+
+    @pytest.mark.asyncio
+    async def test_runtime_context_bundle_uses_context_pack_without_duplicate_history(
+        self,
+        db_session,
+    ):
+        """Runtime helper 应使用 ContextPack，并关闭旧对话块重复注入。"""
+        from sqlalchemy.orm import sessionmaker
+
+        from app.agent.runtime.llm_support import _get_runtime_context_bundle
+
+        conversation = Conversation(
+            farm_id=1,
+            user_id="test-user-001",
+            session_id="session-pack",
+            summary="完整新版摘要：用户关注西棚黄瓜预算 200 元。",
+        )
+        db_session.add(conversation)
+        db_session.commit()
+        db_session.refresh(conversation)
+        messages = []
+        for index in range(6):
+            message = ConversationMessage(
+                conversation_id=conversation.id,
+                role="user" if index % 2 == 0 else "assistant",
+                content=f"第 {index + 1} 条消息",
+            )
+            db_session.add(message)
+            messages.append(message)
+        db_session.commit()
+        for message in messages:
+            db_session.refresh(message)
+        boundary_message = messages[3]
+        conversation.meta_json = {
+            "context_cursor": {
+                "summary_version": 3,
+                "summarized_until_message_id": boundary_message.id,
+                "summarized_until_created_at": boundary_message.created_at.replace(
+                    tzinfo=UTC
+                ).isoformat(),
+                "summary_hash": "sha256:pack",
+            }
+        }
+        db_session.commit()
+        test_session_local = sessionmaker(bind=db_session.get_bind())
+        memory_service = _FakeMemoryService()
+
+        with patch("app.agent.runtime.llm_support.SessionLocal", test_session_local):
+            bundle, _farm_ctx = await _get_runtime_context_bundle(
+                farm_id=1,
+                intent="query",
+                selected_tool_names=[],
+                user_id="test-user-001",
+                session_id="session-pack",
+                memory_context_loader=memory_service.build_context,
+            )
+
+        block_keys = [block.key for block in bundle.blocks]
+        assert "conversation_summary" in block_keys
+        assert "recent_messages" in block_keys
+        assert "conversation" not in block_keys
+        assert "short_term_recent" not in block_keys
+        assert "short_term_summary" not in block_keys
+        assert "完整新版摘要" in bundle.render_text()
+        assert "第 5 条消息" in bundle.render_text()
+        assert "第 6 条消息" in bundle.render_text()
+        assert "上次说要控水" not in bundle.render_text()
+        assert bundle.metadata["context_pack"]["summary_version"] == 3
+        assert bundle.metadata["context_pack"]["recent_message_ids"] == [
+            messages[4].id,
+            messages[5].id,
+        ]
 
     @pytest.mark.asyncio
     async def test_no_user_setting_record(self, mock_env):

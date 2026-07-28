@@ -477,7 +477,11 @@ def _record_final_llm_context_trace(
                 "schema_version": 2,
                 "system_prompt": safe_preview(system_text, max_chars=4000),
                 "runtime_context": {
-                    "sections": _runtime_context_sections_payload(context_bundle)
+                    "sections": _runtime_context_sections_payload(context_bundle),
+                    "context_pack": safe_trace_value(
+                        context_bundle.metadata.get("context_pack"),
+                        max_chars=1000,
+                    ),
                 },
                 "messages": message_payloads,
                 "context_blocks": context_blocks,
