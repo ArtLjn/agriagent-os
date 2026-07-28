@@ -256,7 +256,22 @@ async def stream_advisor(
     user_id: str | None = None,
     call_type: str = "stream_chat",
 ) -> AsyncGenerator[str, None]:
-    """流式调用建议 Agent，逐 token 返回最终 AI 回复。"""
+    """流式调用建议 Agent，逐 token 返回最终 AI 回复。
+
+    链路位置: ``stream_chat.py::_stream_query_or_advisor_reply`` 的下游，
+    是 Agent 的真正入口。本函数负责把"用户消息"加工成"最终回复"::
+
+        ① 安全检查       输入被拦截时直接 yield 提示，return
+        ② trace 初始化   本轮 agent_turn 开始计时
+        ③ 短路分支（命中即 return，不进 Agent）:
+            - 问候语
+            - 不支持能力
+            - pending_action 命中（与 stream_chat 层的检查是双保险）
+        ④ 构建 history + 当前消息，调 stream_agent_loop 进入 ReAct 循环
+
+    关于 yield 的语义: 本函数是 "最终回复" 的流式分段（每段 3 字符、
+    20ms 间隔），不是 LLM 原生的 token 流。前端的打字机效果由此产生。
+    """
     ok, reason = check_input(user_input)
     if not ok:
         logger.warning("Agent 输入被拦截 | farm_id=%s, reason=%s", farm_id, reason)
@@ -295,6 +310,7 @@ async def stream_advisor(
     observed_tool_results = 0
     final_reply_len = 0
     try:
+        # ③-a 问候语短路：直接给固定文案，跳过 Agent
         if intent == IntentType.GREETING:
             reply = filter_output(get_greeting_reply(user_input))
             record_agent_response(
@@ -306,6 +322,7 @@ async def stream_advisor(
             yield reply
             return
 
+        # ③-b 不支持能力短路：明示告诉用户这条路做不到
         unsupported_reply = _unsupported_capability_reply(user_input)
         if unsupported_reply:
             record_agent_response(
@@ -317,6 +334,7 @@ async def stream_advisor(
             yield unsupported_reply
             return
 
+        # ③-c pending 短路：与 stream_chat 层的双保险（这里带 farm_uid）
         pending_decision = await handle_pending_action(
             farm_id=farm_id,
             message=user_input,
@@ -334,12 +352,14 @@ async def stream_advisor(
             yield reply
             return
 
-        # 构建历史消息 + 当前消息
+        # ④ 进入 ReAct Agent：拼历史消息 + 当前消息作为初始 state
         history = await _async_build_history_messages(
             db, conversation_id, current_user_input=user_input
         )
         messages = history + [HumanMessage(content=user_input)]
 
+        # stream_agent_loop 每次 yield 形如 {"llm": update} / {"tools": update}
+        # 这里只关心 update.messages 里新增的消息类型，做日志和最终回复提取
         async for event in stream_agent_loop(
             {
                 "messages": messages,
@@ -372,6 +392,7 @@ async def stream_advisor(
                         )
                     elif isinstance(msg, AIMessage):
                         if msg.tool_calls:
+                            # LLM 决定调工具：记录每个 tool_call 决策，下一轮工具节点会执行
                             for tc in msg.tool_calls:
                                 tool_name = str(tc.get("name") or "")
                                 if tool_name:
@@ -393,6 +414,8 @@ async def stream_advisor(
                                     },
                                 )
                         elif msg.content:
+                            # LLM 不再调工具且带正文 = 最终回复；
+                            # 切片 + sleep 制造前端打字机效果
                             final_reply_len = len(msg.content)
                             log_event(
                                 logger,
