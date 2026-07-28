@@ -1,5 +1,6 @@
 """测试 _llm_node 中 UserSetting.default_city 的优先级逻辑。"""
 
+import threading
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -7,6 +8,11 @@ import pytest
 from app.agent.runtime.nodes import _llm_node
 from app.prompt.cache import clear_all_caches
 from app.context.core.models import ContextBundle
+from app.context.pack import (
+    ContextPack,
+    ContextPackDiagnostics,
+    ConversationSummaryBlock,
+)
 from app.domains.conversation.models import Conversation, ConversationMessage
 from app.memory.models import MemoryContext, MemoryMessage
 from app.shared.compatibility import UTC
@@ -327,6 +333,60 @@ class TestRuntimeContextBundleHelper:
             messages[4].id,
             messages[5].id,
         ]
+
+    @pytest.mark.asyncio
+    async def test_runtime_context_pack_loads_on_request_event_loop(
+        self,
+        db_session,
+        monkeypatch,
+    ):
+        """ContextPack 的异步 Repository 读取必须留在请求事件循环。"""
+        from sqlalchemy.orm import sessionmaker
+
+        from app.agent.runtime.llm_support import _get_runtime_context_bundle
+
+        test_session_local = sessionmaker(bind=db_session.get_bind())
+        request_thread_id = threading.get_ident()
+        build_thread_ids: list[int] = []
+
+        class _FakeContextPackService:
+            async def build(self, **kwargs):
+                build_thread_ids.append(threading.get_ident())
+                return ContextPack(
+                    conversation_id=1,
+                    session_id=kwargs["session_id"],
+                    farm_id=kwargs["farm_id"],
+                    user_id=kwargs["user_id"],
+                    summary=ConversationSummaryBlock(
+                        content="完整新版摘要：用户关注西棚黄瓜预算。",
+                        version=1,
+                        summarized_until_message_id=None,
+                        summarized_until_created_at=None,
+                    ),
+                    recent_messages=[],
+                    diagnostics=ContextPackDiagnostics(
+                        recent_message_ids=[],
+                        summary_version=1,
+                    ),
+                )
+
+        monkeypatch.setattr(
+            "app.context.pack.ContextPackService",
+            _FakeContextPackService,
+        )
+
+        with patch("app.agent.runtime.llm_support.SessionLocal", test_session_local):
+            bundle, _farm_ctx = await _get_runtime_context_bundle(
+                farm_id=1,
+                intent="query",
+                selected_tool_names=[],
+                user_id="test-user-001",
+                session_id="session-pack-loop",
+                memory_context_loader=_FakeMemoryService().build_context,
+            )
+
+        assert build_thread_ids == [request_thread_id]
+        assert "完整新版摘要" in bundle.render_text()
 
     @pytest.mark.asyncio
     async def test_no_user_setting_record(self, mock_env):
