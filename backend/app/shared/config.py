@@ -89,7 +89,7 @@ class SkillVectorStoreConfig(BaseModel):
     collection: str = "farm_manager_skill_routes_v1"
     mode: Literal["vector", "bm25", "hybrid"] = "hybrid"
     top_k: int = Field(default=8, ge=1, le=100)
-    timeout_seconds: float = Field(default=1.5, gt=0)
+    timeout_seconds: float = Field(default=10.0, gt=0)
     sync_timeout_seconds: float = Field(default=30.0, gt=0)
     retry: int = Field(default=0, ge=0)
     use_hyde: bool = False

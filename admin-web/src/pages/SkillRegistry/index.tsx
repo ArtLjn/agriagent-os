@@ -222,6 +222,15 @@ export default function SkillRegistry() {
                   <Tag color={recallResult.vector_index_enabled ? 'green' : 'default'}>
                     {recallResult.vector_index_enabled ? '向量索引已启用' : '向量索引未启用'}
                   </Tag>
+                  <Tag color={recallBool(recallResult.recall, 'quillrag_retrieve_used') ? 'green' : 'default'}>
+                    {recallBool(recallResult.recall, 'quillrag_retrieve_used') ? 'RAG 已调用' : 'RAG 未调用'}
+                  </Tag>
+                  <Tag color={recallBool(recallResult.recall, 'external_embedding_requested') ? 'cyan' : 'default'}>
+                    Embedding: {recallText(recallResult.recall, 'embedding_location') || 'none'}
+                  </Tag>
+                  <Tag color="blue">
+                    Scope: {recallText(recallResult.recall, 'candidate_scope') || 'unknown'}
+                  </Tag>
                 </div>
                 <div
                   style={{
@@ -299,10 +308,10 @@ export default function SkillRegistry() {
                     marginBottom: 10,
                   }}
                 >
-                  完整 skill_router JSON
+                  skill_router trace JSON
                 </summary>
                 <pre
-                  aria-label="完整 skill_router JSON"
+                  aria-label="skill_router trace JSON"
                   style={{
                     color: TEXT,
                     fontSize: 12,
@@ -560,7 +569,7 @@ function SummaryCard({
 }
 
 function EvidenceMetrics({ evidence }: { evidence: Record<string, unknown> }) {
-  const metrics = ['bm25', 'embedding', 'lexical']
+  const metrics = ['bm25', 'vector', 'lexical']
     .map((key) => evidenceMetric(evidence, key))
     .filter((item): item is string => Boolean(item));
 
@@ -633,11 +642,20 @@ function evidenceMetric(evidence: Record<string, unknown>, key: string) {
   return `${key}: ${value.toFixed(2)}`;
 }
 
+function recallBool(recall: Record<string, unknown> | undefined, key: string) {
+  return Boolean(recall?.[key]);
+}
+
+function recallText(recall: Record<string, unknown> | undefined, key: string) {
+  const value = recall?.[key];
+  return typeof value === 'string' ? value : '';
+}
+
 function sourceColor(source: string) {
-  if (source === 'strong_rule') {
+  if (source === 'lexical') {
     return 'purple';
   }
-  if (source === 'embedding') {
+  if (source === 'vector') {
     return 'cyan';
   }
   if (source === 'bm25') {

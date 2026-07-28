@@ -11,14 +11,18 @@ from typing import Any
 import yaml
 from langchain_core.tools import BaseTool
 
+from app.agent.router import classifier_signals as signals
 from app.agent.router.catalog import SkillCatalog
 from app.agent.router.hybrid_retriever import HybridOperationRetriever
+from app.agent.router.intent import IntentType, classify_intent
 from app.agent.router.models import ToolCandidate
 from app.agent.router.skill_vector_store import build_skill_vector_search_fn
 from app.skills.registry import OperationDefinition, load_skill_registry
 
 
 DEFAULT_ROUTE_CASES_PATH = Path(__file__).with_name("skill_route_cases.json")
+_READ_OPERATION_RISKS = frozenset({"read", "external_network"})
+_WRITE_OPERATION_RISKS = frozenset({"write_confirm", "write_high"})
 
 
 @dataclass(frozen=True)
@@ -60,6 +64,8 @@ class RouteRecallPreview:
     candidates: list[RouteRecallCandidate]
     vector_index_enabled: bool
     recall_mode: str
+    recall: dict[str, Any]
+    top_candidates: list[dict[str, Any]]
 
 
 @dataclass(frozen=True)
@@ -101,12 +107,14 @@ def preview_route_recall_detail(
     retriever: HybridOperationRetriever | None = None,
 ) -> RouteRecallPreview:
     """预览单条业务输入的 Skill 候选召回详情。"""
-    candidates = _operation_candidates(tools)
+    candidate_scope = _candidate_scope_for_message(message)
+    candidates = _operation_candidates_for_scope(candidate_scope, tools)
     route_retriever = retriever or _default_hybrid_retriever()
     result = route_retriever.retrieve(
         message,
         candidates,
         limit=len(candidates),
+        candidate_scope=candidate_scope,
     )
     return RouteRecallPreview(
         candidates=_top_unique_skill_candidates(
@@ -119,6 +127,8 @@ def preview_route_recall_detail(
         recall_mode="hybrid_vector"
         if route_retriever.vector_index_enabled
         else "hybrid_local",
+        recall=result.recall,
+        top_candidates=result.top_candidates,
     )
 
 
@@ -130,7 +140,6 @@ def evaluate_route_recall(
     retriever: HybridOperationRetriever | None = None,
 ) -> RouteRecallReport:
     """评测 operation 级召回命中率。"""
-    candidates = _operation_candidates(tools)
     route_retriever = retriever or _default_hybrid_retriever()
     failures: list[RouteRecallFailure] = []
     hit_1 = 0
@@ -138,10 +147,13 @@ def evaluate_route_recall(
     operation_hit_k = 0
 
     for case in cases:
+        candidate_scope = _candidate_scope_for_message(case.message)
+        candidates = _operation_candidates_for_scope(candidate_scope, tools)
         result = route_retriever.retrieve(
             case.message,
             candidates,
             limit=len(candidates),
+            candidate_scope=candidate_scope,
         )
         routes = _top_unique_skill_routes(result.selected_candidates, top_k)
         accepted = _accepted_routes(case)
@@ -251,29 +263,53 @@ def _expected_route(value: dict[str, Any]) -> ExpectedRoute:
     )
 
 
-def _operation_candidates(tools: list[BaseTool]) -> list[ToolCandidate]:
+def _operation_candidates_for_scope(
+    candidate_scope: str,
+    tools: list[BaseTool],
+) -> list[ToolCandidate]:
+    if candidate_scope == "write":
+        return _operation_candidates(tools, risks=_WRITE_OPERATION_RISKS)
+    return _operation_candidates(tools, risks=_READ_OPERATION_RISKS)
+
+
+def _candidate_scope_for_message(message: str) -> str:
+    return "write" if _looks_like_write_message(message) else "read"
+
+
+def _operation_candidates(
+    tools: list[BaseTool],
+    *,
+    risks: frozenset[str] | None = None,
+) -> list[ToolCandidate]:
     catalog = SkillCatalog.from_tools(tools)
     candidates: list[ToolCandidate] = []
     for candidate in catalog.candidates():
-        candidates.extend(_expand_candidate_operations(candidate))
+        candidates.extend(_expand_candidate_operations(candidate, risks=risks))
     return candidates
 
 
-def _expand_candidate_operations(candidate: ToolCandidate) -> list[ToolCandidate]:
+def _expand_candidate_operations(
+    candidate: ToolCandidate,
+    *,
+    risks: frozenset[str] | None = None,
+) -> list[ToolCandidate]:
     if candidate.capability is None:
-        return [candidate]
+        return [candidate] if _candidate_matches_risk(candidate, risks) else []
     try:
         registry = load_skill_registry()
     except (OSError, ValueError):
-        return [candidate]
+        return [candidate] if _candidate_matches_risk(candidate, risks) else []
     capability = registry.capabilities.get(candidate.capability)
     if capability is None:
-        return [candidate]
+        return [candidate] if _candidate_matches_risk(candidate, risks) else []
     expanded = [
         _candidate_for_operation(candidate, operation)
         for operation in capability.operations.values()
+        if risks is None or operation.risk in risks
     ]
-    return expanded or [candidate]
+    if expanded:
+        return expanded
+    return [candidate] if _candidate_matches_risk(candidate, risks) else []
 
 
 def _candidate_for_operation(
@@ -306,6 +342,37 @@ def _candidate_for_operation(
             "operation": operation.name,
             "operation_risk": operation.risk,
         },
+    )
+
+
+def _candidate_matches_risk(
+    candidate: ToolCandidate,
+    risks: frozenset[str] | None,
+) -> bool:
+    if risks is None:
+        return True
+    risk = candidate.operation_risk or candidate.risk
+    return risk in risks
+
+
+def _looks_like_write_message(message: str) -> bool:
+    if (
+        signals.looks_like_daily_operation_advice(message)
+        or signals.looks_like_weather_crop_impact_query(message)
+        or signals.looks_like_weather_query(message)
+    ):
+        return False
+    if classify_intent(message) == IntentType.WRITE:
+        return True
+    return (
+        signals.looks_like_create_work_order(message)
+        or signals.looks_like_create_worker(message)
+        or signals.looks_like_manage_wage(message)
+        or signals.looks_like_create_cost_record(message)
+        or signals.looks_like_create_crop_cycle(message)
+        or signals.looks_like_manage_planting_unit(message)
+        or signals.looks_like_create_crop_template(message)
+        or signals.looks_like_manage_cost_category(message)
     )
 
 

@@ -126,6 +126,13 @@ describe('SkillRegistry', () => {
       top_k: 5,
       recall_mode: 'hybrid_vector',
       vector_index_enabled: true,
+      recall: {
+        candidate_scope: 'read',
+        quillrag_retrieve_used: true,
+        external_embedding_requested: true,
+        embedding_location: 'quillrag_service',
+      },
+      top_candidates: [],
       candidates: [
         {
           skill: 'manage_cost',
@@ -134,7 +141,7 @@ describe('SkillRegistry', () => {
           risk: 'read',
           operation_risk: 'read',
           evidence: {
-            sources: ['strong_rule', 'bm25', 'vector'],
+            sources: ['lexical', 'bm25', 'vector'],
             bm25: 1,
             vector: 0.8,
             lexical: 0.9,
@@ -145,17 +152,21 @@ describe('SkillRegistry', () => {
         },
       ],
       skill_router: {
-        selected_tools: ['manage_cost'],
-        selected_operations: {
-          manage_cost: ['query_debt'],
+        schema_version: 2,
+        summary: {
+          selection_path: 'hybrid_retrieval',
+          selected_routes: ['manage_cost.query_debt'],
         },
-        reason: '按意图候选和 stop-loss policy 选择工具',
-        evidence: {
-          frames: [
-            {
-              source: 'hybrid_operation_retriever',
-            },
-          ],
+        selected: {
+          tools: ['manage_cost'],
+          operations: {
+            manage_cost: ['query_debt'],
+          },
+        },
+        recall: {
+          status: 'used',
+          candidate_scope: 'read',
+          vector_search_used: true,
         },
       },
     });
@@ -190,15 +201,18 @@ describe('SkillRegistry', () => {
     expect(await screen.findByText('query_debt')).toBeInTheDocument();
     expect(screen.getByText('混合向量召回')).toBeInTheDocument();
     expect(screen.getByText('向量索引已启用')).toBeInTheDocument();
+    expect(screen.getByText('RAG 已调用')).toBeInTheDocument();
+    expect(screen.getByText('Embedding: quillrag_service')).toBeInTheDocument();
+    expect(screen.getByText('Scope: read')).toBeInTheDocument();
     expect(screen.getByText('hybrid 0.630')).toBeInTheDocument();
-    expect(screen.getByText('strong_rule')).toBeInTheDocument();
+    expect(screen.getByText('lexical')).toBeInTheDocument();
     expect(screen.getByText('bm25')).toBeInTheDocument();
     expect(screen.getByText('vector')).toBeInTheDocument();
     expect(screen.getByText('lexical: 0.90')).toBeInTheDocument();
-    expect(screen.getByLabelText('完整 skill_router JSON')).toHaveTextContent(
-      '"selected_operations"'
+    expect(screen.getByLabelText('skill_router trace JSON')).toHaveTextContent(
+      '"schema_version"'
     );
-    expect(screen.getByLabelText('完整 skill_router JSON')).toHaveTextContent(
+    expect(screen.getByLabelText('skill_router trace JSON')).toHaveTextContent(
       '"manage_cost"'
     );
 

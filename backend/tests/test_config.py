@@ -246,7 +246,7 @@ class TestSkillVectorStoreConfig:
         assert config.enabled is False
         assert config.collection == "farm_manager_skill_routes_v1"
         assert config.mode == "hybrid"
-        assert config.timeout_seconds == 1.5
+        assert config.timeout_seconds == 10.0
         assert config.sync_timeout_seconds == 30.0
         assert config.sync_on_startup is True
 

@@ -76,7 +76,10 @@ class TestSkillRouteRecall:
             vector_calls.append(query)
             return {
                 f"{candidate.name}.{candidate.operation}": (
-                    0.99 if candidate.operation == "query_summary" else 0.01
+                    0.99
+                    if candidate.name == "manage_farm_logs"
+                    and candidate.operation == "query_logs"
+                    else 0.01
                 )
                 for candidate in candidates
             }
@@ -85,28 +88,44 @@ class TestSkillRouteRecall:
             "app.ops.skill_route_eval.build_skill_vector_search_fn",
             lambda: fake_vector_search,
         )
+        monkeypatch.setattr(
+            "app.agent.router.service.build_skill_vector_search_fn",
+            lambda: fake_vector_search,
+        )
         with auth_override_scope(app):
             resp = TestClient(app).post(
                 "/admin/skills/route-recall",
                 headers=admin_headers(),
-                json={"message": "这个月花了多少钱", "top_k": 3},
+                json={"message": "我的农事", "top_k": 3},
             )
 
         assert resp.status_code == 200
         data = resp.json()
-        assert data["message"] == "这个月花了多少钱"
+        assert data["message"] == "我的农事"
         assert data["top_k"] == 3
         assert data["recall_mode"] == "hybrid_vector"
         assert data["vector_index_enabled"] is True
-        assert vector_calls == ["这个月花了多少钱"]
-        assert data["candidates"][0]["skill"] == "manage_cost"
-        assert data["candidates"][0]["operation"] == "query_summary"
+        assert data["recall"]["path"] == "bm25_vector_hybrid"
+        assert data["recall"]["candidate_scope"] == "read"
+        assert data["recall"]["vector_search_used"] is True
+        assert data["recall"]["quillrag_retrieve_used"] is True
+        assert data["top_candidates"][0]["route"] == "manage_farm_logs.query_logs"
+        assert vector_calls == ["我的农事", "我的农事"]
+        assert data["candidates"][0]["skill"] == "manage_farm_logs"
+        assert data["candidates"][0]["operation"] == "query_logs"
         assert data["candidates"][0]["score"] > 0
         assert "vector" in data["candidates"][0]["evidence"]["sources"]
         assert data["candidates"][0]["evidence"]["score"] == data["candidates"][0]["score"]
-        assert data["skill_router"]["selected_operations"] == {
-            "manage_cost": ["query_summary"]
+        assert data["skill_router"]["selected"]["operations"] == {
+            "manage_farm_logs": ["query_logs"]
         }
+        assert data["skill_router"]["summary"].get("fallback") != (
+            "model_choice_read_default"
+        )
+        assert data["skill_router"]["recall"]["path"] == (
+            "bm25_vector_hybrid"
+        )
+        assert data["skill_router"]["recall"]["vector_search_used"] is True
 
     def test_dataset_eval_uses_json_cases(self, db_session, monkeypatch) -> None:
         ensure_admin_user(db_session)

@@ -17,9 +17,31 @@ from app.shared.logging import log_event
 
 VectorSearchFn = Callable[[str, list[ToolCandidate]], dict[str, float]]
 logger = logging.getLogger(__name__)
-_SCORING_FORMULA = (
-    "0.35*bm25 + 0.35*vector + 0.20*lexical + "
-    "0.10*registry_prior + operation_prior - penalties"
+
+
+@dataclass(frozen=True)
+class HybridScoringWeights:
+    """Hybrid rerank 权重。"""
+
+    bm25: float = 0.15
+    vector: float = 0.70
+    lexical: float = 0.05
+    registry_prior: float = 0.10
+
+    def formula(self) -> str:
+        return (
+            f"{self.bm25:.2f}*bm25 + {self.vector:.2f}*vector + "
+            f"{self.lexical:.2f}*lexical + {self.registry_prior:.2f}*registry_prior "
+            "+ operation_prior - penalties"
+        )
+
+
+DEFAULT_SCORING_WEIGHTS = HybridScoringWeights()
+FALLBACK_SCORING_WEIGHTS = HybridScoringWeights(
+    bm25=0.35,
+    vector=0.0,
+    lexical=0.35,
+    registry_prior=0.15,
 )
 
 
@@ -73,13 +95,16 @@ _COST_ANALYTICS_QUERY_TERMS = frozenset(
     "趋势 同比 环比 分析 比上个月 比去年".split()
 )
 _FARM_LOG_CREATE_TERMS = frozenset(
-    "记录 记一下 浇水 施肥 打药 除草 翻地 育苗 农事 操作".split()
+    "记录 记一下 浇水 施肥 打药 除草 翻地 育苗".split()
 )
-_FARM_LOG_QUERY_TERMS = frozenset("查询 查看 看看 最近 历史 日志 哪些".split())
+_FARM_LOG_QUERY_TERMS = frozenset("查询 查看 看看 最近 历史 日志 哪些 农事".split())
 _WORK_ORDER_CREATE_TERMS = frozenset("安排 派 叫 让 用工 作业单 工人 干活".split())
 _UPDATE_DELETE_TERMS = frozenset("修改 更新 删除 删掉 更正 纠正 改成 改为".split())
 _LABOR_WAGE_RECORD_TERMS = frozenset(
     "来了 上工 出勤 一天 日薪 工资 工钱 人工费 每天".split()
+)
+_LABOR_WAGE_RECORD_STRONG_TERMS = frozenset(
+    "来了 上工 出勤 一天 日薪 每天".split()
 )
 _LABOR_PAYROLL_QUERY_TERMS = frozenset(
     "发薪 应发 应该发 未付 工资 工钱 人工钱 多少钱 多少".split()
@@ -134,8 +159,10 @@ class HybridOperationRetriever:
     def __init__(
         self,
         vector_search: VectorSearchFn | None = None,
+        weights: HybridScoringWeights = DEFAULT_SCORING_WEIGHTS,
     ) -> None:
         self._vector_search = vector_search
+        self._weights = weights
 
     @property
     def vector_index_enabled(self) -> bool:
@@ -147,6 +174,7 @@ class HybridOperationRetriever:
         candidates: list[ToolCandidate],
         *,
         limit: int = 5,
+        candidate_scope: str | None = None,
     ) -> HybridRetrievalResult:
         enabled_candidates = [candidate for candidate in candidates if candidate.enabled]
         if not enabled_candidates:
@@ -156,6 +184,7 @@ class HybridOperationRetriever:
         bm25_scores = _bm25_scores(query_terms, enabled_candidates)
         vector_recall = self._vector_scores(message, enabled_candidates)
         vector_scores = vector_recall.scores
+        weights = self._effective_weights(vector_recall)
         max_bm25 = max(bm25_scores.values(), default=0.0)
 
         scored = [
@@ -165,6 +194,7 @@ class HybridOperationRetriever:
                 bm25_scores.get(_route_key(candidate), 0.0),
                 max_bm25,
                 vector_scores.get(_route_key(candidate), 0.0),
+                weights,
             )
             for candidate in enabled_candidates
         ]
@@ -185,6 +215,7 @@ class HybridOperationRetriever:
             candidate_count=len(enabled_candidates),
             ranked=kept,
             limit=min(max(limit, 5), 8),
+            scoring_formula=weights.formula(),
         )
         selected = kept[:limit]
         top_candidates = [
@@ -200,13 +231,23 @@ class HybridOperationRetriever:
                 for _candidate, signals in kept
             },
             recall=_recall_summary(
+                candidate_scope=candidate_scope,
                 candidate_count=len(enabled_candidates),
                 scored_count=len(kept),
                 vector_recall=vector_recall,
                 bm25_used=any(score > 0 for score in bm25_scores.values()),
+                scoring_formula=weights.formula(),
             ),
             top_candidates=top_candidates,
         )
+
+    def _effective_weights(
+        self,
+        vector_recall: _VectorRecallResult,
+    ) -> HybridScoringWeights:
+        if vector_recall.scores:
+            return self._weights
+        return FALLBACK_SCORING_WEIGHTS
 
     def _score_candidate(
         self,
@@ -215,6 +256,7 @@ class HybridOperationRetriever:
         bm25: float,
         max_bm25: float,
         vector: float,
+        weights: HybridScoringWeights,
     ) -> _CandidateSignals:
         route_key = _route_key(candidate)
         lexical_hits, low_signal_hits = _lexical_hits(query_terms, candidate)
@@ -228,16 +270,16 @@ class HybridOperationRetriever:
             0.25 if low_signal_hits and not lexical_hits and bm25_norm > 0 else 0.0
         )
         score = (
-            0.35 * bm25_norm
-            + 0.35 * max(0.0, vector)
-            + 0.20 * lexical
-            + 0.10 * registry_prior
+            weights.bm25 * bm25_norm
+            + weights.vector * max(0.0, vector)
+            + weights.lexical * lexical
+            + weights.registry_prior * registry_prior
             + operation_prior
             - anti_penalty
             - low_signal_only_penalty
         )
         sources = _sources(
-            strong_rule=bool(lexical_hits),
+            lexical=bool(lexical_hits),
             bm25=bm25 > 0,
             vector=vector > 0,
         )
@@ -330,6 +372,7 @@ def _log_candidate_scores(
     candidate_count: int,
     ranked: list[tuple[ToolCandidate, _CandidateSignals]],
     limit: int,
+    scoring_formula: str,
 ) -> None:
     if not ranked:
         return
@@ -347,7 +390,7 @@ def _log_candidate_scores(
             "shown_count": min(len(ranked), limit),
             "top_routes": [signals.route_key for _, signals in ranked[:limit]],
             "top_score": _round_score(ranked[0][1].score),
-            "scoring_formula": _SCORING_FORMULA,
+            "scoring_formula": scoring_formula,
         },
     )
     logger.info(
@@ -356,6 +399,7 @@ def _log_candidate_scores(
             candidate_count=candidate_count,
             ranked=ranked,
             limit=limit,
+            scoring_formula=scoring_formula,
         ),
     )
 
@@ -395,11 +439,12 @@ def _format_candidate_scores_block(
     candidate_count: int,
     ranked: list[tuple[ToolCandidate, _CandidateSignals]],
     limit: int,
+    scoring_formula: str,
 ) -> str:
     shown = ranked[:limit]
     lines = [
         "Skill Router Candidate Scores",
-        f"  formula: {_SCORING_FORMULA}",
+        f"  formula: {scoring_formula}",
         f"  candidates: total={candidate_count} scored={len(ranked)} shown={len(shown)}",
         "  top:",
     ]
@@ -445,14 +490,17 @@ def _format_signal_hits(signals: _CandidateSignals) -> str:
 
 def _recall_summary(
     *,
+    candidate_scope: str | None,
     candidate_count: int,
     scored_count: int,
     vector_recall: _VectorRecallResult,
     bm25_used: bool,
+    scoring_formula: str,
 ) -> dict:
     return {
         "path": "bm25_vector_hybrid",
         "retrieval_engine": "hybrid_operation_retriever",
+        "candidate_scope": candidate_scope,
         "candidate_count": candidate_count,
         "scored_count": scored_count,
         "bm25_used": bm25_used,
@@ -470,10 +518,7 @@ def _recall_summary(
         "vector_status": vector_recall.status,
         "vector_scored_count": len(vector_recall.scores),
         "vector_error_code": vector_recall.error_code,
-        "scoring_formula": (
-            "0.35*bm25 + 0.35*vector + 0.20*lexical + "
-            "0.10*registry_prior + operation_prior - penalties"
-        ),
+        "scoring_formula": scoring_formula,
     }
 
 
@@ -482,11 +527,14 @@ def _valid_vector_scores(
     candidates: list[ToolCandidate],
 ) -> dict[str, float]:
     candidate_keys = {_route_key(candidate) for candidate in candidates}
-    return {
-        route_key: max(0.0, float(score))
-        for route_key, score in raw_scores.items()
-        if route_key in candidate_keys
-    }
+    scores: dict[str, float] = {}
+    for route_key, raw_score in raw_scores.items():
+        if route_key not in candidate_keys:
+            continue
+        score = max(0.0, float(raw_score))
+        if score > 0:
+            scores[route_key] = score
+    return scores
 
 
 def _route_key(candidate: ToolCandidate) -> str:
@@ -538,6 +586,7 @@ def _candidate_terms(candidate: ToolCandidate) -> Counter[str]:
         [candidate.operation or "", candidate.legacy_alias or "", *candidate.intents],
         3.0,
     )
+    _add_weighted_terms(terms, _operation_domain_terms(candidate), 2.2)
     _add_weighted_terms(terms, candidate.entities, 2.5)
     _add_weighted_terms(terms, candidate.trigger_examples, 1.5)
     _add_weighted_terms(
@@ -556,6 +605,31 @@ def _add_weighted_terms(
     for value in values:
         for term in _normalize_terms(value):
             terms[term] += weight
+
+
+def _operation_domain_terms(candidate: ToolCandidate) -> list[str]:
+    if candidate.name == "weather" or candidate.capability == "weather":
+        return [
+            "天气",
+            "预报",
+            "适合",
+            "打药",
+            "施药",
+            "喷药",
+            "浇水",
+            "施肥",
+        ]
+    if (
+        candidate.capability == "manage_work_orders"
+        and candidate.operation == "create_work_order"
+    ):
+        return list(_WORK_ORDER_CREATE_TERMS)
+    if (
+        candidate.capability == "manage_work_orders"
+        and candidate.operation == "update_work_order"
+    ):
+        return list(_UPDATE_DELETE_TERMS)
+    return []
 
 
 def _bm25_scores(
@@ -673,8 +747,8 @@ def _farm_log_operation_prior(
         if "适合" in query_terms:
             return -0.10 + alias_prior
         return 0.24 + alias_prior
-    if candidate.operation == "query_logs" and not (query_terms & _FARM_LOG_QUERY_TERMS):
-        return -0.22 + alias_prior
+    if candidate.operation == "query_logs":
+        return 0.04 + alias_prior
     if candidate.operation == "manage_log" and not (query_terms & _UPDATE_DELETE_TERMS):
         return -0.04 + alias_prior
     return alias_prior
@@ -686,22 +760,29 @@ def _labor_payment_operation_prior(
     alias_prior: float,
 ) -> float:
     wage_record = bool(query_terms & _LABOR_WAGE_RECORD_TERMS)
+    strong_wage_record = bool(query_terms & _LABOR_WAGE_RECORD_STRONG_TERMS)
     payroll_query = bool(query_terms & _LABOR_PAYROLL_QUERY_TERMS)
-    if candidate.operation == "manage_wage" and wage_record:
+    if candidate.operation == "manage_wage" and strong_wage_record:
+        return 0.58 + alias_prior
+    if candidate.operation == "manage_wage" and wage_record and not payroll_query:
         return 0.26 + alias_prior
+    if candidate.operation == "query_payables" and strong_wage_record:
+        return -0.22 + alias_prior
     if candidate.operation == "query_payables" and wage_record and not payroll_query:
         return -0.16 + alias_prior
     if candidate.operation == "query_payables" and payroll_query:
         return 0.14 + alias_prior
+    if candidate.operation == "settle_payment" and strong_wage_record:
+        return -0.45 + alias_prior
     if candidate.operation == "settle_payment" and not (query_terms & _LABOR_SETTLE_TERMS):
-        return -0.12 + alias_prior
+        return -0.18 + alias_prior
     return alias_prior
 
 
-def _sources(*, strong_rule: bool, bm25: bool, vector: bool) -> tuple[str, ...]:
+def _sources(*, lexical: bool, bm25: bool, vector: bool) -> tuple[str, ...]:
     sources = []
-    if strong_rule:
-        sources.append("strong_rule")
+    if lexical:
+        sources.append("lexical")
     if bm25:
         sources.append("bm25")
     if vector:

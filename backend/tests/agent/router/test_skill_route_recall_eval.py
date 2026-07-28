@@ -13,8 +13,21 @@ from app.ops.skill_route_eval import (
     load_route_cases,
     preview_route_recall,
 )
+from app.agent.router.hybrid_retriever import HybridOperationRetriever
 
 pytestmark = pytest.mark.no_db
+
+
+@pytest.fixture(autouse=True)
+def _disable_external_vector_search_by_default(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.ops.skill_route_eval.build_skill_vector_search_fn",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        "app.agent.router.service.build_skill_vector_search_fn",
+        lambda: None,
+    )
 
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "business_route_cases.yaml"
@@ -49,11 +62,30 @@ def test_business_route_recall_hits_expected_candidates() -> None:
 
 def test_json_route_recall_dataset_hits_expected_candidates() -> None:
     cases = load_route_cases(default_route_cases_path())
+    retriever = HybridOperationRetriever(vector_search=_semantic_vector_search)
 
-    report = evaluate_route_recall(cases, active_eval_tools(), top_k=5)
+    report = evaluate_route_recall(
+        cases,
+        active_eval_tools(),
+        top_k=5,
+        retriever=retriever,
+    )
 
     assert report.failures == []
     assert report.operation_recall_at_k == 1.0
+
+
+def _semantic_vector_search(query: str, candidates) -> dict[str, float]:
+    return {
+        f"{candidate.name}.{candidate.operation}": (
+            0.98
+            if query == "我干了啥"
+            and candidate.name == "manage_farm_logs"
+            and candidate.operation == "query_logs"
+            else 0.0
+        )
+        for candidate in candidates
+    }
 
 
 def test_preview_route_recall_uses_route_level_hybrid_score() -> None:

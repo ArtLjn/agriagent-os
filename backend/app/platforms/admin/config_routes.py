@@ -25,6 +25,7 @@ from app.ops.skill_route_eval import (
     preview_route_recall_detail,
 )
 from app.agent.router.service import SkillRouter
+from app.infra.trace_diagnostics import skill_router_trace_payload
 from app.shared.config import settings
 from app.infra.skill_cache import clear_cache
 
@@ -94,8 +95,13 @@ def preview_skill_route_recall(request: SkillRouteRecallRequest) -> dict:
         "top_k": request.top_k,
         "recall_mode": preview.recall_mode,
         "vector_index_enabled": preview.vector_index_enabled,
+        "recall": preview.recall,
+        "top_candidates": preview.top_candidates,
         "candidates": [asdict(candidate) for candidate in preview.candidates],
-        "skill_router": router_decision.to_trace_payload(),
+        "skill_router": skill_router_trace_payload(
+            router_decision,
+            candidate_count=len(tools),
+        ),
     }
 
 

@@ -64,6 +64,15 @@
     "tags": ["farm_log", "labor_boundary", "write", "regression"]
   },
   {
+    "id": "farm_log_semantic_query_001",
+    "message": "我干了啥",
+    "expected": {
+      "skill": "manage_farm_logs",
+      "operation": "query_logs"
+    },
+    "tags": ["farm_log", "semantic", "vector_required", "read", "regression"]
+  },
+  {
     "id": "labor_wage_attendance_001",
     "message": "张三今天来了一天",
     "expected": {

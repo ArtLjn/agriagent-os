@@ -7,7 +7,10 @@ from unittest.mock import MagicMock
 import pytest
 
 from app.agent.router.catalog import SkillCatalog
-from app.agent.router.hybrid_retriever import HybridOperationRetriever
+from app.agent.router.hybrid_retriever import (
+    HybridOperationRetriever,
+    HybridScoringWeights,
+)
 from app.ops.skill_route_eval import _expand_candidate_operations
 
 pytestmark = pytest.mark.no_db
@@ -50,7 +53,7 @@ def test_hybrid_retriever_keeps_debt_operation_when_generic_query_terms_pollute_
     ]
     assert top_routes[:1] == ["manage_cost.query_debt"]
     assert "manage_cost.query_debt" in top_routes
-    assert "strong_rule" in result.evidence["manage_cost.query_debt"]["sources"]
+    assert "lexical" in result.evidence["manage_cost.query_debt"]["sources"]
 
 
 def test_hybrid_retriever_penalizes_candidates_that_only_match_low_signal_terms() -> None:
@@ -62,9 +65,10 @@ def test_hybrid_retriever_penalizes_candidates_that_only_match_low_signal_terms(
 
     debt_score = result.evidence["manage_cost.query_debt"]["score"]
     worker_score = result.evidence["manage_workers.query_workers"]["score"]
-    category_score = result.evidence[
-        "manage_cost_categories.query_categories"
-    ]["score"]
+    category_score = result.evidence.get(
+        "manage_cost_categories.query_categories",
+        {"score": 0.0},
+    )["score"]
     assert debt_score > worker_score
     assert debt_score > category_score
 
@@ -138,6 +142,153 @@ def test_hybrid_retriever_uses_vector_source_when_available() -> None:
     assert result.top_candidates[0]["route"] == "manage_cost.query_debt"
     assert result.top_candidates[0]["vector"] == 0.98
     assert "bm25" in result.top_candidates[0]
+
+
+def test_vector_score_has_priority_over_bm25_pollution() -> None:
+    candidates = [
+        replace(
+            candidate,
+            trigger_examples=[],
+            entities=[],
+            intents=[candidate.operation or "", candidate.name],
+        )
+        for candidate in _operation_candidates(["manage_cost", "manage_workers"])
+    ]
+
+    def vector_search(_query_text: str, search_candidates) -> dict[str, float]:
+        return {
+            f"{candidate.name}.{candidate.operation}": (
+                0.95 if candidate.operation == "query_debt" else 0.05
+            )
+            for candidate in search_candidates
+        }
+
+    result = HybridOperationRetriever(vector_search=vector_search).retrieve(
+        "工人欠款",
+        candidates,
+        limit=5,
+    )
+
+    top_routes = [
+        f"{candidate.name}.{candidate.operation}"
+        for candidate in result.selected_candidates
+    ]
+    assert top_routes[0] == "manage_cost.query_debt"
+    assert result.evidence["manage_cost.query_debt"]["vector"] == 0.95
+
+
+def test_vector_first_weights_win_semantic_log_query_over_bm25_pollution() -> None:
+    candidates = []
+    for candidate in _operation_candidates(["manage_farm_logs", "manage_work_orders"]):
+        if candidate.operation not in {"query_logs", "query_work_orders"}:
+            continue
+        candidates.append(
+            replace(
+                candidate,
+                trigger_examples=["我干了啥"]
+                if candidate.operation == "query_work_orders"
+                else [],
+                entities=[],
+                intents=[],
+                anti_examples=[],
+            )
+        )
+
+    def vector_search(_query_text: str, search_candidates) -> dict[str, float]:
+        return {
+            f"{candidate.name}.{candidate.operation}": (
+                0.99 if candidate.operation == "query_logs" else 0.0
+            )
+            for candidate in search_candidates
+        }
+
+    bm25_heavy = HybridOperationRetriever(
+        vector_search=vector_search,
+        weights=HybridScoringWeights(
+            bm25=0.45,
+            vector=0.25,
+            lexical=0.20,
+            registry_prior=0.10,
+        ),
+    ).retrieve("我干了啥", candidates, limit=2)
+    vector_first = HybridOperationRetriever(
+        vector_search=vector_search,
+    ).retrieve("我干了啥", candidates, limit=2)
+
+    assert bm25_heavy.top_candidates[0]["route"] == (
+        "manage_work_orders.query_work_orders"
+    )
+    assert vector_first.top_candidates[0]["route"] == "manage_farm_logs.query_logs"
+    assert vector_first.top_candidates[0]["vector"] == 0.99
+    assert vector_first.recall["scoring_formula"].startswith("0.15*bm25 + 0.70*vector")
+
+
+def test_semantic_log_query_operation_prior_does_not_suppress_vector_hit() -> None:
+    candidates = [
+        candidate
+        for candidate in _operation_candidates(
+            [
+                "manage_cost",
+                "manage_crop_cycle",
+                "manage_farm_logs",
+                "manage_work_orders",
+                "manage_workers",
+            ]
+        )
+        if candidate.operation
+        in {
+            "query_summary",
+            "query_cycles",
+            "query_logs",
+            "query_work_orders",
+            "query_workers",
+        }
+    ]
+    vector_scores = {
+        "manage_cost.query_summary": 0.7985,
+        "manage_crop_cycle.query_cycles": 0.7798,
+        "manage_work_orders.query_work_orders": 0.6021,
+        "manage_farm_logs.query_logs": 0.8000,
+        "manage_workers.query_workers": 0.4591,
+    }
+
+    result = HybridOperationRetriever(
+        vector_search=lambda _query, _candidates: vector_scores,
+    ).retrieve("我干了啥", candidates, limit=5)
+
+    assert result.top_candidates[0]["route"] == "manage_farm_logs.query_logs"
+    assert result.evidence["manage_farm_logs.query_logs"]["vector"] == 0.8
+
+
+def test_labor_wage_record_prior_overrides_settlement_vector_noise() -> None:
+    candidates = [
+        candidate
+        for candidate in _operation_candidates(
+            ["manage_labor_payment", "manage_farm_logs", "manage_cost"]
+        )
+        if candidate.operation
+        in {
+            "manage_wage",
+            "settle_payment",
+            "create_log",
+            "create_record",
+        }
+    ]
+    vector_scores = {
+        "manage_labor_payment.settle_payment": 0.9124,
+        "manage_farm_logs.create_log": 0.7623,
+        "manage_cost.create_record": 0.7000,
+    }
+
+    result = HybridOperationRetriever(
+        vector_search=lambda _query, _candidates: vector_scores,
+    ).retrieve("张三今天打药一天180", candidates, limit=5)
+
+    assert result.top_candidates[0]["route"] == "manage_labor_payment.manage_wage"
+    assert result.evidence["manage_labor_payment.manage_wage"]["operation_prior"] > 0
+    assert result.evidence["manage_labor_payment.settle_payment"][
+        "operation_prior"
+    ] < 0
 
 
 def test_hybrid_retriever_never_calls_vector_search_without_index(caplog) -> None:

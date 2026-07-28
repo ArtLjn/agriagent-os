@@ -341,6 +341,8 @@ export interface SkillRouteRecallResponse {
   top_k: number;
   recall_mode: string;
   vector_index_enabled: boolean;
+  recall?: Record<string, unknown>;
+  top_candidates?: Record<string, unknown>[];
   candidates: SkillRouteRecallCandidate[];
   skill_router?: Record<string, unknown>;
 }

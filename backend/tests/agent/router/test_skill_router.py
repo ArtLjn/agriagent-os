@@ -13,6 +13,14 @@ from app.agent.router.service import SkillRouter
 pytestmark = pytest.mark.no_db
 
 
+@pytest.fixture(autouse=True)
+def _disable_external_vector_search_by_default(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.agent.router.service.build_skill_vector_search_fn",
+        lambda: None,
+    )
+
+
 def _tool(name: str, description: str = ""):
     tool = MagicMock()
     tool.name = name
@@ -548,7 +556,8 @@ def test_single_work_order_candidate_over_schema_budget_is_not_dropped() -> None
     work_order_frame = decision.frames[0]
     assert work_order_frame.intent == "retrieved_write_candidate"
     assert work_order_frame.evidence["source"] == "hybrid_operation_retriever"
-    assert work_order_frame.evidence["recall"]["vector_search_used"] is True
+    assert work_order_frame.evidence["recall"]["candidate_scope"] == "write"
+    assert work_order_frame.evidence["recall"]["bm25_used"] is True
 
 
 def test_write_hybrid_retrieval_can_select_farm_log_create_operation() -> None:
@@ -580,6 +589,142 @@ def test_write_hybrid_retrieval_can_select_farm_log_create_operation() -> None:
     assert decision.frames[0].evidence["recall"]["vector_search_used"] is True
     assert decision.frames[0].evidence["top_candidates"][0]["route"] == (
         "manage_farm_logs.create_log"
+    )
+
+
+def test_farm_log_read_uses_hybrid_vector_recall_instead_of_read_pool(
+    monkeypatch,
+) -> None:
+    def fake_vector_search(_query: str, candidates) -> dict[str, float]:
+        return {
+            f"{candidate.name}.{candidate.operation}": (
+                0.96
+                if candidate.name == "manage_farm_logs"
+                and candidate.operation == "query_logs"
+                else 0.05
+            )
+            for candidate in candidates
+        }
+
+    monkeypatch.setattr(
+        "app.agent.router.service.build_skill_vector_search_fn",
+        lambda: fake_vector_search,
+    )
+
+    decision = SkillRouter().route(
+        "查询农事日志",
+        [_tool("manage_farm_logs"), _tool("get_farm_status"), _tool("manage_cost")],
+    )
+
+    assert decision.fallback != "model_choice_read_default"
+    assert decision.selected_tools == ["manage_farm_logs"]
+    assert decision.selected_operations == {"manage_farm_logs": ["query_logs"]}
+    recall = decision.evidence["recall"]
+    assert recall["path"] == "bm25_vector_hybrid"
+    assert recall["vector_search_used"] is True
+    assert recall["quillrag_retrieve_used"] is True
+
+
+def test_farm_log_short_read_uses_vector_recall(monkeypatch) -> None:
+    def fake_vector_search(query: str, candidates) -> dict[str, float]:
+        assert query == "我的农事"
+        return {
+            f"{candidate.name}.{candidate.operation}": (
+                0.97
+                if candidate.name == "manage_farm_logs"
+                and candidate.operation == "query_logs"
+                else 0.03
+            )
+            for candidate in candidates
+        }
+
+    monkeypatch.setattr(
+        "app.agent.router.service.build_skill_vector_search_fn",
+        lambda: fake_vector_search,
+    )
+
+    decision = SkillRouter().route(
+        "我的农事",
+        [_tool("manage_farm_logs"), _tool("get_farm_status"), _tool("manage_cost")],
+    )
+
+    assert decision.selected_tools == ["manage_farm_logs"]
+    assert decision.selected_operations == {"manage_farm_logs": ["query_logs"]}
+    assert decision.fallback is None
+    recall = decision.evidence["recall"]
+    assert recall["path"] == "bm25_vector_hybrid"
+    assert recall["vector_search_used"] is True
+    assert recall["rag_service_used"] is True
+
+
+def test_farm_log_semantic_read_uses_vector_recall_without_lexical_hints(
+    monkeypatch,
+) -> None:
+    def fake_vector_search(query: str, candidates) -> dict[str, float]:
+        assert query == "我干了啥"
+        return {
+            f"{candidate.name}.{candidate.operation}": (
+                0.97
+                if candidate.name == "manage_farm_logs"
+                and candidate.operation == "query_logs"
+                else 0.03
+            )
+            for candidate in candidates
+        }
+
+    monkeypatch.setattr(
+        "app.agent.router.service.build_skill_vector_search_fn",
+        lambda: fake_vector_search,
+    )
+
+    decision = SkillRouter().route(
+        "我干了啥",
+        [_tool("manage_farm_logs"), _tool("get_farm_status"), _tool("manage_cost")],
+    )
+
+    assert decision.selected_tools == ["manage_farm_logs"]
+    assert decision.selected_operations == {"manage_farm_logs": ["query_logs"]}
+    assert decision.evidence["recall"]["vector_search_used"] is True
+
+
+def test_vector_recall_binds_only_top_skill_when_semantic_top1_is_clear(
+    monkeypatch,
+) -> None:
+    vector_scores = {
+        "manage_farm_logs.query_logs": 0.8000,
+        "manage_cost.query_summary": 0.7985,
+        "manage_crop_cycle.query_cycles": 0.7798,
+    }
+
+    def fake_vector_search(query: str, candidates) -> dict[str, float]:
+        assert query == "我干了啥"
+        return {
+            f"{candidate.name}.{candidate.operation}": vector_scores.get(
+                f"{candidate.name}.{candidate.operation}",
+                0.0,
+            )
+            for candidate in candidates
+        }
+
+    monkeypatch.setattr(
+        "app.agent.router.service.build_skill_vector_search_fn",
+        lambda: fake_vector_search,
+    )
+
+    decision = SkillRouter().route(
+        "我干了啥",
+        [
+            _tool("manage_farm_logs"),
+            _tool("get_farm_status"),
+            _tool("manage_cost"),
+            _tool("manage_crop_cycle"),
+        ],
+    )
+
+    assert decision.selected_tools == ["manage_farm_logs"]
+    assert decision.selected_operations == {"manage_farm_logs": ["query_logs"]}
+    assert decision.evidence["recall"]["top_candidates"][0]["route"] == (
+        "manage_farm_logs.query_logs"
     )
 
 

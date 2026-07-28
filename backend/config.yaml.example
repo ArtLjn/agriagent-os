@@ -52,7 +52,7 @@ skill_vector_store:
   collection: "farm_manager_skill_routes_v1" # Skill operation 专用 collection。
   mode: "hybrid"              # vector / bm25 / hybrid；由 QuillRAG 内部执行 embedding 和检索。
   top_k: 8                    # QuillRAG 返回的 Skill operation 候选数量。
-  timeout_seconds: 1.5        # Router 检索超时，单位秒。
+  timeout_seconds: 10.0       # Router 在线检索超时，单位秒；优先等待云端 QuillRAG 完成语义召回。
   sync_timeout_seconds: 30.0   # 后台/手动同步入库超时，单位秒。
   retry: 0                    # Router 路径默认不额外重试，避免拖慢对话。
   use_hyde: false             # Skill 路由默认不使用 HyDE。

@@ -80,6 +80,9 @@ _RETRIEVABLE_READ_ENTITY_HINTS = (
     "天气",
     "分类",
     "单位",
+    "农事",
+    "日志",
+    "作业",
     "debt",
     "payable",
     "cost",
@@ -178,7 +181,10 @@ class SkillRouter:
         frames = self._enrich_frames(self._classifier.classify(message), catalog)
         intent = classify_intent(message)
         self._log_classification_completed(frames=frames, intent=intent)
-        if frames:
+        if frames and not (
+            self._read_frames_only(frames)
+            and self._should_try_hybrid_read_recall(message, intent)
+        ):
             self._log_vector_recall_skipped(
                 reason="rule_classifier_matched",
                 intent=intent,
@@ -195,10 +201,20 @@ class SkillRouter:
         intent: IntentType,
     ) -> tuple[list[IntentFrame], RouterDecision | None]:
         if frames:
+            if self._read_frames_only(frames) and self._should_try_hybrid_read_recall(
+                message,
+                intent,
+            ):
+                retrieved_frames = self._retrieved_frames(message, catalog)
+                if retrieved_frames and not self._should_keep_read_rule_frames(
+                    frames,
+                    retrieved_frames
+                ):
+                    return retrieved_frames, None
             return frames, None
         if intent == IntentType.WRITE or self._looks_like_retrievable_write(message):
             return self._write_retrieval_frames(message, catalog, intent)
-        if self._looks_like_retrievable_read(message):
+        if self._should_try_hybrid_read_recall(message, intent):
             return self._retrieved_frames(message, catalog), None
         self._log_vector_recall_skipped(
             reason="not_retrievable_read",
@@ -370,11 +386,13 @@ class SkillRouter:
             message,
             read_candidates,
             limit=len(read_candidates),
+            candidate_scope="read",
         )
         selected_candidates = self._filter_retrieved_candidates(
             message,
             retrieved.selected_candidates,
             scores=retrieved.scores,
+            evidence=retrieved.evidence,
         )
         if not selected_candidates:
             return []
@@ -419,13 +437,23 @@ class SkillRouter:
         candidates: list[ToolCandidate],
         *,
         scores: dict[str, float],
+        evidence: dict[str, dict] | None = None,
     ) -> list[ToolCandidate]:
-        candidates = _filter_low_confidence_retrieved_candidates(candidates, scores)
+        candidates = _filter_low_confidence_retrieved_candidates(
+            candidates,
+            scores,
+            evidence=evidence,
+        )
         names = [candidate.name for candidate in candidates]
+        if signals.looks_like_planting_unit_query(message):
+            return [
+                candidate
+                for candidate in candidates
+                if candidate.name != "manage_crop_cycle"
+            ]
         if (
             "manage_crop_cycle" not in names
             or "manage_planting_units" not in names
-            or signals.looks_like_planting_unit_query(message)
         ):
             return candidates
         return [
@@ -450,6 +478,7 @@ class SkillRouter:
             message,
             write_candidates,
             limit=min(len(write_candidates), self._budget.max_retrieved_tools_default),
+            candidate_scope="write",
         )
         if not retrieved.selected_names:
             return []
@@ -541,7 +570,9 @@ class SkillRouter:
     def _read_operation_candidates(catalog: SkillCatalog) -> list[ToolCandidate]:
         candidates = list(catalog.candidates())
         read_candidates = [
-            candidate for candidate in candidates if candidate.risk in _READ_OPERATION_RISKS
+            candidate
+            for candidate in candidates
+            if not candidate.capability and candidate.risk in _READ_OPERATION_RISKS
         ]
         try:
             registry = load_skill_registry()
@@ -549,13 +580,12 @@ class SkillRouter:
             return read_candidates
 
         existing_keys = {
-            (candidate.name, candidate.capability, candidate.operation)
+            (candidate.capability, candidate.operation)
             for candidate in read_candidates
+            if candidate.capability and candidate.operation
         }
         for candidate in candidates:
             if not candidate.capability:
-                continue
-            if candidate.operation is not None and candidate.risk not in _READ_OPERATION_RISKS:
                 continue
             capability = registry.capabilities.get(candidate.capability)
             if capability is None:
@@ -563,7 +593,7 @@ class SkillRouter:
             for operation in capability.operations.values():
                 if operation.risk not in _READ_OPERATION_RISKS:
                     continue
-                key = (candidate.name, candidate.capability, operation.name)
+                key = (candidate.capability, operation.name)
                 if key in existing_keys:
                     continue
                 existing_keys.add(key)
@@ -621,6 +651,24 @@ class SkillRouter:
         )
 
     @staticmethod
+    def _read_frames_only(frames: list[IntentFrame]) -> bool:
+        return bool(frames) and all(
+            frame.risk in _READ_OPERATION_RISKS for frame in frames
+        )
+
+    @staticmethod
+    def _should_keep_read_rule_frames(
+        rule_frames: list[IntentFrame],
+        retrieved_frames: list[IntentFrame],
+    ) -> bool:
+        recall = retrieved_frames[0].evidence.get("recall") if retrieved_frames else {}
+        if not isinstance(recall, dict):
+            return False
+        if recall.get("vector_status") in {"fallback", "empty", "missing_index"}:
+            return True
+        return False
+
+    @staticmethod
     def _read_operation_for(candidate: ToolCandidate | None) -> str | None:
         if candidate is None or not candidate.capability:
             return None
@@ -643,6 +691,25 @@ class SkillRouter:
         return any(hint in normalized for hint in _RETRIEVABLE_READ_HINTS) and any(
             hint in normalized for hint in _RETRIEVABLE_READ_ENTITY_HINTS
         )
+
+    def _should_try_hybrid_read_recall(
+        self,
+        message: str,
+        intent: IntentType,
+    ) -> bool:
+        if intent == IntentType.GREETING:
+            return False
+        normalized = message.strip().lower()
+        has_business_entity = any(
+            hint in normalized for hint in _RETRIEVABLE_READ_ENTITY_HINTS
+        )
+        if self._looks_like_retrievable_read(message):
+            return True
+        if not self._hybrid_retriever.vector_index_enabled:
+            return False
+        if has_business_entity:
+            return True
+        return intent == IntentType.AGENT
 
     @staticmethod
     def _looks_like_retrievable_write(message: str) -> bool:
@@ -811,6 +878,8 @@ class SkillRouter:
 def _filter_low_confidence_retrieved_candidates(
     candidates: list[ToolCandidate],
     scores: dict[str, float],
+    *,
+    evidence: dict[str, dict] | None = None,
 ) -> list[ToolCandidate]:
     if not candidates:
         return []
@@ -820,10 +889,30 @@ def _filter_low_confidence_retrieved_candidates(
     top_score = max(route_scores, default=0.0)
     if top_score <= 0:
         return candidates
-    threshold = max(0.18, top_score * 0.5)
+    threshold = _retrieved_candidate_threshold(candidates, scores, evidence, top_score)
     kept = [
         candidate
         for candidate, score in zip(candidates, route_scores, strict=True)
         if score >= threshold
     ]
     return kept or candidates[:1]
+
+
+def _retrieved_candidate_threshold(
+    candidates: list[ToolCandidate],
+    scores: dict[str, float],
+    evidence: dict[str, dict] | None,
+    top_score: float,
+) -> float:
+    threshold = max(0.18, top_score * 0.5)
+    if top_score < 0.55:
+        return threshold
+    top_candidate = max(
+        candidates,
+        key=lambda candidate: scores.get(SkillRouter._route_key(candidate), 0.0),
+    )
+    route_evidence = (evidence or {}).get(SkillRouter._route_key(top_candidate), {})
+    sources = set(route_evidence.get("sources") or ())
+    if "vector" in sources:
+        return max(threshold, top_score - 0.03)
+    return threshold
