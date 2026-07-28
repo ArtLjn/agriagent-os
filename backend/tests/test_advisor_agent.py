@@ -6,6 +6,8 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
 from app.agent.executor.models import PendingActionDecision
+from app.domains.conversation.models import Conversation, ConversationMessage
+from app.shared.compatibility import UTC
 
 
 class TestBuildAdvisorAgent:
@@ -144,6 +146,57 @@ class TestBuildHistoryMessages:
         )
 
         assert all(message.content != "第一个问题是" for message in result)
+
+    @pytest.mark.asyncio
+    async def test_async_history_prefers_context_pack_recent_messages(
+        self,
+        db_session,
+    ) -> None:
+        """Advisor history 应优先使用 ContextPack 的边界后原文窗口。"""
+        from app.application.advice.advisor import _async_build_history_messages
+
+        conversation = Conversation(
+            farm_id=1,
+            user_id="test-user-001",
+            session_id="advisor-pack",
+            summary="完整新版摘要：用户关注西棚预算。",
+        )
+        db_session.add(conversation)
+        db_session.commit()
+        db_session.refresh(conversation)
+        messages = []
+        for index in range(6):
+            message = ConversationMessage(
+                conversation_id=conversation.id,
+                role="user" if index % 2 == 0 else "assistant",
+                content=f"第 {index + 1} 条消息",
+            )
+            db_session.add(message)
+            messages.append(message)
+        db_session.commit()
+        for message in messages:
+            db_session.refresh(message)
+        boundary_message = messages[3]
+        conversation.meta_json = {
+            "context_cursor": {
+                "summary_version": 2,
+                "summarized_until_message_id": boundary_message.id,
+                "summarized_until_created_at": boundary_message.created_at.replace(
+                    tzinfo=UTC
+                ).isoformat(),
+                "summary_hash": "sha256:advisor",
+            }
+        }
+        db_session.commit()
+
+        result = await _async_build_history_messages(
+            db_session,
+            conversation.id,
+            current_user_input="第 5 条消息",
+        )
+
+        assert [message.content for message in result] == ["第 6 条消息"]
+        assert isinstance(result[0], AIMessage)
 
 
 class TestAdvisorInvoke:

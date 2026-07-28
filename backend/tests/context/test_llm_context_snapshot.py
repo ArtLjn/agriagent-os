@@ -57,6 +57,14 @@ def test_final_llm_context_snapshot_v2_is_structured_and_sanitized() -> None:
                 metadata={"original_tokens": 120},
             )
         ],
+        metadata={
+            "context_pack": {
+                "recent_message_ids": [123],
+                "summary_version": 4,
+                "summary_hash": "sha256:abc",
+                "selected_blocks": ["conversation_summary"],
+            }
+        },
     )
     messages = [
         HumanMessage(content="查看农场，password=secret"),
@@ -86,6 +94,9 @@ def test_final_llm_context_snapshot_v2_is_structured_and_sanitized() -> None:
     assert output["system_prompt"] == "系统提示 password=[REDACTED]"
     assert output["context_blocks"] == ["farm", "conversation_summary"]
     assert output["runtime_context"]["sections"]
+    assert output["runtime_context"]["context_pack"]["summary_version"] == 4
+    assert output["runtime_context"]["context_pack"]["recent_message_ids"] == [123]
+    assert output["runtime_context"]["context_pack"]["summary_hash"] == "sha256:abc"
     assert output["runtime_context"]["sections"][0]["blocks"][0]["content_preview"]
     assert output["budget"]["actions"] == final_budget.summary()["actions"]
     assert output["compression"]["context_compressed_count"] == 1

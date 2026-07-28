@@ -19,8 +19,10 @@ from app.agent.runtime.loop import (
     run_agent_loop,
     stream_agent_loop,
 )
+from app.context.pack import ContextPackService
 from app.infra.trace_context import clear_trace, init_trace, set_round_index
 from app.shared.logging import log_event
+from app.domains.conversation.models import Conversation
 from app.domains.farm.models import Farm
 from app.domains.conversation.service import (
     async_get_recent_messages,
@@ -53,6 +55,13 @@ def _build_history_messages(
     """从数据库加载最近 N 条消息，转为 LangChain message 列表。"""
     if db is None or conversation_id is None:
         return []
+    context_pack_messages = _build_history_messages_from_context_pack(
+        db=db,
+        conversation_id=conversation_id,
+        current_user_input=current_user_input,
+    )
+    if context_pack_messages is not None:
+        return context_pack_messages
     records = get_recent_messages(db, conversation_id, limit=limit)
     messages = _records_to_history_messages(records)
     if (
@@ -61,7 +70,7 @@ def _build_history_messages(
         and isinstance(messages[-1], HumanMessage)
         and messages[-1].content == current_user_input
     ):
-        messages = messages[:-1]
+        messages = _drop_current_user_input(messages, current_user_input)
     messages = _summarize_history_messages(messages, recent_message_limit)
     return messages
 
@@ -76,6 +85,13 @@ async def _async_build_history_messages(
     """async 请求链路构建历史消息。"""
     if db is None or conversation_id is None:
         return []
+    context_pack_messages = await _async_build_history_messages_from_context_pack(
+        db=db,
+        conversation_id=conversation_id,
+        current_user_input=current_user_input,
+    )
+    if context_pack_messages is not None:
+        return context_pack_messages
     records = await async_get_recent_messages(db, conversation_id, limit=limit)
     messages = _records_to_history_messages(records)
     if (
@@ -84,7 +100,7 @@ async def _async_build_history_messages(
         and isinstance(messages[-1], HumanMessage)
         and messages[-1].content == current_user_input
     ):
-        messages = messages[:-1]
+        messages = _drop_current_user_input(messages, current_user_input)
     return _summarize_history_messages(messages, recent_message_limit)
 
 
@@ -97,6 +113,61 @@ def _records_to_history_messages(
             messages.append(HumanMessage(content=rec.content))
         elif rec.role == "assistant":
             messages.append(AIMessage(content=rec.content))
+    return messages
+
+
+def _build_history_messages_from_context_pack(
+    *,
+    db: Session,
+    conversation_id: int,
+    current_user_input: str | None,
+) -> list[HumanMessage | AIMessage] | None:
+    try:
+        return asyncio.run(
+            _async_build_history_messages_from_context_pack(
+                db=db,
+                conversation_id=conversation_id,
+                current_user_input=current_user_input,
+            )
+        )
+    except RuntimeError:
+        return None
+
+
+async def _async_build_history_messages_from_context_pack(
+    *,
+    db: Session,
+    conversation_id: int,
+    current_user_input: str | None,
+) -> list[HumanMessage | AIMessage] | None:
+    try:
+        conversation = db.get(Conversation, conversation_id)
+        if not isinstance(conversation, Conversation):
+            return None
+        pack = await ContextPackService().build(
+            db=db,
+            farm_id=conversation.farm_id,
+            session_id=conversation.session_id,
+            user_id=conversation.user_id,
+        )
+        if not pack.recent_messages and pack.summary is None:
+            return None
+        messages = _records_to_history_messages(pack.recent_messages)
+        return _drop_current_user_input(messages, current_user_input)
+    except Exception:
+        return None
+
+
+def _drop_current_user_input(
+    messages: list[HumanMessage | AIMessage],
+    current_user_input: str | None,
+) -> list[HumanMessage | AIMessage]:
+    if current_user_input is None:
+        return messages
+    for index in range(len(messages) - 1, -1, -1):
+        message = messages[index]
+        if isinstance(message, HumanMessage) and message.content == current_user_input:
+            return messages[:index] + messages[index + 1 :]
     return messages
 
 

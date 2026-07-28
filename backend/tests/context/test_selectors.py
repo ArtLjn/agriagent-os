@@ -14,6 +14,12 @@ from app.context.selectors import (
     RetrievalSelector,
     UserSettingsSelector,
 )
+from app.context.pack import (
+    ContextPack,
+    ContextPackDiagnostics,
+    ConversationSummaryBlock,
+    MessageSnapshot,
+)
 from app.context.selectors.memory import MemorySelector
 from app.context.selectors.planting import (
     CostCategorySelector,
@@ -287,6 +293,54 @@ def test_memory_selector_returns_short_term_memory_blocks() -> None:
         blocks_by_key["short_term_recent"].metadata
         is not blocks_by_key["short_term_summary"].metadata
     )
+
+
+def test_memory_selector_prefers_context_pack_for_dialogue_blocks() -> None:
+    memory_context = MemoryContext(
+        user_id="user-1",
+        farm_id=1,
+        session_id="session-1",
+        recent_messages=[MemoryMessage(role="user", content="旧短时窗口")],
+        session_summary="旧短时摘要",
+        pending_action=PendingActionSnapshot(
+            action_id="act-1",
+            name="create_log",
+            payload={"content": "记录浇水"},
+        ),
+    )
+    context_pack = ContextPack(
+        conversation_id=1,
+        session_id="session-1",
+        farm_id=1,
+        user_id="user-1",
+        summary=ConversationSummaryBlock(
+            content="唯一会话摘要",
+            version=2,
+            summarized_until_message_id=10,
+            summarized_until_created_at=None,
+        ),
+        recent_messages=[
+            MessageSnapshot(message_id=11, role="user", content="新的最近消息")
+        ],
+        diagnostics=ContextPackDiagnostics(recent_message_ids=[11]),
+    )
+
+    blocks = MemorySelector().select(
+        memory_context=memory_context,
+        context_pack=context_pack,
+    )
+    blocks_by_key = {block.key: block for block in blocks}
+
+    assert set(blocks_by_key) == {
+        "conversation_summary",
+        "recent_messages",
+        "pending_action",
+    }
+    assert "唯一会话摘要" in blocks_by_key["conversation_summary"].content
+    assert "新的最近消息" in blocks_by_key["recent_messages"].content
+    assert "旧短时窗口" not in blocks_by_key["recent_messages"].content
+    assert "旧短时摘要" not in blocks_by_key["conversation_summary"].content
+    assert "create_log" in blocks_by_key["pending_action"].content
 
 
 def test_memory_selector_injects_confirmed_long_term_memory() -> None:

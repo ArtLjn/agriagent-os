@@ -271,6 +271,9 @@ def build_context_trace_payload(bundle: ContextBundle) -> dict[str, Any]:
         "policy": _policy_summary(bundle.metadata.get("policy")),
         "sections": _section_summary(bundle),
     }
+    context_pack = _sanitize(bundle.metadata.get("context_pack"))
+    if context_pack:
+        payload["context_pack"] = context_pack
     selector_metadata = _selector_metadata_summary(
         bundle.metadata.get("selector_metadata")
     )
