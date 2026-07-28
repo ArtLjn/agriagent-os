@@ -123,7 +123,7 @@ class CreateCostRecordSkill(Skill):
 | --- | --- | --- |
 | `manage-cost` | create/query/analyze/delete/settle；兼容 `create_cost_record`、`get_cost_summary`、`get_debt_summary`、`settle_debt` 等 | 记账、买了、卖了、赊账、欠款、趋势 |
 | `manage-cost-categories` | query/manage；兼容 `get_cost_categories`、`manage_cost_categories` | 分类、收入分类、支出分类 |
-| `manage-labor-payment` | 工资查询、补付、结算 | 工资、应付、补付 |
+| `manage-labor-payment` | query_payables/manage_wage/settle_payment | 工资、应付、未付、补付、发薪、来了几天 |
 
 ### 6.2 茬口与作物域
 
@@ -137,8 +137,8 @@ class CreateCostRecordSkill(Skill):
 
 | Skill 包 | 主要 operation / legacy alias | 触发词 |
 | --- | --- | --- |
-| `manage-farm-logs` | create/query/update/delete；兼容 `log_farm_activity` | 浇水、打药、施肥、农事日志 |
-| `manage-work-orders` | create/query/update | 派工、作业单、农事工单 |
+| `manage-farm-logs` | create_log/query_logs/manage_log；兼容 `log_farm_activity` | 浇水、打药、施肥、农事日志 |
+| `manage-work-orders` | create_work_order/query_work_orders/update_work_order | 派工、作业单、农事工单、作业用工 |
 | `manage-workers` | query/create/update/deactivate | 工人、新增工人、离职工人 |
 
 ### 6.4 农场与设置域
@@ -151,6 +151,23 @@ class CreateCostRecordSkill(Skill):
 | `web_search` | query | 网上查、搜索、行情 |
 
 完整清单与触发词矩阵见 [../../../docs/agent/skill-coverage-matrix.md](../../../docs/agent/skill-coverage-matrix.md)。
+
+### 6.5 农事、用工与工资边界
+
+农事日志、作业单和工资台账必须按主账分工，不应因为自然语言里同时出现“工人”和“农事动作”就混成一个 Skill。
+
+| 场景 | 主 Skill | 说明 |
+| --- | --- | --- |
+| “今天浇水了” | `manage-farm-logs.create_log` | 农事事实，无工人、无工资。 |
+| “张三今天打药了” | `manage-farm-logs.create_log` | 可记录参与人，但不自动产生工资。 |
+| “安排张三明天去 3 号棚打药” | `manage-work-orders.create_work_order` | 安排动作 + 工人 + 作业范围。 |
+| “张三今天打药一天 180” | `manage-labor-payment.manage_wage` 或 `manage-work-orders.create_work_order` | 出现计薪字段；若同时有明确作业范围，作业单承载用工来源。 |
+| “这个月每个工人应该发多少钱” | `manage-labor-payment.query_payables` | 发薪统计以 `labor_entries` 为准。 |
+| “给老王补付 300 人工” | `manage-labor-payment.settle_payment` | 结算或补付工资。 |
+
+发薪日统计以 `labor_entries` 作为唯一应付工资来源；`farm_logs` 只作为农事事实和辅助佐证，不直接参与应发金额计算。完整业务边界见 [../../../docs/specs/2026-07-28-farm-log-labor-payroll-boundary-design.md](../../../docs/specs/2026-07-28-farm-log-labor-payroll-boundary-design.md)。
+
+该边界不是单纯 Skill 路由规则调整。落地范围包括 `workers/labor_entries/operation_work_orders/farm_logs` 数据模型、`labor_service/planting_read_service/planting_service/farm_log_service/cost_service` 领域 service、Skill 参数契约、Router 回归集、Trace 数据来源标记，以及工资汇总和结算相关前端页面。
 
 ## 7. Skill 注册流程
 
