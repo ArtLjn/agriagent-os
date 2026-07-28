@@ -141,47 +141,47 @@ async def _get_runtime_context_bundle(
 ) -> tuple[ContextBundle, dict]:
     """构建 Runtime ContextBundle，并返回兼容旧 prompt 的 farm context。"""
 
-    def _query() -> tuple[ContextBundle, dict]:
-        db = SessionLocal()
-        try:
-            from app.context.builder import ContextBuilder
-
-            memory_context = _load_runtime_memory_context(
-                user_id=user_id,
-                farm_id=farm_id,
-                session_id=session_id,
-                memory_context_loader=memory_context_loader,
-            )
-            context_pack = _load_runtime_context_pack(
-                db=db,
-                farm_id=farm_id,
-                session_id=session_id,
-                user_id=user_id,
-            )
-            context_builder = ContextBuilder()
-            bundle = context_builder.build_runtime_context_bundle(
-                db=db,
-                request=_runtime_context_request(
-                    intent=intent,
-                    query=query,
-                    selected_tool_names=selected_tool_names,
-                    context_dependencies=context_dependencies,
-                    farm_id=farm_id,
-                    user_id=user_id,
-                    session_id=session_id,
-                ),
-                memory_context=memory_context,
-                context_pack=context_pack,
-            )
-            farm_ctx = context_builder.build_farm_runtime_context(
-                db=db,
-                farm_id=farm_id,
-            )
-            return bundle, farm_ctx
-        finally:
-            db.close()
-
     try:
+        memory_context = await _load_runtime_memory_context(
+            user_id=user_id,
+            farm_id=farm_id,
+            session_id=session_id,
+            memory_context_loader=memory_context_loader,
+        )
+        context_pack = await _load_runtime_context_pack(
+            farm_id=farm_id,
+            session_id=session_id,
+            user_id=user_id,
+        )
+
+        def _query() -> tuple[ContextBundle, dict]:
+            db = SessionLocal()
+            try:
+                from app.context.builder import ContextBuilder
+
+                context_builder = ContextBuilder()
+                bundle = context_builder.build_runtime_context_bundle(
+                    db=db,
+                    request=_runtime_context_request(
+                        intent=intent,
+                        query=query,
+                        selected_tool_names=selected_tool_names,
+                        context_dependencies=context_dependencies,
+                        farm_id=farm_id,
+                        user_id=user_id,
+                        session_id=session_id,
+                    ),
+                    memory_context=memory_context,
+                    context_pack=context_pack,
+                )
+                farm_ctx = context_builder.build_farm_runtime_context(
+                    db=db,
+                    farm_id=farm_id,
+                )
+                return bundle, farm_ctx
+            finally:
+                db.close()
+
         return await asyncio.to_thread(_query)
     except Exception:
         logger.warning("构建 Runtime ContextBundle 失败，使用降级上下文", exc_info=True)
@@ -197,7 +197,7 @@ async def _get_runtime_context_bundle(
         )
 
 
-def _load_runtime_memory_context(
+async def _load_runtime_memory_context(
     *,
     user_id: str | None,
     farm_id: int,
@@ -211,18 +211,15 @@ def _load_runtime_memory_context(
         from app.application.chat.helpers import load_memory_context
 
         loader = load_memory_context
-    return asyncio.run(
-        loader(
-            user_id=user_id,
-            farm_id=farm_id,
-            session_id=session_id,
-        )
+    return await loader(
+        user_id=user_id,
+        farm_id=farm_id,
+        session_id=session_id,
     )
 
 
-def _load_runtime_context_pack(
+async def _load_runtime_context_pack(
     *,
-    db,
     farm_id: int,
     session_id: str | None,
     user_id: str | None,
@@ -231,14 +228,16 @@ def _load_runtime_context_pack(
         return None
     from app.context.pack import ContextPackService
 
-    loaded_pack = asyncio.run(
-        ContextPackService().build(
+    db = SessionLocal()
+    try:
+        loaded_pack = await ContextPackService().build(
             db=db,
             farm_id=farm_id,
             session_id=session_id,
             user_id=user_id,
         )
-    )
+    finally:
+        db.close()
     if loaded_pack.summary is None and not loaded_pack.recent_messages:
         return None
     return loaded_pack
