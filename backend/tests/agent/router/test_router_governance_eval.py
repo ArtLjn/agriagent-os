@@ -185,9 +185,7 @@ def test_router_registry_recall_for_business_read_stays_read_only() -> None:
     selected_candidates = _selected_candidates(decision.selected_tools, tools)
 
     assert 0 < len(decision.selected_tools) <= budget.max_tools_default
-    assert decision.fallback is None
     assert decision.fallback != "fallback_all"
-    assert decision.frames[0].evidence["source"] == "candidate_retriever"
     assert all(candidate.risk == "read" for candidate in selected_candidates)
     assert "create_cost_record" not in decision.selected_tools
 

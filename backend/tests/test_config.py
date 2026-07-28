@@ -22,12 +22,12 @@ class TestYamlConfig:
                 "api_key": "test-key",
                 "base_url": "http://localhost:11434",
             },
-            "embedding": {
-                "model": "qwen3-embedding:0.6b",
-                "base_url": "https://ollama.example.com",
-                "username": "ollama",
-                "password": "basic-password",
-                "dimensions": 1024,
+            "skill_vector_store": {
+                "enabled": True,
+                "url": "https://rag.example.com",
+                "api_key": "skill-rag-key",
+                "collection": "farm_manager_skill_routes_v1",
+                "sync_on_startup": True,
             },
             "weather": {"latitude": 39.9, "longitude": 116.4},
         }
@@ -40,8 +40,9 @@ class TestYamlConfig:
         assert settings.server.host == "127.0.0.1"
         assert settings.server.port == 9000
         assert settings.ai.api_key == "test-key"
-        assert settings.embedding.model == "qwen3-embedding:0.6b"
-        assert settings.embedding.password == "basic-password"
+        assert settings.skill_vector_store.enabled is True
+        assert settings.skill_vector_store.url == "https://rag.example.com"
+        assert settings.skill_vector_store.api_key == "skill-rag-key"
         assert settings.weather.latitude == 39.9
 
     def test_default_values_when_no_yaml(self):
@@ -71,25 +72,25 @@ class TestYamlConfig:
         finally:
             del os.environ["AI__API_KEY"]
 
-    def test_nested_env_var_overrides_embedding_yaml(self, tmp_path):
+    def test_nested_env_var_overrides_skill_vector_store_yaml(self, tmp_path):
         config_data = {
-            "embedding": {
-                "username": "ollama",
-                "password": "yaml-password",
+            "skill_vector_store": {
+                "api_key": "yaml-key",
+                "collection": "yaml_collection",
             },
         }
         config_file = tmp_path / "config.yaml"
         config_file.write_text(yaml.dump(config_data))
 
-        os.environ["EMBEDDING__PASSWORD"] = "env-password"
+        os.environ["SKILL_VECTOR_STORE__API_KEY"] = "env-key"
         try:
             from app.shared.config import Settings
 
             settings = Settings(_config_path=str(config_file))
-            assert settings.embedding.username == "ollama"
-            assert settings.embedding.password == "env-password"
+            assert settings.skill_vector_store.collection == "yaml_collection"
+            assert settings.skill_vector_store.api_key == "env-key"
         finally:
-            del os.environ["EMBEDDING__PASSWORD"]
+            del os.environ["SKILL_VECTOR_STORE__API_KEY"]
 
     def test_farm_manager_env_loads_dev_config(self, tmp_path, monkeypatch):
         config_file = tmp_path / "config.dev.yaml"
@@ -235,20 +236,23 @@ class TestAIConfig:
             AIConfig(**{field_name: 0})
 
 
-class TestEmbeddingConfig:
-    def test_embedding_config_defaults_to_qwen3_ollama(self):
-        from app.shared.config import EmbeddingConfig
+class TestSkillVectorStoreConfig:
+    def test_skill_vector_store_defaults_to_disabled_quillrag(self):
+        from app.shared.config import SkillVectorStoreConfig
 
-        config = EmbeddingConfig()
+        config = SkillVectorStoreConfig()
 
-        assert config.provider == "ollama"
-        assert config.model == "qwen3-embedding:0.6b"
-        assert config.endpoint == "/api/embed"
-        assert config.dimensions == 1024
+        assert config.provider == "quillrag"
+        assert config.enabled is False
+        assert config.collection == "farm_manager_skill_routes_v1"
+        assert config.mode == "hybrid"
+        assert config.timeout_seconds == 1.5
+        assert config.sync_timeout_seconds == 30.0
+        assert config.sync_on_startup is True
 
-    @pytest.mark.parametrize("field_name", ["dimensions", "timeout_seconds"])
-    def test_embedding_config_numeric_values_must_be_positive(self, field_name):
-        from app.shared.config import EmbeddingConfig
+    @pytest.mark.parametrize("field_name", ["top_k", "timeout_seconds", "sync_timeout_seconds"])
+    def test_skill_vector_store_numeric_values_must_be_positive(self, field_name):
+        from app.shared.config import SkillVectorStoreConfig
 
         with pytest.raises(ValidationError):
-            EmbeddingConfig(**{field_name: 0})
+            SkillVectorStoreConfig(**{field_name: 0})

@@ -79,6 +79,25 @@ class RAGServiceConfig(BaseModel):
     use_hyde: bool = False
 
 
+class SkillVectorStoreConfig(BaseModel):
+    """Skill Router 专用 QuillRAG 向量集合配置。"""
+
+    enabled: bool = False
+    provider: Literal["quillrag"] = "quillrag"
+    url: str = ""
+    api_key: str = ""
+    collection: str = "farm_manager_skill_routes_v1"
+    mode: Literal["vector", "bm25", "hybrid"] = "hybrid"
+    top_k: int = Field(default=8, ge=1, le=100)
+    timeout_seconds: float = Field(default=1.5, gt=0)
+    sync_timeout_seconds: float = Field(default=30.0, gt=0)
+    retry: int = Field(default=0, ge=0)
+    use_hyde: bool = False
+    create_collection_on_startup: bool = True
+    sync_on_startup: bool = True
+    sync_delete_stale: bool = False
+
+
 StorageBackend = Literal["mysql", "dual", "mongo-read", "mongo"]
 DataFlywheelStorageBackend = Literal["mysql", "mongo"]
 
@@ -120,21 +139,6 @@ class AIConfig(BaseModel):
     session_summary_message_threshold: int = Field(default=12, gt=0)
     session_summary_debounce_minutes: int = Field(default=30, gt=0)
     session_summary_max_tokens: int = Field(default=500, gt=0)
-
-
-class EmbeddingConfig(BaseModel):
-    """Embedding 模型配置，供检索、召回评测和后续向量化任务复用。"""
-
-    enabled: bool = False
-    provider: str = "ollama"
-    model: str = "qwen3-embedding:0.6b"
-    base_url: str = ""
-    endpoint: str = "/api/embed"
-    username: str = ""
-    password: str = ""
-    api_key: str = ""
-    dimensions: int = Field(default=1024, gt=0)
-    timeout_seconds: float = Field(default=30.0, gt=0)
 
 
 class WeatherConfig(BaseModel):
@@ -300,9 +304,9 @@ class Settings(BaseSettings):
     database: DatabaseConfig = DatabaseConfig()
     mongodb: MongoConfig = MongoConfig()
     rag_service: RAGServiceConfig = RAGServiceConfig()
+    skill_vector_store: SkillVectorStoreConfig = SkillVectorStoreConfig()
     storage: StorageConfig = StorageConfig()
     ai: AIConfig = AIConfig()
-    embedding: EmbeddingConfig = EmbeddingConfig()
     weather: WeatherConfig = WeatherConfig()
     circuit_breaker: CircuitBreakerConfig = CircuitBreakerConfig()
     rate_limiting: RateLimitConfig = RateLimitConfig()
@@ -404,7 +408,6 @@ __all__ = [
     "DataFlywheelConfig",
     "DataFlywheelStorageBackend",
     "DatabaseConfig",
-    "EmbeddingConfig",
     "LangSmithConfig",
     "MongoConfig",
     "PROJECT_ROOT",
@@ -414,6 +417,7 @@ __all__ = [
     "SecretsConfig",
     "ServerConfig",
     "Settings",
+    "SkillVectorStoreConfig",
     "StorageBackend",
     "StorageConfig",
     "TokenQuotaConfig",

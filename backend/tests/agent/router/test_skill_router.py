@@ -1,11 +1,13 @@
 """Skill Catalog 测试。"""
 
+import logging
 from unittest.mock import MagicMock
 
 import pytest
 from pydantic import BaseModel, Field
 
 from app.agent.router.catalog import SkillCatalog
+from app.agent.router.hybrid_retriever import HybridOperationRetriever
 from app.agent.router.service import SkillRouter
 
 pytestmark = pytest.mark.no_db
@@ -760,6 +762,98 @@ def test_registry_capability_routing_metadata_is_preserved(
     assert decision.scores["operation"][operation] >= 0.85
     assert decision.frames[0].capability == capability
     assert decision.frames[0].operation == operation
+
+
+def test_expense_query_routes_to_manage_cost_when_crop_cycle_is_available() -> None:
+    decision = SkillRouter().route(
+        "我的花费多少",
+        [_tool("manage_cost"), _tool("manage_crop_cycle"), _tool("get_farm_status")],
+    )
+
+    assert decision.selected_tools == ["manage_cost"]
+    assert decision.selected_operations == {"manage_cost": ["query_summary"]}
+    assert decision.frames[0].operation == "query_summary"
+
+
+def test_rule_route_trace_explains_vector_recall_was_skipped() -> None:
+    decision = SkillRouter().route(
+        "明天天气怎么样？",
+        [_tool("weather"), _tool("get_farm_status")],
+    )
+
+    payload = decision.to_trace_payload()
+    recall = payload["evidence"]["recall"]
+    explanations = payload["evidence"]["candidate_explanations"]
+
+    assert recall["path"] == "rule_classifier"
+    assert recall["retrieval_engine"] == "rule_intent_classifier"
+    assert recall["bm25_used"] is False
+    assert recall["vector_search_used"] is False
+    assert recall["rag_service_used"] is False
+    assert recall["external_embedding_requested"] is False
+    assert recall["embedding_location"] == "none"
+    assert recall["skip_reason"] == "rule_classifier_matched"
+    assert explanations[0]["route"] == "weather.query_forecast"
+    assert explanations[0]["selected"] is True
+    assert explanations[0]["scores"]["operation"] >= 0.85
+
+
+def test_hybrid_route_trace_includes_top_candidate_scores() -> None:
+    router = SkillRouter()
+    router._classifier = MagicMock()
+    router._classifier.classify.return_value = []
+
+    def vector_search(_query: str, candidates) -> dict[str, float]:
+        return {
+            f"{candidate.name}.{candidate.operation}": (
+                0.97 if candidate.operation == "query_summary" else 0.12
+            )
+            for candidate in candidates
+        }
+
+    router._hybrid_retriever = HybridOperationRetriever(vector_search=vector_search)
+
+    decision = router.route(
+        "我的花费多少",
+        [_tool("manage_cost"), _tool("manage_crop_cycle"), _tool("get_farm_status")],
+    )
+
+    payload = decision.to_trace_payload()
+    recall = payload["evidence"]["recall"]
+    explanations = payload["evidence"]["candidate_explanations"]
+
+    assert recall["path"] == "bm25_vector_hybrid"
+    assert recall["vector_search_used"] is True
+    assert recall["rag_service_used"] is True
+    assert recall["external_embedding_requested"] is True
+    assert recall["local_doc_embedding_calls"] == 0
+    assert recall["top_candidates"][0]["route"] == "manage_cost.query_summary"
+    assert explanations[0]["route"] == "manage_cost.query_summary"
+    assert explanations[0]["selected"] is True
+    assert explanations[0]["scores"]["vector"] == 0.97
+    assert "bm25" in explanations[0]["scores"]
+    assert "final" in explanations[0]["scores"]
+
+
+def test_rule_routing_logs_classification_and_vector_skip_reason(caplog) -> None:
+    tools = [_tool("manage_crop_cycle"), _tool("get_farm_status")]
+
+    with caplog.at_level(logging.INFO, logger="app.agent.router.service"):
+        SkillRouter().route("我现在有哪些进行中的茬口？", tools)
+
+    messages = [record.getMessage() for record in caplog.records]
+    assert any(
+        "event=skill_router_classification_completed" in message
+        and "frame_count=" in message
+        and "query_active_crops" in message
+        for message in messages
+    )
+    assert any(
+        "event=skill_router_vector_recall_skipped" in message
+        and "status=skipped" in message
+        and "reason=rule_classifier_matched" in message
+        for message in messages
+    )
 
 
 @pytest.mark.parametrize(

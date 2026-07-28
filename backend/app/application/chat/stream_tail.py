@@ -26,7 +26,7 @@ async def yield_metadata_events(
         )
 
     if metadata.pending_action:
-        logger.info(
+        logger.debug(
             "[%s] 发送 pending_action SSE 事件 | skill=%s",
             request_id,
             metadata.pending_action.skill_name,
@@ -54,7 +54,7 @@ def log_stream_completed(
     metadata: StreamMetadata,
     conversation: Conversation | None,
 ) -> None:
-    logger.info(
+    logger.debug(
         "[%s] /chat/stream 完成 | 耗时 %.2fs | reply %d 字符 | skills=%s conversation=%s",
         request_id,
         time.perf_counter() - started_at,

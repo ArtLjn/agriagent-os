@@ -42,6 +42,24 @@ rag_service:
   top_k: 5                    # 注入 prompt 前最多取前 5 条摘要。
   use_hyde: false             # 是否请求 QuillRAG 执行 HyDE 查询改写。
 
+# Skill Router 专用向量集合配置。复用 QuillRAG 公共上传/检索能力，
+# Farm Manager 不再配置 embedding provider，也不保存 embedding key。
+skill_vector_store:
+  enabled: false              # true 时 Router 会调用 QuillRAG 检索 Skill operation。
+  provider: "quillrag"        # 当前仅支持 quillrag。
+  url: ""                     # 可留空复用 rag_service.url；也可单独指定 Skill 向量服务地址。
+  api_key: ""                 # 可留空复用 rag_service.api_key；真实值放私密 config 或环境变量。
+  collection: "farm_manager_skill_routes_v1" # Skill operation 专用 collection。
+  mode: "hybrid"              # vector / bm25 / hybrid；由 QuillRAG 内部执行 embedding 和检索。
+  top_k: 8                    # QuillRAG 返回的 Skill operation 候选数量。
+  timeout_seconds: 1.5        # Router 检索超时，单位秒。
+  sync_timeout_seconds: 30.0   # 后台/手动同步入库超时，单位秒。
+  retry: 0                    # Router 路径默认不额外重试，避免拖慢对话。
+  use_hyde: false             # Skill 路由默认不使用 HyDE。
+  create_collection_on_startup: true # 启动时自动创建 collection（幂等）。
+  sync_on_startup: true       # 启动后后台检查 manifest，变化时才同步 Skill Registry。
+  sync_delete_stale: false    # 第一阶段不自动删除云端旧文档，避免误删。
+
 # MongoDB 迁移对象存储后端。可选：mysql、dual、mongo-read、mongo。
 storage:
   trace: "mongo"               # traceRecords。
@@ -70,19 +88,6 @@ ai:
   session_summary_message_threshold: 12          # 累积消息达到该数量后才触发摘要，避免每轮调用 LLM。
   session_summary_debounce_minutes: 30           # 摘要成功后的防抖窗口，单位分钟。
   session_summary_max_tokens: 500                # 单次摘要输出 token 上限，用于控制工作记忆长度和成本。
-
-# Embedding 模型配置。可用 Ollama 原生 /api/embed，也可由代码扩展为其他 provider。
-embedding:
-  enabled: false                     # 是否启用 Skill Router embedding 召回。
-  provider: "ollama"                 # embedding provider 标识。
-  model: "qwen3-embedding:0.6b"       # embedding 模型名称。
-  base_url: "https://ollama.example.com" # 服务根地址，不要带 endpoint。
-  endpoint: "/api/embed"             # Ollama 原生 embedding endpoint。
-  username: ""                       # Basic Auth 用户名；无鉴权时留空。
-  password: ""                       # Basic Auth 密码；真实值只放私密配置或 EMBEDDING__PASSWORD。
-  api_key: ""                        # Bearer/API-Key 模式预留。
-  dimensions: 1024                   # qwen3-embedding:0.6b 输出维度。
-  timeout_seconds: 30.0              # 单次 embedding 请求超时，单位秒。
 
 # 默认天气坐标。用户/农场没有精确位置时会作为兜底。
 weather:

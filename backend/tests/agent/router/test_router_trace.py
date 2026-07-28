@@ -7,7 +7,8 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
 from app.agent.router import IntentFrame, RouterDecision
-from app.agent.runtime.nodes import _llm_node
+from app.agent.runtime import node_helpers as _node_helpers
+from app.agent.runtime.nodes import _llm_node, _resolve_router_decision
 from app.context.core.models import ContextBundle
 
 pytestmark = pytest.mark.no_db
@@ -143,6 +144,52 @@ def test_router_decision_trace_payload_includes_diagnostics() -> None:
     assert payload["scores"]["capability"] == {"manage_crop_cycle": 0.88}
     assert payload["scores"]["operation"] == {"query_cycles": 0.87}
     assert payload["evidence"]["selected_candidates"] == [{"name": "get_farm_status"}]
+
+
+def test_runtime_router_decision_returns_measured_duration() -> None:
+    decision = RouterDecision(selected_tools=["get_farm_status"])
+
+    with ExitStack() as stack:
+        stack.enter_context(
+            patch(
+                "app.agent.runtime.nodes._node_helpers._resolve_router_decision",
+                return_value=decision,
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.agent.runtime.nodes.time.perf_counter",
+                side_effect=[100.0, 100.012],
+            )
+        )
+
+        resolved_decision, duration_ms = _resolve_router_decision(
+            state={},
+            normal_msgs=[],
+            user_msg="查询农场状态",
+            tools=[],
+        )
+
+    assert resolved_decision is decision
+    assert duration_ms == 12
+
+
+def test_record_router_plan_trace_preserves_router_duration() -> None:
+    collector = MagicMock()
+    decision = RouterDecision(selected_tools=["get_farm_status"])
+
+    _node_helpers._record_router_plan_trace(
+        collector=collector,
+        router_decision=decision,
+        user_msg="查询农场状态",
+        farm_id=1,
+        session_id="session-1",
+        duration_ms=12,
+    )
+
+    collector.record.assert_called_once()
+    assert collector.record.call_args.kwargs["node_name"] == "skill_router"
+    assert collector.record.call_args.kwargs["duration_ms"] == 12
 
 
 @pytest.mark.asyncio

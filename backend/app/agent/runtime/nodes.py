@@ -2,6 +2,7 @@
 
 import logging
 import re
+import time
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
@@ -111,6 +112,7 @@ def _bind_llm_for_tools(
     *,
     log_no_tools: bool = True,
     tool_choice: str = "auto",
+    has_tool_results: bool = False,
 ):
     """按配置绑定可用工具。"""
     if selected_tools:
@@ -121,7 +123,10 @@ def _bind_llm_for_tools(
             kwargs["tool_choice"] = "required"
         return raw_llm.bind_tools(selected_tools, **kwargs)
     if log_no_tools:
-        logger.info("无匹配工具，LLM 直接回复（闲聊模式）")
+        if has_tool_results:
+            logger.info("工具结果已返回，进入最终回复生成阶段（不再绑定工具）")
+        else:
+            logger.info("无匹配工具，LLM 直接回复")
     return raw_llm
 
 
@@ -228,6 +233,7 @@ async def _prepare_node_contexts(
         should_record_router_trace=route_context["should_record_router_trace"],
         collector=route_context["collector"],
         user_msg=user_msg,
+        has_tool_results=has_tool_results,
     )
     prompt_context = await _prepare_llm_prompt(
         state=state,
@@ -265,7 +271,7 @@ def _prepare_route_context(
     user_msg: str,
     has_tool_results: bool,
 ) -> dict:
-    router_decision = _resolve_router_decision(
+    router_decision, router_duration_ms = _resolve_router_decision(
         state=state,
         normal_msgs=normal_msgs,
         user_msg=user_msg,
@@ -282,6 +288,7 @@ def _prepare_route_context(
         farm_id=farm_id,
         session_id=session_id,
         has_tool_results=has_tool_results,
+        router_duration_ms=router_duration_ms,
     )
     selected_names = _node_helpers._resolve_selected_names(
         router_decision=router_decision,
@@ -312,8 +319,10 @@ def _resolve_router_decision(
     normal_msgs: list[ToolMessage],
     user_msg: str,
     tools: list,
-) -> RouterDecision:
-    return _node_helpers._resolve_router_decision(
+) -> tuple[RouterDecision, int | None]:
+    should_measure_route = state.get("router_decision") is None and not normal_msgs
+    started_at = time.perf_counter() if should_measure_route else None
+    router_decision = _node_helpers._resolve_router_decision(
         prepared_router_decision=state.get("router_decision"),
         normal_msgs=normal_msgs,
         user_msg=user_msg,
@@ -325,6 +334,10 @@ def _resolve_router_decision(
             default_select_tools_func=_select_tools,
         ),
     )
+    if started_at is None:
+        return router_decision, None
+    elapsed_ms = (time.perf_counter() - started_at) * 1000
+    return router_decision, max(1, int(elapsed_ms))
 
 
 def _resolve_plan_trace(
@@ -336,6 +349,7 @@ def _resolve_plan_trace(
     farm_id: int,
     session_id: str | None,
     has_tool_results: bool,
+    router_duration_ms: int | None,
 ) -> tuple[dict | None, bool]:
     plan_draft_payload = _node_helpers._existing_plan_draft_payload(state)
     should_record_router_trace = not has_tool_results
@@ -346,6 +360,7 @@ def _resolve_plan_trace(
             user_msg=user_msg,
             farm_id=farm_id,
             session_id=session_id,
+            duration_ms=router_duration_ms,
         )
     return plan_draft_payload, should_record_router_trace
 
@@ -359,6 +374,7 @@ def _prepare_llm_binding(
     should_record_router_trace: bool,
     collector,
     user_msg: str,
+    has_tool_results: bool,
 ) -> dict:
     model_role = "lightweight" if intent == "query" else "generation"
     raw_llm = get_llm(role=model_role)
@@ -373,7 +389,12 @@ def _prepare_llm_binding(
             tool_choice=tool_choice,
             force_binding=router_decision.force_binding,
         )
-    llm = _bind_llm_for_tools(raw_llm, selected_tools, tool_choice=tool_choice)
+    llm = _bind_llm_for_tools(
+        raw_llm,
+        selected_tools,
+        tool_choice=tool_choice,
+        has_tool_results=has_tool_results,
+    )
     return {
         "model_role": model_role,
         "raw_llm": raw_llm,
@@ -403,15 +424,15 @@ async def _prepare_llm_prompt(
         user_id=state.get("user_id"),
         session_id=route_context["session_id"],
     )
-    system_text, prompt_scene = _compose_system_text(
-        prepared_system_prompt=state.get("system_prompt"),
+    system_text, prompt_scene, system_prompt_duration_ms = _compose_timed_system_prompt(
+        state=state,
         farm_id=farm_id,
         farm_ctx=farm_ctx,
         selected_tool_names=llm_context["selected_tool_names"],
         has_tool_results=has_tool_results,
         router_decision=route_context["router_decision"],
+        context_bundle=context_bundle,
     )
-    system_text = _node_helpers._append_runtime_context(system_text, context_bundle)
 
     system, messages, input_summary = _node_helpers._record_prompt_budget(
         collector=route_context["collector"],
@@ -421,6 +442,7 @@ async def _prepare_llm_prompt(
         state=state,
         compact_messages_func=sliding_window_compact,
         find_last_human_message_func=_find_last_human_message,
+        system_prompt_duration_ms=system_prompt_duration_ms,
     )
     return {
         "context_bundle": context_bundle,
@@ -430,6 +452,30 @@ async def _prepare_llm_prompt(
         "messages": messages,
         "input_summary": input_summary,
     }
+
+
+def _compose_timed_system_prompt(
+    *,
+    state: AgentState,
+    farm_id: int,
+    farm_ctx: dict,
+    selected_tool_names: list[str],
+    has_tool_results: bool,
+    router_decision: RouterDecision,
+    context_bundle,
+) -> tuple[str, str, int]:
+    started_at = time.perf_counter()
+    system_text, prompt_scene = _compose_system_text(
+        prepared_system_prompt=state.get("system_prompt"),
+        farm_id=farm_id,
+        farm_ctx=farm_ctx,
+        selected_tool_names=selected_tool_names,
+        has_tool_results=has_tool_results,
+        router_decision=router_decision,
+    )
+    system_text = _node_helpers._append_runtime_context(system_text, context_bundle)
+    duration_ms = max(1, int((time.perf_counter() - started_at) * 1000))
+    return system_text, prompt_scene, duration_ms
 
 
 __all__ = [

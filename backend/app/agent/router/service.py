@@ -9,8 +9,8 @@ from langchain_core.tools import BaseTool
 
 from app.agent.router.catalog import SkillCatalog
 from app.agent.router.candidate_retriever import CandidateRetriever
-from app.agent.router.embedding_client import build_router_embedding_fn
 from app.agent.router.hybrid_retriever import HybridOperationRetriever
+from app.agent.router.skill_vector_store import build_skill_vector_search_fn
 from app.agent.router import classifier_signals as signals
 from app.agent.router.classifier import RuleIntentClassifier
 from app.agent.router.intent import IntentType, classify_intent
@@ -21,6 +21,11 @@ from app.agent.router.models import (
     ToolCandidate,
 )
 from app.agent.router.policy import RouterPolicy
+from app.agent.router.trace_diagnostics import (
+    candidate_explanations,
+    selection_path,
+    with_trace_diagnostics,
+)
 from app.infra.trace_context import get_trace
 from app.shared.logging import log_event
 from app.skills.registry import OperationDefinition, load_skill_registry
@@ -100,7 +105,7 @@ class SkillRouter:
         self._policy = policy or RouterPolicy(self._budget)
         self._retriever = CandidateRetriever()
         self._hybrid_retriever = HybridOperationRetriever(
-            embed=build_router_embedding_fn()
+            vector_search=build_skill_vector_search_fn()
         )
 
     def route(self, message: str, tools: list[BaseTool]) -> RouterDecision:
@@ -109,24 +114,32 @@ class SkillRouter:
         self._log_route_started(message=message, tools=tools)
         catalog = SkillCatalog.from_tools(tools)
         try:
-            frames = self._enrich_frames(self._classifier.classify(message), catalog)
-            intent = classify_intent(message)
-            if not frames and intent == IntentType.WRITE:
-                frames = self._retrieved_write_frames(message, catalog)
-                if not frames:
-                    decision = self._unresolved_write_decision(message)
-                    self._log_route_completed(
-                        started_at=started_at,
-                        decision=decision,
-                        candidate_count=len(catalog.candidates()),
-                    )
-                    return decision
-            if not frames and self._looks_like_retrievable_read(message):
-                frames = self._retrieved_frames(message, catalog)
+            frames, intent = self._classified_frames(message, catalog)
+            frames, early_decision = self._resolve_retrieval_frames(
+                message,
+                catalog,
+                frames,
+                intent,
+            )
+            if early_decision is not None:
+                early_decision = with_trace_diagnostics(
+                    early_decision,
+                    vector_index_enabled=self._hybrid_retriever.vector_index_enabled,
+                )
+                self._log_route_completed(
+                    started_at=started_at,
+                    decision=early_decision,
+                    candidate_count=len(catalog.candidates()),
+                )
+                return early_decision
             decision = self._policy.apply(
                 message=message,
                 frames=frames,
                 candidates=catalog.candidates(),
+            )
+            decision = with_trace_diagnostics(
+                decision,
+                vector_index_enabled=self._hybrid_retriever.vector_index_enabled,
             )
         except Exception as exc:
             self._log_route_failed(
@@ -141,6 +154,67 @@ class SkillRouter:
         )
         return decision
 
+    def _classified_frames(
+        self,
+        message: str,
+        catalog: SkillCatalog,
+    ) -> tuple[list[IntentFrame], IntentType]:
+        frames = self._enrich_frames(self._classifier.classify(message), catalog)
+        intent = classify_intent(message)
+        self._log_classification_completed(frames=frames, intent=intent)
+        if frames:
+            self._log_vector_recall_skipped(
+                reason="rule_classifier_matched",
+                intent=intent,
+                frame_count=len(frames),
+                retrievable_read=self._looks_like_retrievable_read(message),
+            )
+        return frames, intent
+
+    def _resolve_retrieval_frames(
+        self,
+        message: str,
+        catalog: SkillCatalog,
+        frames: list[IntentFrame],
+        intent: IntentType,
+    ) -> tuple[list[IntentFrame], RouterDecision | None]:
+        if frames:
+            return frames, None
+        if intent == IntentType.WRITE:
+            return self._write_retrieval_frames(message, catalog, intent)
+        if self._looks_like_retrievable_read(message):
+            return self._retrieved_frames(message, catalog), None
+        self._log_vector_recall_skipped(
+            reason="not_retrievable_read",
+            intent=intent,
+            frame_count=0,
+            retrievable_read=False,
+        )
+        return frames, None
+
+    def _write_retrieval_frames(
+        self,
+        message: str,
+        catalog: SkillCatalog,
+        intent: IntentType,
+    ) -> tuple[list[IntentFrame], RouterDecision | None]:
+        frames = self._retrieved_write_frames(message, catalog)
+        if frames:
+            self._log_vector_recall_skipped(
+                reason="write_candidate_retriever",
+                intent=intent,
+                frame_count=len(frames),
+                retrievable_read=False,
+            )
+            return frames, None
+        self._log_vector_recall_skipped(
+            reason="unresolved_write",
+            intent=intent,
+            frame_count=0,
+            retrievable_read=False,
+        )
+        return frames, self._unresolved_write_decision(message)
+
     @staticmethod
     def _log_route_started(*, message: str, tools: list[BaseTool]) -> None:
         trace = get_trace()
@@ -154,6 +228,61 @@ class SkillRouter:
             data={
                 "message_len": len(message),
                 "tool_count": len(tools),
+            },
+        )
+
+    def _log_classification_completed(
+        self,
+        *,
+        frames: list[IntentFrame],
+        intent: IntentType,
+    ) -> None:
+        trace = get_trace()
+        log_event(
+            logger,
+            logging.INFO,
+            "skill_router_classification_completed",
+            request_id=trace.request_id if trace else None,
+            session_id=trace.session_id if trace else None,
+            status="success",
+            data={
+                "coarse_intent": intent.value,
+                "frame_count": len(frames),
+                "frame_intents": [frame.intent for frame in frames],
+                "frame_capabilities": [frame.capability for frame in frames],
+                "frame_operations": [frame.operation for frame in frames],
+            },
+        )
+
+    def _log_vector_recall_skipped(
+        self,
+        *,
+        reason: str,
+        intent: IntentType,
+        frame_count: int,
+        retrievable_read: bool,
+    ) -> None:
+        trace = get_trace()
+        log_event(
+            logger,
+            logging.INFO,
+            "skill_router_vector_recall_skipped",
+            request_id=trace.request_id if trace else None,
+            session_id=trace.session_id if trace else None,
+            status="skipped",
+            data={
+                "reason": reason,
+                "coarse_intent": intent.value,
+                "frame_count": frame_count,
+                "retrievable_read": retrievable_read,
+                "vector_index_enabled": self._hybrid_retriever.vector_index_enabled,
+                "vector_search_used": False,
+                "quillrag_retrieve_used": False,
+                "external_embedding_requested": False,
+                "embedding_location": "none",
+                "local_embedding_used": False,
+                "local_query_embedding_calls": 0,
+                "local_doc_embedding_calls": 0,
             },
         )
 
@@ -177,6 +306,15 @@ class SkillRouter:
                 "candidate_count": candidate_count,
                 "selected_tools": decision.selected_tools,
                 "selected_operations": decision.selected_operations,
+                "selection_path": selection_path(decision),
+                "selection_reason": decision.reason,
+                "recall": decision.evidence.get("recall"),
+                "candidate_explanations": {
+                    "items": decision.evidence.get(
+                        "candidate_explanations",
+                        candidate_explanations(decision),
+                    )
+                },
                 "fallback": decision.fallback,
                 "fallback_reason": decision.fallback_reason,
                 "policy_violations": decision.policy_violations,
@@ -211,6 +349,7 @@ class SkillRouter:
         selected_candidates = self._filter_retrieved_candidates(
             message,
             retrieved.selected_candidates,
+            scores=retrieved.scores,
         )
         if not selected_candidates:
             return []
@@ -233,6 +372,8 @@ class SkillRouter:
                     score=0.6,
                     evidence={
                         "source": "hybrid_operation_retriever",
+                        "recall": retrieved.recall,
+                        "top_candidates": retrieved.top_candidates,
                         "scores": retrieved.scores,
                         "retrieval_evidence": {
                             self._route_key(candidate): retrieved.evidence.get(
@@ -251,7 +392,10 @@ class SkillRouter:
     def _filter_retrieved_candidates(
         message: str,
         candidates: list[ToolCandidate],
+        *,
+        scores: dict[str, float],
     ) -> list[ToolCandidate]:
+        candidates = _filter_low_confidence_retrieved_candidates(candidates, scores)
         names = [candidate.name for candidate in candidates]
         if (
             "manage_crop_cycle" not in names
@@ -594,6 +738,7 @@ class SkillRouter:
             "risk": candidate.risk,
             "enabled": candidate.enabled,
             "legacy_alias": candidate.legacy_alias,
+            "score": candidate.score or 0.85,
         }
 
     @staticmethod
@@ -606,3 +751,24 @@ class SkillRouter:
                 if isinstance(params.get(key), list):
                     params[key] = ",".join(str(item) for item in params[key])
         return params
+
+
+def _filter_low_confidence_retrieved_candidates(
+    candidates: list[ToolCandidate],
+    scores: dict[str, float],
+) -> list[ToolCandidate]:
+    if not candidates:
+        return []
+    route_scores = [
+        scores.get(SkillRouter._route_key(candidate), 0.0) for candidate in candidates
+    ]
+    top_score = max(route_scores, default=0.0)
+    if top_score <= 0:
+        return candidates
+    threshold = max(0.18, top_score * 0.5)
+    kept = [
+        candidate
+        for candidate, score in zip(candidates, route_scores, strict=True)
+        if score >= threshold
+    ]
+    return kept or candidates[:1]

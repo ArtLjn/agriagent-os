@@ -12,9 +12,9 @@ import yaml
 from langchain_core.tools import BaseTool
 
 from app.agent.router.catalog import SkillCatalog
-from app.agent.router.embedding_client import build_router_embedding_fn
 from app.agent.router.hybrid_retriever import HybridOperationRetriever
 from app.agent.router.models import ToolCandidate
+from app.agent.router.skill_vector_store import build_skill_vector_search_fn
 from app.skills.registry import OperationDefinition, load_skill_registry
 
 
@@ -56,6 +56,13 @@ class RouteRecallCandidate:
 
 
 @dataclass(frozen=True)
+class RouteRecallPreview:
+    candidates: list[RouteRecallCandidate]
+    vector_index_enabled: bool
+    recall_mode: str
+
+
+@dataclass(frozen=True)
 class RouteRecallReport:
     total: int
     recall_at_1: float
@@ -75,19 +82,43 @@ def preview_route_recall(
     tools: list[BaseTool],
     *,
     top_k: int = 5,
+    retriever: HybridOperationRetriever | None = None,
 ) -> list[RouteRecallCandidate]:
     """预览单条业务输入的 Skill 候选召回结果。"""
+    return preview_route_recall_detail(
+        message,
+        tools,
+        top_k=top_k,
+        retriever=retriever,
+    ).candidates
+
+
+def preview_route_recall_detail(
+    message: str,
+    tools: list[BaseTool],
+    *,
+    top_k: int = 5,
+    retriever: HybridOperationRetriever | None = None,
+) -> RouteRecallPreview:
+    """预览单条业务输入的 Skill 候选召回详情。"""
     candidates = _operation_candidates(tools)
-    result = HybridOperationRetriever(embed=build_router_embedding_fn()).retrieve(
+    route_retriever = retriever or _default_hybrid_retriever()
+    result = route_retriever.retrieve(
         message,
         candidates,
         limit=len(candidates),
     )
-    return _top_unique_skill_candidates(
-        result.selected_candidates,
-        result.scores,
-        result.evidence,
-        top_k,
+    return RouteRecallPreview(
+        candidates=_top_unique_skill_candidates(
+            result.selected_candidates,
+            result.scores,
+            result.evidence,
+            top_k,
+        ),
+        vector_index_enabled=route_retriever.vector_index_enabled,
+        recall_mode="hybrid_vector"
+        if route_retriever.vector_index_enabled
+        else "hybrid_local",
     )
 
 
@@ -96,17 +127,22 @@ def evaluate_route_recall(
     tools: list[BaseTool],
     *,
     top_k: int = 5,
+    retriever: HybridOperationRetriever | None = None,
 ) -> RouteRecallReport:
     """评测 operation 级召回命中率。"""
     candidates = _operation_candidates(tools)
-    retriever = HybridOperationRetriever(embed=build_router_embedding_fn())
+    route_retriever = retriever or _default_hybrid_retriever()
     failures: list[RouteRecallFailure] = []
     hit_1 = 0
     hit_k = 0
     operation_hit_k = 0
 
     for case in cases:
-        result = retriever.retrieve(case.message, candidates, limit=len(candidates))
+        result = route_retriever.retrieve(
+            case.message,
+            candidates,
+            limit=len(candidates),
+        )
         routes = _top_unique_skill_routes(result.selected_candidates, top_k)
         accepted = _accepted_routes(case)
         if routes and _skill_hit(routes[0], accepted):
@@ -156,6 +192,11 @@ def format_report(report: RouteRecallReport, *, top_k: int) -> str:
         lines.append(f"  expected: {expected}")
         lines.append(f"  top{top_k}: {top}")
     return "\n".join(lines)
+
+
+def _default_hybrid_retriever() -> HybridOperationRetriever:
+    """评测/预览入口默认接入 QuillRAG 向量召回。"""
+    return HybridOperationRetriever(vector_search=build_skill_vector_search_fn())
 
 
 def default_route_cases_path() -> Path:

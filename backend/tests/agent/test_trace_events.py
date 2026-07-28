@@ -48,10 +48,10 @@ class TestTraceEvents:
 
         修复后：force_binding 由 _route_tools 基于真实工具列表派生并透传至本函数。
         """
-        from app.agent.runtime import nodes as nodes_mod
+        from app.agent.runtime import node_helpers
 
         collector = MagicMock()
-        nodes_mod._record_tool_call_forced_trace(
+        node_helpers._record_tool_call_forced_trace(
             collector=collector,
             user_msg="今天天气如何",
             selected_names=["weather"],
@@ -61,6 +61,7 @@ class TestTraceEvents:
         assert collector.record.called, "trace 函数必须调用 collector.record"
         call_kwargs = collector.record.call_args.kwargs
         assert call_kwargs.get("node_name") == "tool_call_forced"
+        assert call_kwargs.get("duration_ms") >= 1
         output_data = call_kwargs.get("output_data", {})
         assert output_data.get("forced_skills") == ["weather"], (
             "forced_skills 必须包含真实 skill 名，不能为空列表"
@@ -110,3 +111,30 @@ class TestTraceEvents:
         tool_calls = _tool_messages_for_data_source(messages)
 
         assert tool_calls == [{"name": "manage_crop_cycle"}]
+
+    def test_final_reply_data_source_trace_records_duration(self):
+        """final_reply_data_source 应记录 payload 构造耗时。"""
+        from langchain_core.messages import AIMessage, ToolMessage
+
+        from app.agent.runtime.node_helpers import _record_final_reply_data_source_trace
+
+        collector = MagicMock()
+        messages = [
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "call-status",
+                        "name": "get_farm_status",
+                        "args": {},
+                    }
+                ],
+            ),
+            ToolMessage(content="农场状态", tool_call_id="call-status"),
+        ]
+
+        _record_final_reply_data_source_trace(collector=collector, messages=messages)
+
+        call_kwargs = collector.record.call_args.kwargs
+        assert call_kwargs.get("node_name") == "final_reply_data_source"
+        assert call_kwargs.get("duration_ms") >= 1

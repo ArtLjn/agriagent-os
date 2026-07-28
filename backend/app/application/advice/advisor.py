@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import time
 from collections.abc import AsyncGenerator
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
@@ -19,6 +20,7 @@ from app.agent.runtime.loop import (
     stream_agent_loop,
 )
 from app.infra.trace_context import clear_trace, init_trace, set_round_index
+from app.shared.logging import log_event
 from app.domains.farm.models import Farm
 from app.domains.conversation.service import (
     async_get_recent_messages,
@@ -268,13 +270,30 @@ async def stream_advisor(
         user_id=user_id,
         call_type=call_type,
     )
-    logger.info("Agent 流式请求 | farm_id=%s: %s", farm_id, user_input[:200])
+    started_at = time.perf_counter()
+    log_event(
+        logger,
+        logging.INFO,
+        "agent_turn_started",
+        request_id=request_id,
+        session_id=session_id,
+        status="started",
+        data={
+            "farm_id": farm_id,
+            "conversation_id": conversation_id,
+            "message_len": len(user_input),
+            "call_type": call_type,
+        },
+    )
 
     # 意图路由：问候语直接回复，跳过 ReAct loop
     intent = classify_intent(user_input)
     farm_uid = _resolve_farm_uid(db, farm_id)
 
     step = 0
+    decided_tools: list[str] = []
+    observed_tool_results = 0
+    final_reply_len = 0
     try:
         if intent == IntentType.GREETING:
             reply = filter_output(get_greeting_reply(user_input))
@@ -336,26 +355,56 @@ async def stream_advisor(
                 step += 1
                 for msg in state.get("messages", []):
                     if isinstance(msg, ToolMessage):
-                        logger.info(
-                            "[step %d] 工具 %s 返回: %s",
-                            step,
-                            node,
-                            str(msg.content)[:150],
+                        observed_tool_results += 1
+                        log_event(
+                            logger,
+                            logging.DEBUG,
+                            "agent_tool_result_observed",
+                            request_id=request_id,
+                            session_id=session_id,
+                            status="success",
+                            data={
+                                "step": step,
+                                "node": node,
+                                "result_len": len(str(msg.content)),
+                                "result_preview": str(msg.content)[:150],
+                            },
                         )
                     elif isinstance(msg, AIMessage):
                         if msg.tool_calls:
                             for tc in msg.tool_calls:
-                                logger.info(
-                                    "[step %d] LLM 决定调用工具: %s(%s)",
-                                    step,
-                                    tc["name"],
-                                    tc["args"],
+                                tool_name = str(tc.get("name") or "")
+                                if tool_name:
+                                    decided_tools.append(tool_name)
+                                args = tc.get("args") or {}
+                                log_event(
+                                    logger,
+                                    logging.INFO,
+                                    "agent_tool_call_decided",
+                                    request_id=request_id,
+                                    session_id=session_id,
+                                    status="success",
+                                    data={
+                                        "step": step,
+                                        "tool": tool_name,
+                                        "arg_keys": list(args)
+                                        if isinstance(args, dict)
+                                        else [],
+                                    },
                                 )
                         elif msg.content:
-                            logger.info(
-                                "[step %d] LLM 最终回复，长度 %d",
-                                step,
-                                len(msg.content),
+                            final_reply_len = len(msg.content)
+                            log_event(
+                                logger,
+                                logging.DEBUG,
+                                "agent_final_reply_generated",
+                                request_id=request_id,
+                                session_id=session_id,
+                                status="success",
+                                data={
+                                    "step": step,
+                                    "reply_len": final_reply_len,
+                                },
                             )
                             filtered = filter_output(msg.content)
                             set_round_index(state.get("trace_round_index"))
@@ -371,17 +420,54 @@ async def stream_advisor(
                                 yield filtered[i : i + chunk_size]
                                 await asyncio.sleep(delay)
     except AgentLoopMaxStepsExceeded:
-        logger.error("Agent 流式步数超限 | farm_id=%s", farm_id)
+        log_event(
+            logger,
+            logging.ERROR,
+            "agent_turn_failed",
+            request_id=request_id,
+            session_id=session_id,
+            status="failed",
+            duration_ms=int((time.perf_counter() - started_at) * 1000),
+            data={"farm_id": farm_id, "steps": step},
+            error={"code": "AGENT_LOOP_MAX_STEPS_EXCEEDED"},
+        )
         yield "Agent 处理步数超出限制，请简化您的问题后重试。"
         return
     except Exception as e:
-        logger.error("Agent 流式异常 | farm_id=%s | error=%s", farm_id, e)
+        log_event(
+            logger,
+            logging.ERROR,
+            "agent_turn_failed",
+            request_id=request_id,
+            session_id=session_id,
+            status="failed",
+            duration_ms=int((time.perf_counter() - started_at) * 1000),
+            data={"farm_id": farm_id, "steps": step},
+            error={"code": e.__class__.__name__},
+        )
         yield "抱歉，AI 服务暂时不可用，请稍后重试。"
         return
     finally:
         clear_trace()
 
-    logger.info("Agent 流式完成，共 %d 步", step)
+    log_event(
+        logger,
+        logging.INFO,
+        "agent_turn_summary",
+        request_id=request_id,
+        session_id=session_id,
+        status="success",
+        duration_ms=int((time.perf_counter() - started_at) * 1000),
+        data={
+            "farm_id": farm_id,
+            "conversation_id": conversation_id,
+            "steps": step,
+            "llm_tool_calls": len(decided_tools),
+            "decided_tools": decided_tools,
+            "tool_results": observed_tool_results,
+            "reply_len": final_reply_len,
+        },
+    )
 
 
 __all__ = ["build_advisor_agent", "invoke_advisor", "stream_advisor"]

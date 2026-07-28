@@ -79,6 +79,7 @@ def test_final_llm_context_snapshot_v2_is_structured_and_sanitized() -> None:
         final_budget=final_budget,
     )
 
+    assert collector.records[0]["duration_ms"] >= 1
     output = collector.records[0]["output_data"]
     serialized = json.dumps(output, ensure_ascii=False)
     assert output["schema_version"] == 2

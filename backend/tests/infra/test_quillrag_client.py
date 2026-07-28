@@ -91,6 +91,135 @@ def test_retrieve_sends_payload_and_normalizes_success_response() -> None:
     assert result.results[0].metadata["category"] == "tomato"
 
 
+def test_ensure_collection_posts_public_collection_contract() -> None:
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        request.read()
+        captured["path"] = request.url.path
+        captured["payload"] = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={
+                "code": "OK",
+                "data": {
+                    "collection": "farm_manager_skill_routes_v1",
+                    "action": "created",
+                    "vector_dim": 3072,
+                },
+            },
+        )
+
+    client = QuillRAGClient(
+        base_url="http://rag.local",
+        api_key=PLACEHOLDER_API_KEY,
+        transport=httpx.MockTransport(handler),
+    )
+
+    result = client.ensure_collection(collection="farm_manager_skill_routes_v1")
+
+    assert result.ok is True
+    assert captured["path"] == "/collections"
+    assert captured["payload"] == {"name": "farm_manager_skill_routes_v1"}
+    assert result.data["action"] == "created"
+
+
+def test_ingest_text_posts_public_upload_contract() -> None:
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = request.read().decode()
+        captured["path"] = request.url.path
+        captured["body"] = body
+        captured["content_type"] = request.headers["content-type"]
+        return httpx.Response(
+            200,
+            json={
+                "code": "OK",
+                "data": {
+                    "doc_id": "skill:manage_cost.query_summary",
+                    "chunk_count": 1,
+                    "collection": "farm_manager_skill_routes_v1",
+                    "action": "created",
+                },
+            },
+        )
+
+    client = QuillRAGClient(
+        base_url="http://rag.local",
+        api_key=PLACEHOLDER_API_KEY,
+        transport=httpx.MockTransport(handler),
+    )
+
+    result = client.ingest_text(
+        collection="farm_manager_skill_routes_v1",
+        text="Capability: manage_cost",
+        source="manage_cost.query_summary",
+        category="skill_route",
+        doc_id="skill:manage_cost.query_summary",
+        metadata={"route_key": "manage_cost.query_summary", "enabled": True},
+    )
+
+    assert result.ok is True
+    assert captured["path"] == "/ingest"
+    assert "application/x-www-form-urlencoded" in captured["content_type"]
+    assert "collection=farm_manager_skill_routes_v1" in captured["body"]
+    assert "doc_id=skill%3Amanage_cost.query_summary" in captured["body"]
+    assert "route_key" in captured["body"]
+    assert result.data["action"] == "created"
+
+
+def test_list_documents_normalizes_public_collection_contract() -> None:
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["path"] = request.url.path
+        captured["query"] = dict(request.url.params)
+        return httpx.Response(
+            200,
+            json={
+                "code": "OK",
+                "data": {
+                    "total": 1,
+                    "page": 1,
+                    "page_size": 100,
+                    "documents": [
+                        {
+                            "doc_id": "skill:__manifest__",
+                            "collection": "farm_manager_skill_routes_v1",
+                            "source": "skill_route_manifest",
+                            "category": "skill_route_manifest",
+                            "chunk_count": 1,
+                            "content_hash": "abc",
+                            "extra": {
+                                "metadata": {"registry_hash": "sha256:abc"}
+                            },
+                        }
+                    ],
+                },
+            },
+        )
+
+    client = QuillRAGClient(
+        base_url="http://rag.local",
+        api_key=PLACEHOLDER_API_KEY,
+        transport=httpx.MockTransport(handler),
+    )
+
+    result = client.list_documents(
+        collection="farm_manager_skill_routes_v1",
+        page=1,
+        page_size=100,
+    )
+
+    assert result.ok is True
+    assert captured["path"] == "/collections/farm_manager_skill_routes_v1/documents"
+    assert captured["query"] == {"page": "1", "page_size": "100"}
+    assert result.total == 1
+    assert result.documents[0].doc_id == "skill:__manifest__"
+    assert result.documents[0].extra["metadata"]["registry_hash"] == "sha256:abc"
+
+
 def test_network_error_retries_before_success() -> None:
     attempts = 0
 

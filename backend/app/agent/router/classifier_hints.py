@@ -87,9 +87,13 @@ COST_SUMMARY_HINTS = (
     "余额",
     "收支",
     "成本",
+    "费用",
+    "花费",
     "利润",
     "账单",
     "流水",
+    "花费多少",
+    "费用多少",
     "花了多少",
     "赚了多少",
     "收入多少",
@@ -120,6 +124,13 @@ LABOR_PAYABLE_HINTS = (
     "欠人工",
     "还欠多少人工",
     "人工欠款",
+    "unpaid labor",
+    "labor payment",
+    "labor payments",
+    "worker wage",
+    "worker wages",
+    "unpaid worker wage",
+    "unpaid worker wages",
 )
 LABOR_PAYABLE_QUERY_HINTS = (
     "多少",
@@ -132,6 +143,12 @@ LABOR_PAYABLE_QUERY_HINTS = (
     "查一下",
     "看看",
     "我说的是",
+    "how much",
+    "unpaid",
+    "remain",
+    "remaining",
+    "show",
+    "list",
 )
 LABOR_SETTLE_HINTS = ("补付", "支付", "结算", "付清", "结清", "结了")
 WAGE_RECORD_HINTS = ("记", "记录", "新增", "添加", "修改", "更改", "调整", "更新")
@@ -236,4 +253,9 @@ WORKER_QUERY_HINTS = (
     "查询工人",
     "查一下工人",
     "工人有哪些",
+    "worker list",
+    "workers list",
+    "show my worker",
+    "show my workers",
+    "list workers",
 )

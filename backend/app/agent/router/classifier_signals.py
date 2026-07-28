@@ -284,7 +284,7 @@ def looks_like_crop_cycle_area_query(message: str) -> bool:
         return False
     if not re.search(r"(?:面积|多少\s*亩|几\s*亩)", message):
         return False
-    return "茬口" in message
+    return "茬口" in message or bool(re.search(r"(?:现在|当前).{0,12}亩", message))
 
 
 def looks_like_planting_unit_query(message: str) -> bool:

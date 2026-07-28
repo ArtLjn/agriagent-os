@@ -15,14 +15,14 @@ from app.infra.trace_context import get_trace
 from app.shared.logging import log_event
 
 
-EmbedFn = Callable[[str], list[float]]
+VectorSearchFn = Callable[[str, list[ToolCandidate]], dict[str, float]]
 logger = logging.getLogger(__name__)
 
 
 _STOP_TERMS = frozenset("a an and are for how i is me much my of please the to".split())
 _LOW_SIGNAL_TERMS = frozenset(
     "今天 昨天 前天 现在 当前 最近 本周 这周 本月 这个月 查询 查看 看看 "
-    "看一下 有哪些 有哪 哪些 多少 列表 明细 统计 show list what which".split()
+    "看一下 我 我的 有哪些 有哪 哪些 多少 列表 明细 统计 show list what which".split()
 )
 
 _TOKEN_ALIASES = {
@@ -42,8 +42,12 @@ _TOKEN_ALIASES = {
     "workers": "工人",
     "cost": "成本",
     "expense": "支出",
+    "expenses": "支出",
     "bill": "账单",
     "bills": "账单",
+    "花费": "成本",
+    "费用": "成本",
+    "开销": "成本",
     "未结清": "欠款",
     "没结清": "欠款",
     "欠账": "欠款",
@@ -54,6 +58,13 @@ _TOKEN_ALIASES = {
     "weather": "天气",
 }
 
+_COST_SUMMARY_QUERY_TERMS = frozenset(
+    "余额 收支 成本 费用 花费 支出 收入 利润 账单 流水 多少钱 多少".split()
+)
+_COST_ANALYTICS_QUERY_TERMS = frozenset(
+    "趋势 同比 环比 分析 比上个月 比去年".split()
+)
+
 
 @dataclass(frozen=True)
 class HybridRetrievalResult:
@@ -63,15 +74,28 @@ class HybridRetrievalResult:
     selected_candidates: list[ToolCandidate] = field(default_factory=list)
     scores: dict[str, float] = field(default_factory=dict)
     evidence: dict[str, dict] = field(default_factory=dict)
+    recall: dict = field(default_factory=dict)
+    top_candidates: list[dict] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class _VectorRecallResult:
+    """外部向量召回状态。"""
+
+    scores: dict[str, float]
+    status: str
+    vector_search_used: bool
+    error_code: str | None = None
 
 
 @dataclass(frozen=True)
 class _CandidateSignals:
     route_key: str
     bm25: float
-    embedding: float
+    vector: float
     lexical: float
     registry_prior: float
+    operation_prior: float
     anti_penalty: float
     low_signal_only_penalty: float
     score: float
@@ -82,13 +106,19 @@ class _CandidateSignals:
 
 
 class HybridOperationRetriever:
-    """BM25、强词法信号和 embedding 并集召回后统一重排。"""
+    """BM25、强词法信号和外部向量检索并集召回后统一重排。"""
 
     min_score: float = 0.05
 
-    def __init__(self, embed: EmbedFn | None = None) -> None:
-        self._embed = embed
-        self._embedding_cache: dict[str, list[float]] = {}
+    def __init__(
+        self,
+        vector_search: VectorSearchFn | None = None,
+    ) -> None:
+        self._vector_search = vector_search
+
+    @property
+    def vector_index_enabled(self) -> bool:
+        return self._vector_search is not None
 
     def retrieve(
         self,
@@ -103,7 +133,8 @@ class HybridOperationRetriever:
 
         query_terms = _normalize_terms(message)
         bm25_scores = _bm25_scores(query_terms, enabled_candidates)
-        embedding_scores = self._embedding_scores(message, enabled_candidates)
+        vector_recall = self._vector_scores(message, enabled_candidates)
+        vector_scores = vector_recall.scores
         max_bm25 = max(bm25_scores.values(), default=0.0)
 
         scored = [
@@ -112,7 +143,7 @@ class HybridOperationRetriever:
                 query_terms,
                 bm25_scores.get(_route_key(candidate), 0.0),
                 max_bm25,
-                embedding_scores.get(_route_key(candidate), 0.0),
+                vector_scores.get(_route_key(candidate), 0.0),
             )
             for candidate in enabled_candidates
         ]
@@ -129,7 +160,16 @@ class HybridOperationRetriever:
                 item[0].operation or "",
             )
         )
+        _log_candidate_scores(
+            candidate_count=len(enabled_candidates),
+            ranked=kept,
+            limit=min(max(limit, 5), 8),
+        )
         selected = kept[:limit]
+        top_candidates = [
+            _candidate_score_log_item(candidate, signals)
+            for candidate, signals in kept[: min(max(limit, 5), 8)]
+        ]
         return HybridRetrievalResult(
             selected_names=[candidate.name for candidate, _signals in selected],
             selected_candidates=[candidate for candidate, _signals in selected],
@@ -138,6 +178,13 @@ class HybridOperationRetriever:
                 signals.route_key: _evidence(signals)
                 for _candidate, signals in kept
             },
+            recall=_recall_summary(
+                candidate_count=len(enabled_candidates),
+                scored_count=len(kept),
+                vector_recall=vector_recall,
+                bm25_used=any(score > 0 for score in bm25_scores.values()),
+            ),
+            top_candidates=top_candidates,
         )
 
     def _score_candidate(
@@ -146,13 +193,14 @@ class HybridOperationRetriever:
         query_terms: set[str],
         bm25: float,
         max_bm25: float,
-        embedding: float,
+        vector: float,
     ) -> _CandidateSignals:
         route_key = _route_key(candidate)
         lexical_hits, low_signal_hits = _lexical_hits(query_terms, candidate)
         anti_hits = _anti_hits(query_terms, candidate)
         lexical = min(1.0, len(lexical_hits) * 0.45)
         registry_prior = _registry_prior(candidate)
+        operation_prior = _operation_prior(candidate, query_terms)
         bm25_norm = bm25 / max_bm25 if max_bm25 > 0 else 0.0
         anti_penalty = min(0.8, len(anti_hits) * 0.35)
         low_signal_only_penalty = (
@@ -160,23 +208,25 @@ class HybridOperationRetriever:
         )
         score = (
             0.35 * bm25_norm
-            + 0.35 * max(0.0, embedding)
+            + 0.35 * max(0.0, vector)
             + 0.20 * lexical
             + 0.10 * registry_prior
+            + operation_prior
             - anti_penalty
             - low_signal_only_penalty
         )
         sources = _sources(
             strong_rule=bool(lexical_hits),
             bm25=bm25 > 0,
-            embedding=embedding > 0,
+            vector=vector > 0,
         )
         return _CandidateSignals(
             route_key=route_key,
             bm25=bm25_norm,
-            embedding=embedding,
+            vector=vector,
             lexical=lexical,
             registry_prior=registry_prior,
+            operation_prior=operation_prior,
             anti_penalty=anti_penalty,
             low_signal_only_penalty=low_signal_only_penalty,
             score=score,
@@ -186,69 +236,181 @@ class HybridOperationRetriever:
             anti_hits=tuple(sorted(anti_hits)),
         )
 
-    def _embedding_scores(
+    def _vector_scores(
         self,
         message: str,
         candidates: list[ToolCandidate],
-    ) -> dict[str, float]:
-        if self._embed is None:
-            return {}
+    ) -> _VectorRecallResult:
+        if self._vector_search is None:
+            _log_missing_vector_index(candidate_count=len(candidates))
+            return _VectorRecallResult(
+                scores={},
+                status="missing_index",
+                vector_search_used=False,
+            )
         started_at = time.perf_counter()
         try:
-            query_vector = self._embed(message)
+            raw_scores = self._vector_search(message, candidates)
         except (OSError, ValueError, RuntimeError) as exc:
-            _log_embedding_recall(
+            _log_vector_recall(
                 status="fallback",
                 started_at=started_at,
                 candidate_count=len(candidates),
-                doc_embedding_calls=0,
+                local_query_embedding_calls=0,
+                local_doc_embedding_calls=0,
                 cache_hits=0,
+                vector_search_calls=1,
                 failed_docs=0,
                 scored_count=0,
                 error_code=exc.__class__.__name__,
             )
-            return {}
-        scores: dict[str, float] = {}
-        doc_embedding_calls = 0
-        cache_hits = 0
-        failed_docs = 0
-        for candidate in candidates:
-            try:
-                route_key, score, cache_hit = self._score_embedding_candidate(
-                    query_vector,
-                    candidate,
-                )
-            except (OSError, ValueError, RuntimeError):
-                failed_docs += 1
-                continue
-            doc_embedding_calls += int(not cache_hit)
-            cache_hits += int(cache_hit)
-            scores[route_key] = score
-        _log_embedding_recall(
-            status="success" if scores else "empty",
+            return _VectorRecallResult(
+                scores={},
+                status="fallback",
+                vector_search_used=True,
+                error_code=exc.__class__.__name__,
+            )
+        scores = _valid_vector_scores(raw_scores, candidates)
+        status = "success" if scores else "empty"
+        _log_vector_recall(
+            status=status,
             started_at=started_at,
             candidate_count=len(candidates),
-            doc_embedding_calls=doc_embedding_calls,
-            cache_hits=cache_hits,
-            failed_docs=failed_docs,
+            local_query_embedding_calls=0,
+            local_doc_embedding_calls=0,
+            cache_hits=0,
+            vector_search_calls=1,
+            failed_docs=0,
             scored_count=len(scores),
         )
-        return scores
+        return _VectorRecallResult(
+            scores=scores,
+            status=status,
+            vector_search_used=True,
+        )
 
-    def _score_embedding_candidate(
-        self,
-        query_vector: list[float],
-        candidate: ToolCandidate,
-    ) -> tuple[str, float, bool]:
-        if self._embed is None:
-            raise RuntimeError("EMBEDDING_DISABLED")
-        doc_text = _document_text(candidate)
-        doc_vector = self._embedding_cache.get(doc_text)
-        cache_hit = doc_vector is not None
-        if doc_vector is None:
-            doc_vector = self._embed(doc_text)
-            self._embedding_cache[doc_text] = doc_vector
-        return _route_key(candidate), max(0.0, _cosine(query_vector, doc_vector)), cache_hit
+
+def _log_missing_vector_index(*, candidate_count: int) -> None:
+    _log_vector_recall(
+        status="missing_index",
+        started_at=time.perf_counter(),
+        candidate_count=candidate_count,
+        local_query_embedding_calls=0,
+        local_doc_embedding_calls=0,
+        cache_hits=0,
+        vector_search_calls=0,
+        failed_docs=0,
+        scored_count=0,
+    )
+
+
+def _log_candidate_scores(
+    *,
+    candidate_count: int,
+    ranked: list[tuple[ToolCandidate, _CandidateSignals]],
+    limit: int,
+) -> None:
+    if not ranked:
+        return
+    trace = get_trace()
+    log_event(
+        logger,
+        logging.INFO,
+        "skill_router_candidate_scores",
+        request_id=trace.request_id if trace else None,
+        session_id=trace.session_id if trace else None,
+        status="ranked",
+        data={
+            "candidate_count": candidate_count,
+            "scored_count": len(ranked),
+            "scoring_formula": (
+                "0.35*bm25 + 0.35*vector + 0.20*lexical + "
+                "0.10*registry_prior + operation_prior - penalties"
+            ),
+            "top_candidates": {
+                "items": [
+                    _candidate_score_log_item(candidate, signals)
+                    for candidate, signals in ranked[:limit]
+                ]
+            },
+        },
+    )
+
+
+def _candidate_score_log_item(
+    candidate: ToolCandidate,
+    signals: _CandidateSignals,
+) -> dict:
+    return {
+        "route": signals.route_key,
+        "skill": candidate.name,
+        "domain": candidate.domain,
+        "capability": candidate.capability,
+        "operation": candidate.operation,
+        "risk": candidate.risk,
+        "score": _round_score(signals.score),
+        "bm25": _round_score(signals.bm25),
+        "vector": _round_score(signals.vector),
+        "lexical": _round_score(signals.lexical),
+        "registry_prior": _round_score(signals.registry_prior),
+        "operation_prior": _round_score(signals.operation_prior),
+        "anti_penalty": _round_score(signals.anti_penalty),
+        "low_signal_penalty": _round_score(signals.low_signal_only_penalty),
+        "sources": list(signals.sources),
+        "lexical_hits": list(signals.lexical_hits[:5]),
+        "low_signal_hits": list(signals.low_signal_hits[:5]),
+        "anti_hits": list(signals.anti_hits[:5]),
+    }
+
+
+def _round_score(value: float) -> float:
+    return round(float(value), 4)
+
+
+def _recall_summary(
+    *,
+    candidate_count: int,
+    scored_count: int,
+    vector_recall: _VectorRecallResult,
+    bm25_used: bool,
+) -> dict:
+    return {
+        "path": "bm25_vector_hybrid",
+        "retrieval_engine": "hybrid_operation_retriever",
+        "candidate_count": candidate_count,
+        "scored_count": scored_count,
+        "bm25_used": bm25_used,
+        "vector_index_enabled": vector_recall.status != "missing_index",
+        "vector_search_used": vector_recall.vector_search_used,
+        "rag_service_used": vector_recall.vector_search_used,
+        "quillrag_retrieve_used": vector_recall.vector_search_used,
+        "external_embedding_requested": vector_recall.vector_search_used,
+        "embedding_location": "quillrag_service"
+        if vector_recall.vector_search_used
+        else "none",
+        "local_embedding_used": False,
+        "local_query_embedding_calls": 0,
+        "local_doc_embedding_calls": 0,
+        "vector_status": vector_recall.status,
+        "vector_scored_count": len(vector_recall.scores),
+        "vector_error_code": vector_recall.error_code,
+        "scoring_formula": (
+            "0.35*bm25 + 0.35*vector + 0.20*lexical + "
+            "0.10*registry_prior + operation_prior - penalties"
+        ),
+    }
+
+
+def _valid_vector_scores(
+    raw_scores: dict[str, float],
+    candidates: list[ToolCandidate],
+) -> dict[str, float]:
+    candidate_keys = {_route_key(candidate) for candidate in candidates}
+    return {
+        route_key: max(0.0, float(score))
+        for route_key, score in raw_scores.items()
+        if route_key in candidate_keys
+    }
 
 
 def _route_key(candidate: ToolCandidate) -> str:
@@ -374,20 +536,6 @@ def _anti_hits(query_terms: set[str], candidate: ToolCandidate) -> set[str]:
     }
 
 
-def _document_text(candidate: ToolCandidate) -> str:
-    values = [
-        candidate.name,
-        candidate.domain,
-        candidate.capability or "",
-        candidate.operation or "",
-        candidate.legacy_alias or "",
-        *candidate.intents,
-        *candidate.entities,
-        *candidate.trigger_examples,
-    ]
-    return " ".join(value for value in values if value)
-
-
 def _registry_prior(candidate: ToolCandidate) -> float:
     prior = 0.5
     if candidate.operation:
@@ -399,26 +547,29 @@ def _registry_prior(candidate: ToolCandidate) -> float:
     return min(1.0, prior)
 
 
-def _sources(*, strong_rule: bool, bm25: bool, embedding: bool) -> tuple[str, ...]:
+def _operation_prior(candidate: ToolCandidate, query_terms: set[str]) -> float:
+    if candidate.capability != "manage_cost":
+        return 0.0
+    if candidate.operation == "query_summary" and (
+        query_terms & _COST_SUMMARY_QUERY_TERMS
+    ):
+        return 0.06
+    if candidate.operation == "analyze_cost" and not (
+        query_terms & _COST_ANALYTICS_QUERY_TERMS
+    ):
+        return -0.04
+    return 0.0
+
+
+def _sources(*, strong_rule: bool, bm25: bool, vector: bool) -> tuple[str, ...]:
     sources = []
     if strong_rule:
         sources.append("strong_rule")
     if bm25:
         sources.append("bm25")
-    if embedding:
-        sources.append("embedding")
+    if vector:
+        sources.append("vector")
     return tuple(sources)
-
-
-def _cosine(left: list[float], right: list[float]) -> float:
-    if len(left) != len(right) or not left:
-        return 0.0
-    dot = sum(a * b for a, b in zip(left, right, strict=True))
-    left_norm = math.sqrt(sum(value * value for value in left))
-    right_norm = math.sqrt(sum(value * value for value in right))
-    if left_norm == 0 or right_norm == 0:
-        return 0.0
-    return dot / (left_norm * right_norm)
 
 
 def _evidence(signals: _CandidateSignals) -> dict:
@@ -426,9 +577,10 @@ def _evidence(signals: _CandidateSignals) -> dict:
         "score": signals.score,
         "sources": list(signals.sources),
         "bm25": signals.bm25,
-        "embedding": signals.embedding,
+        "vector": signals.vector,
         "lexical": signals.lexical,
         "registry_prior": signals.registry_prior,
+        "operation_prior": signals.operation_prior,
         "anti_penalty": signals.anti_penalty,
         "low_signal_only_penalty": signals.low_signal_only_penalty,
         "lexical_hits": list(signals.lexical_hits),
@@ -437,13 +589,15 @@ def _evidence(signals: _CandidateSignals) -> dict:
     }
 
 
-def _log_embedding_recall(
+def _log_vector_recall(
     *,
     status: str,
     started_at: float,
     candidate_count: int,
-    doc_embedding_calls: int,
+    local_query_embedding_calls: int,
+    local_doc_embedding_calls: int,
     cache_hits: int,
+    vector_search_calls: int,
     failed_docs: int,
     scored_count: int,
     error_code: str | None = None,
@@ -451,8 +605,10 @@ def _log_embedding_recall(
     trace = get_trace()
     log_event(
         logger,
-        logging.INFO if status in {"success", "empty"} else logging.WARNING,
-        "skill_router_embedding_recall_completed",
+        logging.INFO
+        if status in {"success", "empty", "disabled", "missing_index"}
+        else logging.WARNING,
+        "skill_router_vector_recall_completed",
         code=error_code,
         request_id=trace.request_id if trace else None,
         session_id=trace.session_id if trace else None,
@@ -460,8 +616,19 @@ def _log_embedding_recall(
         duration_ms=int((time.perf_counter() - started_at) * 1000),
         data={
             "candidate_count": candidate_count,
-            "doc_embedding_calls": doc_embedding_calls,
+            "vector_index_enabled": vector_search_calls > 0
+            or status not in {"missing_index", "disabled"},
+            "vector_search_used": vector_search_calls > 0,
+            "quillrag_retrieve_used": vector_search_calls > 0,
+            "external_embedding_requested": vector_search_calls > 0,
+            "embedding_location": "quillrag_service"
+            if vector_search_calls > 0
+            else "none",
+            "local_embedding_used": False,
+            "local_query_embedding_calls": local_query_embedding_calls,
+            "local_doc_embedding_calls": local_doc_embedding_calls,
             "cache_hits": cache_hits,
+            "vector_search_calls": vector_search_calls,
             "failed_docs": failed_docs,
             "scored_count": scored_count,
         },

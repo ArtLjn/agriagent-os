@@ -68,8 +68,23 @@ class TestListSkills:
 
 
 class TestSkillRouteRecall:
-    def test_preview_returns_ranked_skill_candidates(self, db_session) -> None:
+    def test_preview_returns_ranked_skill_candidates(self, db_session, monkeypatch) -> None:
         ensure_admin_user(db_session)
+        vector_calls: list[str] = []
+
+        def fake_vector_search(query: str, candidates) -> dict[str, float]:
+            vector_calls.append(query)
+            return {
+                f"{candidate.name}.{candidate.operation}": (
+                    0.99 if candidate.operation == "query_summary" else 0.01
+                )
+                for candidate in candidates
+            }
+
+        monkeypatch.setattr(
+            "app.ops.skill_route_eval.build_skill_vector_search_fn",
+            lambda: fake_vector_search,
+        )
         with auth_override_scope(app):
             resp = TestClient(app).post(
                 "/admin/skills/route-recall",
@@ -81,17 +96,31 @@ class TestSkillRouteRecall:
         data = resp.json()
         assert data["message"] == "这个月花了多少钱"
         assert data["top_k"] == 3
+        assert data["recall_mode"] == "hybrid_vector"
+        assert data["vector_index_enabled"] is True
+        assert vector_calls == ["这个月花了多少钱"]
         assert data["candidates"][0]["skill"] == "manage_cost"
         assert data["candidates"][0]["operation"] == "query_summary"
         assert data["candidates"][0]["score"] > 0
-        assert data["candidates"][0]["evidence"]["sources"]
+        assert "vector" in data["candidates"][0]["evidence"]["sources"]
         assert data["candidates"][0]["evidence"]["score"] == data["candidates"][0]["score"]
         assert data["skill_router"]["selected_operations"] == {
             "manage_cost": ["query_summary"]
         }
 
-    def test_dataset_eval_uses_json_cases(self, db_session) -> None:
+    def test_dataset_eval_uses_json_cases(self, db_session, monkeypatch) -> None:
         ensure_admin_user(db_session)
+
+        def fake_vector_search(_query: str, candidates) -> dict[str, float]:
+            return {
+                f"{candidate.name}.{candidate.operation}": 0.1
+                for candidate in candidates
+            }
+
+        monkeypatch.setattr(
+            "app.ops.skill_route_eval.build_skill_vector_search_fn",
+            lambda: fake_vector_search,
+        )
         with auth_override_scope(app):
             resp = TestClient(app).post(
                 "/admin/skills/route-recall/evaluate",

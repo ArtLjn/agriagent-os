@@ -16,6 +16,7 @@ async def test_lifespan_reinitializes_logging_in_server_process():
         patch("app.bootstrap.lifespan._run_migrations", new=AsyncMock()),
         patch("app.bootstrap.lifespan._seed_initial_data"),
         patch("app.bootstrap.lifespan._load_prompts"),
+        patch("app.bootstrap.lifespan._start_skill_vector_sync_task", return_value=None),
         patch("app.bootstrap.lifespan.start_trace_system", new=AsyncMock()),
         patch("app.bootstrap.lifespan.clean_expired_traces"),
         patch("app.bootstrap.lifespan.stop_trace_system", new=AsyncMock()),
@@ -39,6 +40,7 @@ async def test_lifespan_initializes_and_closes_mongo_client_when_enabled():
         patch("app.bootstrap.lifespan._run_migrations", new=AsyncMock()),
         patch("app.bootstrap.lifespan._seed_initial_data"),
         patch("app.bootstrap.lifespan._load_prompts"),
+        patch("app.bootstrap.lifespan._start_skill_vector_sync_task", return_value=None),
         patch("app.bootstrap.lifespan.start_trace_system", new=AsyncMock()),
         patch("app.bootstrap.lifespan.clean_expired_traces"),
         patch("app.bootstrap.lifespan.stop_trace_system", new=AsyncMock()),
@@ -52,3 +54,26 @@ async def test_lifespan_initializes_and_closes_mongo_client_when_enabled():
             init_mongo_client.assert_called_once_with(fake_settings.mongodb)
 
     close_mongo_client.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_lifespan_starts_skill_vector_sync_background_task():
+    """lifespan 应启动后台同步任务，不在启动路径中等待同步完成。"""
+    with (
+        patch("app.bootstrap.lifespan.setup_logging"),
+        patch("app.bootstrap.lifespan._configure_langsmith"),
+        patch("app.bootstrap.lifespan._run_migrations", new=AsyncMock()),
+        patch("app.bootstrap.lifespan._seed_initial_data"),
+        patch("app.bootstrap.lifespan._load_prompts"),
+        patch(
+            "app.bootstrap.lifespan._start_skill_vector_sync_task",
+            return_value=None,
+        ) as start_skill_vector_sync_task,
+        patch("app.bootstrap.lifespan.start_trace_system", new=AsyncMock()),
+        patch("app.bootstrap.lifespan.clean_expired_traces"),
+        patch("app.bootstrap.lifespan.stop_trace_system", new=AsyncMock()),
+    ):
+        async with lifespan(MagicMock()):
+            pass
+
+    start_skill_vector_sync_task.assert_called_once()

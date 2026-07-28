@@ -33,6 +33,11 @@ from app.infra.trace_context import set_round_index
 logger = logging.getLogger(__name__)
 
 
+def _elapsed_trace_ms(started_at: float) -> int:
+    """返回用于 trace 展示的毫秒耗时，避免亚毫秒步骤显示为 0ms。"""
+    return max(1, int((_time.perf_counter() - started_at) * 1000))
+
+
 def _build_data_source_payload(tool_calls: list[dict] | None) -> dict:
     """构造 final_reply_data_source trace payload。"""
     if tool_calls:
@@ -84,8 +89,9 @@ def _record_tool_call_forced_trace(
 ) -> None:
     """记录 tool_call_forced trace（LLM bind_tools 前）。失败静默。"""
     try:
+        started_at = _time.perf_counter()
+        wall_started_at = _time.time()
         forced = set(force_binding) & set(selected_names)
-        now = _time.time()
         collector.record(
             node_type="tool_selection",
             node_name="tool_call_forced",
@@ -95,8 +101,8 @@ def _record_tool_call_forced_trace(
                 "tool_choice": tool_choice,
                 "selected_tools": list(selected_names),
             },
-            start_time=now,
-            duration_ms=0,
+            start_time=wall_started_at,
+            duration_ms=_elapsed_trace_ms(started_at),
         )
     except Exception:
         return
@@ -105,15 +111,16 @@ def _record_tool_call_forced_trace(
 def _record_final_reply_data_source_trace(*, collector, messages: list) -> None:
     """记录 final_reply_data_source trace。失败静默。"""
     try:
+        started_at = _time.perf_counter()
+        wall_started_at = _time.time()
         last_tool_messages_for_trace = _tool_messages_for_data_source(messages)
-        now = _time.time()
         collector.record(
             node_type="response",
             node_name="final_reply_data_source",
             input_data={"has_tool_results": bool(last_tool_messages_for_trace)},
             output_data=_build_data_source_payload(last_tool_messages_for_trace),
-            start_time=now,
-            duration_ms=0,
+            start_time=wall_started_at,
+            duration_ms=_elapsed_trace_ms(started_at),
         )
     except Exception:
         return
@@ -222,6 +229,7 @@ def _record_router_plan_trace(
     user_msg: str,
     farm_id: int,
     session_id: str | None,
+    duration_ms: int | None = None,
 ) -> dict:
     """记录 skill router trace，并返回 plan draft payload。"""
     plan_draft = plan_draft_from_router_decision(
@@ -244,6 +252,7 @@ def _record_router_plan_trace(
             "schema_token_estimate": router_decision.schema_token_estimate,
             "usage_source": "router_estimate",
         },
+        duration_ms=duration_ms,
     )
     return plan_draft_payload
 
@@ -434,6 +443,8 @@ def _record_final_llm_context_trace(
 ) -> None:
     """记录预算压缩后真正送入 LLM 的上下文快照。失败静默。"""
     try:
+        started_at = _time.perf_counter()
+        wall_started_at = _time.time()
         context_blocks = _context_block_keys(context_bundle)
         message_payloads = [
             _message_trace_payload(message, index)
@@ -464,6 +475,8 @@ def _record_final_llm_context_trace(
                 ),
             },
             token_usage={"prompt_tokens": final_budget.total_tokens},
+            start_time=wall_started_at,
+            duration_ms=_elapsed_trace_ms(started_at),
         )
     except Exception:
         return
@@ -479,6 +492,7 @@ def _record_system_prompt_trace(
     system_text: str,
     prompt_scene: str,
     context_blocks: list[str],
+    duration_ms: int | None = None,
 ) -> None:
     collector.record(
         node_type="prompt_render",
@@ -489,6 +503,7 @@ def _record_system_prompt_trace(
             "context_blocks": context_blocks,
         },
         output_data=safe_preview(system_text, max_chars=2000),
+        duration_ms=duration_ms,
     )
 
 
@@ -498,6 +513,7 @@ def _record_final_prompt_budget_trace(
     context_blocks: list[str],
     message_count: int,
     final_budget,
+    duration_ms: int | None = None,
 ) -> None:
     collector.record(
         node_type="prompt_budget",
@@ -509,6 +525,7 @@ def _record_final_prompt_budget_trace(
         },
         output_data=final_budget.summary(),
         token_usage={"prompt_tokens": final_budget.total_tokens},
+        duration_ms=duration_ms,
     )
 
 
@@ -521,6 +538,7 @@ def _record_prompt_budget(
     state: AgentState,
     compact_messages_func,
     find_last_human_message_func,
+    system_prompt_duration_ms: int | None = None,
 ) -> tuple[SystemMessage, list, str]:
     """记录 prompt 渲染与预算 trace，返回 LLM 输入。"""
     context_blocks = _context_block_keys(context_bundle)
@@ -529,16 +547,20 @@ def _record_prompt_budget(
         system_text=system_text,
         prompt_scene=prompt_scene,
         context_blocks=context_blocks,
+        duration_ms=system_prompt_duration_ms,
     )
     system = SystemMessage(content=system_text)
+    final_prompt_started_at = _time.perf_counter()
     messages = compact_messages_func(state["messages"])
     messages, final_budget = FinalPromptBudget().apply(system_text, messages)
+    final_prompt_duration_ms = _elapsed_trace_ms(final_prompt_started_at)
     input_summary = find_last_human_message_func(state["messages"])[:200]
     _record_final_prompt_budget_trace(
         collector=collector,
         context_blocks=context_blocks,
         message_count=len(messages),
         final_budget=final_budget,
+        duration_ms=final_prompt_duration_ms,
     )
     _record_final_llm_context_trace(
         collector=collector,

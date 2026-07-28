@@ -2,7 +2,7 @@
 
 import asyncio
 import os
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -12,6 +12,7 @@ from app.shared.config import settings
 from app.shared.database import SessionLocal
 from app.shared.logging import get_logger, setup_logging
 from app.ops.bootstrap_seed import seed_admin_user, seed_default_farm
+from app.ops.skill_vector_sync import sync_skill_vectors_on_startup
 from app.infra.mongo import close_mongo_client, init_mongo_client
 from app.infra.repository_runtime import set_main_event_loop
 from app.infra.trace_cleaner import clean_expired_traces
@@ -85,6 +86,37 @@ def _load_prompts() -> None:
     logger.info("PromptComposer 初始化完成")
 
 
+def _sync_skill_vectors() -> None:
+    """按配置创建 Skill 向量集合并同步 registry。"""
+    if not (
+        settings.skill_vector_store.enabled
+        and settings.skill_vector_store.sync_on_startup
+    ):
+        return
+    try:
+        sync_skill_vectors_on_startup()
+    except Exception as exc:
+        logger.warning("Skill 向量同步失败，启动继续 | error=%s", exc.__class__.__name__)
+
+
+async def _run_skill_vector_sync_background() -> None:
+    """后台执行 Skill 向量同步，不阻塞应用启动。"""
+    await asyncio.to_thread(_sync_skill_vectors)
+
+
+def _start_skill_vector_sync_task() -> asyncio.Task[None] | None:
+    """按配置启动后台同步任务。"""
+    if not (
+        settings.skill_vector_store.enabled
+        and settings.skill_vector_store.sync_on_startup
+    ):
+        return None
+    return asyncio.create_task(
+        _run_skill_vector_sync_background(),
+        name="skill-vector-sync",
+    )
+
+
 async def _daily_trace_cleanup() -> None:
     """每日清理过期 trace。"""
     while True:
@@ -102,6 +134,7 @@ async def lifespan(app: FastAPI):
     setup_logging()
     _seed_initial_data()
     _load_prompts()
+    skill_vector_sync_task = _start_skill_vector_sync_task()
 
     init_mongo_client(settings.mongodb)
     await start_trace_system()
@@ -112,6 +145,10 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         set_main_event_loop(None)
+        if skill_vector_sync_task and not skill_vector_sync_task.done():
+            skill_vector_sync_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await skill_vector_sync_task
         cleanup_task.cancel()
         try:
             await cleanup_task

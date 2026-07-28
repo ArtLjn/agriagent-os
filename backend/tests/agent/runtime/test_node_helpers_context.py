@@ -83,15 +83,25 @@ def test_record_prompt_budget_records_final_llm_context_snapshot() -> None:
         state={"messages": raw_messages},
         compact_messages_func=lambda messages: messages[1:],
         find_last_human_message_func=lambda messages: messages[-3].content,
+        system_prompt_duration_ms=3,
     )
 
     records = [call.kwargs for call in collector.record.call_args_list]
+    system_prompt_record = next(
+        item for item in records if item["node_name"] == "system_prompt"
+    )
+    final_prompt_record = next(
+        item for item in records if item["node_name"] == "final_prompt"
+    )
     snapshot_record = next(
         item
         for item in records
         if item["node_type"] == "prompt_budget"
         and item["node_name"] == "final_llm_context"
     )
+    assert system_prompt_record["duration_ms"] == 3
+    assert final_prompt_record["duration_ms"] >= 1
+    assert snapshot_record["duration_ms"] >= 1
     output = snapshot_record["output_data"]
     assert output["system_prompt"] == system_text
     assert output["context_blocks"] == ["farm"]
