@@ -30,6 +30,7 @@ from app.agent.router.policy_trace import (
 class RouterPolicy:
     """对候选工具应用 stop-loss、读写隔离和 schema 预算。"""
 
+    _model_choice_excluded_read_tools = frozenset({"calculate_arithmetic"})
     _no_tool_prefixes = ("你好", "您好", "hello", "hi", "nihao", "ni hao")
     _no_tool_hints = (
         "为什么",
@@ -356,7 +357,9 @@ class RouterPolicy:
         selected = [
             candidate
             for candidate in candidate_by_name.values()
-            if candidate.risk == "read" and candidate.enabled
+            if candidate.risk == "read"
+            and candidate.enabled
+            and candidate.name not in self._model_choice_excluded_read_tools
         ]
         if not selected:
             return None

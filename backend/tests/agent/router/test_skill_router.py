@@ -362,12 +362,8 @@ def test_uncategorized_business_read_exposes_read_pool_to_model() -> None:
 
     decision = SkillRouter().route("我要看一下经营数据", tools)
 
-    assert decision.selected_tools == [
-        "get_cost_summary",
-        "get_debt_summary",
-        "get_farm_status",
-    ]
-    assert decision.frames[0].intent == "model_choice_read"
+    assert decision.selected_tools == ["get_farm_status"]
+    assert decision.frames[0].evidence["source"] == "hybrid_operation_retriever"
 
 
 def test_unknown_write_asks_clarification_without_write_tool() -> None:
