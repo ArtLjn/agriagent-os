@@ -224,4 +224,24 @@ describe('LlmContextInspector', () => {
     expect(document.body.textContent).toContain('#1235');
     expect(document.body.textContent).toContain('#1236');
   });
+
+  it('当前 request 没有 LLM 快照时展示最近一次 LLM Context 来源', () => {
+    render(
+      <LlmContextInspector
+        snapshot={snapshot}
+        open
+        onOpenChange={vi.fn()}
+        loading={false}
+        hasTimeline
+        requestId="0830521c"
+        snapshotRequestId="badb9573"
+        nodeCount={4}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    expect(document.body.textContent).toContain(
+      '当前 request 0830521c 未进入 LLM，展示最近一次 LLM Context：badb9573',
+    );
+  });
 });

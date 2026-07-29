@@ -53,6 +53,7 @@ interface ChatSessionState {
   loading: boolean;
   traceLoading: boolean;
   timeline: TraceTimeline | null;
+  llmContextTimeline: TraceTimeline | null;
 }
 
 function generateSessionId(): string {
@@ -73,6 +74,7 @@ function emptySessionState(): ChatSessionState {
     loading: false,
     traceLoading: false,
     timeline: null,
+    llmContextTimeline: null,
   };
 }
 
@@ -294,6 +296,26 @@ async function fetchSessionTimeline(sid: string): Promise<TraceTimeline | null> 
   }
 }
 
+async function fetchSessionLlmContextTimeline(
+  sid: string,
+  latestTimeline: TraceTimeline | null,
+): Promise<TraceTimeline | null> {
+  if (extractLatestLlmContextSnapshot(latestTimeline)) return latestTimeline;
+  try {
+    const listRes = await listTraces({ session_id: sid, limit: 12 });
+    for (const item of listRes.items ?? []) {
+      if (!item.request_id) continue;
+      const candidate = item.request_id === latestTimeline?.request_id
+        ? latestTimeline
+        : await getTimeline(item.request_id);
+      if (extractLatestLlmContextSnapshot(candidate)) return candidate;
+    }
+  } catch {
+    // LLM Context 是调试增强能力，查询失败时保留当前 request timeline。
+  }
+  return null;
+}
+
 export default function Playground() {
   const [sessionId, setSessionId] = useState<string>(generateSessionId);
   const [sessions, setSessions] = useState<Record<string, ChatSessionState>>(() => ({
@@ -314,11 +336,14 @@ export default function Playground() {
   const loading = activeSession.loading;
   const traceLoading = activeSession.traceLoading;
   const timeline = activeSession.timeline;
+  const llmContextTimeline = activeSession.llmContextTimeline ?? timeline;
   const traceMetrics = buildPlaygroundTraceMetrics(timeline);
-  const llmContextSnapshot = extractLatestLlmContextSnapshot(timeline);
+  const llmContextSnapshot = extractLatestLlmContextSnapshot(llmContextTimeline);
   const compressed = hasAutomaticCompression(traceMetrics);
   const conversationRows = buildConversationRows(sessions, conversations);
   const timelineNodeCount = timeline?.rounds.reduce((sum, round) => sum + round.nodes.length, 0) ?? 0;
+  const currentRequestId = timeline?.request_id;
+  const llmContextRequestId = llmContextTimeline?.request_id;
 
   const updateSession = useCallback((sid: string, updater: (state: ChatSessionState) => ChatSessionState) => {
     setSessions((prev) => {
@@ -406,6 +431,7 @@ export default function Playground() {
         loading: false,
         messages: resolved,
         timeline: null,
+        llmContextTimeline: null,
       }));
     } catch {
       updateSession(sid, (state) => ({ ...state, loading: false }));
@@ -507,9 +533,11 @@ export default function Playground() {
   const refreshSessionTimeline = useCallback(async (sid: string) => {
     updateSession(sid, (state) => ({ ...state, traceLoading: true }));
     const latestTimeline = await fetchSessionTimeline(sid);
+    const latestLlmContextTimeline = await fetchSessionLlmContextTimeline(sid, latestTimeline);
     updateSession(sid, (state) => ({
       ...state,
       timeline: latestTimeline,
+      llmContextTimeline: latestLlmContextTimeline,
       traceLoading: false,
     }));
     return latestTimeline;
@@ -550,6 +578,7 @@ export default function Playground() {
       loading: true,
       traceLoading: false,
       timeline: null,
+      llmContextTimeline: null,
     }));
     scrollToBottom();
 
@@ -965,7 +994,8 @@ export default function Playground() {
           }}
           loading={loading || traceLoading}
           hasTimeline={timeline !== null}
-          requestId={timeline?.request_id}
+          requestId={currentRequestId}
+          snapshotRequestId={llmContextRequestId}
           nodeCount={timelineNodeCount}
           onRefresh={() => refreshSessionTimeline(sessionId)}
         />
