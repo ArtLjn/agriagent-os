@@ -39,6 +39,9 @@ select_tools = _select_tools
 _WORK_ORDER_CLARIFICATION_RE = re.compile(
     r"(?:创建|生成|安排|记录).{0,12}(?:农事)?作业单|创建农事作业单"
 )
+_PLANTING_PLAN_FOLLOWUP_RE = re.compile(
+    r"(?:自行|自己|你来|你帮我|帮我|按你说的?).{0,8}(?:规划|决定|定)"
+)
 
 
 def _should_continue(state: AgentState) -> str:
@@ -62,6 +65,43 @@ def _is_operation_work_order_clarification(messages: list) -> bool:
             content = str(msg.content or "")
             return bool(_WORK_ORDER_CLARIFICATION_RE.search(content))
     return False
+
+
+def _routing_message_for_followup(messages: list, current_user_msg: str) -> str:
+    """短补充路由时拼接上一轮业务上下文，避免只按“帮我”召回。"""
+    if not _looks_like_planting_plan_followup(current_user_msg):
+        return current_user_msg
+    previous_human = _previous_human_before_latest(messages)
+    if previous_human is None or not _looks_like_planting_plan_context(previous_human):
+        return current_user_msg
+    return f"{previous_human}\n当前补充：{current_user_msg}"
+
+
+def _looks_like_planting_plan_followup(message: str) -> bool:
+    return len(message.strip()) <= 30 and bool(
+        _PLANTING_PLAN_FOLLOWUP_RE.search(message)
+    )
+
+
+def _previous_human_before_latest(messages: list) -> str | None:
+    seen_current_human = False
+    for msg in reversed(messages):
+        if not isinstance(msg, HumanMessage):
+            continue
+        if not seen_current_human:
+            seen_current_human = True
+            continue
+        content = str(msg.content or "").strip()
+        return content or None
+    return None
+
+
+def _looks_like_planting_plan_context(message: str) -> bool:
+    return (
+        "茬口" in message
+        and "规划" in message
+        and any(hint in message for hint in ("种", "草莓", "作物", "地", "亩"))
+    )
 
 
 def _append_tool_name_once(names: list[str], tool_name: str, tools: list) -> list[str]:
@@ -216,13 +256,14 @@ async def _prepare_node_contexts(
     has_tool_results = bool(tool_msgs)
     intent = state.get("intent", "agent")
     user_msg = _find_last_human_message(messages)
+    route_user_msg = _routing_message_for_followup(messages, user_msg)
     route_context = _prepare_route_context(
         state=state,
         messages=messages,
         normal_msgs=normal_msgs,
         tools=tools,
         farm_id=farm_id,
-        user_msg=user_msg,
+        user_msg=route_user_msg,
         has_tool_results=has_tool_results,
     )
     llm_context = _prepare_llm_binding(

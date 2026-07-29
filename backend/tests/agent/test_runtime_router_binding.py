@@ -245,7 +245,7 @@ async def test_registry_read_runtime_does_not_expand_to_all_read_tools() -> None
                 "user_id": "user-1",
                 "session_id": "session-model-choice",
             }
-    )
+        )
 
     assert result["router_decision"].fallback is None
     assert result["router_decision"].frames[0].evidence["source"] == (
@@ -292,7 +292,7 @@ async def test_llm_node_keeps_planting_planning_intent_in_read_tool_pool() -> No
 
 
 @pytest.mark.asyncio
-async def test_llm_node_does_not_route_planting_plan_area_math_to_calculator_only() -> None:
+async def test_llm_node_keeps_area_math_planting_plan_out_of_calculator() -> None:
     """带面积拆分的茬口规划仍是规划对话，不应被算术工具截胡。"""
     fake_llm = _FakeLLM()
     tools = [
@@ -322,6 +322,60 @@ async def test_llm_node_does_not_route_planting_plan_area_math_to_calculator_onl
             }
         )
 
+    assert fake_llm.bound_tool_names == [
+        "get_farm_status",
+        "manage_crop_cycle",
+    ]
+    assert result["router_decision"].fallback == "model_choice_read_default"
+
+
+@pytest.mark.asyncio
+async def test_llm_node_routes_short_planting_plan_followup_with_context() -> None:
+    """短补充“自行规划”应续接上一轮茬口规划，不应只绑定算术工具。"""
+    fake_llm = _FakeLLM()
+    tools = [
+        _FakeTool("calculate_arithmetic"),
+        _FakeTool("get_farm_status"),
+        _FakeTool("manage_crop_cycle"),
+        _FakeTool("manage_crop_templates"),
+        _FakeTool("weather"),
+    ]
+
+    with ExitStack() as stack:
+        _enter_runtime_patches(stack, fake_llm, tools)
+        router_cls = stack.enter_context(
+            patch("app.agent.runtime.node_helpers.SkillRouter")
+        )
+        router = router_cls.return_value
+        router.route.return_value = RouterDecision(
+            selected_tools=["get_farm_status", "manage_crop_cycle"],
+            fallback="model_choice_read_default",
+        )
+        result = await _llm_node(
+            {
+                "messages": [
+                    HumanMessage(
+                        content=(
+                            "我在太仓新租了30亩地 每块地 1.5亩 "
+                            "帮我规划下茬口 ，秋季草莓"
+                        )
+                    ),
+                    AIMessage(
+                        content="为了开始建档，请告诉我茬口名称、品种和定植日期。"
+                    ),
+                    HumanMessage(content="你帮我自行规划"),
+                ],
+                "farm_id": 1,
+                "farm_uid": "farm-uid-1",
+                "intent": "agent",
+                "user_id": "user-1",
+                "session_id": "session-planting-plan-followup",
+            }
+        )
+
+    route_message = router.route.call_args.args[0]
+    assert "秋季草莓" in route_message
+    assert "你帮我自行规划" in route_message
     assert fake_llm.bound_tool_names == [
         "get_farm_status",
         "manage_crop_cycle",
