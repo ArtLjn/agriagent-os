@@ -71,6 +71,18 @@ class TestComposerCompose:
         assert "weather" in result
         assert "farm_context_summary" not in result
 
+    def test_system_base_forbids_fabricated_business_query_rows(self, _composer):
+        """system_base 禁止把模拟列表当成现有业务数据返回。"""
+        result = _composer.compose(
+            "system_base",
+            variables={"display_name": "农友"},
+            current_date=date(2026, 5, 29),
+        )
+
+        assert "不要用模拟、示例或常见情况编造成真实列表" in result
+        assert "不要给虚构示例表格" in result
+        assert "不要声称“已完成”“已设置”“已更新”" in result
+
     def test_system_chat_excludes_tool_protocol(self, _composer):
         """system_chat 是闲聊快通道 prompt，不暴露工具协议和工具名。"""
         result = _composer.compose(

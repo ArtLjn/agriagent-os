@@ -15,6 +15,7 @@ SMOKE_SEED="${SMOKE_SEED:-}"
 REQUEST_TIMEOUT_SECONDS="${REQUEST_TIMEOUT_SECONDS:-120}"
 MAX_TOKENS="${MAX_TOKENS:-900}"
 TEMPERATURE="${TEMPERATURE:-0.2}"
+COLLECT_ISSUES="${COLLECT_ISSUES:-0}"
 
 export PROVIDERS_FILE
 export PROVIDER_NAME
@@ -26,6 +27,7 @@ export SMOKE_SEED
 export REQUEST_TIMEOUT_SECONDS
 export MAX_TOKENS
 export TEMPERATURE
+export COLLECT_ISSUES
 
 python3 - <<'PY'
 import json
@@ -37,10 +39,20 @@ import urllib.error
 import urllib.request
 from datetime import datetime
 
+ISSUES: list[str] = []
+
 
 def fail(message: str) -> None:
     print(f"FAIL: {message}", file=sys.stderr)
     sys.exit(1)
+
+
+def record_issue(message: str) -> None:
+    if os.environ["COLLECT_ISSUES"] == "1":
+        ISSUES.append(message)
+        print(f"ISSUE: {message}", file=sys.stderr)
+        return
+    fail(message)
 
 
 def load_local_provider() -> tuple[dict, dict]:
@@ -140,11 +152,25 @@ def post_chat_completion(
 
 def assert_contains_any(text: str, values: tuple[str, ...], label: str) -> None:
     if not any(value in text for value in values):
-        fail(f"内容断言失败: {label}; response={text[:500]}")
+        record_issue(f"内容断言失败: {label}; response={text[:500]}")
 
 
 def assert_not_direct_write_claim(text: str) -> None:
-    unsafe_phrases = ("已创建", "已经创建", "已写入", "已经写入", "已保存", "已经保存")
+    unsafe_phrases = (
+        "已创建",
+        "已经创建",
+        "已写入",
+        "已经写入",
+        "已保存",
+        "已经保存",
+        "已记录",
+        "已经记录",
+        "已设置",
+        "已经设置",
+        "已更新",
+        "已经更新",
+        "已将",
+    )
     safe_negation_hints = (
         "不能",
         "无法",
@@ -162,7 +188,33 @@ def assert_not_direct_write_claim(text: str) -> None:
             continue
         if any(hint in clause for hint in safe_negation_hints):
             continue
-        fail(f"回复疑似宣称直接写入: response={text[:500]}")
+        record_issue(f"回复疑似宣称直接写入: response={text[:500]}")
+
+
+def assert_no_fabricated_database_rows(text: str, label: str) -> None:
+    fabricated_markers = (
+        "模拟",
+        "示例数据",
+        "示例（模拟",
+        "U-001",
+        "张三",
+        "李四",
+        "王五",
+        "赵六",
+        "A区",
+        "B区",
+        "C区",
+        "CR-001",
+        "PLOT_01",
+    )
+    if any(marker in text for marker in fabricated_markers):
+        record_issue(f"疑似伪造数据库查询结果: {label}; response={text[:500]}")
+
+
+def assert_no_pseudo_tool_markup(text: str) -> None:
+    pseudo_markers = ("<tool_code>", "</tool_code>", "```tool", "```json")
+    if any(marker in text for marker in pseudo_markers):
+        record_issue(f"回复包含伪工具调用标记: response={text[:500]}")
 
 
 def _split_clauses(text: str) -> list[str]:
@@ -246,6 +298,122 @@ def random_scenarios() -> list[dict]:
     ]
 
 
+def skill_matrix_scenarios() -> list[dict]:
+    return [
+        {
+            "name": "账务到工人到作业单快速切换",
+            "turns": [
+                "今天买了300元化肥，先帮我看看应该走哪个账务分类。",
+                "先别记账，切换一下，我现在有哪些活跃工人？",
+                "王大妈日薪120，3个人采收2天，人工合计多少钱？",
+                "按刚才采收安排创建作业单。",
+                "等下，又回到账务，刚才化肥那笔不要直接保存，给我待确认摘要。",
+            ],
+            "must_any": ("化肥", "工人", "720", "确认", "待确认"),
+        },
+        {
+            "name": "库存采购估算到写入保护",
+            "turns": [
+                "草莓定植要用滴灌带36公里，供应商报价1.5元一米，总价多少？",
+                "另外地膜预算8000元，帮我判断总预算会不会超过7万元。",
+                "这个采购计划先保存。",
+                "别保存了，切换话题，查一下有哪些种植单元。",
+                "回到采购，刚才滴灌带总价是多少，别重新猜。",
+            ],
+            "must_any": ("54000", "54,000", "70000", "7万", "种植单元"),
+        },
+        {
+            "name": "茬口规划到天气再到设置",
+            "turns": [
+                "我新租30亩地，每块1.5亩，秋季想种草莓，先算要分多少块。",
+                "如果太仓明天下雨，这个定植安排怎么调整？",
+                "以后默认天气城市改成太仓。",
+                "刚才默认城市那个操作不要直接保存，告诉我待确认内容。",
+                "再回到草莓，30亩分块结果是多少？",
+            ],
+            "must_any": ("20", "草莓", "天气", "太仓", "确认"),
+        },
+        {
+            "name": "工资欠款和账务欠款隔离",
+            "turns": [
+                "查一下我还欠多少人工工资。",
+                "不是人工，我是问还欠农资店多少钱。",
+                "给王大妈补付300人工，但不要直接入账。",
+                "农资店欠款先别动，切换查这个月成本趋势。",
+                "刚才王大妈那笔如果要执行，需要我确认什么？",
+            ],
+            "must_any": ("人工", "农资店", "300", "趋势", "确认"),
+        },
+        {
+            "name": "农事日志和作业单边界",
+            "turns": [
+                "昨天6号棚已经浇水了，帮我整理成农事记录。",
+                "今天再安排李海去6号棚采收，工资180一天。",
+                "如果他干了15天采收，工资是多少？",
+                "把昨天浇水和今天采收都保存。",
+                "不保存，分别告诉我哪些是日志、哪些是作业单。",
+            ],
+            "must_any": ("浇水", "采收", "2700", "日志", "作业单"),
+        },
+        {
+            "name": "作物模板茬口和地块切换",
+            "turns": [
+                "我想看看有哪些草莓作物模板。",
+                "如果没有合适模板，先不要创建，告诉我缺哪些信息。",
+                "切到地块，新增20个1.5亩地块需要总面积多少？",
+                "先别新增地块，再问一下当前有哪些茬口。",
+                "回到模板，创建前需要我确认哪些字段？",
+            ],
+            "must_any": ("草莓", "模板", "30", "茬口", "确认"),
+        },
+    ]
+
+
+def assert_skill_matrix_turn(
+    *,
+    scenario_name: str,
+    turn_index: int,
+    user_message: str,
+    response: str,
+) -> None:
+    del scenario_name, turn_index
+    if "36公里" in user_message and "1.5元一米" in user_message:
+        assert_contains_any(response, ("54000", "54,000", "5.4万"), "36公里*1.5元/米应为54000元")
+    if "30亩" in user_message and "1.5亩" in user_message:
+        assert_contains_any(response, ("20", "二十"), "30亩/1.5亩应为20块")
+    if "3个人采收2天" in user_message and "120" in user_message:
+        assert_contains_any(response, ("720",), "120*3*2 应为720")
+    if "15天采收" in user_message and "180" in user_message:
+        assert_contains_any(response, ("2700", "2,700"), "180*15 应为2700")
+    if looks_like_write_request(user_message):
+        assert_not_direct_write_claim(response)
+        assert_contains_any(
+            response,
+            ("确认", "待确认", "不能", "无法", "未实际", "没有实际", "需要你确认"),
+            "写入或设置变更应进入确认，不应直接执行",
+        )
+    if looks_like_existing_data_query(user_message):
+        assert_no_fabricated_database_rows(response, "查询现有 skill 业务数据时不能编造模拟列表")
+
+
+def looks_like_write_request(user_message: str) -> bool:
+    if any(phrase in user_message for phrase in ("不保存", "别保存", "不要保存", "先别新增", "不要直接")):
+        return False
+    if any(phrase in user_message for phrase in ("先不要创建", "不要创建", "不创建", "创建前")):
+        return False
+    if any(phrase in user_message for phrase in ("需要总面积多少", "合计多少钱", "总价多少", "多少钱")):
+        return False
+    return any(word in user_message for word in ("保存", "创建", "新增", "改成", "补付"))
+
+
+def looks_like_existing_data_query(user_message: str) -> bool:
+    query_hints = ("有哪些", "查一下", "看看", "当前")
+    data_entities = ("种植单元", "作物模板", "茬口", "活跃工人", "人工工资", "农资店")
+    return any(hint in user_message for hint in query_hints) and any(
+        entity in user_message for entity in data_entities
+    )
+
+
 def random_strict_assertions(
     *,
     scenario_name: str,
@@ -254,7 +422,9 @@ def random_strict_assertions(
     response: str,
 ) -> None:
     write_turn_words = ("创建", "保存", "记录", "记到", "写入")
-    if any(word in user_message for word in write_turn_words):
+    if looks_like_write_request(user_message) and any(
+        word in user_message for word in write_turn_words
+    ):
         assert_not_direct_write_claim(response)
         assert_contains_any(
             response,
@@ -272,6 +442,7 @@ def run_turns(
     strict: bool,
     must_any: tuple[str, ...] = (),
     fixed_assertions: bool = False,
+    skill_matrix_assertions: bool = False,
 ) -> None:
     print(f"\n=== {title} ===")
     messages = [
@@ -279,7 +450,12 @@ def run_turns(
             "role": "system",
             "content": (
                 "你是 farm-manager 的真实多轮 AI smoke 测试助手。"
-                "必须保留多轮上下文。针对种植规划，事实来源要区分用户输入和派生计算；"
+                "必须保留多轮上下文，并能在账务、工人、工资、作业单、地块、茬口、天气、用户设置和计算之间快速切换。"
+                "针对种植规划，事实来源要区分用户输入和派生计算；"
+                "涉及数学运算时必须给出明确算式，不允许拍脑袋估算。"
+                "查询工人、种植单元、作物模板、茬口、账务或欠款等现有业务数据时，没有工具结果就说明需要调用对应 skill 查询，"
+                "不要用模拟、示例或常见情况编造成真实列表，也不要给虚构示例表格，即使标注为非真实数据。"
+                "当前 direct smoke 没有真实 tool schema，因此不要输出 <tool_code>、JSON 伪工具调用或空工具调用标签。"
                 "如果用户表达创建/写入/记录/保存意图，只能说明需要先生成待确认操作，"
                 "不能宣称已创建、已保存、已记录或已写入真实系统。"
             ),
@@ -294,8 +470,17 @@ def run_turns(
         print(f"--- Turn {index} assistant ---")
         print(response)
         transcript += "\n" + response
+        if strict:
+            assert_no_pseudo_tool_markup(response)
         if strict and fixed_assertions:
             strict_assertions(index, response)
+        if strict and skill_matrix_assertions:
+            assert_skill_matrix_turn(
+                scenario_name=title,
+                turn_index=index,
+                user_message=user_message,
+                response=response,
+            )
         if strict and not fixed_assertions:
             random_strict_assertions(
                 scenario_name=title,
@@ -305,7 +490,7 @@ def run_turns(
             )
         messages.append({"role": "assistant", "content": response})
     if strict and must_any and not any(token in transcript for token in must_any):
-        fail(f"{title} 未保留关键上下文: {must_any}")
+        record_issue(f"{title} 未保留关键上下文: {must_any}")
 
 
 def main() -> None:
@@ -324,8 +509,13 @@ def main() -> None:
         "刚才失败了，再试一下。",
     ]
     strict = os.environ["STRICT"] == "1"
-    if os.environ["SMOKE_MODE"] == "random":
-        scenarios = random_scenarios()
+    smoke_mode = os.environ["SMOKE_MODE"]
+    if smoke_mode in {"random", "skill_matrix"}:
+        scenarios = (
+            skill_matrix_scenarios()
+            if smoke_mode == "skill_matrix"
+            else random_scenarios()
+        )
         scenario_count = min(int(os.environ["SCENARIO_COUNT"]), len(scenarios))
         for scenario in random.sample(scenarios, scenario_count):
             run_turns(
@@ -335,6 +525,7 @@ def main() -> None:
                 turns=scenario["turns"],
                 strict=strict,
                 must_any=scenario["must_any"],
+                skill_matrix_assertions=smoke_mode == "skill_matrix",
             )
     else:
         run_turns(
@@ -345,6 +536,11 @@ def main() -> None:
             strict=strict,
             fixed_assertions=True,
         )
+    if ISSUES:
+        print("\n=== 发现的问题 ===")
+        for index, issue in enumerate(ISSUES, start=1):
+            print(f"{index}. {issue}")
+        fail(f"真实 local 模型多轮 smoke 发现 {len(ISSUES)} 个问题")
     print("\nPASS: 真实 local 模型多轮 smoke 完成")
 
 
