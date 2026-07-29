@@ -46,6 +46,15 @@ _TestSession = sessionmaker(autocommit=False, autoflush=False, bind=_test_engine
 
 
 @pytest.fixture(autouse=True)
+def disable_external_skill_vector_search(monkeypatch):
+    """单元测试默认不访问外部 Skill 向量检索，避免线上索引导致路由结果漂移。"""
+    monkeypatch.setattr(
+        "app.agent.router.service.build_skill_vector_search_fn",
+        lambda: None,
+    )
+
+
+@pytest.fixture(autouse=True)
 def clean_db(request):
     if request.node.get_closest_marker("no_db"):
         yield
