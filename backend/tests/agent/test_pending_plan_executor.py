@@ -12,6 +12,7 @@ from app.infra.pending_action_presenter import build_plan_confirm_message
 from app.infra.pending_actions import (
     PENDING_MARKER,
     _pending_plans,
+    get_pending,
     get_pending_plan,
     remove_pending,
     store_pending_plan,
@@ -481,6 +482,52 @@ async def test_pending_plan_resolves_cycle_id_for_crop_setup_plan():
         },
         farm_uid="farm-uid-1",
     )
+
+
+@pytest.mark.asyncio
+async def test_pending_plan_missing_template_creates_template_pending() -> None:
+    store_pending_plan(
+        farm_id=1,
+        session_id="missing-template-plan-session",
+        raw_user_input="ok",
+        router_decision={"selected_tools": ["manage_crop_cycle"]},
+        steps=[
+            {
+                "step_id": "manage_crop_cycle-1",
+                "tool_name": "manage_crop_cycle",
+                "params": {
+                    "operation": "create_cycle",
+                    "crop_name": "草莓",
+                    "cycle_name": "秋季草莓1组",
+                    "area": "7.5",
+                },
+            }
+        ],
+    )
+
+    with patch(
+        "app.agent.executor.pending_actions._execute_write_skill",
+        new_callable=AsyncMock,
+    ) as mock_execute:
+        mock_execute.return_value = SimpleNamespace(
+            status="failed",
+            reply="系统还没有草莓模板，要帮你创建一个吗？",
+        )
+        decision = await handle_pending_action(
+            farm_id=1,
+            session_id="missing-template-plan-session",
+            message="确认",
+        )
+
+    pending = get_pending(1, session_id="missing-template-plan-session")
+    assert decision.status == "confirmed"
+    assert pending is not None
+    assert pending.skill_name == "manage_crop_templates"
+    assert pending.params == {"operation": "create_template", "crop_name": "草莓"}
+    assert pending.follow_up_skill_name == "manage_crop_cycle"
+    assert pending.follow_up_params["operation"] == "create_cycle"
+    assert pending.follow_up_params["crop_name"] == "草莓"
+    assert "确认创建作物模板" in decision.reply
 
 
 @pytest.mark.asyncio

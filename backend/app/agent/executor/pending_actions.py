@@ -9,6 +9,10 @@ from app.agent.executor.pending_aliases import (
     pending_alias_metadata,
     pending_alias_metadata_or_trace,
 )
+from app.agent.executor.pending_missing_template import (
+    missing_template_follow_up_decision,
+    missing_template_pending_plan_step_decision,
+)
 from app.agent.executor.skill_raw_executor import execute_write_skill_raw
 from app.agent.executor.tool_failure_reflection import reflect_tool_failure
 from app.agent.runtime.tool_arg_validation import validate_pending_tool_args
@@ -45,7 +49,6 @@ from app.infra.trace_collector import get_collector
 
 logger = logging.getLogger(__name__)
 
-_MISSING_TEMPLATE_RE = re.compile(r"系统还没有\s*(?P<crop>.+?)\s*模板")
 _CLEAR_CORRECTION_RE = re.compile(
     r"(?:改成|改为|改到|更正|纠正|不是|金额|分类|日期|对象|备注|\d+\s*(?:元|块|万|w|W|千|百))"
 )
@@ -126,16 +129,6 @@ def _format_follow_up_intro(skill_name: str, params: dict) -> str:
 def _is_clear_pending_correction(message: str) -> bool:
     """判断用户是否在明确修正待确认参数，需要交给 LLM 重新规划。"""
     return bool(_CLEAR_CORRECTION_RE.search(message.strip()))
-
-
-def _extract_missing_template_crop(pending: PendingAction, result: str) -> str:
-    """从缺模板结果中提取作物名，优先使用 pending 参数。"""
-    crop_name = str(pending.params.get("crop_name") or "").strip()
-    if crop_name:
-        return crop_name
-
-    match = _MISSING_TEMPLATE_RE.search(result)
-    return match.group("crop").strip() if match else ""
 
 
 def _skill_result_reply(result) -> str:
@@ -268,6 +261,7 @@ async def _confirm_pending(
     session_id: str | None = None,
 ) -> PendingActionDecision:
     """执行已确认的 pending action，并处理缺模板和链式动作。"""
+    original_params = dict(pending.params)
     contract_block = _contract_blocked_confirmation(
         farm_id=farm_id, pending=pending, session_id=session_id
     )
@@ -303,6 +297,7 @@ async def _confirm_pending(
         alias_metadata=alias_metadata,
         farm_uid=farm_uid,
         session_id=session_id,
+        original_params=original_params,
     )
 
 
@@ -407,6 +402,7 @@ def _successful_skill_result_decision(
     alias_metadata: dict,
     farm_uid: str | None,
     session_id: str | None,
+    original_params: dict | None = None,
 ) -> PendingActionDecision:
     reply = _skill_result_reply(result)
     cache_groups = _get_metadata_cache_groups(
@@ -418,12 +414,13 @@ def _successful_skill_result_decision(
     remove_pending(farm_id, session_id=session_id)
     metadata = {"cache_groups_cleared": cleared_groups, **alias_metadata}
 
-    template_decision = _missing_template_follow_up_decision(
+    template_decision = missing_template_follow_up_decision(
         farm_id=farm_id,
         pending=pending,
         reply=reply,
         metadata=metadata,
         session_id=session_id,
+        follow_up_params=original_params or pending.params,
     )
     if template_decision is not None:
         return template_decision
@@ -439,43 +436,6 @@ def _successful_skill_result_decision(
         return follow_up_decision
 
     return PendingActionDecision.confirmed(f"已执行：{reply}", metadata=metadata)
-
-
-def _missing_template_follow_up_decision(
-    *,
-    farm_id: int,
-    pending: PendingAction,
-    reply: str,
-    metadata: dict,
-    session_id: str | None,
-) -> PendingActionDecision | None:
-    if (
-        pending.skill_name == "create_crop_cycle"
-        and "系统还没有" in reply
-        and "模板" in reply
-    ):
-        crop_name = _extract_missing_template_crop(pending, reply)
-        if crop_name:
-            store_pending(
-                farm_id,
-                "manage_crop_templates",
-                {"operation": "create_template", "crop_name": crop_name},
-                original_input=f"系统还没有{crop_name}作物模板",
-                follow_up_skill_name="create_crop_cycle",
-                follow_up_params=dict(pending.params),
-                follow_up_original_input=pending.original_input,
-                session_id=session_id,
-            )
-            confirm = build_confirm_message(
-                "manage_crop_templates",
-                {"operation": "create_template", "crop_name": crop_name},
-                original_input=f"系统还没有{crop_name}作物模板",
-            )
-            reply = (
-                f"系统还没有{crop_name}作物模板。创建茬口前需要先创建模板。\n{confirm}"
-            )
-            return PendingActionDecision.confirmed(reply, metadata=metadata)
-    return None
 
 
 def _follow_up_pending_decision(
@@ -696,6 +656,18 @@ def _failed_pending_plan_step_decision(
 ) -> PendingActionDecision:
     result_reply = _skill_result_reply(result)
     _mark_pending_plan_step_failed(plan.plan_id, step.step_index, result_reply)
+    template_decision = missing_template_pending_plan_step_decision(
+        farm_id=farm_id,
+        plan=plan,
+        step=step,
+        params=params,
+        result_reply=result_reply,
+        session_id=session_id,
+    )
+    if template_decision is not None:
+        _clear_runtime_pending_plan_only(farm_id, session_id)
+        return template_decision
+
     repair_decision = reflect_tool_failure(
         farm_id=farm_id,
         skill_name=step.tool_name,
@@ -863,6 +835,13 @@ def _clear_runtime_pending_plan_cache(
     session_id: str | None,
 ) -> None:
     _pending.pop((farm_id, session_id or None), None)
+    _pending_plans.pop((farm_id, session_id or None), None)
+
+
+def _clear_runtime_pending_plan_only(
+    farm_id: int,
+    session_id: str | None,
+) -> None:
     _pending_plans.pop((farm_id, session_id or None), None)
 
 

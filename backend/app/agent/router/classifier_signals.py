@@ -227,14 +227,23 @@ def looks_like_settle_labor_payment(message: str) -> bool:
 def looks_like_manage_wage(message: str) -> bool:
     if looks_like_settle_labor_payment(message):
         return False
-    if looks_like_farm_labor_work(message):
+    has_explicit_wage_word = has_any(message, ("工资", "工钱", "人工费"))
+    has_work_order_target = extractors.extract_unit_name(
+        message
+    ) is not None or has_any(
+        message,
+        ("去", "到", "安排", "让", "叫", "派"),
+    )
+    if looks_like_farm_labor_work(message) and (
+        has_work_order_target or not has_explicit_wage_word
+    ):
         return False
     has_attendance_signal = extractors.extract_worker_name(
         message
     ) is not None and has_any(message, hints.WAGE_ATTENDANCE_HINTS)
-    if has_attendance_signal:
+    if has_attendance_signal and not has_work_order_target:
         return True
-    if not has_any(message, ("工资", "工钱", "人工费")):
+    if not has_explicit_wage_word:
         has_wage_detail_without_wage_word = (
             extractors.extract_wage_operation_type(message) is not None
             and extractors.extract_worker_name(message) is not None
@@ -248,12 +257,6 @@ def looks_like_manage_wage(message: str) -> bool:
         extractors.extract_wage_operation_type(message) is not None
         and extractors.extract_worker_name(message) is not None
         and extractors.extract_unit_price(message) is not None
-    )
-    has_work_order_target = extractors.extract_unit_name(
-        message
-    ) is not None or has_any(
-        message,
-        ("去", "到", "安排", "让", "叫", "派"),
     )
     return has_record_action or (has_wage_detail and not has_work_order_target)
 
