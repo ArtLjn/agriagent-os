@@ -8,6 +8,15 @@ const TEXT = '#e6edf3';
 const TEXT_DIM = '#8b949e';
 const BAR_HEIGHT = 20;
 
+interface TimelineSegment {
+  nodeIndex: number;
+  left: number;
+  width: number;
+  color: string;
+  nodeName: string;
+  durationMs: number;
+}
+
 function getPhaseLabel(nodes: GanttNode[], displayIndex: number): string {
   const names = new Set(nodes.map((node) => node.node_name));
   const types = new Set(nodes.map((node) => node.node_type));
@@ -27,6 +36,30 @@ function getPhaseLabel(nodes: GanttNode[], displayIndex: number): string {
     return '最终回复阶段';
   }
   return `执行阶段 ${displayIndex + 1}`;
+}
+
+function buildTimelineSegments(nodes: GanttNode[]): TimelineSegment[] {
+  const valid = nodes
+    .map((node, nodeIndex) => ({ node, nodeIndex }))
+    .filter(({ node }) => node.duration_ms !== null && node.duration_ms > 0);
+  if (valid.length === 0) return [];
+
+  const totalDur = valid.reduce((s, { node }) => s + (node.duration_ms || 0), 0);
+  let offset = 0;
+  return valid.map(({ node, nodeIndex }) => {
+    const durationMs = node.duration_ms || 0;
+    const left = (offset / totalDur) * 100;
+    const width = Math.max((durationMs / totalDur) * 100, 0.3);
+    offset += durationMs;
+    return {
+      nodeIndex,
+      left,
+      width,
+      color: getNodeColor(node.node_type),
+      nodeName: node.node_name,
+      durationMs,
+    };
+  });
 }
 
 /* ── 统计信息条 ── */
@@ -169,19 +202,7 @@ function RoundDivider({
 
 /* ── 收起时的紧凑汇总条 ── */
 function CompactRoundBar({ nodes }: { nodes: GanttNode[] }) {
-  const segments = useMemo(() => {
-    const valid = nodes.filter((n) => n.duration_ms !== null && n.duration_ms > 0);
-    if (valid.length === 0) return [];
-
-    const totalDur = valid.reduce((s, n) => s + (n.duration_ms || 0), 0);
-    let offset = 0;
-    return valid.map((n) => {
-      const left = (offset / totalDur) * 100;
-      const width = Math.max(((n.duration_ms || 0) / totalDur) * 100, 0.3);
-      offset += n.duration_ms || 0;
-      return { left, width, color: getNodeColor(n.node_type) };
-    });
-  }, [nodes]);
+  const segments = useMemo(() => buildTimelineSegments(nodes), [nodes]);
 
   return (
     <div
@@ -206,23 +227,27 @@ function CompactRoundBar({ nodes }: { nodes: GanttNode[] }) {
       <div
         style={{
           flex: 1,
-          height: 20,
+          height: 16,
           position: 'relative',
           background: '#21262d',
           borderRadius: 4,
+          overflow: 'hidden',
           marginRight: 10,
+          boxShadow: 'inset 0 0 0 1px rgba(230, 237, 243, 0.04)',
         }}
       >
         {segments.map((seg, i) => (
           <div
             key={i}
+            aria-label={`轮次汇总 ${seg.nodeName} ${seg.durationMs}ms`}
             style={{
               position: 'absolute',
               left: `${seg.left}%`,
               width: `${seg.width}%`,
               height: '100%',
               background: seg.color,
-              borderRadius: 4,
+              borderRadius: 0,
+              opacity: 0.9,
             }}
           />
         ))}
@@ -234,6 +259,7 @@ function CompactRoundBar({ nodes }: { nodes: GanttNode[] }) {
 /* ── 展开时的汇总时间线 ── */
 function RoundSummaryBar({ nodes }: { nodes: GanttNode[] }) {
   const totalDur = nodes.reduce((s, n) => s + (n.duration_ms || 0), 0);
+  const segments = useMemo(() => buildTimelineSegments(nodes), [nodes]);
 
   return (
     <div
@@ -260,23 +286,30 @@ function RoundSummaryBar({ nodes }: { nodes: GanttNode[] }) {
       <div
         style={{
           flex: 1,
-          height: 20,
+          height: 16,
           position: 'relative',
           background: '#21262d',
           borderRadius: 4,
+          overflow: 'hidden',
           marginRight: 10,
+          boxShadow: 'inset 0 0 0 1px rgba(230, 237, 243, 0.04)',
         }}
       >
-        <div
-          style={{
-            position: 'absolute',
-            left: 0,
-            width: '100%',
-            height: '100%',
-            background: '#3498db',
-            borderRadius: 4,
-          }}
-        />
+        {segments.map((seg, i) => (
+          <div
+            key={i}
+            aria-label={`轮次汇总 ${seg.nodeName} ${seg.durationMs}ms`}
+            style={{
+              position: 'absolute',
+              left: `${seg.left}%`,
+              width: `${seg.width}%`,
+              height: '100%',
+              background: seg.color,
+              borderRadius: 0,
+              opacity: 0.9,
+            }}
+          />
+        ))}
       </div>
       <div style={{ fontSize: 11, color: TEXT_DIM, minWidth: 60 }}>{totalDur}ms</div>
     </div>
@@ -286,9 +319,11 @@ function RoundSummaryBar({ nodes }: { nodes: GanttNode[] }) {
 /* ── 节点信息行 ── */
 function NodeRow({
   node,
+  segment,
   onClick,
 }: {
   node: GanttNode;
+  segment?: TimelineSegment;
   onClick?: () => void;
 }) {
   const color = getNodeColor(node.node_type);
@@ -376,23 +411,28 @@ function NodeRow({
             position: 'absolute',
             left: 0,
             width: '100%',
-            height: '100%',
+            height: 16,
+            top: 2,
             background: '#21262d',
             borderRadius: 4,
+            overflow: 'hidden',
+            boxShadow: 'inset 0 0 0 1px rgba(230, 237, 243, 0.04)',
           }}
         />
-        {node.duration_ms && node.duration_ms > 0 && (
+        {segment && (
           <div
+            aria-label={`节点时间 ${node.node_name} ${segment.durationMs}ms`}
             style={{
               position: 'absolute',
-              left: 0,
-              width: '100%',
-              height: '100%',
+              left: `${segment.left}%`,
+              width: `${segment.width}%`,
+              height: 16,
+              top: 2,
               background: color,
               borderRadius: 4,
-              opacity: 0.85,
+              opacity: 0.9,
             }}
-            title={`${node.node_name}: ${node.duration_ms}ms`}
+            title={`${node.node_name}: ${segment.durationMs}ms`}
           />
         )}
       </div>
@@ -507,6 +547,9 @@ export function GanttTimeline({ rounds, onNodeClick }: GanttTimelineProps) {
         const successCount = round.nodes.filter((n) => n.status === 'success').length;
         const errorCount = round.nodes.filter((n) => n.status === 'error').length;
         const phaseLabel = getPhaseLabel(round.nodes, rIdx);
+        const rowSegments = new Map(
+          buildTimelineSegments(round.nodes).map((segment) => [segment.nodeIndex, segment]),
+        );
 
         return (
           <div key={rIdx}>
@@ -530,6 +573,7 @@ export function GanttTimeline({ rounds, onNodeClick }: GanttTimelineProps) {
                   <NodeRow
                     key={nIdx}
                     node={node}
+                    segment={rowSegments.get(nIdx)}
                     onClick={() => onNodeClick?.(rIdx, nIdx, node)}
                   />
                 ))}

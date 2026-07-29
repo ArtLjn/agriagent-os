@@ -219,6 +219,35 @@ def test_policy_records_selected_operations_for_labor_payment() -> None:
     assert decision.selected_operations == {"manage_labor_payment": ["query_payables"]}
 
 
+def test_policy_requires_tool_call_for_write_confirm_selection() -> None:
+    decision = RouterPolicy().apply(
+        message="今天就安排他们去芒果地吧",
+        frames=[
+            IntentFrame(
+                domain="operation",
+                intent="retrieved_write_candidate",
+                risk="write_confirm",
+                capability="manage_work_orders",
+                operation="create_work_order",
+                candidate_tools=["manage_work_orders"],
+                requires_confirmation=True,
+            )
+        ],
+        candidates=[
+            _candidate(
+                "manage_work_orders",
+                "write_confirm",
+                capability="manage_work_orders",
+                operation="create_work_order",
+            ),
+        ],
+    )
+
+    assert decision.selected_tools == ["manage_work_orders"]
+    assert decision.tool_choice == "required"
+    assert decision.force_binding == ("manage_work_orders",)
+
+
 def test_policy_shortlists_model_choice_read_pool_without_fallback_all() -> None:
     candidates = [_candidate(f"read_{index}", "read") for index in range(4)]
 

@@ -65,6 +65,7 @@ _WRITE_SUCCESS_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
         re.compile(r"(?:^|[，,。；;！!\n])\s*(?:已|已经)(?:帮你|为你|为您)?记录"),
     ),
     ("已创建", re.compile(r"(?:已|已经)(?:帮你|为你|为您)?创建")),
+    ("这就创建", re.compile(r"这就(?:帮你|为你|为您)?[^。！？\n]*创建")),
     ("已保存", re.compile(r"(?:已|已经)(?:帮你|为你|为您)?保存")),
     ("已执行", re.compile(r"(?:已|已经)(?:帮你|为你|为您)?执行")),
 )
@@ -290,7 +291,7 @@ def check_no_tool_write_success_claim(
     plan_draft: dict[str, Any] | None = None,
     pending_created: bool | None = None,
 ) -> ReflectionResult:
-    if selected_tools or tool_messages or tool_calls:
+    if tool_messages or tool_calls or pending_created is True:
         return ReflectionResult.passed(
             ReflectionTrigger.FALLBACK_GUARD,
             checks=[_NO_TOOL_WRITE_SUCCESS_CHECK],
