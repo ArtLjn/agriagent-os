@@ -163,6 +163,17 @@ WRITE_PATTERNS: dict[str, list[re.Pattern]] = {
 }
 
 QUERY_TRIGGERS: dict[str, set[str]] = {
+    "calculate_arithmetic": {
+        "计算",
+        "算一下",
+        "帮我算",
+        "总价",
+        "单价",
+        "合计",
+        "换算",
+        "多少钱",
+        "多少元",
+    },
     "weather": {"天气", "预报", "降雨", "温度", "极端天气"},
     "manage_cost": {
         "余额",
@@ -314,6 +325,7 @@ DISABLED_SKILLS: set[str] = {
     "web_search",
 }
 TOOL_CHAIN_MAP: dict[str, list[str]] = {
+    "calculate_arithmetic": [],
     "weather": [],
     "manage_cost": [],
     "manage_crop_cycle": [],

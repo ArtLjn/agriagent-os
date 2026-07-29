@@ -32,6 +32,8 @@ class RuleIntentClassifier:
         return [frame_builders.build_ambiguous_write_frame()]
 
     def _classify_primary_read(self, message: str) -> list[IntentFrame]:
+        if signals.looks_like_calculation_request(message):
+            return [frame_builders.build_calculate_arithmetic_frame()]
         if signals.looks_like_user_settings_query(message):
             return [frame_builders.build_query_user_settings_frame()]
         if signals.looks_like_labor_payable_query(message):

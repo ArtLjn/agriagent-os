@@ -28,6 +28,20 @@ def build_query_user_settings_frame() -> IntentFrame:
     )
 
 
+def build_calculate_arithmetic_frame() -> IntentFrame:
+    return IntentFrame(
+        domain="farm",
+        intent="calculate_arithmetic",
+        risk="read",
+        capability="calculate_arithmetic",
+        operation="calculate",
+        operation_hint="calculate",
+        entities=["math", "amount", "quantity"],
+        candidate_tools=["calculate_arithmetic"],
+        confidence=0.9,
+    )
+
+
 def build_query_labor_payables_frame() -> IntentFrame:
     return IntentFrame(
         domain="labor",

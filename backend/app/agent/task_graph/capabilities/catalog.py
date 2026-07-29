@@ -91,6 +91,17 @@ CAPABILITY_CATALOG: dict[str, CapabilityDefinition] = {
         ),
         adapter_hint="deterministic_calculator",
     ),
+    "CalculateArithmetic": CapabilityDefinition(
+        name="CalculateArithmetic",
+        description="执行通用确定性算术，避免模型心算总价、单价、面积和数量。",
+        contract=NodeContract(
+            input_types=["PlanningSlotSet"],
+            output_type="ArithmeticResult",
+            side_effect="none",
+            failure_policy="repair",
+        ),
+        adapter_hint="calculate_arithmetic",
+    ),
     "SynthesizePlantingPlan": CapabilityDefinition(
         name="SynthesizePlantingPlan",
         description="汇总已验证事实并生成用户可读规划方案。",
