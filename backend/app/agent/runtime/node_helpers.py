@@ -721,6 +721,7 @@ def _direct_response_summary(
         intent=intent,
         user_message=user_msg,
         plan_draft=plan_draft_payload,
+        fact_sources=_fact_sources_from_plan_draft_payload(plan_draft_payload),
     )
     content = response.content or ""
     logger.info("LLM 直接回复 | reply_len=%d | model=%s", len(content), model_name)
@@ -730,6 +731,27 @@ def _direct_response_summary(
         "reply_preview": safe_preview(str(content), max_chars=1000),
         "reply_len": len(str(content)),
     }
+
+
+def _fact_sources_from_plan_draft_payload(plan_draft_payload: dict) -> dict:
+    for key in ("fact_sources", "facts"):
+        value = plan_draft_payload.get(key)
+        if isinstance(value, dict) and value:
+            return value
+    planning_context = plan_draft_payload.get("planning_context") or plan_draft_payload.get(
+        "context"
+    )
+    if isinstance(planning_context, dict):
+        for key in ("fact_sources", "facts"):
+            value = planning_context.get(key)
+            if isinstance(value, dict) and value:
+                return value
+        slots = planning_context.get("slots")
+        if isinstance(slots, dict):
+            nested_slots = slots.get("slots")
+            if isinstance(nested_slots, dict) and nested_slots:
+                return nested_slots
+    return {}
 
 
 def _llm_trace_input(

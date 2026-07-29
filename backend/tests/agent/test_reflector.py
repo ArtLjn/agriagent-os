@@ -488,6 +488,114 @@ def test_check_tool_result_final_contradiction_blocks_number_mismatch() -> None:
     assert result.issues[0].code == "tool_result_final_contradiction"
 
 
+def test_check_tool_result_final_contradiction_allows_user_and_derived_facts() -> None:
+    tool_message = ToolMessage(
+        content="【农场现状】当前共有 2 个茬口，欠款 5000 元。",
+        tool_call_id="tc-status",
+    )
+
+    result = check_tool_result_final_contradiction(
+        tool_messages=[tool_message],
+        final_text="按你说的 30 亩和每块 1.5 亩，共规划 20 个茬口。",
+        fact_sources={
+            "total_area_mu": {
+                "value": 30,
+                "source": "user_input",
+            },
+            "unit_area_mu": {
+                "value": 1.5,
+                "source": {"kind": "user_input", "ref": "slot:unit_area_mu"},
+            },
+            "unit_count": {
+                "value": 20,
+                "source": {"kind": "derived", "ref": "rule:area_division"},
+            },
+        },
+    )
+
+    assert result.decision == ReflectionDecision.PASS
+
+
+def test_check_tool_result_final_contradiction_does_not_allow_same_value_wrong_fact() -> (
+    None
+):
+    tool_message = ToolMessage(
+        content="查询结果：当前共有 2 个茬口。",
+        tool_call_id="tc-status",
+    )
+
+    result = check_tool_result_final_contradiction(
+        tool_messages=[tool_message],
+        final_text="系统里当前共有 3 个茬口。",
+        fact_sources={
+            "total_area_mu": {
+                "value": 3,
+                "source": "user_input",
+            }
+        },
+    )
+
+    assert result.decision == ReflectionDecision.FALLBACK_RESPONSE
+    assert result.issues[0].code == "tool_result_final_contradiction"
+
+
+def test_check_tool_result_final_contradiction_still_blocks_tool_fact_mismatch() -> (
+    None
+):
+    tool_message = ToolMessage(
+        content="查询结果：当前共有 2 个茬口。",
+        tool_call_id="tc-status",
+    )
+
+    result = check_tool_result_final_contradiction(
+        tool_messages=[tool_message],
+        final_text="系统里当前共有 3 个茬口。",
+        fact_sources={
+            "active_cycle_count": {
+                "value": 3,
+                "source": {"kind": "tool_result", "ref": "tc-status"},
+            }
+        },
+    )
+
+    assert result.decision == ReflectionDecision.FALLBACK_RESPONSE
+    assert result.issues[0].code == "tool_result_final_contradiction"
+
+
+def test_service_allows_task_graph_fact_sources_in_trace_metadata() -> None:
+    service = ReflectorService(policy=ReflectionPolicy(enabled=True))
+
+    result = service.check_tool_response(
+        tool_messages=[
+            ToolMessage(
+                content="【农场现状】当前共有 2 个茬口，欠款 5000 元。",
+                tool_call_id="tc-status",
+            )
+        ],
+        final_text="按你说的 30 亩和每块 1.5 亩，共规划 20 个茬口。",
+        selected_tools=[],
+        tool_calls=[],
+        trace_metadata={
+            "fact_sources": {
+                "total_area_mu": {
+                    "value": 30,
+                    "source": {"kind": "user_input"},
+                },
+                "unit_area_mu": {
+                    "value": 1.5,
+                    "source": {"kind": "user_input"},
+                },
+                "unit_count": {
+                    "value": 20,
+                    "source": {"kind": "derived"},
+                },
+            }
+        },
+    )
+
+    assert result.decision == ReflectionDecision.PASS
+
+
 def test_check_tool_result_final_contradiction_allows_plan_advice_numbers() -> None:
     tool_message = ToolMessage(
         content=(

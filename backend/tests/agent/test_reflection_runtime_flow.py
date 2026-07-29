@@ -14,6 +14,7 @@ from app.agent.reflector import (
 )
 from app.agent.reflector.models import ReflectionIssue
 from app.agent.router import RouterDecision
+from app.agent.runtime import node_helpers as runtime_node_helpers
 from app.agent.runtime.nodes import _llm_node
 from app.agent.runtime.reflection import apply_post_tool_reflection
 from app.context.core.models import ContextBundle
@@ -313,6 +314,74 @@ def test_no_tool_write_success_trace_metadata_includes_plan_draft() -> None:
 
     call_kwargs = reflector_cls.return_value.check_tool_response.call_args.kwargs
     assert call_kwargs["trace_metadata"]["plan_draft"] == plan_draft
+
+
+def test_post_tool_reflection_trace_metadata_includes_fact_sources() -> None:
+    fact_sources = {
+        "total_area_mu": {
+            "value": 30,
+            "source": {"kind": "user_input"},
+        },
+        "unit_count": {
+            "value": 20,
+            "source": {"kind": "derived"},
+        },
+    }
+
+    with patch("app.agent.runtime.reflection.ReflectorService", create=True) as (
+        reflector_cls
+    ):
+        reflector_cls.return_value.check_tool_response.return_value = (
+            ReflectionResult.passed(ReflectionTrigger.POST_TOOL_RESULT)
+        )
+
+        apply_post_tool_reflection(
+            response=AIMessage(content="按你说的 30 亩，共规划 20 个茬口。"),
+            tool_messages=[
+                ToolMessage(
+                    content="【农场现状】当前共有 2 个茬口。",
+                    tool_call_id="tc-status",
+                )
+            ],
+            selected_tool_names=[],
+            farm_id=1,
+            session_id="session-fact-sources-reflection",
+            intent="agent",
+            user_message="太仓草莓 30 亩，每块 1.5 亩",
+            fact_sources=fact_sources,
+        )
+
+    call_kwargs = reflector_cls.return_value.check_tool_response.call_args.kwargs
+    assert call_kwargs["trace_metadata"]["fact_sources"] == fact_sources
+
+
+def test_direct_response_summary_passes_plan_draft_fact_sources() -> None:
+    fact_sources = {
+        "total_area_mu": {
+            "value": 30,
+            "source": "user_input",
+        }
+    }
+
+    with patch("app.agent.runtime.node_helpers.apply_post_tool_reflection") as (
+        reflection
+    ):
+        reflection.side_effect = lambda **kwargs: kwargs["response"]
+
+        runtime_node_helpers._direct_response_summary(
+            response=AIMessage(content="按你说的 30 亩规划。"),
+            selected_tool_names=[],
+            normal_msgs=[],
+            farm_id=1,
+            session_id="session-fact-sources-reflection",
+            intent="agent",
+            user_msg="太仓草莓 30 亩",
+            plan_draft_payload={"planning_context": {"facts": fact_sources}},
+            model_name="fake-model",
+        )
+
+    call_kwargs = reflection.call_args.kwargs
+    assert call_kwargs["fact_sources"] == fact_sources
 
 
 @pytest.mark.asyncio

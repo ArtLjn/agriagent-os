@@ -1,6 +1,6 @@
 """Agent Reflection 规则检查。"""
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping, Sequence
 from decimal import Decimal, InvalidOperation
 import re
 from typing import Any
@@ -69,6 +69,13 @@ _WRITE_SUCCESS_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("已保存", re.compile(r"(?:已|已经)(?:帮你|为你|为您)?保存")),
     ("已执行", re.compile(r"(?:已|已经)(?:帮你|为你|为您)?执行")),
 )
+_NON_TOOL_FACT_SOURCE_KINDS = {"user_input", "memory", "rag", "derived", "system"}
+_FACT_KEY_CLAUSE_HINTS: dict[str, tuple[str, ...]] = {
+    "total_area_mu": ("面积", "亩", "地"),
+    "unit_area_mu": ("每块", "单块", "块地", "亩"),
+    "unit_count": ("拆分", "规划", "计划", "安排", "地块", "块", "茬口"),
+}
+_PLANNED_UNIT_HINTS = ("拆分", "规划", "计划", "安排")
 
 
 def check_write_plan_consistency(
@@ -372,6 +379,7 @@ def check_tool_result_final_contradiction(
     *,
     tool_messages: list[ToolMessage],
     final_text: str,
+    fact_sources: Any | None = None,
 ) -> ReflectionResult:
     if not _looks_like_business_fact(final_text):
         return ReflectionResult.passed(
@@ -379,13 +387,17 @@ def check_tool_result_final_contradiction(
             checks=[_TOOL_CONCLUSION_CHECK],
         )
     tool_numbers = _extract_numbers_from_messages(tool_messages)
-    final_numbers = _extract_asserted_numbers(final_text)
+    allowed_facts = _extract_non_tool_facts(fact_sources)
+    final_numbers, allowed_fact_numbers = _extract_unprotected_asserted_numbers(
+        final_text,
+        allowed_facts,
+    )
     if not tool_numbers or not final_numbers:
         return ReflectionResult.passed(
             ReflectionTrigger.POST_TOOL_RESULT,
             checks=[_TOOL_CONCLUSION_CHECK],
         )
-    if any(number in tool_numbers for number in final_numbers):
+    if final_numbers.issubset(tool_numbers):
         return ReflectionResult.passed(
             ReflectionTrigger.POST_TOOL_RESULT,
             checks=[_TOOL_CONCLUSION_CHECK],
@@ -399,6 +411,7 @@ def check_tool_result_final_contradiction(
         evidence={
             "tool_numbers": [str(number) for number in tool_numbers],
             "final_numbers": [str(number) for number in final_numbers],
+            "allowed_fact_numbers": [str(number) for number in allowed_fact_numbers],
             "final_text": final_text[:160],
         },
     )
@@ -454,11 +467,123 @@ def _extract_numbers(text: str) -> set[Decimal]:
     }
 
 
-def _extract_asserted_numbers(text: str) -> set[Decimal]:
-    numbers: set[Decimal] = set()
+def _extract_unprotected_asserted_numbers(
+    text: str,
+    allowed_facts: list[dict[str, Any]],
+) -> tuple[set[Decimal], set[Decimal]]:
+    unprotected: set[Decimal] = set()
+    protected: set[Decimal] = set()
     for clause in _business_fact_clauses(text):
-        numbers.update(_extract_numbers(clause))
-    return numbers
+        for number in _extract_numbers(clause):
+            if _number_allowed_by_fact_clause(number, clause, allowed_facts):
+                protected.add(number)
+            else:
+                unprotected.add(number)
+    return unprotected, protected
+
+
+def _number_allowed_by_fact_clause(
+    number: Decimal,
+    clause: str,
+    allowed_facts: list[dict[str, Any]],
+) -> bool:
+    return any(
+        number in fact["numbers"] and _fact_key_matches_clause(fact["key"], clause)
+        for fact in allowed_facts
+    )
+
+
+def _fact_key_matches_clause(key: str, clause: str) -> bool:
+    hints = _FACT_KEY_CLAUSE_HINTS.get(key)
+    if hints is None:
+        return bool(key) and key in clause
+    if key == "unit_count" and "茬口" in clause:
+        return any(hint in clause for hint in _PLANNED_UNIT_HINTS)
+    return any(hint in clause for hint in hints)
+
+
+def _extract_non_tool_facts(fact_sources: Any | None) -> list[dict[str, Any]]:
+    facts: list[dict[str, Any]] = []
+    for key, fact in _iter_fact_source_items(fact_sources):
+        if _fact_source_kind(fact) not in _NON_TOOL_FACT_SOURCE_KINDS:
+            continue
+        numbers = _extract_fact_value_numbers(_fact_value(fact))
+        if numbers:
+            facts.append({"key": _fact_key(key, fact), "numbers": numbers})
+    return facts
+
+
+def _iter_fact_source_items(
+    value: Any, key: str | None = None
+) -> Iterable[tuple[str | None, Any]]:
+    if value is None:
+        return
+    if _looks_like_fact_source_item(value):
+        yield key, value
+        return
+    if isinstance(value, Mapping):
+        for nested_key, nested in value.items():
+            yield from _iter_fact_source_items(nested, str(nested_key))
+        return
+    if isinstance(value, Sequence) and not isinstance(value, str | bytes):
+        for nested in value:
+            yield from _iter_fact_source_items(nested, key)
+
+
+def _looks_like_fact_source_item(value: Any) -> bool:
+    if isinstance(value, Mapping):
+        return "value" in value and "source" in value
+    return hasattr(value, "value") and hasattr(value, "source")
+
+
+def _fact_source_kind(fact: Any) -> str | None:
+    source = (
+        fact.get("source")
+        if isinstance(fact, Mapping)
+        else getattr(fact, "source", None)
+    )
+    if isinstance(source, str):
+        kind = source
+    elif isinstance(source, Mapping):
+        kind = source.get("kind")
+    else:
+        kind = getattr(source, "kind", None)
+    return str(kind) if kind else None
+
+
+def _fact_key(key: str | None, fact: Any) -> str:
+    if isinstance(fact, Mapping):
+        explicit_key = fact.get("name") or fact.get("key")
+    else:
+        explicit_key = getattr(fact, "name", None) or getattr(fact, "key", None)
+    return str(explicit_key or key or "")
+
+
+def _fact_value(fact: Any) -> Any:
+    if isinstance(fact, Mapping):
+        return fact.get("value")
+    return getattr(fact, "value", None)
+
+
+def _extract_fact_value_numbers(value: Any) -> set[Decimal]:
+    if value is None or isinstance(value, bool):
+        return set()
+    if isinstance(value, int | float | Decimal):
+        normalized = _normalize_decimal(value)
+        return {normalized} if normalized is not None else set()
+    if isinstance(value, str):
+        return _extract_numbers(value)
+    if isinstance(value, Mapping):
+        numbers: set[Decimal] = set()
+        for nested in value.values():
+            numbers.update(_extract_fact_value_numbers(nested))
+        return numbers
+    if isinstance(value, Sequence) and not isinstance(value, str | bytes):
+        numbers: set[Decimal] = set()
+        for nested in value:
+            numbers.update(_extract_fact_value_numbers(nested))
+        return numbers
+    return set()
 
 
 def _business_fact_clauses(text: str) -> list[str]:
