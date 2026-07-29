@@ -309,10 +309,7 @@ def _build_diagnostics(
 
 
 def _format_recent_messages(messages: list[MessageSnapshot]) -> str:
-    return "\n".join(
-        f"#{message.message_id or '-'} {message.role}: {message.content}"
-        for message in messages
-    )
+    return "\n".join(f"{message.role}: {message.content}" for message in messages)
 
 
 def _empty_pack(

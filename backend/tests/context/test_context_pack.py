@@ -2,7 +2,12 @@
 
 import pytest
 
-from app.context.pack import ContextPackService
+from app.context.pack import (
+    ContextPack,
+    ContextPackDiagnostics,
+    ContextPackService,
+    MessageSnapshot,
+)
 from app.domains.conversation.models import Conversation, ConversationMessage
 from app.shared.compatibility import UTC
 
@@ -131,4 +136,35 @@ async def test_context_pack_可转换为_context_builder_兼容_blocks(db_sessio
     assert blocks[0].metadata["summary_version"] == 1
     assert blocks[0].metadata["summarized_until_message_id"] == messages[0].id
     assert blocks[1].metadata["message_ids"] == [messages[1].id, messages[2].id]
-    assert "#2 assistant: 第 2 条消息" in blocks[1].content
+    assert "assistant: 第 2 条消息" in blocks[1].content
+
+
+@pytest.mark.asyncio
+async def test_context_pack_recent_messages_do_not_inline_message_ids(db_session):
+    pack = ContextPack(
+        conversation_id=1,
+        session_id="context-pack-session",
+        farm_id=1,
+        user_id="test-user-001",
+        summary=None,
+        recent_messages=[
+            MessageSnapshot(
+                message_id=1785231256426903159, role="assistant", content="已执行"
+            ),
+            MessageSnapshot(
+                message_id=1785231294639429161, role="user", content="创建种植单元"
+            ),
+        ],
+        diagnostics=ContextPackDiagnostics(
+            recent_message_ids=[1785231256426903159, 1785231294639429161],
+        ),
+    )
+
+    blocks = pack.to_context_blocks()
+
+    assert blocks[0].metadata["message_ids"] == [
+        1785231256426903159,
+        1785231294639429161,
+    ]
+    assert "#1785231256426903159" not in blocks[0].content
+    assert "assistant: 已执行" in blocks[0].content
