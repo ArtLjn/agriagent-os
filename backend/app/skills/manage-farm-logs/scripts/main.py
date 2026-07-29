@@ -1,5 +1,6 @@
 """农事日志聚合 Skill。"""
 
+import json
 from datetime import date, datetime, timedelta
 
 from skillify.models.schemas import ResultStatus, SkillResult
@@ -354,7 +355,7 @@ def _to_int(value) -> int | None:
 def _to_int_list(value) -> list[int]:
     if value in (None, ""):
         return []
-    values = value if isinstance(value, (list, tuple, set)) else str(value).split(",")
+    values = _list_arg(value)
     parsed = [_to_int(item) for item in values]
     return [item for item in parsed if item is not None]
 
@@ -362,8 +363,23 @@ def _to_int_list(value) -> list[int]:
 def _to_str_list(value) -> list[str]:
     if value in (None, ""):
         return []
-    values = value if isinstance(value, (list, tuple, set)) else str(value).split(",")
+    values = _list_arg(value)
     return [str(item).strip() for item in values if str(item).strip()]
+
+
+def _list_arg(value) -> list:
+    if isinstance(value, (list, tuple, set)):
+        return list(value)
+    text = str(value).strip()
+    if not text:
+        return []
+    try:
+        parsed = json.loads(text)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        parsed = None
+    if isinstance(parsed, list):
+        return parsed
+    return [part.strip() for part in text.split(",")]
 
 
 def _worker_suffix(log: FarmLog) -> str:

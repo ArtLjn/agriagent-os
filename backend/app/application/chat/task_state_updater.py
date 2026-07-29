@@ -49,6 +49,11 @@ async def update_task_state_after_turn(
         user_id=turn.user_id,
         session_id=turn.session_id,
     )
+    pending_completion = _complete_existing_task_after_pending_decision(
+        store, turn, active
+    )
+    if pending_completion is not None:
+        return pending_completion
     missing = _extract_missing_information(turn.assistant_reply) or (
         _infer_missing_information_from_task_intent(turn.user_input)
     )
@@ -63,6 +68,25 @@ async def update_task_state_after_turn(
     entities = _extract_entities(turn.user_input)
     if task_type == "planting_plan":
         missing = _planting_plan_missing_from_entities(missing, entities)
+    return _create_new_task_state(
+        store=store,
+        turn=turn,
+        task_type=task_type,
+        entities=entities,
+        missing=missing,
+        start_reason=start_reason,
+    )
+
+
+def _create_new_task_state(
+    *,
+    store: AgentTaskStateStore,
+    turn: TaskStateTurn,
+    task_type: str,
+    entities: dict[str, object],
+    missing: list[str],
+    start_reason: str,
+) -> TaskStateUpdateResult:
     task = store.upsert_active_task(
         farm_id=turn.farm_id,
         user_id=turn.user_id or "",
@@ -133,13 +157,53 @@ def _skip_reason_before_decision(turn: TaskStateTurn) -> str:
         return "pending_write_confirmation"
     if turn.pending_plan is not None and not _is_crop_cycle_setup_turn(turn):
         return "pending_write_confirmation"
-    if turn.pending_decision_handled:
-        return "pending_decision_handled"
     if not _compact_text(turn.user_input) or not _compact_text(turn.assistant_reply):
         return "empty_turn"
     if _is_side_query(turn.user_input):
         return "side_query"
     return ""
+
+
+def _complete_existing_task_after_pending_decision(
+    store: AgentTaskStateStore,
+    turn: TaskStateTurn,
+    active,
+) -> TaskStateUpdateResult | None:
+    if not turn.pending_decision_handled:
+        return None
+    if active is None:
+        return _skipped("pending_decision_handled")
+    if active.task_type != "crop_cycle_setup":
+        return _skipped(
+            "pending_decision_handled",
+            task_id=active.task_id,
+            task_type=active.task_type,
+        )
+    if not _is_successful_pending_execution(turn.assistant_reply):
+        return _skipped(
+            "pending_decision_handled",
+            task_id=active.task_id,
+            task_type=active.task_type,
+        )
+    task = store.mark_completed(
+        farm_id=turn.farm_id,
+        user_id=turn.user_id or "",
+        session_id=turn.session_id or "",
+        task_id=active.task_id,
+    )
+    return TaskStateUpdateResult(
+        action="completed",
+        reason="pending_plan_completed",
+        task_id=task.task_id if task else active.task_id,
+        task_type=active.task_type,
+    )
+
+
+def _is_successful_pending_execution(reply: str) -> bool:
+    text = _compact_text(reply)
+    if not text.startswith("已执行"):
+        return False
+    return not any(keyword in text for keyword in ("失败", "不存在", "执行受阻"))
 
 
 def _update_existing_task(

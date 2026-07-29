@@ -91,6 +91,8 @@ export function LlmContextInspector({
   onOpenChange,
   loading,
   hasTimeline,
+  requestId,
+  snapshotRequestId,
   onRefresh,
 }: {
   snapshot: PlaygroundLlmContextSnapshot | null;
@@ -99,9 +101,17 @@ export function LlmContextInspector({
   loading: boolean;
   hasTimeline: boolean;
   requestId?: string;
+  snapshotRequestId?: string;
   nodeCount: number;
   onRefresh: () => void | Promise<unknown>;
 }) {
+  const usingPreviousLlmContext = Boolean(
+    snapshot && requestId && snapshotRequestId && requestId !== snapshotRequestId,
+  );
+  const subtitle = usingPreviousLlmContext
+    ? `当前 request ${requestId} 未进入 LLM，展示最近一次 LLM Context：${snapshotRequestId}`
+    : '最终送入模型的上下文快照';
+
   return (
     <Drawer
       title="LLM Context 可观测"
@@ -145,7 +155,7 @@ export function LlmContextInspector({
                 LLM Context 可观测
               </div>
               <div style={{ color: TEXT_DIM, fontSize: 12, lineHeight: 1.3, marginTop: 2 }}>
-                最终送入模型的上下文快照
+                {subtitle}
               </div>
             </div>
           </div>

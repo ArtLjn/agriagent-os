@@ -22,6 +22,18 @@ def looks_like_planting_advice(message: str) -> bool:
     return "种" in message and has_any(message, hints.PLANTING_ADVICE_HINTS)
 
 
+def looks_like_calculation_request(message: str) -> bool:
+    if re.search(r"\d", message) is None:
+        return False
+    has_math_operator = re.search(r"[\d\s]+[+\-*/÷×][\d\s]+", message) is not None
+    has_math_hint = has_any(message, hints.CALCULATION_HINTS)
+    has_unit_math = has_any(message, hints.CALCULATION_UNIT_HINTS) and has_any(
+        message,
+        ("单价", "总价", "合计", "多少钱", "多少元", "一米", "每米", "一亩", "每亩"),
+    )
+    return has_math_operator or has_math_hint or has_unit_math
+
+
 def looks_like_web_search(message: str) -> bool:
     return has_any(message, hints.WEB_SEARCH_HINTS)
 
@@ -217,10 +229,9 @@ def looks_like_manage_wage(message: str) -> bool:
         return False
     if looks_like_farm_labor_work(message):
         return False
-    has_attendance_signal = (
-        extractors.extract_worker_name(message) is not None
-        and has_any(message, hints.WAGE_ATTENDANCE_HINTS)
-    )
+    has_attendance_signal = extractors.extract_worker_name(
+        message
+    ) is not None and has_any(message, hints.WAGE_ATTENDANCE_HINTS)
     if has_attendance_signal:
         return True
     if not has_any(message, ("工资", "工钱", "人工费")):

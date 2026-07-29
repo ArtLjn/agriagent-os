@@ -109,6 +109,34 @@ class TestPurePendingPath:
         assert "确认记账" in ai_msg.content
 
     @pytest.mark.asyncio
+    async def test_pending_plan_placeholders_are_not_repeated(self):
+        """pending plan 的普通占位 ToolMessage 不应重复进入最终回复。"""
+        pending_msg = ToolMessage(
+            content=(
+                f"{PENDING_MARKER} 请确认将执行 2 步（共 2 个步骤）：\n"
+                "1. 创建工人：张三\n"
+                "2. 创建工人：李四\n"
+                "确认执行吗？"
+            ),
+            tool_call_id="tc1",
+        )
+        placeholder_msg = ToolMessage(
+            content="已纳入待确认计划。",
+            tool_call_id="tc2",
+        )
+        state = {
+            "messages": [pending_msg, placeholder_msg],
+            "farm_id": 1,
+        }
+
+        result = await _llm_node(state)
+        ai_msg = result["messages"][0]
+
+        assert ai_msg.content.count("已纳入待确认计划。") == 0
+        assert ai_msg.content.count("请确认将执行 2 步") == 1
+        assert "创建工人：张三" in ai_msg.content
+
+    @pytest.mark.asyncio
     async def test_contract_blocked_returns_directly_without_llm(self):
         """参数契约阻断应直接返回给用户，不进入 no-tools fallback。"""
         blocked_msg = ToolMessage(

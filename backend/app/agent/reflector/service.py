@@ -310,6 +310,7 @@ def _post_tool_response_checks(
         check_tool_result_final_contradiction(
             tool_messages=tool_messages,
             final_text=final_text,
+            fact_sources=trace_metadata.get("fact_sources"),
         ),
         check_required_tool_missing(
             selected_tools=selected_tools,

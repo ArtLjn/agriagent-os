@@ -275,6 +275,8 @@ def _invalid_candidate_fields(
 
 
 def _candidate_input_values(value: Any) -> list[str]:
+    if isinstance(value, dict):
+        return []
     if isinstance(value, (list, tuple, set)):
         return [str(item).strip() for item in value if str(item).strip()]
     text = str(value).strip()

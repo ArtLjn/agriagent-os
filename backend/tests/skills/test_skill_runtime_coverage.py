@@ -10,13 +10,18 @@ from app.skills.metadata import (
     SkillPermissionLevel,
     get_skill_metadata,
 )
-from app.agent.router.tool_selector import QUERY_TRIGGERS, TOOL_CHAIN_MAP, WRITE_PATTERNS
+from app.agent.router.tool_selector import (
+    QUERY_TRIGGERS,
+    TOOL_CHAIN_MAP,
+    WRITE_PATTERNS,
+)
 from app.infra.pending_actions import WRITE_SKILLS
 
 pytestmark = pytest.mark.no_db
 
 
 EXPECTED_REGISTERED_SKILLS = {
+    "calculate_arithmetic",
     "manage_cost",
     "manage_crop_cycle",
     "manage_crop_templates",

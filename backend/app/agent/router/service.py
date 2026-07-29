@@ -56,6 +56,11 @@ _RETRIEVABLE_READ_HINTS = (
     "remaining",
     "remain",
     "unpaid",
+    "计算",
+    "算",
+    "总价",
+    "合计",
+    "换算",
 )
 _RETRIEVABLE_READ_ENTITY_HINTS = (
     "欠款",
@@ -91,6 +96,14 @@ _RETRIEVABLE_READ_ENTITY_HINTS = (
     "labor",
     "worker",
     "weather",
+    "单价",
+    "总价",
+    "金额",
+    "元",
+    "米",
+    "公里",
+    "亩",
+    "株",
 )
 _RETRIEVABLE_WRITE_HINTS = (
     "安排",
@@ -207,8 +220,7 @@ class SkillRouter:
             ):
                 retrieved_frames = self._retrieved_frames(message, catalog)
                 if retrieved_frames and not self._should_keep_read_rule_frames(
-                    frames,
-                    retrieved_frames
+                    frames, retrieved_frames
                 ):
                     return retrieved_frames, None
             return frames, None
@@ -451,10 +463,7 @@ class SkillRouter:
                 for candidate in candidates
                 if candidate.name != "manage_crop_cycle"
             ]
-        if (
-            "manage_crop_cycle" not in names
-            or "manage_planting_units" not in names
-        ):
+        if "manage_crop_cycle" not in names or "manage_planting_units" not in names:
             return candidates
         return [
             candidate
@@ -549,7 +558,10 @@ class SkillRouter:
         for candidate in candidates:
             if not candidate.capability:
                 continue
-            if candidate.operation is not None and candidate.risk not in _WRITE_OPERATION_RISKS:
+            if (
+                candidate.operation is not None
+                and candidate.risk not in _WRITE_OPERATION_RISKS
+            ):
                 continue
             capability = registry.capabilities.get(candidate.capability)
             if capability is None:

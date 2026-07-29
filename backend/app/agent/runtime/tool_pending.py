@@ -648,10 +648,19 @@ def _resolve_pending_execution_args(
         tool_name=name,
     )
     if execution_args is not None:
+        execution_args = _args_with_missing_tool_call_fields(execution_args, args)
         return _build_pending_execution_args(
             name, execution_args, farm_id, original_input
         )
     return _build_pending_execution_args(name, args, farm_id, original_input)
+
+
+def _args_with_missing_tool_call_fields(plan_args: dict, tool_call_args: dict) -> dict:
+    merged = dict(plan_args)
+    for key, value in dict(tool_call_args or {}).items():
+        if _is_missing_param(merged.get(key)):
+            merged[key] = value
+    return merged
 
 
 def _ambiguous_pending_message(

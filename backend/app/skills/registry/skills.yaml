@@ -1,4 +1,43 @@
 capabilities:
+  - name: calculate_arithmetic
+    domain: farm
+    capability: calculate_arithmetic
+    description: 确定性数学运算，支持总价、单价、面积、数量、比例和单位换算后的算术计算。
+    examples:
+      - 滴灌带36公里，1.5元一米，总价是多少钱
+      - 30亩每块1.5亩，需要多少块
+      - 一亩2800株，15亩合计多少株
+      - 帮我算一下 36 * 1000 * 1.5
+      - 公里换算成米后再乘单价
+    anti_examples:
+      - 查询这个月账单
+      - 今天买了100元化肥
+      - 我还欠老王多少钱
+      - 查询农场整体情况
+    tags:
+      - 计算
+      - 算术
+      - 总价
+      - 单价
+      - 金额
+      - 换算
+      - 面积
+      - 数量
+      - 公里
+      - 米
+      - 亩
+    version: v1
+    owner: agent-platform
+    status: active
+    context_dependencies:
+      - calculation_expression
+    cache_invalidation: []
+    operations:
+      calculate:
+        risk: read
+        description: 执行只读确定性算术计算。
+        legacy_aliases:
+          - calculate_arithmetic
   - name: manage_cost
     domain: finance
     capability: cost_management

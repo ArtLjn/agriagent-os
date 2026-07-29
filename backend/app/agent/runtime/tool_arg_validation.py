@@ -76,6 +76,11 @@ def validate_pending_tool_args(
         normalized_params,
         candidates=candidate_set.values,
     )
+    validation = _reject_implausible_planting_unit_cycle_id(
+        contract_skill_name=contract_skill_name,
+        params=normalized_params,
+        validation=validation,
+    )
     message = _contract_message(validation)
     return PendingToolArgValidation(
         valid=validation.valid,
@@ -168,3 +173,36 @@ def _contract_message(validation: ContractValidationResult) -> str:
         return ""
     message = validation.message or "参数不完整，暂不能创建待确认操作。"
     return f"{message}，请补充后我再为你确认。"
+
+
+def _reject_implausible_planting_unit_cycle_id(
+    *,
+    contract_skill_name: str,
+    params: dict[str, Any],
+    validation: ContractValidationResult,
+) -> ContractValidationResult:
+    if contract_skill_name != "manage_planting_units":
+        return validation
+    if str(params.get("action") or "").strip() != "create":
+        return validation
+    cycle_id = params.get("cycle_id")
+    if not _looks_like_message_id(cycle_id):
+        return validation
+    cycle_id = str(params.get("cycle_id") or "").strip()
+    message = f"未找到当前农场 ID 为 {cycle_id} 的茬口。"
+    return ContractValidationResult(
+        valid=False,
+        missing_fields=list(validation.missing_fields),
+        invalid_candidates=dict(validation.invalid_candidates),
+        retryable=validation.retryable,
+        message=message,
+    )
+
+
+def _looks_like_message_id(value: Any) -> bool:
+    if isinstance(value, dict):
+        return False
+    text = str(value or "").strip()
+    if not text.isdigit():
+        return False
+    return int(text) > 2_147_483_647

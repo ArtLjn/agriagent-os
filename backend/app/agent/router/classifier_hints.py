@@ -99,6 +99,30 @@ READ_BLOCKERS = ("哪些", "有哪些", "查询", "查一下", "看看", "最近
 PLANTING_ADVICE_HINTS = ("怎么种", "如何种", "咋种", "要注意什么")
 WEB_SEARCH_HINTS = ("搜索", "网上查", "新闻")
 WEATHER_HINTS = ("天气", "预报", "降雨", "下雨", "气温", "风力", "湿度", "极端天气")
+CALCULATION_HINTS = (
+    "计算",
+    "算一下",
+    "帮我算",
+    "总价",
+    "单价",
+    "合计",
+    "换算",
+    "多少钱",
+    "多少元",
+)
+CALCULATION_UNIT_HINTS = (
+    "元",
+    "块",
+    "亩",
+    "米",
+    "公里",
+    "千米",
+    "斤",
+    "公斤",
+    "株",
+    "棵",
+    "个",
+)
 FINANCE_OVERVIEW_HINTS = ("money", "finance", "financial")
 COST_SUMMARY_HINTS = (
     "余额",
