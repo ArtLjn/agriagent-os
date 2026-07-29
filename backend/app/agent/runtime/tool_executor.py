@@ -191,6 +191,7 @@ async def _call_one(
 ) -> ToolMessage:
     """执行单个 tool_call，保持原有权限、pending 和 trace 顺序。"""
     name = tc["name"]
+    tool_call_raw_args = dict(tc.get("args") or {})
     raw_args = _execution_args_for_call(name, tc["args"])
     # 权限判定必须使用已补齐的确定性 operation，否则“结工资”这类写意图会被误判为查询。
     args = _tool_pending_args._build_pending_execution_args(
@@ -247,6 +248,7 @@ async def _call_one(
     message = _tool_pending._pending_action_message(
         state=state,
         name=name,
+        raw_args=tool_call_raw_args,
         args=args,
         farm_id=farm_id,
         original_input=original_input,

@@ -814,6 +814,13 @@ def _store_pending_action_message(
     logger,
 ) -> ToolMessage:
     session_id = state.get("session_id")
+    permission_trace = _permission_trace_output(permission_decision)
+    if (
+        not execution_args.get("operation")
+        and permission_decision.capability == name
+        and permission_decision.operation_risk in {"write_confirm", "write_high"}
+    ):
+        permission_trace.pop("resolved_operation", None)
     action_id = store_pending(
         farm_id,
         name,
@@ -836,7 +843,7 @@ def _store_pending_action_message(
             "status": "pending",
             "confirmation_context": confirmation_context,
             "plan_draft": state.get("plan_draft") or {},
-            **_permission_trace_output(permission_decision),
+            **permission_trace,
         },
         duration_ms=0,
     )
@@ -850,6 +857,7 @@ def _pending_action_message(
     *,
     state: AgentState,
     name: str,
+    raw_args: dict,
     args: dict,
     farm_id: int,
     original_input: str,
@@ -861,6 +869,11 @@ def _pending_action_message(
     """写操作 Skill 拦截：存储 pending action，不直接执行。"""
     if not permission_decision.requires_confirmation:
         return None
+    pending_args = _pending_storage_args(
+        name=name,
+        args=raw_args,
+        permission_decision=permission_decision,
+    )
     execution_args = _resolve_pending_execution_args(
         state=state,
         name=name,
@@ -883,7 +896,7 @@ def _pending_action_message(
     return _store_pending_action_message(
         state=state,
         name=name,
-        execution_args=execution_args,
+        execution_args=pending_args or execution_args,
         original_input=original_input,
         confirmation_context=confirmation_context or {},
         confirm_text=confirm_text or "",
@@ -893,6 +906,22 @@ def _pending_action_message(
         collector=collector,
         logger=logger,
     )
+
+
+def _pending_storage_args(
+    *,
+    name: str,
+    args: dict,
+    permission_decision: _PermissionDecision,
+) -> dict | None:
+    if (
+        not args.get("operation")
+        and name in {"manage_cost", "manage_crop_cycle", "manage_farm_logs"}
+        and permission_decision.capability == name
+        and permission_decision.operation_risk in {"write_confirm", "write_high"}
+    ):
+        return dict(args or {})
+    return None
 
 
 def _pending_action_precheck(
@@ -922,13 +951,11 @@ def _pending_action_precheck(
         farm_id=farm_id,
         original_input=original_input,
     )
-    execution_args.clear()
-    execution_args.update(contract_validation.params)
     if not contract_validation.valid:
         collector.record(
             node_type="skill_call",
             node_name=name,
-            input_data=execution_args,
+            input_data=contract_validation.params,
             output_data={
                 "status": "contract_blocked",
                 "contract_validation": contract_validation.trace_payload(),

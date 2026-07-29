@@ -615,6 +615,12 @@ def _execution_args_for_call(name: str, args: dict) -> dict:
     inferred = infer_skill_operation_name(name, execution_args)
     if inferred:
         if (
+            _is_registry_capability_name(name)
+            and _alias_default_operation_name(name) is None
+            and name != _LABOR_PAYMENT_SKILL
+        ):
+            return execution_args
+        if (
             _has_meaningful_args(execution_args)
             or _alias_default_operation_name(name) is None
         ):

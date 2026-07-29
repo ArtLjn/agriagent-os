@@ -231,14 +231,12 @@ def _contract_blocked_confirmation(
         params=pending.params,
         farm_id=farm_id,
     )
-    pending.params.clear()
-    pending.params.update(validation.params)
     if validation.valid:
         return None
     get_collector().record(
         node_type="skill_call",
         node_name=pending.skill_name,
-        input_data=pending.params,
+        input_data=validation.params,
         output_data={
             "status": "contract_blocked",
             "phase": "confirm_pending_action",
