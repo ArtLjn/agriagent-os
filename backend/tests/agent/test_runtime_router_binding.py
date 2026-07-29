@@ -245,11 +245,11 @@ async def test_registry_read_runtime_does_not_expand_to_all_read_tools() -> None
                 "user_id": "user-1",
                 "session_id": "session-model-choice",
             }
-        )
+    )
 
     assert result["router_decision"].fallback is None
     assert result["router_decision"].frames[0].evidence["source"] == (
-        "candidate_retriever"
+        "hybrid_operation_retriever"
     )
     assert fake_llm.bound_tool_names == ["get_farm_status"]
     assert "create_cost_record" not in fake_llm.bound_tool_names
@@ -289,6 +289,44 @@ async def test_llm_node_keeps_planting_planning_intent_in_read_tool_pool() -> No
         "manage_crop_cycle",
     ]
     assert router_decision.fallback == "model_choice_read_default"
+
+
+@pytest.mark.asyncio
+async def test_llm_node_does_not_route_planting_plan_area_math_to_calculator_only() -> None:
+    """带面积拆分的茬口规划仍是规划对话，不应被算术工具截胡。"""
+    fake_llm = _FakeLLM()
+    tools = [
+        _FakeTool("calculate_arithmetic"),
+        _FakeTool("get_farm_status"),
+        _FakeTool("manage_crop_cycle"),
+        _FakeTool("manage_crop_templates"),
+    ]
+
+    with ExitStack() as stack:
+        _enter_runtime_patches(stack, fake_llm, tools)
+        result = await _llm_node(
+            {
+                "messages": [
+                    HumanMessage(
+                        content=(
+                            "我在太仓新租了30亩地 每块地 1.5亩 "
+                            "帮我规划下茬口 ，秋季草莓"
+                        )
+                    )
+                ],
+                "farm_id": 1,
+                "farm_uid": "farm-uid-1",
+                "intent": "agent",
+                "user_id": "user-1",
+                "session_id": "session-planting-area-math",
+            }
+        )
+
+    assert fake_llm.bound_tool_names == [
+        "get_farm_status",
+        "manage_crop_cycle",
+    ]
+    assert result["router_decision"].fallback == "model_choice_read_default"
 
 
 @pytest.mark.asyncio
