@@ -173,9 +173,13 @@ def _direct_tool_message_response(
     trace_round_index = state.get("trace_round_index")
     set_round_index(trace_round_index)
     if pending_msgs and normal_msgs:
-        summaries = [str(m.content or "")[:200] for m in normal_msgs if m.content]
+        summaries = [
+            str(m.content or "")[:200]
+            for m in normal_msgs
+            if m.content and not _is_pending_plan_placeholder(m.content)
+        ]
         confirm_parts = [_strip_direct_tool_marker(m.content) for m in pending_msgs]
-        combined = "\n\n".join(summaries) + "\n\n" + "\n\n".join(confirm_parts)
+        combined = "\n\n".join([*summaries, *confirm_parts]).strip()
         logger.info(
             "混合 ToolMessage | pending=%d normal=%d | 跳过 LLM 合并回复",
             len(pending_msgs),
@@ -203,6 +207,10 @@ def _direct_tool_message_response(
             "trace_round_index": trace_round_index,
         }
     return None
+
+
+def _is_pending_plan_placeholder(content: str) -> bool:
+    return str(content or "").strip() == "已纳入待确认计划。"
 
 
 def _strip_direct_tool_marker(content: str) -> str:

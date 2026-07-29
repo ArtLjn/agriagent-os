@@ -96,6 +96,69 @@ async def test_single_write_pending_action_prefers_validated_plan_draft_params()
 
 
 @pytest.mark.asyncio
+async def test_single_write_pending_action_merges_tool_call_args_when_plan_is_sparse() -> (
+    None
+):
+    tool = _write_tool("manage_farm_logs")
+    state = {
+        "messages": [
+            HumanMessage(content="今天下午李四在西瓜棚浇水"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc-log",
+                        "name": "manage_farm_logs",
+                        "args": {
+                            "operation": "create_log",
+                            "cycle_id": "1",
+                            "operation_type": "浇水",
+                            "operation_date": "2026-07-28",
+                            "note": "西瓜棚浇水",
+                            "worker_ids": '["1"]',
+                            "worker_names": '["李四"]',
+                        },
+                    }
+                ],
+            ),
+        ],
+        "farm_id": 1,
+        "session_id": "sess-plan-action-sparse-log",
+        "plan_draft": {
+            "route_type": "write_pending_action",
+            "validation": {"status": "valid"},
+            "steps": [
+                {
+                    "step_id": "create_log",
+                    "skill_name": "manage_farm_logs",
+                    "params": {"operation": "create_log"},
+                    "depends_on": [],
+                }
+            ],
+        },
+    }
+
+    with (
+        patch(
+            "app.agent.runtime.tool_executor.get_langchain_tools", return_value=[tool]
+        ),
+        patch(
+            "app.agent.runtime.tool_executor.get_collector", return_value=MagicMock()
+        ),
+    ):
+        result = await _parallel_tool_node(state)
+
+    pending = get_pending(1, session_id="sess-plan-action-sparse-log")
+    assert pending is not None
+    assert pending.params["operation"] == "create_log"
+    assert pending.params["operation_type"] == "浇水"
+    assert pending.params["cycle_id"] == "1"
+    assert pending.params["worker_names"] == '["李四"]'
+    assert "缺少必填字段：operation_type" not in result["messages"][0].content
+    tool.ainvoke.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_create_crop_cycle_builds_template_preflight_pending_plan() -> None:
     tool = _write_tool("manage_crop_cycle")
     state = {
@@ -249,6 +312,52 @@ async def test_crop_cycle_setup_builds_planting_unit_step_from_task_state() -> N
     assert plan.steps[2].depends_on == ["create_crop_cycle"]
     assert "请确认将执行 3 步" in result["messages"][0].content
     assert "创建种植单元" in result["messages"][0].content
+    tool.ainvoke.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_multi_tool_pending_plan_returns_single_confirmation_prefix() -> None:
+    tool = _write_tool("manage_workers")
+    state = {
+        "messages": [
+            HumanMessage(content="新增两个工人张三和李四"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc-worker-1",
+                        "name": "manage_workers",
+                        "args": {"action": "create", "name": "张三"},
+                    },
+                    {
+                        "id": "tc-worker-2",
+                        "name": "manage_workers",
+                        "args": {"action": "create", "name": "李四"},
+                    },
+                ],
+            ),
+        ],
+        "farm_id": 1,
+        "session_id": "sess-workers-plan",
+    }
+
+    with (
+        patch(
+            "app.agent.runtime.tool_executor.get_langchain_tools", return_value=[tool]
+        ),
+        patch(
+            "app.agent.runtime.tool_executor.get_collector", return_value=MagicMock()
+        ),
+        patch(
+            "app.infra.pending_actions.pending_plan_service.create_pending_plan",
+            return_value=SimpleNamespace(plan_id="plan-workers"),
+        ),
+    ):
+        result = await _parallel_tool_node(state)
+
+    combined = "\n".join(message.content for message in result["messages"])
+    assert combined.count("已纳入待确认计划。") == 1
+    assert "请确认将执行 2 步" in combined
     tool.ainvoke.assert_not_awaited()
 
 

@@ -11,8 +11,8 @@ from app.domains.finance.cost_models import CostRecord
 from app.domains.finance.cost_category_models import CostCategory
 from app.domains.planting.crop_models import CropTemplate, GrowthStage
 from app.domains.planting.cycle_models import CropCycle, CycleStage
-from app.domains.planting.log_models import FarmLog
-from app.domains.planting.models import PlantingUnit
+from app.domains.planting.log_models import FarmLog, FarmLogWorker
+from app.domains.planting.models import PlantingUnit, Worker
 from app.domains.users.models import User
 from app.domains.users.settings_models import UserSetting
 
@@ -382,6 +382,40 @@ async def test_manage_farm_logs_updates_and_deletes_log(patched_skill_sessions, 
     )
     assert deleted.status.value == "success"
     assert patched_skill_sessions.get(FarmLog, log.id) is None
+
+
+@pytest.mark.asyncio
+async def test_manage_farm_logs_accepts_json_string_worker_names(
+    patched_skill_sessions,
+    ctx,
+):
+    cycle = _create_cycle(patched_skill_sessions)
+    cycle_id = cycle.id
+    worker = Worker(farm_id=1, name="李四", status="active", default_pay_type="daily")
+    patched_skill_sessions.add(worker)
+    patched_skill_sessions.commit()
+    worker_id = worker.id
+
+    created = await ManageFarmLogsSkill().execute(
+        {
+            "operation": "create_log",
+            "cycle_id": cycle_id,
+            "operation_type": "浇水",
+            "operation_date": "2026-07-28",
+            "note": "西瓜棚浇水",
+            "worker_names": '["李四"]',
+        },
+        ctx,
+    )
+
+    assert created.status.value == "success"
+    log = (
+        patched_skill_sessions.query(FarmLog)
+        .filter_by(cycle_id=cycle_id, operation_type="浇水")
+        .one()
+    )
+    links = patched_skill_sessions.query(FarmLogWorker).filter_by(farm_log_id=log.id)
+    assert [link.worker_id for link in links] == [worker_id]
 
 
 @pytest.mark.asyncio

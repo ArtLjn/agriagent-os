@@ -1,3 +1,4 @@
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -10,6 +11,8 @@ from app.agent.runtime.tool_pending import (
     _pending_action_message,
     _pending_action_precheck,
 )
+from app.domains.planting.crop_models import CropTemplate
+from app.domains.planting.cycle_models import CropCycle
 
 
 def test_validate_before_pending_reports_missing_required_field(monkeypatch):
@@ -79,6 +82,45 @@ def test_validate_before_pending_repairs_invalid_other_category_to_broad_candida
     assert result.valid is True
     assert result.params["category"] == "农资"
     assert result.params["_category_repair_strategy"] == "dynamic_consolidation"
+
+
+def test_validate_before_pending_blocks_unknown_planting_unit_cycle_id(
+    db_session, monkeypatch
+):
+    monkeypatch.setattr(
+        "app.agent.runtime.tool_arg_validation.load_skill_candidates",
+        lambda _farm_id: SimpleNamespace(values={"cycle_id": ["1:夏季西瓜"]}),
+    )
+
+    template = CropTemplate(farm_id=1, name="西瓜")
+    db_session.add(template)
+    db_session.flush()
+    db_session.add(
+        CropCycle(
+            farm_id=1,
+            crop_template_id=template.id,
+            name="夏季西瓜",
+            start_date=date(2026, 7, 28),
+            status="active",
+        )
+    )
+    db_session.commit()
+
+    result = validate_before_pending(
+        "manage_planting_units",
+        {
+            "operation": "manage_units",
+            "action": "create",
+            "cycle_id": "1785231256426903159",
+            "name": "吴中芒果基地 1号棚",
+            "area_mu": "2",
+        },
+        farm_id=1,
+    )
+
+    assert result.valid is False
+    assert result.missing_fields == []
+    assert "未找到当前农场 ID 为 1785231256426903159 的茬口" in result.message
 
 
 def test_pending_action_precheck_blocks_missing_category_before_confirmation(
