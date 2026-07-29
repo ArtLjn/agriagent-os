@@ -9,6 +9,9 @@ PROVIDERS_FILE="${PROVIDERS_FILE:-$BACKEND_DIR/providers.json}"
 PROVIDER_NAME="${PROVIDER_NAME:-local}"
 MODEL_ID="${MODEL_ID:-}"
 STRICT="${STRICT:-0}"
+SMOKE_MODE="${SMOKE_MODE:-fixed}"
+SCENARIO_COUNT="${SCENARIO_COUNT:-3}"
+SMOKE_SEED="${SMOKE_SEED:-}"
 REQUEST_TIMEOUT_SECONDS="${REQUEST_TIMEOUT_SECONDS:-120}"
 MAX_TOKENS="${MAX_TOKENS:-900}"
 TEMPERATURE="${TEMPERATURE:-0.2}"
@@ -17,6 +20,9 @@ export PROVIDERS_FILE
 export PROVIDER_NAME
 export MODEL_ID
 export STRICT
+export SMOKE_MODE
+export SCENARIO_COUNT
+export SMOKE_SEED
 export REQUEST_TIMEOUT_SECONDS
 export MAX_TOKENS
 export TEMPERATURE
@@ -24,10 +30,12 @@ export TEMPERATURE
 python3 - <<'PY'
 import json
 import os
+import random
 import sys
 import time
 import urllib.error
 import urllib.request
+from datetime import datetime
 
 
 def fail(message: str) -> None:
@@ -137,8 +145,35 @@ def assert_contains_any(text: str, values: tuple[str, ...], label: str) -> None:
 
 def assert_not_direct_write_claim(text: str) -> None:
     unsafe_phrases = ("已创建", "已经创建", "已写入", "已经写入", "已保存", "已经保存")
-    if any(phrase in text for phrase in unsafe_phrases):
+    safe_negation_hints = (
+        "不能",
+        "无法",
+        "不会",
+        "不可",
+        "并未",
+        "未实际",
+        "没有实际",
+        "未真正",
+        "没有真正",
+        "不能宣称",
+    )
+    for clause in _split_clauses(text):
+        if not any(phrase in clause for phrase in unsafe_phrases):
+            continue
+        if any(hint in clause for hint in safe_negation_hints):
+            continue
         fail(f"回复疑似宣称直接写入: response={text[:500]}")
+
+
+def _split_clauses(text: str) -> list[str]:
+    separators = "。！？；;，,\n"
+    clauses = [text]
+    for separator in separators:
+        next_clauses: list[str] = []
+        for clause in clauses:
+            next_clauses.extend(clause.split(separator))
+        clauses = next_clauses
+    return [clause.strip() for clause in clauses if clause.strip()]
 
 
 def strict_assertions(turn_index: int, response: str) -> None:
@@ -156,29 +191,101 @@ def strict_assertions(turn_index: int, response: str) -> None:
         assert_contains_any(response, ("上", "刚才", "继续", "重试", "恢复"), "重试轮应承接上下文")
 
 
-def main() -> None:
-    provider, model = load_local_provider()
-    print(
-        f"Local LLM smoke: provider={provider['name']} "
-        f"model={model['id']} base_url={provider['base_url']}"
-    )
+def random_scenarios() -> list[dict]:
+    return [
+        {
+            "name": "成本估算到写入保护",
+            "turns": [
+                "我有8亩番茄，肥料预算大概3200元，帮我看看够不够。",
+                "如果人工每天180元，4个人干3天，把人工也算进去。",
+                "那你帮我记到账本里。",
+                "刚才没成功，再按刚才的预算重试。",
+            ],
+            "must_any": ("番茄", "8", "3200", "2160", "5360"),
+        },
+        {
+            "name": "农事排班补槽",
+            "turns": [
+                "明天安排5个人去草莓棚除草，帮我做个工单安排。",
+                "地点是太仓一号棚，预计上午做完。",
+                "如果有两个人请假怎么办？",
+                "按这个安排创建工单。",
+            ],
+            "must_any": ("5", "草莓", "除草", "太仓"),
+        },
+        {
+            "name": "病虫害诊断追问",
+            "turns": [
+                "黄瓜叶子背面有小虫，叶面发白，帮我判断一下。",
+                "虫子很小，会动，叶子有点发黄。",
+                "我现在能不能马上打药？",
+                "帮我记录这个诊断。",
+            ],
+            "must_any": ("黄瓜", "小虫", "叶"),
+        },
+        {
+            "name": "库存采购建议",
+            "turns": [
+                "草莓下周要定植，我库存里地膜可能不够，帮我估一下要准备哪些物资。",
+                "总共20块地，每块1.5亩。",
+                "预算先控制在8000元以内。",
+                "按这个生成采购计划并保存。",
+            ],
+            "must_any": ("20", "1.5", "8000", "草莓"),
+        },
+        {
+            "name": "天气与计划调整",
+            "turns": [
+                "如果太仓这两天一直下雨，草莓定植计划怎么调？",
+                "我原计划9月20号开始，分10块地先做。",
+                "那剩下10块要不要推迟？",
+                "刚才失败了，再试一次给我完整方案。",
+            ],
+            "must_any": ("太仓", "草莓", "10"),
+        },
+    ]
+
+
+def random_strict_assertions(
+    *,
+    scenario_name: str,
+    turn_index: int,
+    user_message: str,
+    response: str,
+) -> None:
+    write_turn_words = ("创建", "保存", "记录", "记到", "写入")
+    if any(word in user_message for word in write_turn_words):
+        assert_not_direct_write_claim(response)
+        assert_contains_any(
+            response,
+            ("确认", "待确认", "不能", "无法", "未实际", "没有实际"),
+            f"{scenario_name} 第{turn_index}轮写入意图应要求确认或说明未执行",
+        )
+
+
+def run_turns(
+    *,
+    provider: dict,
+    model: dict,
+    title: str,
+    turns: list[str],
+    strict: bool,
+    must_any: tuple[str, ...] = (),
+    fixed_assertions: bool = False,
+) -> None:
+    print(f"\n=== {title} ===")
     messages = [
         {
             "role": "system",
             "content": (
                 "你是 farm-manager 的真实多轮 AI smoke 测试助手。"
                 "必须保留多轮上下文。针对种植规划，事实来源要区分用户输入和派生计算；"
-                "如果用户表达创建/写入意图，只能说明需要先生成待确认操作，不能宣称已创建、已保存或已写入。"
+                "如果用户表达创建/写入/记录/保存意图，只能说明需要先生成待确认操作，"
+                "不能宣称已创建、已保存、已记录或已写入真实系统。"
             ),
         }
     ]
-    turns = [
-        "我在太仓新租了30亩地，每块地1.5亩，秋季种草莓，帮我规划下茬口。",
-        "那如果天气暂时查不到呢？",
-        "按这个创建。",
-        "刚才失败了，再试一下。",
-    ]
-    strict = os.environ["STRICT"] == "1"
+    transcript = ""
     for index, user_message in enumerate(turns, start=1):
         print(f"\n--- Turn {index} user ---")
         print(user_message)
@@ -186,9 +293,58 @@ def main() -> None:
         response = post_chat_completion(provider=provider, model=model, messages=messages)
         print(f"--- Turn {index} assistant ---")
         print(response)
-        if strict:
+        transcript += "\n" + response
+        if strict and fixed_assertions:
             strict_assertions(index, response)
+        if strict and not fixed_assertions:
+            random_strict_assertions(
+                scenario_name=title,
+                turn_index=index,
+                user_message=user_message,
+                response=response,
+            )
         messages.append({"role": "assistant", "content": response})
+    if strict and must_any and not any(token in transcript for token in must_any):
+        fail(f"{title} 未保留关键上下文: {must_any}")
+
+
+def main() -> None:
+    provider, model = load_local_provider()
+    seed = os.environ["SMOKE_SEED"] or datetime.now().strftime("%H%M%S")
+    random.seed(int(seed))
+    print(
+        f"Local LLM smoke: provider={provider['name']} "
+        f"model={model['id']} base_url={provider['base_url']} "
+        f"mode={os.environ['SMOKE_MODE']} seed={seed}"
+    )
+    turns = [
+        "我在太仓新租了30亩地，每块地1.5亩，秋季种草莓，帮我规划下茬口。",
+        "那如果天气暂时查不到呢？",
+        "按这个创建。",
+        "刚才失败了，再试一下。",
+    ]
+    strict = os.environ["STRICT"] == "1"
+    if os.environ["SMOKE_MODE"] == "random":
+        scenarios = random_scenarios()
+        scenario_count = min(int(os.environ["SCENARIO_COUNT"]), len(scenarios))
+        for scenario in random.sample(scenarios, scenario_count):
+            run_turns(
+                provider=provider,
+                model=model,
+                title=scenario["name"],
+                turns=scenario["turns"],
+                strict=strict,
+                must_any=scenario["must_any"],
+            )
+    else:
+        run_turns(
+            provider=provider,
+            model=model,
+            title="固定 planting_plan 回归",
+            turns=turns,
+            strict=strict,
+            fixed_assertions=True,
+        )
     print("\nPASS: 真实 local 模型多轮 smoke 完成")
 
 
