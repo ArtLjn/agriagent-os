@@ -519,6 +519,42 @@ async def test_task_state_updater_records_crop_setup_pending_plan(db_session) ->
     assert task.missing_information_json == []
 
 
+async def test_task_state_marks_crop_setup_complete_after_pending_confirm(
+    db_session,
+) -> None:
+    store = AgentTaskStateStore(db_session)
+    task = store.upsert_active_task(
+        farm_id=1,
+        user_id="test-user-001",
+        session_id="sess-task",
+        task_type="crop_cycle_setup",
+        goal="保留 新建独立茬口",
+        status=TaskStateStatus.ACTIVE,
+    )
+
+    result = await update_task_state_after_turn(
+        db_session,
+        _turn(
+            user_input="确认",
+            assistant_reply="已执行：\n1. 芒果模板已创建\n2. 已创建茬口：夏季芒果",
+            pending_decision_handled=True,
+        ),
+    )
+
+    db_session.refresh(task)
+    assert result.action == "completed"
+    assert result.reason == "pending_plan_completed"
+    assert task.status == TaskStateStatus.COMPLETED.value
+    assert (
+        store.get_active_task(
+            farm_id=1,
+            user_id="test-user-001",
+            session_id="sess-task",
+        )
+        is None
+    )
+
+
 async def test_task_state_recovers_from_fresh_db_session(db_session) -> None:
     await update_task_state_after_turn(
         db_session,
