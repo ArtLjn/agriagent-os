@@ -228,6 +228,17 @@ def test_unknown_farm_read_uses_model_choice_read() -> None:
     assert decision.frames[0].intent == "model_choice_read"
 
 
+def test_retry_control_word_without_pending_binds_no_tools() -> None:
+    decision = SkillRouter().route(
+        "重试",
+        [_tool("get_farm_status"), _tool("manage_cost"), _tool("manage_crop_cycle")],
+    )
+
+    assert decision.selected_tools == []
+    assert decision.fallback == "no_tools"
+    assert decision.fallback_reason == "no_candidate_tools"
+
+
 @pytest.mark.parametrize("message", ["明天苏州什么天气", "今天天气", "明天会下雨吗"])
 def test_weather_query_selects_weather_tool(message: str) -> None:
     tools = [_tool("weather"), _tool("get_farm_status")]

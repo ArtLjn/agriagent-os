@@ -713,6 +713,13 @@ def _operation_prior(candidate: ToolCandidate, query_terms: set[str]) -> float:
         and query_terms & _WORK_ORDER_CREATE_TERMS
     ):
         return 0.16 + alias_prior
+    if (
+        candidate.capability == "manage_work_orders"
+        and candidate.operation == "create_work_order"
+        and query_terms & _FARM_LOG_CREATE_TERMS
+        and not (query_terms & _WORK_ORDER_CREATE_TERMS)
+    ):
+        return -0.20 + alias_prior
     if candidate.capability == "manage_planting_units" and (
         query_terms & _WORK_ORDER_CREATE_TERMS
     ):

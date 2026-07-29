@@ -291,6 +291,28 @@ def test_labor_wage_record_prior_overrides_settlement_vector_noise() -> None:
     ] < 0
 
 
+def test_completed_irrigation_log_beats_work_order_vector_noise() -> None:
+    candidates = [
+        candidate
+        for candidate in _operation_candidates(["manage_work_orders", "manage_farm_logs"])
+        if candidate.operation in {"create_work_order", "create_log", "manage_log"}
+    ]
+    vector_scores = {
+        "manage_work_orders.create_work_order": 0.6532,
+        "manage_farm_logs.create_log": 0.0,
+        "manage_farm_logs.manage_log": 0.0,
+    }
+
+    result = HybridOperationRetriever(
+        vector_search=lambda _query, _candidates: vector_scores,
+    ).retrieve("我今天给水稻浇水了", candidates, limit=5)
+
+    assert result.top_candidates[0]["route"] == "manage_farm_logs.create_log"
+    assert result.evidence["manage_work_orders.create_work_order"][
+        "operation_prior"
+    ] < 0
+
+
 def test_hybrid_retriever_never_calls_vector_search_without_index(caplog) -> None:
     candidates = _operation_candidates(["manage_cost", "manage_workers"])
 

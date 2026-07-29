@@ -46,6 +46,8 @@ class RouterPolicy:
         "什么活",
         "建议安排",
         "适合干",
+        "重试",
+        "再试一次",
     )
     _write_action_hints = (
         "买",
