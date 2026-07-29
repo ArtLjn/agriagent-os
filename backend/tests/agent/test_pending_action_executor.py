@@ -77,21 +77,35 @@ async def test_handle_pending_legacy_replay_records_resolved_alias_trace():
         {"amount": 100, "category": "化肥", "record_type": "cost"},
         original_input="买了100块化肥",
     )
-    tool = SimpleNamespace(
-        name="create_cost_record",
-        ainvoke=AsyncMock(return_value="已记账：化肥 100元"),
-        skill_metadata=SimpleNamespace(cache_invalidation=[]),
+    skill = SimpleNamespace(
+        execute=AsyncMock(
+            return_value=SimpleNamespace(status="success", reply="已记账：化肥 100元")
+        )
+    )
+    registry = SimpleNamespace(
+        get=lambda name: skill if name == "manage_cost" else None,
     )
     collector = MagicMock()
 
     with (
         patch(
-            "app.agent.executor.pending_actions.get_langchain_tools",
-            return_value=[tool],
+            "app.agent.executor.skill_raw_executor.get_skill_registry",
+            return_value=registry,
         ),
         patch(
-            "app.agent.executor.pending_actions.get_collector",
+            "app.agent.executor.skill_raw_executor.build_skill_context",
+            return_value=SimpleNamespace(),
+        ),
+        patch(
+            "app.agent.executor.skill_raw_executor.get_collector",
             return_value=collector,
+        ),
+        patch(
+            "app.agent.executor.pending_actions._get_metadata_cache_groups",
+            return_value=[],
+        ),
+        patch(
+            "app.agent.executor.pending_actions._clear_cache_groups", return_value=[]
         ),
     ):
         decision = await handle_pending_action(
@@ -101,14 +115,13 @@ async def test_handle_pending_legacy_replay_records_resolved_alias_trace():
         )
 
     assert decision.status == "confirmed"
-    tool.ainvoke.assert_awaited_once_with(
-        {
-            "amount": 100,
-            "category": "化肥",
-            "record_type": "cost",
-            "operation": "create_record",
-        }
-    )
+    skill.execute.assert_awaited_once()
+    assert skill.execute.await_args.args[0] == {
+        "amount": 100,
+        "category": "化肥",
+        "record_type": "cost",
+        "operation": "create_record",
+    }
     output_data = collector.record.call_args.kwargs["output_data"]
     assert output_data["legacy_tool_name"] == "create_cost_record"
     assert output_data["resolved_capability"] == "manage_cost"

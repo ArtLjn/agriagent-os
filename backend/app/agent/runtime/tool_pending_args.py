@@ -248,6 +248,12 @@ def _normalize_settle_labor_payment_args(args: dict, original_input: str) -> Non
         args.pop("worker_name", None)
         args.pop("operation", None)
         args["scope"] = "all_unpaid_labor"
+        return
+    if args.get("scope") in (None, "") and any(
+        args.get(key) not in (None, "")
+        for key in ("worker", "worker_name", "worker_id")
+    ):
+        args["scope"] = "worker"
 
 
 def _is_labor_payment_settle_call(name: str, args: dict) -> bool:

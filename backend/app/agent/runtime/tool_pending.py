@@ -914,13 +914,16 @@ def _pending_storage_args(
     args: dict,
     permission_decision: _PermissionDecision,
 ) -> dict | None:
-    if (
-        not args.get("operation")
-        and name in {"manage_cost", "manage_crop_cycle", "manage_farm_logs"}
-        and permission_decision.capability == name
-        and permission_decision.operation_risk in {"write_confirm", "write_high"}
-    ):
-        return dict(args or {})
+    risk = permission_decision.operation_risk
+    if args.get("operation") or risk not in ("write_confirm", "write_high"):
+        return None
+    capability = permission_decision.capability
+    if capability == name:
+        if name in ("manage_cost", "manage_crop_cycle", "manage_farm_logs"):
+            return dict(args or {})
+        return None
+    if capability == "manage_cost" and permission_decision.operation == "create_record":
+        return {**dict(args or {}), "operation": permission_decision.operation}
     return None
 
 

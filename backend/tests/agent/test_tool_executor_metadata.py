@@ -731,13 +731,31 @@ async def test_all_registry_write_operations_pending_then_confirm_multiturn(
             patch(
                 "app.agent.runtime.tool_pending.ReflectorService",
             ) as pending_reflector_cls,
+            patch(
+                "app.infra.pending_actions.pending_plan_service.create_pending_plan",
+                return_value=SimpleNamespace(plan_id=f"plan-{session_id}"),
+            ),
         ):
             pending_reflector_cls.return_value.check_write_plan.return_value = (
+                _PassReflection()
+            )
+            pending_reflector_cls.return_value.check_pending_plan.return_value = (
                 _PassReflection()
             )
             result = await _parallel_tool_node(state)
 
         pending = get_pending(1, session_id=session_id)
+        if capability_name == "manage_crop_cycle" and operation_name == "create_cycle":
+            plan = pending_actions.get_pending_plan(1, session_id=session_id)
+            assert pending is None
+            assert plan is not None
+            assert [step.tool_name for step in plan.steps] == [
+                "manage_crop_templates",
+                "manage_crop_cycle",
+            ]
+            assert plan.steps[1].params["operation"] == operation_name
+            assert "[PENDING_ACTION]" in result["messages"][0].content
+            return
         assert pending is not None
         assert pending.skill_name == tool_name
         assert pending.params["operation"] == operation_name

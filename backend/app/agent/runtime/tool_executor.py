@@ -99,6 +99,8 @@ def _validation_error_message(
     collector,
 ) -> ToolMessage | None:
     """执行 Pydantic 参数校验，失败时反馈 LLM 自纠错。"""
+    if permission_decision.requires_confirmation:
+        return None
     if not (tool and hasattr(tool, "args_schema") and tool.args_schema):
         return None
     try:
