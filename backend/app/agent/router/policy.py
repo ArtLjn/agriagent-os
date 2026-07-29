@@ -298,6 +298,7 @@ class RouterPolicy:
             state.selected,
             frames,
         )
+        forced_tools = _write_confirm_tool_names(state.selected)
 
         return RouterDecision(
             frames=frames,
@@ -315,6 +316,8 @@ class RouterPolicy:
                 state.selected,
                 state.rejected_candidates,
             ),
+            tool_choice="required" if forced_tools else "auto",
+            force_binding=forced_tools,
         )
 
     def _high_risk_decision(
@@ -435,3 +438,9 @@ class RouterPolicy:
     @staticmethod
     def _has_any(message: str, hints: tuple[str, ...]) -> bool:
         return any(hint in message for hint in hints)
+
+
+def _write_confirm_tool_names(candidates: list[ToolCandidate]) -> tuple[str, ...]:
+    return tuple(
+        candidate.name for candidate in candidates if candidate.risk == "write_confirm"
+    )

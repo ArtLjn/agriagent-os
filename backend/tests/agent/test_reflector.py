@@ -399,6 +399,39 @@ def test_no_tool_write_success_claim_trace_includes_plan_draft_evidence(
     assert collector.records[0]["input_data"]["plan_draft"] == plan_draft
 
 
+def test_no_tool_write_success_blocks_selected_write_tool_without_call() -> None:
+    service = ReflectorService(policy=ReflectionPolicy(enabled=True))
+    plan_draft = {
+        "route_type": "write_pending_action",
+        "steps": [
+            {
+                "skill_name": "manage_work_orders",
+                "params": {"operation": "create_work_order"},
+            }
+        ],
+        "validation": {"status": "valid"},
+    }
+
+    result = service.check_tool_response(
+        tool_messages=[],
+        final_text="这就为李四好和王阿毛创建今天的芒果苗期作业单。",
+        selected_tools=["manage_work_orders"],
+        tool_calls=[],
+        trace_metadata={
+            "user_message": "今天就安排他们去芒果地吧",
+            "plan_draft": plan_draft,
+            "pending_created": False,
+        },
+    )
+
+    assert result.decision == ReflectionDecision.FALLBACK_RESPONSE
+    assert result.issues[0].code == "no_tool_write_success_claim"
+    assert result.issues[0].evidence["selected_tools"] == ["manage_work_orders"]
+    assert result.issues[0].evidence["plan_draft"]["route_type"] == (
+        "write_pending_action"
+    )
+
+
 def test_no_tool_write_success_guard_allows_safe_non_write_replies() -> None:
     service = ReflectorService(policy=ReflectionPolicy(enabled=True))
 
