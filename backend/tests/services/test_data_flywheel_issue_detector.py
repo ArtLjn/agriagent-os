@@ -278,3 +278,149 @@ def test_detects_missing_tool_selection_for_realtime_query() -> None:
             "suggested_label": "wrong_tool_selection",
         }
     ]
+
+
+def test_detects_json_leak_with_final_context_evidence() -> None:
+    candidates = detect_issue_candidates(
+        user_input="30 除以 1.5 等于多少？",
+        assistant_reply="已拿到工具结果，但最终回复格式异常。",
+        selected_tools=["calculate_arithmetic"],
+        events=[
+            {
+                "event_type": "trace.node.recorded",
+                "payload": {
+                    "request_id": "req-eda446a0",
+                    "session_id": "sess-eda446a0",
+                    "node_type": "final_context",
+                    "node_name": "build",
+                    "output_data": {
+                        "tool_result_count": 1,
+                        "dropped_tool_call_history": True,
+                        "tool_results": [
+                            {
+                                "tool_name": "calculate_arithmetic",
+                                "status": "success",
+                            }
+                        ],
+                    },
+                },
+            },
+            {
+                "event_type": "trace.node.recorded",
+                "payload": {
+                    "request_id": "req-eda446a0",
+                    "session_id": "sess-eda446a0",
+                    "node_type": "response",
+                    "node_name": "final_reply_data_source",
+                    "output_data": {"data_source": "tool:calculate_arithmetic"},
+                },
+            },
+            {
+                "event_type": "trace.node.recorded",
+                "payload": {
+                    "request_id": "req-eda446a0",
+                    "session_id": "sess-eda446a0",
+                    "node_type": "output_guard",
+                    "node_name": "final_json_leak_check",
+                    "output_data": {
+                        "passed": False,
+                        "leak_type": "raw_json_object",
+                        "action": "fail_closed",
+                        "retry_count": 1,
+                    },
+                },
+            },
+        ],
+        pending_lifecycle=[],
+    )
+
+    json_candidate = next(
+        candidate
+        for candidate in candidates
+        if candidate["type"] == "json_leak_detected"
+    )
+    assert json_candidate["suggested_label"] == "json_leak_detected"
+    assert "req-eda446a0" in json_candidate["evidence"]
+    assert "sess-eda446a0" in json_candidate["evidence"]
+    assert "30 除以 1.5" in json_candidate["evidence"]
+    assert "最终回复格式异常" in json_candidate["evidence"]
+    assert "raw_json_object/fail_closed/retry=1" in json_candidate["evidence"]
+    assert "calculate_arithmetic(success)" in json_candidate["evidence"]
+    assert "final_context=tools:1 dropped:True" in json_candidate["evidence"]
+    assert "data_source=tool:calculate_arithmetic" in json_candidate["evidence"]
+
+
+def test_detects_tool_result_discarded_reply_with_tool_summary() -> None:
+    candidates = detect_issue_candidates(
+        user_input="30 除以 1.5 等于多少？",
+        assistant_reply="需要先调用工具获取真实数据，请稍后重试。",
+        selected_tools=["calculate_arithmetic"],
+        events=[
+            {
+                "event_type": "tool.call.finished",
+                "payload": {"tool_name": "calculate_arithmetic", "result": 20},
+            },
+            {
+                "event_type": "trace.node.recorded",
+                "payload": {
+                    "request_id": "req-tool",
+                    "session_id": "sess-tool",
+                    "node_type": "final_context",
+                    "node_name": "build",
+                    "output_data": {
+                        "tool_result_count": 1,
+                        "dropped_tool_call_history": True,
+                        "tool_results": [
+                            {
+                                "tool_name": "calculate_arithmetic",
+                                "status": "success",
+                            }
+                        ],
+                    },
+                },
+            },
+        ],
+        pending_lifecycle=[],
+    )
+
+    discarded = next(
+        candidate
+        for candidate in candidates
+        if candidate["type"] == "tool_result_discarded_reply"
+    )
+    assert discarded["severity"] == "high"
+    assert "req-tool" in discarded["evidence"]
+    assert "calculate_arithmetic(success)" in discarded["evidence"]
+
+
+def test_detects_trace_log_tool_choice_mismatch() -> None:
+    candidates = detect_issue_candidates(
+        user_input="查一下天气",
+        assistant_reply="今天适合浇水。",
+        selected_tools=[],
+        events=[
+            {
+                "event_type": "trace.node.recorded",
+                "payload": {
+                    "request_id": "req-mismatch",
+                    "session_id": "sess-mismatch",
+                    "node_type": "llm_call",
+                    "node_name": "fake-model",
+                    "input_data": {
+                        "tool_choice": "none",
+                        "app_log_tool_choice": "auto",
+                    },
+                },
+            }
+        ],
+        pending_lifecycle=[],
+    )
+
+    mismatch = next(
+        candidate
+        for candidate in candidates
+        if candidate["type"] == "trace_log_inconsistent"
+    )
+    assert mismatch["severity"] == "medium"
+    assert "trace_tool_choice=none log_tool_choice=auto" in mismatch["reason"]
+    assert "req-mismatch" in mismatch["evidence"]

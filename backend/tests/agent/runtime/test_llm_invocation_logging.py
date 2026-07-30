@@ -25,9 +25,15 @@ async def test_llm_invocation_logs_started_and_timeout(caplog) -> None:
     raw_llm = _SlowLlm()
 
     with (
-        patch("app.agent.runtime.llm_invocation._build_circuit_key", return_value="slow/model"),
+        patch(
+            "app.agent.runtime.llm_invocation._build_circuit_key",
+            return_value="slow/model",
+        ),
         patch("app.agent.runtime.llm_invocation._record_llm_failure"),
-        patch("app.agent.runtime.llm_invocation._llm_attempt_timeout_seconds", return_value=0.01),
+        patch(
+            "app.agent.runtime.llm_invocation._llm_attempt_timeout_seconds",
+            return_value=0.01,
+        ),
         caplog.at_level(logging.INFO, logger="app.agent.runtime.llm_invocation"),
     ):
         with pytest.raises(TimeoutError):
@@ -56,5 +62,5 @@ async def test_llm_invocation_logs_started_and_timeout(caplog) -> None:
     assert trace_call["input_data"]["provider"] == "slow"
     assert trace_call["input_data"]["model"] == "slow-model"
     assert trace_call["input_data"]["role"] == "lightweight"
-    assert trace_call["input_data"]["tool_choice"] == "none"
+    assert trace_call["input_data"]["tool_choice"] == "auto"
     assert trace_call["output_data"]["error"]["code"] == "llm_call_timeout"

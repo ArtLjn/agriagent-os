@@ -120,12 +120,19 @@ def _tool_selection_reason(tool_choice: str, forced: set[str]) -> str:
     return "读工具允许 LLM auto 选择，不强制 tool_call"
 
 
-def _record_final_reply_data_source_trace(*, collector, messages: list) -> None:
+def _record_final_reply_data_source_trace(
+    *,
+    collector,
+    messages: list,
+    tool_results: list | None = None,
+) -> None:
     """记录 final_reply_data_source trace。失败静默。"""
     try:
         started_at = _time.perf_counter()
         wall_started_at = _time.time()
-        last_tool_messages_for_trace = _tool_messages_for_data_source(messages)
+        last_tool_messages_for_trace = _tool_results_for_data_source(
+            tool_results
+        ) or _tool_messages_for_data_source(messages)
         collector.record(
             node_type="response",
             node_name="final_reply_data_source",
@@ -136,6 +143,15 @@ def _record_final_reply_data_source_trace(*, collector, messages: list) -> None:
         )
     except Exception:
         return
+
+
+def _tool_results_for_data_source(tool_results: list | None) -> list[dict] | None:
+    """从 FinalResponseRequest.tool_results 提取 final reply 真实依赖的工具名。"""
+    if not tool_results:
+        return None
+    last_tool_result = tool_results[-1]
+    tool_name = str(getattr(last_tool_result, "tool_name", "") or "unknown")
+    return [{"name": tool_name}]
 
 
 def _route_tools(
@@ -717,17 +733,18 @@ def _direct_response_summary(
     model_name: str,
 ) -> tuple[AIMessage, dict]:
     response = _ensure_non_empty_response(response, model_name, selected_tool_names)
-    response = apply_post_tool_reflection(
-        response=response,
-        tool_messages=normal_msgs,
-        selected_tool_names=selected_tool_names,
-        farm_id=farm_id,
-        session_id=session_id,
-        intent=intent,
-        user_message=user_msg,
-        plan_draft=plan_draft_payload,
-        fact_sources=_fact_sources_from_plan_draft_payload(plan_draft_payload),
-    )
+    if not _should_skip_post_tool_reflection(response):
+        response = apply_post_tool_reflection(
+            response=response,
+            tool_messages=normal_msgs,
+            selected_tool_names=selected_tool_names,
+            farm_id=farm_id,
+            session_id=session_id,
+            intent=intent,
+            user_message=user_msg,
+            plan_draft=plan_draft_payload,
+            fact_sources=_fact_sources_from_plan_draft_payload(plan_draft_payload),
+        )
     content = response.content or ""
     logger.info("LLM 直接回复 | reply_len=%d | model=%s", len(content), model_name)
     return response, {
@@ -736,6 +753,22 @@ def _direct_response_summary(
         "reply_preview": safe_preview(str(content), max_chars=1000),
         "reply_len": len(str(content)),
     }
+
+
+def _is_output_guard_fail_closed(response: AIMessage) -> bool:
+    output_guard = (response.response_metadata or {}).get("output_guard")
+    if not isinstance(output_guard, dict):
+        return False
+    return output_guard.get("action") == "fail_closed"
+
+
+def _should_skip_post_tool_reflection(response: AIMessage) -> bool:
+    if _is_output_guard_fail_closed(response):
+        return True
+    final_response = (response.response_metadata or {}).get("final_response")
+    if not isinstance(final_response, dict):
+        return False
+    return final_response.get("boundary") == "final_response"
 
 
 def _fact_sources_from_plan_draft_payload(plan_draft_payload: dict) -> dict:
@@ -776,7 +809,7 @@ def _llm_trace_input(
         "model": model_name,
         "role": model_role,
         "selected_tools": list(selected_tool_names),
-        "tool_choice": tool_choice if selected_tool_names else "none",
+        "tool_choice": tool_choice,
         "message_count": message_count,
         "timeout_seconds": _llm_timeout_seconds_for_trace(),
     }

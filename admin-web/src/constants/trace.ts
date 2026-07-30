@@ -7,6 +7,8 @@ export const NODE_TYPE_COLORS: Record<string, string> = {
   prompt_render: '#1890ff',  // 蓝色 — Prompt 渲染
   llm_call: '#722ed1',       // 紫色 — LLM 调用
   skill_call: '#52c41a',     // 绿色 — Skill 执行
+  final_context: '#06b6d4',   // 青色 — Final 上下文边界
+  output_guard: '#faad14',    // 黄色 — 输出防泄漏
   error: '#ff4d4f',          // 红色 — 错误节点
 };
 
@@ -22,6 +24,8 @@ export const NODE_TYPE_LABELS: Record<string, string> = {
   prompt_render: 'Prompt 渲染',
   llm_call: 'LLM 调用',
   skill_call: 'Skill 执行',
+  final_context: 'Final 上下文',
+  output_guard: '输出防泄漏',
   error: '错误',
 };
 

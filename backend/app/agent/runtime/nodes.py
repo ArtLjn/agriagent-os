@@ -11,6 +11,7 @@ from app.agent.runtime.llm_node_steps import (
     _invoke_and_repair_response,
     _record_response_and_result,
 )
+from app.agent.runtime.final_response import FinalContextBuilder
 from app.agent.runtime.llm_prompt import _compose_system_text, _prepare_context_bundle
 from app.agent.runtime.messages import (
     _find_last_human_message,
@@ -163,6 +164,10 @@ def _bind_llm_for_tools(
         if tool_choice == "required":
             kwargs["tool_choice"] = "required"
         return raw_llm.bind_tools(selected_tools, **kwargs)
+    if tool_choice == "none":
+        if log_no_tools and has_tool_results:
+            logger.info("工具结果已返回，进入最终回复生成阶段（显式禁用工具）")
+        return raw_llm.bind_tools([], tool_choice="none")
     if log_no_tools:
         if has_tool_results:
             logger.info("工具结果已返回，进入最终回复生成阶段（不再绑定工具）")
@@ -430,7 +435,7 @@ def _prepare_llm_binding(
     raw_llm = get_llm(role=model_role)
     logger.info("模型路由 | intent=%s | role=%s", intent, model_role)
     selected_tools = [t for t in tools if t.name in selected_names]
-    tool_choice = router_decision.tool_choice
+    tool_choice = "none" if has_tool_results else router_decision.tool_choice
     if should_record_router_trace:
         _node_helpers._record_tool_call_forced_trace(
             collector=collector,
@@ -497,6 +502,16 @@ async def _prepare_llm_prompt(
         find_last_human_message_func=_find_last_human_message,
         system_prompt_duration_ms=system_prompt_duration_ms,
     )
+    final_response_request = None
+    if has_tool_results:
+        final_response_request = FinalContextBuilder().build(
+            state=state,
+            system_text=system_text,
+            context_bundle=context_bundle,
+            collector=route_context["collector"],
+        )
+        system, messages = final_response_request.to_llm_input()
+        input_summary = final_response_request.user_query[:200]
     return {
         "context_bundle": context_bundle,
         "farm_ctx": farm_ctx,
@@ -504,6 +519,7 @@ async def _prepare_llm_prompt(
         "system": system,
         "messages": messages,
         "input_summary": input_summary,
+        "final_response_request": final_response_request,
     }
 
 

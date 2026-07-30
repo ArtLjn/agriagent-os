@@ -42,7 +42,9 @@ from app.platforms.shared.judge_service import (
     build_judge_input,
     normalize_judge_output,
 )
-from app.domains.conversation.session_debug_export_service import build_session_debug_export
+from app.domains.conversation.session_debug_export_service import (
+    build_session_debug_export,
+)
 
 ALLOWED_LABELS = {
     "good_reply",
@@ -57,6 +59,9 @@ ALLOWED_LABELS = {
     "needs_regression",
     "off_topic",
     "sensitive_info_leak",
+    "json_leak_detected",
+    "tool_result_discarded_reply",
+    "trace_log_inconsistent",
     "unclear_intent",
     "not_actionable",
 }

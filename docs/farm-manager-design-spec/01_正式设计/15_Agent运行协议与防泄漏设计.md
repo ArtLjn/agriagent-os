@@ -179,7 +179,9 @@ Final Agent 返回后，Output Guard 检查：
 - 原生 `response.tool_calls` 非空。
 - 文本含 `"tool_calls"`、`"function_call"`、`"arguments"`。
 - 文本整体是 JSON 对象或 JSON 数组。
+- 文本夹带 JSON 对象或 JSON 数组片段，例如 `结果如下：{"answer":"20"}`。
 - 文本含疑似工具调用对象：`{"name": "...", "parameters": ...}`。
+- 文本声称仍需或无需调用工具，例如“需要先调用工具”“无需再调用工具”；final 阶段不得暴露工具协议决策。
 - 文本含兼容模型常见工具协议片段：`<tool_call>`、`</tool_call>`。
 
 ### 5.3 处理策略
@@ -259,6 +261,7 @@ Final system prompt 固定包含：
 4. 模型输出工具 JSON 时会重试或 fail-closed。
 5. 有工具结果时不会返回“需要先调用工具”。
 6. trace 中真实记录 `tool_choice=none`。
+7. JSON 数组、夹带 JSON 片段和“不需要/无需/不用调用工具”变体会被 Output Guard 拦截。
 
 推荐用 `eda446a0` 这类 case 做回归种子：用户要求规划茬口，先计算地块数，最终回复应基于 `30 / 1.5 = 20` 继续给出规划或说明还缺少哪些真实数据。
 

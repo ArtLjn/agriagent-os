@@ -720,6 +720,134 @@ describe('TraceMonitor query 初始化', () => {
     expect(screen.queryByText('Context 摘要')).not.toBeInTheDocument();
   });
 
+  it('展示 Final 防泄漏诊断并复制审计追踪块', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    mockedGetTimeline.mockResolvedValueOnce({
+      request_id: 'req-1',
+      rounds: [
+        {
+          round_index: 0,
+          nodes: [
+            {
+              node_type: 'final_context',
+              node_name: 'build',
+              duration_ms: 4,
+              status: 'success',
+              token_usage: null,
+              start_time: null,
+              error_message: null,
+              input_data: {
+                user_query: '30 除以 1.5 等于多少？',
+              },
+              output_data: {
+                source_message_count: 3,
+                final_message_count: 1,
+                tool_result_count: 1,
+                dropped_tool_call_history: true,
+                tool_results: [
+                  {
+                    tool_name: 'calculate_arithmetic',
+                    status: 'success',
+                    facts: ['result: 20'],
+                  },
+                ],
+              },
+            },
+            {
+              node_type: 'output_guard',
+              node_name: 'final_json_leak_check',
+              duration_ms: 2,
+              status: 'success',
+              token_usage: null,
+              start_time: null,
+              error_message: null,
+              input_data: { boundary: 'final_response' },
+              output_data: {
+                passed: false,
+                leak_type: 'raw_json_object',
+                action: 'fail_closed',
+                retry_count: 1,
+              },
+            },
+            {
+              node_type: 'response',
+              node_name: 'final_reply_data_source',
+              duration_ms: 1,
+              status: 'success',
+              token_usage: null,
+              start_time: null,
+              error_message: null,
+              input_data: { has_tool_results: true },
+              output_data: {
+                data_source: 'tool:calculate_arithmetic',
+                has_tool_results: true,
+              },
+            },
+            {
+              node_type: 'agent_response',
+              node_name: 'final_reply',
+              duration_ms: 3,
+              status: 'success',
+              token_usage: null,
+              start_time: null,
+              error_message: null,
+              input_data: null,
+              output_data: {
+                reason: 'output_guard_fail_closed',
+                reply_preview: '已拿到工具结果，但最终回复格式异常。',
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/dev/traces?request_id=req-1']}>
+        <TraceMonitor />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('button', { name: '打开节点 build' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '打开节点 final_json_leak_check' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '打开节点 build' }));
+    expect(await screen.findByText('Final 上下文边界')).toBeInTheDocument();
+    expect(screen.getByText('dropped_tool_call_history: true')).toBeInTheDocument();
+    expect(screen.getAllByText('calculate_arithmetic').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('success').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('result: 20')).toBeInTheDocument();
+    expect(screen.getByText('未记录')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '打开节点 final_json_leak_check' }));
+    expect(await screen.findByText('最终回复防泄漏')).toBeInTheDocument();
+    expect(screen.getByText('raw_json_object')).toBeInTheDocument();
+    expect(screen.getByText('fail_closed')).toBeInTheDocument();
+    expect(screen.getByText('retry_count')).toBeInTheDocument();
+    expect(screen.getAllByText('1').length).toBeGreaterThanOrEqual(1);
+
+    fireEvent.click(screen.getByRole('button', { name: /复制审计追踪/ }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalled();
+    });
+    const copied = String(writeText.mock.calls.at(-1)?.[0] ?? '');
+    expect(copied).toContain('工单 ID');
+    expect(copied).toContain('Run ID');
+    expect(copied).toContain('Trace ID');
+    expect(copied).toContain('边界');
+    expect(copied).toContain('SOP');
+    expect(copied).toContain('工具');
+    expect(copied).toContain('最终动作');
+    expect(copied).toContain('结果');
+    expect(copied).toContain('耗时');
+    expect(copied).toContain('calculate_arithmetic(success)');
+    expect(copied).toContain('tool:calculate_arithmetic');
+    expect(copied).toContain('最终动作: fail_closed');
+  });
+
   it('节点详情长 JSON 字段允许在面板内断行', async () => {
     const longPlanDraft = `plan_draft:${'x'.repeat(240)}`;
     mockedGetTimeline.mockResolvedValueOnce({

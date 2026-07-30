@@ -129,7 +129,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--turn-id", type=int, help="agent_turns.id")
     parser.add_argument("--farm-id", type=int, help="可选 farm_id 过滤")
     parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT, help="会话最近轮数")
-    parser.add_argument("--include-payload", action="store_true", help="展示输入输出摘要")
+    parser.add_argument(
+        "--include-payload", action="store_true", help="展示输入输出摘要"
+    )
     parser.add_argument("--json", action="store_true", help="输出 JSON")
     return parser.parse_args()
 
@@ -145,7 +147,9 @@ async def build_report(project: Path, args: argparse.Namespace) -> ChainReport:
             messages=[],
             events=[],
             errors=["缺少定位参数：请提供 --request-id、--session-id 或 --turn-id"],
-            suggestions=["先从日志或前端请求中复制 request_id；只有短 ID 时也可以按前缀查询。"],
+            suggestions=[
+                "先从日志或前端请求中复制 request_id；只有短 ID 时也可以按前缀查询。"
+            ],
         )
 
     backend = project / "backend"
@@ -154,7 +158,9 @@ async def build_report(project: Path, args: argparse.Namespace) -> ChainReport:
     mongo_data, mongo_status = await query_mongo(args)
 
     turns = mysql_data.get("turns", [])
-    trace_nodes = merge_nodes(mysql_data.get("trace_nodes", []), mongo_data.get("trace_nodes", []))
+    trace_nodes = merge_nodes(
+        mysql_data.get("trace_nodes", []), mongo_data.get("trace_nodes", [])
+    )
     messages = [*mysql_data.get("messages", []), *mongo_data.get("messages", [])]
     request_ids = collect_request_ids(turns, trace_nodes, messages, args.request_id)
     resolved = build_resolved_scope(turns, trace_nodes, messages, request_ids)
@@ -172,7 +178,9 @@ async def build_report(project: Path, args: argparse.Namespace) -> ChainReport:
     )
     return ChainReport(
         target=target_dict(args),
-        status=EvidenceStatus(mysql=mysql_status, mongo=mongo_status, events=events_status),
+        status=EvidenceStatus(
+            mysql=mysql_status, mongo=mongo_status, events=events_status
+        ),
         resolved=resolved,
         turns=turns,
         trace_nodes=trace_nodes,
@@ -193,7 +201,10 @@ def query_mysql(args: argparse.Namespace) -> tuple[dict[str, list[Any]], str]:
         from app.platforms.evaluation.trace_models import TraceRecord
         from app.shared.database import SessionLocal
     except Exception as exc:
-        return empty_data(), f"unavailable(code=mysql_import_failed,error={preview(str(exc))})"
+        return (
+            empty_data(),
+            f"unavailable(code=mysql_import_failed,error={preview(str(exc))})",
+        )
 
     db = SessionLocal()
     try:
@@ -246,7 +257,9 @@ def query_mysql(args: argparse.Namespace) -> tuple[dict[str, list[Any]], str]:
         db.close()
 
 
-def query_turn_rows(db: Any, AgentTurn: Any, args: argparse.Namespace, or_: Any) -> list[Any]:
+def query_turn_rows(
+    db: Any, AgentTurn: Any, args: argparse.Namespace, or_: Any
+) -> list[Any]:
     query = db.query(AgentTurn)
     if args.farm_id is not None:
         query = query.filter(AgentTurn.farm_id == args.farm_id)
@@ -254,7 +267,12 @@ def query_turn_rows(db: Any, AgentTurn: Any, args: argparse.Namespace, or_: Any)
         return query.filter(AgentTurn.id == args.turn_id).all()
     if args.request_id:
         return (
-            query.filter(or_(AgentTurn.request_id == args.request_id, AgentTurn.request_id.like(f"{args.request_id}%")))
+            query.filter(
+                or_(
+                    AgentTurn.request_id == args.request_id,
+                    AgentTurn.request_id.like(f"{args.request_id}%"),
+                )
+            )
             .order_by(AgentTurn.created_at.desc(), AgentTurn.id.desc())
             .limit(clamp(args.limit, 1, MAX_LIMIT))
             .all()
@@ -269,14 +287,25 @@ def query_turn_rows(db: Any, AgentTurn: Any, args: argparse.Namespace, or_: Any)
     return []
 
 
-def query_trace_rows(db: Any, TraceRecord: Any, args: argparse.Namespace, request_ids: list[str], or_: Any) -> list[Any]:
+def query_trace_rows(
+    db: Any,
+    TraceRecord: Any,
+    args: argparse.Namespace,
+    request_ids: list[str],
+    or_: Any,
+) -> list[Any]:
     query = db.query(TraceRecord)
     if args.farm_id is not None:
         query = query.filter(TraceRecord.farm_id == args.farm_id)
     if request_ids:
         query = query.filter(TraceRecord.request_id.in_(request_ids))
     elif args.request_id:
-        query = query.filter(or_(TraceRecord.request_id == args.request_id, TraceRecord.request_id.like(f"{args.request_id}%")))
+        query = query.filter(
+            or_(
+                TraceRecord.request_id == args.request_id,
+                TraceRecord.request_id.like(f"{args.request_id}%"),
+            )
+        )
     elif args.session_id:
         query = query.filter(TraceRecord.session_id == args.session_id)
     else:
@@ -293,26 +322,41 @@ def query_trace_rows(db: Any, TraceRecord: Any, args: argparse.Namespace, reques
     )
 
 
-def query_message_rows(db: Any, Conversation: Any, ConversationMessage: Any, turns: list[Any], args: argparse.Namespace) -> list[Any]:
+def query_message_rows(
+    db: Any,
+    Conversation: Any,
+    ConversationMessage: Any,
+    turns: list[Any],
+    args: argparse.Namespace,
+) -> list[Any]:
     message_ids = {
         value
         for turn in turns
-        for value in (getattr(turn, "user_message_id", None), getattr(turn, "assistant_message_id", None))
+        for value in (
+            getattr(turn, "user_message_id", None),
+            getattr(turn, "assistant_message_id", None),
+        )
         if value
     }
-    query = db.query(ConversationMessage).join(Conversation, Conversation.id == ConversationMessage.conversation_id)
+    query = db.query(ConversationMessage).join(
+        Conversation, Conversation.id == ConversationMessage.conversation_id
+    )
     if args.farm_id is not None:
         query = query.filter(Conversation.farm_id == args.farm_id)
     if message_ids:
         return (
             query.filter(ConversationMessage.id.in_(message_ids))
-            .order_by(ConversationMessage.created_at.asc(), ConversationMessage.id.asc())
+            .order_by(
+                ConversationMessage.created_at.asc(), ConversationMessage.id.asc()
+            )
             .all()
         )
     if args.session_id:
         return (
             query.filter(Conversation.session_id == args.session_id)
-            .order_by(ConversationMessage.created_at.desc(), ConversationMessage.id.desc())
+            .order_by(
+                ConversationMessage.created_at.desc(), ConversationMessage.id.desc()
+            )
             .limit(40)
             .all()
         )
@@ -325,10 +369,17 @@ async def query_mongo(args: argparse.Namespace) -> tuple[dict[str, list[Any]], s
 
         from app.shared.config import settings
     except Exception as exc:
-        return empty_data(), f"unavailable(code=mongo_import_failed,error={preview(str(exc))})"
+        return (
+            empty_data(),
+            f"unavailable(code=mongo_import_failed,error={preview(str(exc))})",
+        )
 
     config = getattr(settings, "mongodb", None)
-    if not config or not getattr(config, "enabled", False) or not getattr(config, "uri", ""):
+    if (
+        not config
+        or not getattr(config, "enabled", False)
+        or not getattr(config, "uri", "")
+    ):
         return empty_data(), "disabled(code=mongo_not_configured)"
 
     client = AsyncIOMotorClient(
@@ -363,7 +414,12 @@ async def mongo_trace_docs(db: Any, args: argparse.Namespace) -> list[dict[str, 
         filter_doc["sessionId"] = args.session_id
     else:
         return []
-    cursor = db["traceRecords"].find(filter_doc).sort([("requestId", 1), ("roundIndex", 1), ("startTime", 1)]).limit(300)
+    cursor = (
+        db["traceRecords"]
+        .find(filter_doc)
+        .sort([("requestId", 1), ("roundIndex", 1), ("startTime", 1)])
+        .limit(300)
+    )
     return await cursor.to_list(None)
 
 
@@ -460,7 +516,12 @@ async def mongo_message_docs(
     filter_doc.update(base_filter)
     if "farmId" not in filter_doc and farm_ids:
         filter_doc["farmId"] = {"$in": farm_ids}
-    cursor = db["conversationMessages"].find(filter_doc).sort([("createdAt", 1), ("mysqlId", 1)]).limit(40)
+    cursor = (
+        db["conversationMessages"]
+        .find(filter_doc)
+        .sort([("createdAt", 1), ("mysqlId", 1)])
+        .limit(40)
+    )
     return await cursor.to_list(None)
 
 
@@ -481,7 +542,11 @@ def read_events(
         )
     )
     if not event_files and args.session_id:
-        event_files = sorted((project / "data" / "agent-events").glob(f"dt=*/farm_id=*/session_id={args.session_id}/events.jsonl"))[-5:]
+        event_files = sorted(
+            (project / "data" / "agent-events").glob(
+                f"dt=*/farm_id=*/session_id={args.session_id}/events.jsonl"
+            )
+        )[-5:]
     if not event_files:
         return [], "missing(code=event_file_not_found)"
 
@@ -516,7 +581,9 @@ def read_event_file(
             message.turn_id,
             (
                 message.event_seq_range[0],
-                message.event_seq_range[1] if len(message.event_seq_range) > 1 else None,
+                message.event_seq_range[1]
+                if len(message.event_seq_range) > 1
+                else None,
             ),
         )
     request_set = set(request_ids)
@@ -529,7 +596,11 @@ def read_event_file(
             turn_id = doc.get("turn_id")
             if request_set and request_id not in request_set:
                 continue
-            if not request_set and seq_ranges and not in_any_seq_range(turn_id, seq, seq_ranges):
+            if (
+                not request_set
+                and seq_ranges
+                and not in_any_seq_range(turn_id, seq, seq_ranges)
+            ):
                 continue
             items.append(
                 EventItem(
@@ -543,7 +614,11 @@ def read_event_file(
     return items
 
 
-def in_any_seq_range(turn_id: int | None, seq: int | None, seq_ranges: dict[int | None, tuple[int | None, int | None]]) -> bool:
+def in_any_seq_range(
+    turn_id: int | None,
+    seq: int | None,
+    seq_ranges: dict[int | None, tuple[int | None, int | None]],
+) -> bool:
     if turn_id not in seq_ranges or seq is None:
         return False
     start, end = seq_ranges[turn_id]
@@ -565,10 +640,15 @@ def format_markdown(report: ChainReport, *, include_payload: bool) -> str:
     lines.append(f"- MySQL: {report.status.mysql}")
     lines.append(f"- Mongo: {report.status.mongo}")
     lines.append(f"- JSONL events: {report.status.events}")
-    lines.append(f"- trace_nodes: mysql={count_source(report.trace_nodes, 'mysql')} mongo={count_source(report.trace_nodes, 'mongo')}")
-    lines.append(f"- messages: mysql={count_source(report.messages, 'mysql')} mongo={count_source(report.messages, 'mongo')}")
+    lines.append(
+        f"- trace_nodes: mysql={count_source(report.trace_nodes, 'mysql')} mongo={count_source(report.trace_nodes, 'mongo')}"
+    )
+    lines.append(
+        f"- messages: mysql={count_source(report.messages, 'mysql')} mongo={count_source(report.messages, 'mongo')}"
+    )
     lines.extend(format_turns(report.turns))
     lines.extend(format_nodes(report.trace_nodes, include_payload=include_payload))
+    lines.extend(format_audit_block(report))
     lines.extend(format_messages(report.messages))
     lines.extend(format_events(report.events))
     lines.extend(["", "错误节点:"])
@@ -620,10 +700,117 @@ def format_hotspots(nodes: list[TraceNode]) -> list[str]:
     return [
         "",
         "耗时热点:",
-        "- 最慢节点: " + ", ".join(f"{item.node_type}.{item.node_name}={item.duration_ms or 0}ms" for item in slow),
-        "- 节点分布: " + ", ".join(f"{name}x{count}" for name, count in counts.most_common(8)),
+        "- 最慢节点: "
+        + ", ".join(
+            f"{item.node_type}.{item.node_name}={item.duration_ms or 0}ms"
+            for item in slow
+        ),
+        "- 节点分布: "
+        + ", ".join(f"{name}x{count}" for name, count in counts.most_common(8)),
         f"- 工具调用: {', '.join(skills) if skills else '无'}",
     ]
+
+
+def format_audit_block(report: ChainReport) -> list[str]:
+    final_context = find_node(report.trace_nodes, "final_context", "build")
+    output_guard = find_node(
+        report.trace_nodes, "output_guard", "final_json_leak_check"
+    )
+    data_source = find_node(report.trace_nodes, "response", "final_reply_data_source")
+    if final_context is None and output_guard is None and data_source is None:
+        return ["", "审计追踪: 未记录 final_response 审计节点"]
+
+    turn = report.turns[0] if report.turns else None
+    request_id = (
+        (final_context or output_guard or data_source).request_id
+        if (final_context or output_guard or data_source)
+        else None
+    )
+    final_output = output_dict(final_context)
+    guard_output = output_dict(output_guard)
+    source_output = output_dict(data_source)
+    tool_results = (
+        final_output.get("tool_results") if isinstance(final_output, dict) else None
+    )
+    lines = ["", "审计追踪:"]
+    lines.append(f"[审计追踪] {value_or_unknown(request_id)} final_response")
+    lines.append(f"工单 ID: {value_or_unknown(getattr(turn, 'id', None))}")
+    lines.append(f"Run ID: {value_or_unknown(request_id)}")
+    lines.append(f"Trace ID: {value_or_unknown(request_id)}")
+    lines.append(
+        "边界: "
+        + ("AI 可接 / Final Agent 隔离" if final_context or output_guard else "未记录")
+    )
+    lines.append(
+        "SOP: "
+        + (
+            "final_context_valid -> tool_choice_none -> output_guard_check"
+            if output_guard
+            else "未记录"
+        )
+    )
+    lines.append(f"工具: {tool_result_names(tool_results)}")
+    lines.append(
+        "工具结果: "
+        f"count={value_or_unknown(final_output.get('tool_result_count'))} "
+        f"source={value_or_unknown(source_output.get('data_source'))}"
+    )
+    lines.append(
+        "最终动作: "
+        + value_or_unknown(guard_output.get("action") or getattr(turn, "status", None))
+    )
+    lines.append(
+        "结果: "
+        + value_or_unknown(
+            getattr(turn, "reply_preview", None) or guard_output.get("leak_type")
+        )
+    )
+    lines.append(
+        "耗时: "
+        + value_or_unknown(
+            getattr(turn, "latency_ms", None)
+            or getattr(
+                output_guard or final_context or data_source, "duration_ms", None
+            )
+        )
+        + "ms"
+    )
+    return lines
+
+
+def find_node(
+    nodes: list[TraceNode], node_type: str, node_name: str
+) -> TraceNode | None:
+    for node in nodes:
+        if node.node_type == node_type and node.node_name == node_name:
+            return node
+    return None
+
+
+def output_dict(node: TraceNode | None) -> dict[str, Any]:
+    if node is None:
+        return {}
+    return node.output_data if isinstance(node.output_data, dict) else {}
+
+
+def tool_result_names(value: Any) -> str:
+    if not isinstance(value, list) or not value:
+        return "未记录"
+    names: list[str] = []
+    for item in value[:3]:
+        if not isinstance(item, dict):
+            continue
+        names.append(
+            f"{value_or_unknown(item.get('tool_name'))}"
+            f"({value_or_unknown(item.get('status'))})"
+        )
+    return ", ".join(names) if names else "未记录"
+
+
+def value_or_unknown(value: Any) -> str:
+    if value in (None, ""):
+        return "未记录"
+    return preview(value, limit=120)
 
 
 def format_messages(messages: list[MessageItem]) -> list[str]:
@@ -650,7 +837,9 @@ def format_events(events: list[EventItem]) -> list[str]:
         return ["", "事件证据: 未命中 JSONL event"]
     lines = ["", "事件证据:"]
     for item in events[:12]:
-        lines.append(f"- seq={item.seq} type={item.event_type} request_id={item.request_id} payload={json_preview(item.payload)}")
+        lines.append(
+            f"- seq={item.seq} type={item.event_type} request_id={item.request_id} payload={json_preview(item.payload)}"
+        )
     return lines
 
 
@@ -664,7 +853,9 @@ def collect_errors(nodes: list[TraceNode], events: list[EventItem]) -> list[str]
         payload = event.payload if isinstance(event.payload, dict) else {}
         status = payload.get("status")
         if status and status != "success":
-            errors.append(f"event seq={event.seq} {event.event_type}: status={status} payload={json_preview(payload)}")
+            errors.append(
+                f"event seq={event.seq} {event.event_type}: status={status} payload={json_preview(payload)}"
+            )
     return errors[:12]
 
 
@@ -680,19 +871,33 @@ def build_suggestions(
 ) -> list[str]:
     suggestions: list[str] = []
     if turns and not all_nodes:
-        suggestions.append("turn 存在但 trace 为空，检查 TraceDAO flush、trace_context 或 storage.trace。")
+        suggestions.append(
+            "turn 存在但 trace 为空，检查 TraceDAO flush、trace_context 或 storage.trace。"
+        )
     if mysql_nodes and not mongo_nodes and mongo_status == "ok":
-        suggestions.append("MySQL 有 trace 但 Mongo 为空，检查 dual-write、补偿记录和 traceRecords collection。")
+        suggestions.append(
+            "MySQL 有 trace 但 Mongo 为空，检查 dual-write、补偿记录和 traceRecords collection。"
+        )
     if mongo_nodes and not mysql_nodes and mysql_status == "ok":
-        suggestions.append("Mongo 有 trace 但 MySQL 为空，检查 storage.trace 是否为 mongo 或 MySQL trace_records 是否被清理。")
+        suggestions.append(
+            "Mongo 有 trace 但 MySQL 为空，检查 storage.trace 是否为 mongo 或 MySQL trace_records 是否被清理。"
+        )
     if any(node.status not in (None, "success") for node in all_nodes):
-        suggestions.append("先从时间线中的第一个 error 节点向前追输入、上下文和上游工具结果。")
+        suggestions.append(
+            "先从时间线中的第一个 error 节点向前追输入、上下文和上游工具结果。"
+        )
     if any((node.duration_ms or 0) > 5000 for node in all_nodes):
-        suggestions.append("存在超过 5s 的慢节点，优先排查外部网络、LLM provider、Mongo server selection 或 MySQL 慢查询。")
+        suggestions.append(
+            "存在超过 5s 的慢节点，优先排查外部网络、LLM provider、Mongo server selection 或 MySQL 慢查询。"
+        )
     if events_status.startswith("missing"):
-        suggestions.append("JSONL 事件缺失时，确认 agent_turns.event_file 是否写入，以及 data/agent-events 是否在当前工作区。")
+        suggestions.append(
+            "JSONL 事件缺失时，确认 agent_turns.event_file 是否写入，以及 data/agent-events 是否在当前工作区。"
+        )
     if not suggestions:
-        suggestions.append("链路证据未显示明显系统错误，可继续检查工具选择、prompt 上下文和业务语义。")
+        suggestions.append(
+            "链路证据未显示明显系统错误，可继续检查工具选择、prompt 上下文和业务语义。"
+        )
     return suggestions
 
 
@@ -731,8 +936,15 @@ def node_from_mysql(row: Any) -> TraceNode:
         error_message=getattr(row, "error_message", None),
         input_data=getattr(row, "input_data", None),
         output_data=getattr(row, "output_data", None),
-        started_at=iso(getattr(row, "start_time", None) or getattr(row, "created_at", None)),
-        sort_key=sort_key(getattr(row, "request_id", None), getattr(row, "round_index", None), getattr(row, "start_time", None), getattr(row, "id", None)),
+        started_at=iso(
+            getattr(row, "start_time", None) or getattr(row, "created_at", None)
+        ),
+        sort_key=sort_key(
+            getattr(row, "request_id", None),
+            getattr(row, "round_index", None),
+            getattr(row, "start_time", None),
+            getattr(row, "id", None),
+        ),
     )
 
 
@@ -754,7 +966,12 @@ def node_from_mongo(doc: dict[str, Any]) -> TraceNode:
         input_data=doc.get("input"),
         output_data=doc.get("output"),
         started_at=iso(doc.get("startTime") or doc.get("createdAt")),
-        sort_key=sort_key(doc.get("requestId"), doc.get("roundIndex"), doc.get("startTime"), doc.get("mysqlId")),
+        sort_key=sort_key(
+            doc.get("requestId"),
+            doc.get("roundIndex"),
+            doc.get("startTime"),
+            doc.get("mysqlId"),
+        ),
     )
 
 
@@ -792,11 +1009,20 @@ def message_from_mongo(doc: dict[str, Any]) -> MessageItem:
     )
 
 
-def merge_nodes(mysql_nodes: list[TraceNode], mongo_nodes: list[TraceNode]) -> list[TraceNode]:
+def merge_nodes(
+    mysql_nodes: list[TraceNode], mongo_nodes: list[TraceNode]
+) -> list[TraceNode]:
     result: list[TraceNode] = []
     seen: set[tuple[Any, ...]] = set()
     for node in [*mysql_nodes, *mongo_nodes]:
-        key = (node.request_id, node.round_index, node.node_type, node.node_name, node.started_at, node.duration_ms)
+        key = (
+            node.request_id,
+            node.round_index,
+            node.node_type,
+            node.node_name,
+            node.started_at,
+            node.duration_ms,
+        )
         if key in seen:
             continue
         seen.add(key)
@@ -868,7 +1094,11 @@ def build_resolved_scope(
 
 
 def collect_request_ids_from_rows(rows: list[Any], request_id: str | None) -> list[str]:
-    ids = [getattr(row, "request_id", None) for row in rows if getattr(row, "request_id", None)]
+    ids = [
+        getattr(row, "request_id", None)
+        for row in rows
+        if getattr(row, "request_id", None)
+    ]
     if request_id:
         ids.append(request_id)
     return list(dict.fromkeys(ids))
@@ -951,7 +1181,9 @@ def token_total(value: Any) -> int | None:
 
 def json_preview(value: Any) -> str:
     try:
-        return preview(json.dumps(redact(value), ensure_ascii=False, default=str, sort_keys=True))
+        return preview(
+            json.dumps(redact(value), ensure_ascii=False, default=str, sort_keys=True)
+        )
     except TypeError:
         return preview(str(value))
 
@@ -961,7 +1193,9 @@ def redact(value: Any) -> Any:
         result = {}
         for key, item in value.items():
             key_text = str(key)
-            result[key_text] = "***" if key_text.lower() in SENSITIVE_KEYS else redact(item)
+            result[key_text] = (
+                "***" if key_text.lower() in SENSITIVE_KEYS else redact(item)
+            )
         return result
     if isinstance(value, list):
         return [redact(item) for item in value[:30]]

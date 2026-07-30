@@ -15,6 +15,24 @@ _ISSUE_TYPE_META: dict[str, dict[str, Any]] = {
         "suggested_action": "修复敏感信息输出拦截、回复审查和安全边界测试。",
         "expected_behavior": "回复不应包含模型参数、系统提示、密钥、token 等内部信息。",
     },
+    "json_leak_detected": {
+        "fix_target": "guardrail",
+        "priority": 96,
+        "suggested_action": "修复 Final Agent 输出防泄漏、上下文隔离和 output guard 回归测试。",
+        "expected_behavior": "final_response 不应输出 JSON、tool_calls、function_call 或工具协议字段。",
+    },
+    "tool_result_discarded_reply": {
+        "fix_target": "tool_result_state",
+        "priority": 92,
+        "suggested_action": "修复最终回复对工具结果的引用和丢弃检测，避免已有工具结果时错误兜底。",
+        "expected_behavior": "已有可靠工具结果时，最终回复应基于工具结果回答，不应声称需要先调用工具。",
+    },
+    "trace_log_inconsistent": {
+        "fix_target": "guardrail",
+        "priority": 82,
+        "suggested_action": "修复 LLM invocation 参数透传、app.log 和 trace 的一致性测试。",
+        "expected_behavior": "trace 与 app.log 记录的 tool_choice、工具绑定和 final 边界必须来自同一次真实调用。",
+    },
     "pending_missed": {
         "fix_target": "pending_plan",
         "priority": 90,

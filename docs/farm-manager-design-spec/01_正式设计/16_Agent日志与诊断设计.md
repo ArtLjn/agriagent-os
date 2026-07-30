@@ -313,7 +313,9 @@ Function Call 相关日志分三类：
 - no-tools final 回复含疑似工具 JSON。
 - final 回复含原生 `response.tool_calls`。
 - final 回复整体为 JSON 对象或数组。
+- final 回复夹带普通 JSON 对象或数组片段。
 - final 回复含 `function_call`、`tool_calls`、`arguments`。
+- final 回复输出“不需要再调用工具”“无需再调用工具”等工具协议话术。
 - final 回复被 reflection 替换为与工具结果矛盾的兜底文案。
 
 诊断字段：
@@ -321,7 +323,7 @@ Function Call 相关日志分三类：
 | 字段 | 含义 |
 | --- | --- |
 | `phase` | `tool_phase` 或 `final_response_phase`。 |
-| `leak_type` | `native_tool_calls`、`content_tool_call_json`、`raw_json`、`protocol_keyword`。 |
+| `leak_type` | `native_tool_calls`、`content_tool_call_json`、`raw_json_object`、`raw_json_output`、`protocol_keyword`。 |
 | `had_tool_results` | 是否已有工具结果。 |
 | `action` | `retry_generation`、`extract_text`、`fail_closed`。 |
 | `regression_seed` | 是否进入回归集。 |
@@ -332,11 +334,9 @@ Function Call 相关日志分三类：
 
 以下情况必须入仓：
 
-1. final 阶段 JSON 泄漏二次重试失败。
-2. 有工具结果却回复“需要先调用工具”。
-3. trace 显示 `tool_choice=none`，但 app.log 显示真实 invocation 是 `auto`。
-4. 工具结果被 final 回复丢弃。
-5. Output Guard 兜底文案与工具事实冲突。
+1. `json_leak_detected`：final 阶段 JSON / function call 泄漏触发 Output Guard，尤其是二次重试失败。
+2. `tool_result_discarded_reply`：有工具结果却回复“需要先调用工具”，或 reflection 发现工具结果被丢弃。
+3. `trace_log_inconsistent`：trace 显示 `tool_choice=none`，但 app.log 显示真实 invocation 是 `auto`。
 
 入仓内容：
 

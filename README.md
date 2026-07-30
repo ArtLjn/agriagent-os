@@ -1,187 +1,286 @@
 <p align="center">
-  <img src="docs/farm-manager-design-spec/banner.png" alt="AgriAgent OS Design Spec" width="100%">
+  <img src="docs/farm-manager-design-spec/banner.png" alt="AgriAgentOS" width="100%">
 </p>
 
 <p align="center">
-  简体中文 | <a href="docs/farm-manager-design-spec/README_en.md">English</a>
+  简体中文 | <a href="docs/farm-manager-design-spec/README_en.md">English Design Spec</a>
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI">
+  <img src="https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python">
   <img src="https://img.shields.io/badge/React-20232A?style=flat-square&logo=react&logoColor=61DAFB" alt="React">
   <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript">
   <img src="https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite">
   <img src="https://img.shields.io/badge/Flutter-02569B?style=flat-square&logo=flutter&logoColor=white" alt="Flutter">
   <img src="https://img.shields.io/badge/LangChain-1C3C3C?style=flat-square" alt="LangChain">
   <img src="https://img.shields.io/badge/SQLAlchemy-D71F00?style=flat-square&logo=sqlalchemy&logoColor=white" alt="SQLAlchemy">
-  <img src="https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker">
+  <img src="https://img.shields.io/badge/MySQL-4479A1?style=flat-square&logo=mysql&logoColor=white" alt="MySQL">
+  <img src="https://img.shields.io/badge/MongoDB-47A248?style=flat-square&logo=mongodb&logoColor=white" alt="MongoDB">
   <img src="https://img.shields.io/badge/AI_Agent-111827?style=flat-square" alt="AI Agent">
-  <img src="https://img.shields.io/badge/Farm_Management-2E7D32?style=flat-square" alt="Farm Management">
 </p>
 
-# AgriAgent OS 设计规范（Design Spec）
+<p align="center">
+  <img src="https://img.shields.io/badge/Monorepo-backend%20%7C%20admin%20%7C%20mobile-111827?style=flat-square" alt="Monorepo">
+  <img src="https://img.shields.io/badge/Docs-Design%20Spec-2563EB?style=flat-square" alt="Design Spec">
+  <img src="https://img.shields.io/badge/OpenSpec-change%20workflow-7C3AED?style=flat-square" alt="OpenSpec">
+  <img src="https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Compose">
+  <img src="https://img.shields.io/badge/Tests-pytest%20%7C%20vitest%20%7C%20flutter-16A34A?style=flat-square" alt="Tests">
+  <img src="https://img.shields.io/badge/License-CC%20BY--NC%204.0-6B7280?style=flat-square" alt="License">
+</p>
 
-> 版本：v1.5（草稿，按 2026-07-30 代码现状校准关键章节：Agent Planning Runtime 收敛、TaskState Relevance Gate、PlanIR → ExecutionPlan → PendingPlan adapter、Skill registry operation 元数据）
-> 最近校准：2026-07-30
-> 维护人：BlockShip  
-> 文档状态：草稿，持续对齐 `docs/architecture/` 与代码现状
+## 项目概览
 
----
+AgriAgentOS 是一个面向农业经营场景的 AI Agent 操作系统，覆盖移动端经营工作台、自然语言记账、农事记录、作物模板、天气辅助规划、后台运维和 Agent 数据飞轮。项目采用 FastAPI 后端、React 管理后台和 Flutter 移动端，并围绕 Skill、Context、Memory、Trace 和 Evaluation 构建可治理、可观测、可评测的农业 Agent 平台。
 
-## 这是什么
+完整架构、接口协议、Agent 运行规范和项目治理说明见 [设计文档](docs/farm-manager-design-spec/README.md)。
 
-本目录是 **AgriAgent OS 项目的统一设计规范**，目标是把分散在 `docs/architecture/`、`docs/design/`、`.claude/rules/`、`backend/app/**` 的架构决策、模块边界、接口契约、编码规范**收敛成一份单一事实来源**，避免后续迭代中团队/Agent 走偏。
+## 快速导航
 
-参考体例：主流 Agent 设计文档的预设计 / 正式设计 / 接口协议 / 相关规范 / 系统测试 / 项目管理六分法。
-
-## 与既有文档的关系
-
-| 现有文档 | 本 Spec 中的角色 |
+| 入口 | 说明 |
 | --- | --- |
-| `docs/architecture/overview.md` | 被本章 [00_预设计/02_系统功能及技术架构总设计.md](docs/farm-manager-design-spec/00_预设计/02_系统功能及技术架构总设计.md) 整合 |
-| `docs/architecture/boundaries.md` | 边界矩阵下沉到 [01_正式设计/01_Agent平台架构.md](docs/farm-manager-design-spec/01_正式设计/01_Agent平台架构.md) 各模块的「可依赖 / 禁止依赖」表 |
-| `docs/architecture/agent-data-flywheel-industrial-roadmap.md` | 浓缩并指针到 [01_正式设计/06_数据飞轮与评测.md](docs/farm-manager-design-spec/01_正式设计/06_数据飞轮与评测.md) |
-| `docs/architecture/evolution-roadmap.md` | 演进路线归口到 [06_项目管理/01_里程碑与路线图.md](docs/farm-manager-design-spec/06_项目管理/01_里程碑与路线图.md) |
-| `.claude/rules/*.md` | 引用为权威，本 Spec 不复述条款，只索引位置 |
-| `.claude/rules/skill-writing.md` | 与 [01_正式设计/02_Skill引擎与契约.md](docs/farm-manager-design-spec/01_正式设计/02_Skill引擎与契约.md) 一致，冲突时以 `skill-writing.md` 为准 |
+| [界面预览](#界面预览) | 管理端技术界面和移动端业务界面截图 |
+| [核心能力](#核心能力) | Agent、经营数据、智能填写、数据飞轮等能力摘要 |
+| [架构亮点](#架构亮点) | Runtime、Skill、Context、Memory、Trace 的工程边界 |
+| [快速启动](#快速启动) | Docker Compose 与本地开发启动方式 |
+| [常用检查](#常用检查) | 后端、管理后台、移动端和架构门禁命令 |
+| [文档入口](#文档入口) | 设计文档、架构文档、API 协议和当前迭代 |
 
-冲突原则：代码与 `AGENTS.md` 硬规则 > `docs/architecture/` > 本 Spec > 历史 commit。本文档若与真实代码不一致，先按代码事实更新本 Spec；若要改变实现，再另开设计/代码变更。
+## 适合谁看
 
-## 目录速览
+| 角色 | 你可以从这里获得什么 |
+| --- | --- |
+| Agent 工程师 | 了解 Skill Registry、Context Engine、Memory Service、Runtime Loop、Reflection 和 Trace 闭环 |
+| 后端工程师 | 了解 FastAPI 分层、领域目录、平台能力、数据库模型和 Alembic 迁移约束 |
+| 前端工程师 | 了解 React 管理后台、Flutter 移动端、API 边界和真实业务界面 |
+| 产品 / 运营 | 了解农业经营工作台、作物模板、账务、天气、用户管理和数据飞轮能力 |
+| 评测 / QA | 了解 Simulation、Evaluation、TraceMonitor、DataFlywheel 和 repair pack 的问题闭环 |
 
-| 目录 | 内容 | 主要读者 |
+## 界面预览
+
+### 管理端技术界面
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/assets/screenshots/admin-trace-monitor.png" alt="Trace Monitor" width="320"><br>Trace Monitor</td>
+    <td align="center"><img src="docs/assets/screenshots/admin-token-dashboard.png" alt="Token 监控" width="320"><br>Token 监控</td>
+    <td align="center"><img src="docs/assets/screenshots/admin-playground.png" alt="Agent Playground" width="320"><br>Agent Playground</td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/assets/screenshots/admin-data-flywheel.png" alt="DataFlywheel" width="320"><br>DataFlywheel</td>
+    <td align="center"><img src="docs/assets/screenshots/admin-skill-registry.png" alt="Skill Registry" width="320"><br>Skill Registry</td>
+    <td align="center"><img src="docs/assets/screenshots/admin-skill-router-eval.png" alt="Skill Router Eval" width="320"><br>Skill Router Eval</td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/assets/screenshots/admin-prompt-inspector.png" alt="Prompt Inspector" width="320"><br>Prompt Inspector</td>
+    <td align="center"><img src="docs/assets/screenshots/admin-user-management.png" alt="用户管理" width="320"><br>用户管理</td>
+    <td align="center"><img src="docs/assets/screenshots/admin-weather.png" alt="天气上下文" width="320"><br>天气上下文</td>
+  </tr>
+</table>
+
+### 移动端业务界面
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/assets/screenshots/mobile-home.png" alt="首页工作台" width="180"><br>首页工作台</td>
+    <td align="center"><img src="docs/assets/screenshots/mobile-record.png" alt="AI 智填工作台" width="180"><br>AI 智填工作台</td>
+    <td align="center"><img src="docs/assets/screenshots/mobile-yaya.png" alt="AI 助理" width="180"><br>AI 助理</td>
+    <td align="center"><img src="docs/assets/screenshots/mobile-ledger.png" alt="账本概览" width="180"><br>账本概览</td>
+    <td align="center"><img src="docs/assets/screenshots/mobile-crop-templates.png" alt="作物模板库" width="180"><br>作物模板库</td>
+  </tr>
+</table>
+
+## 核心能力
+
+- **AI 农业 Agent**：支持自然语言问答、工具调用、SSE 流式回复、写操作确认和最终回复审计。
+- **经营数据管理**：覆盖成本、收入、赊账、人工、农事日志、种植周期、地块和作业单。
+- **智能填写**：移动端统一通过 `/smart-fill/scenarios` 和 `/smart-fill/parse` 生成表单草稿，避免直接写错业务数据。
+- **作物模板库**：支持系统模板、农场副本、生长阶段、导入查重和模板维护。
+- **上下文与记忆**：通过 ContextBundle、TaskState、短时摘要和显式长期记忆控制 Agent 输入。
+- **可观测与数据飞轮**：TraceMonitor、Simulation、Evaluation、DataFlywheel 和 repair pack 形成坏例沉淀闭环。
+- **管理后台**：提供用户、配置、技能、Token、Trace、数据飞轮、仿真评测和运营看板入口。
+
+## 能力矩阵
+
+| 能力域 | 已覆盖内容 | 关键入口 |
 | --- | --- | --- |
-| [00_预设计](docs/farm-manager-design-spec/00_预设计) | 系统愿景、技术架构总设计、技术选型 | 全员，特别是新人 |
-| [01_正式设计](docs/farm-manager-design-spec/01_正式设计) | Agent 平台、Skill、Context、Memory、Prompt、DataFlywheel、业务模块、前端契约 | 后端 + Agent 工程师 |
-| [02_产品需求](docs/farm-manager-design-spec/02_产品需求) | 核心能力清单、非功能需求 | 产品 + 工程 |
-| [03_接口协议](docs/farm-manager-design-spec/03_接口协议) | HTTP API、Agent 内部接口、外部服务、Skill 契约 | 工程师 + 联调方 |
-| [04_相关规范](docs/farm-manager-design-spec/04_相关规范) | Prompt/人设、安全、数据库、前后端编码、防污染 | 全员 |
-| [05_系统测试](docs/farm-manager-design-spec/05_系统测试) | 测试金字塔、回归集、Simulation、Evaluation | QA + 工程 |
-| [06_项目管理](docs/farm-manager-design-spec/06_项目管理) | 里程碑、工作拆解、Git 规范 | PM + 工程 |
+| Agent Runtime | 工具调用、并行执行、最终回复、输出约束、写确认 | `backend/app/agent/` |
+| Skill 系统 | Skill registry、operation 元数据、权限、schema、路由评测 | `backend/app/skills/` |
+| Context 工程 | ContextBundle、selector、token budget、TaskState relevance gate | `backend/app/context/` |
+| Memory 工程 | 短时窗口、会话摘要、显式长期记忆、observation event | `backend/app/memory/` |
+| Prompt 工程 | Prompt registry、snippet 组合、渲染、replay | `backend/app/prompt/` |
+| 数据飞轮 | 样本队列、LLM 预标注、人工确认、问题链、repair pack | `backend/app/platforms/data_flywheel/` |
+| 仿真评测 | Simulation case、Evaluation replay、路由回归、报告聚合 | `backend/app/platforms/evaluation/` |
+| 管理后台 | Trace、Token、Skill、Prompt、Playground、用户、天气、数据飞轮 | `admin-web/src/` |
+| 移动端 | 首页、工作台、AI 助理、账本、作物模板、个人设置 | `mobile-app/lib/` |
 
-### 完整目录索引
+## 架构亮点
 
-#### 00_预设计
-- [01_系统愿景与目标.md](docs/farm-manager-design-spec/00_预设计/01_系统愿景与目标.md)
-- [02_系统功能及技术架构总设计.md](docs/farm-manager-design-spec/00_预设计/02_系统功能及技术架构总设计.md)
-- [03_技术选型与依赖.md](docs/farm-manager-design-spec/00_预设计/03_技术选型与依赖.md)
+AgriAgentOS 的重点不是把 LLM 接到一个聊天框，而是把农业场景里的高风险写操作、上下文污染、工具选择错误和回复不可审计问题拆成可治理的工程边界：
 
-#### 01_正式设计
-- [01_Agent平台架构.md](docs/farm-manager-design-spec/01_正式设计/01_Agent平台架构.md)
-- [02_Skill引擎与契约.md](docs/farm-manager-design-spec/01_正式设计/02_Skill引擎与契约.md)
-- [03_Context工程.md](docs/farm-manager-design-spec/01_正式设计/03_Context工程.md)
-- [04_Memory工程.md](docs/farm-manager-design-spec/01_正式设计/04_Memory工程.md)
-- [05_Prompt工程.md](docs/farm-manager-design-spec/01_正式设计/05_Prompt工程.md)
-- [06_数据飞轮与评测.md](docs/farm-manager-design-spec/01_正式设计/06_数据飞轮与评测.md)
-- [07_可观测与运维.md](docs/farm-manager-design-spec/01_正式设计/07_可观测与运维.md)
-- [08_业务模块化.md](docs/farm-manager-design-spec/01_正式设计/08_业务模块化.md)
-- [09_前端与移动端契约.md](docs/farm-manager-design-spec/01_正式设计/09_前端与移动端契约.md)
-- [10_数据库结构设计.md](docs/farm-manager-design-spec/01_正式设计/10_数据库结构设计.md)
-- [11_Skill设计/天气Skill.md](docs/farm-manager-design-spec/01_正式设计/11_Skill设计/天气Skill.md)
-- [12_Skill路由选择架构.md](docs/farm-manager-design-spec/01_正式设计/12_Skill路由选择架构.md)
-- [13_Agent范式规范化设计.md](docs/farm-manager-design-spec/01_正式设计/13_Agent范式规范化设计.md)
-- [14_MongoDB迁移方案.md](docs/farm-manager-design-spec/01_正式设计/14_MongoDB迁移方案.md)
+- **Runtime 与业务解耦**：Runtime 负责节点状态机、工具调用和最终回复，不直接拥有 Prompt、Context、Memory 或领域业务规则。
+- **Skill operation 化**：Skill 不只是函数集合，还包含 operation 元数据、输入 schema、风险等级、确认策略和路由提示。
+- **Context 可解释**：上下文由 selector、budget、compressor 和 trace payload 共同构成，避免把完整数据库或原始 trace 直接塞进 prompt。
+- **写操作 fail-closed**：涉及成本、作物、工单、人工等业务写入时，默认进入 pending action 或 pending plan，缺字段不猜测。
+- **Trace 到 DataFlywheel 闭环**：真实请求链路、工具调用、模型输出和失败证据可沉淀为样本，再进入评测、回归和 repair pack。
+- **目录即边界**：后端不再使用旧技术层目录堆叠业务，新增代码必须进入 `domains/*`、`platforms/*` 或 Agent 平台对应边界。
 
-#### 02_产品需求
-- [01_核心能力清单.md](docs/farm-manager-design-spec/02_产品需求/01_核心能力清单.md)
-- [02_非功能性需求.md](docs/farm-manager-design-spec/02_产品需求/02_非功能性需求.md)
+## 技术栈
 
-#### 03_接口协议
-- [01_HTTP_API协议.md](docs/farm-manager-design-spec/03_接口协议/01_HTTP_API协议.md)
-- [02_Agent内部接口.md](docs/farm-manager-design-spec/03_接口协议/02_Agent内部接口.md)
-- [03_外部服务接口.md](docs/farm-manager-design-spec/03_接口协议/03_外部服务接口.md)
-- [04_Skill接口契约.md](docs/farm-manager-design-spec/03_接口协议/04_Skill接口契约.md)
-
-#### 04_相关规范
-- [01_Prompt与人设规范.md](docs/farm-manager-design-spec/04_相关规范/01_Prompt与人设规范.md)
-- [02_安全与权限规范.md](docs/farm-manager-design-spec/04_相关规范/02_安全与权限规范.md)
-- [03_数据库与迁移规范.md](docs/farm-manager-design-spec/04_相关规范/03_数据库与迁移规范.md)
-- [04_前端编码规范.md](docs/farm-manager-design-spec/04_相关规范/04_前端编码规范.md)
-- [05_Python编码规范.md](docs/farm-manager-design-spec/04_相关规范/05_Python编码规范.md)
-- [06_防污染与文档同步规范.md](docs/farm-manager-design-spec/04_相关规范/06_防污染与文档同步规范.md)
-
-#### 05_系统测试
-- [01_测试金字塔与策略.md](docs/farm-manager-design-spec/05_系统测试/01_测试金字塔与策略.md)
-- [02_回归测试集.md](docs/farm-manager-design-spec/05_系统测试/02_回归测试集.md)
-- [03_Simulation仿真测试.md](docs/farm-manager-design-spec/05_系统测试/03_Simulation仿真测试.md)
-- [04_Evaluation评测.md](docs/farm-manager-design-spec/05_系统测试/04_Evaluation评测.md)
-
-#### 06_项目管理
-- [01_里程碑与路线图.md](docs/farm-manager-design-spec/06_项目管理/01_里程碑与路线图.md)
-- [02_工作拆解.md](docs/farm-manager-design-spec/06_项目管理/02_工作拆解.md)
-- [03_Git与协作规范.md](docs/farm-manager-design-spec/06_项目管理/03_Git与协作规范.md)
-
-## 阅读路径
-
-| 你是谁 | 推荐顺序 |
+| 模块 | 技术 |
 | --- | --- |
-| 新人 onboarding | 00 → 02 → 03 → 01 |
-| 后端工程师 | 01.01 → 01.02 → 01.03 → 03.02 → 04 |
-| Agent/Prompt 工程师 | 01.01 → 01.02 → 01.12 → 01.13 → 01.05 → 04.01 → 06 |
-| 移动端工程师 | 02 → 03.01 → 01.09 → 04.04 |
-| Admin Web 工程师 | 02 → 03.01 → 01.09 → 04.04 |
-| 产品/PM | 02 → 00.01 → 06 |
-| QA | 05 → 03 → 01 |
+| 后端 | FastAPI、SQLAlchemy、Pydantic、Alembic、LangChain、Skillify |
+| 数据 | MySQL 8.x、MongoDB 7、JSONL event log |
+| 管理后台 | React 19、TypeScript、Vite、Ant Design 5、Vitest |
+| 移动端 | Flutter、Riverpod、Dio、GoRouter、Flutter Secure Storage |
+| Agent 平台 | Skill Registry、Context Engine、Memory Service、Runtime Loop、Reflection、Trace、Evaluation |
+| 部署 | Docker Compose、Uvicorn、Nginx 静态前端容器 |
 
-## 硬约束（违反即 PR 不通过）
+## 模块地图
 
-1. **依赖方向**：后端以 `bootstrap/routes → application/domains/platforms/agent → shared/infra` 为目标，禁止新增 `app.core`、`app.api`、`app.models`、`app.schemas`、`app.services`、`app.modules`、`app.simulation` 旧入口；前端 `api → components → layouts → pages`。详见 [01.01 Agent平台架构](docs/farm-manager-design-spec/01_正式设计/01_Agent平台架构.md)。
-2. **横切关注点**：auth / log / telemetry / trace 只通过依赖注入，禁止业务层直接 import。
-3. **文件与方法限制**：生产 Python 文件 ≤ 1000 行，500-1000 行按职责观察评审；方法建议 ≤ 50 行，超过 80 行需说明或拆分；类 ≤ 200 行；方法参数 ≤ 5 个。
-4. **新代码必有测试**：覆盖率 ≥ 80% 为目标，关键路径必须覆盖。
-5. **Skill 契约**：Skill 真实代码位于 `backend/app/skills/*/`，每个 Skill 必须有 `skill.md`；写操作脚本按需放在 `scripts/`，并符合 [01.02 Skill引擎与契约](docs/farm-manager-design-spec/01_正式设计/02_Skill引擎与契约.md)。
-6. **结构化日志**：禁止 `print` / `console.log` 调试；日志带 `trace_id`。
-7. **数据库变更**：只用 Alembic；禁止手动 SQL 改表；统一 MySQL 8.x，charset `utf8mb4`。
-8. **写操作 Skill 不允许缓存**，不允许缺参猜测业务关键字段。
+| 模块 | 说明 | 面向的主要问题 |
+| --- | --- | --- |
+| `backend/app/bootstrap/` | FastAPI app factory、路由注册、中间件和 lifespan | 应用启动入口清晰、可测试 |
+| `backend/app/domains/` | 用户、农场、种植、财务、天气、会话等领域代码 | 业务规则不散落到平台层 |
+| `backend/app/application/` | 聊天、会话、建议、报告等 use case 编排 | API 层保持薄入口 |
+| `backend/app/agent/` | Runtime、planner、executor、guardrails、reflection | Agent 执行链路可拆解 |
+| `backend/app/skills/` | Skill 实现、注册、权限、schema 和脚本 | 工具能力可治理、可回归 |
+| `backend/app/platforms/` | admin、data_flywheel、evaluation、simulation | 平台能力和业务领域隔离 |
+| `admin-web/` | React 管理后台 | 运维、评测、Trace 和数据飞轮工作台 |
+| `mobile-app/` | Flutter 移动端 | 面向真实经营场景的用户工作台 |
 
-## 维护节奏
+## 项目结构
 
-- **本 Spec 改动触发条件**：①新增/修改 API 端点；②新增/修改数据模型；③新增/修改 Skill；④修改配置或部署；⑤修改安全策略；⑥新增功能模块。
-- **每次正式 PR**：如涉及以上触发条件，必须同步更新对应章节并链接到 PR。
-- **季度回顾**：核对目录与 `backend/app/`、`admin-web/src/`、`mobile-app/lib/` 真实结构，不一致处由原作者修复。
+```text
+backend/app/
+├── bootstrap/       # 应用工厂、路由注册、中间件、异常和 lifespan
+├── domains/         # 用户、农场、种植、财务、天气、会话等业务领域
+├── application/     # 聊天、会话、建议、报告等 use case 编排
+├── agent/           # Agent runtime、planner、executor、guardrails、reflection
+├── skills/          # Skill 实现、注册、权限、schema 和执行适配
+├── prompt/          # Prompt 注册、组合、渲染和回放
+├── context/         # ContextBundle、selector、预算、压缩和任务状态
+├── memory/          # 短时记忆、显式长期记忆和 observation
+├── platforms/       # admin、data_flywheel、evaluation、simulation、shared
+├── shared/          # 配置、数据库、日志、安全、时间、模型注册
+├── infra/           # trace、Mongo、限流、缓存、熔断、RAG client
+└── ops/             # seed、审计和运维辅助
 
-## 术语速查
+admin-web/           # React 管理后台
+mobile-app/          # Flutter 移动端
+docs/                # 架构、设计、规范和截图资产
+openspec/            # 需求变更和能力规格
+```
 
-| 术语 | 解释 |
+新增后端代码不得重新创建 `app.core`、`app.api`、`app.models`、`app.schemas`、`app.services`、`app.modules`、`app.simulation` 等旧技术层入口。
+
+## 快速启动
+
+### Docker Compose
+
+```bash
+cp backend/config.yaml.example backend/config.yaml
+
+cat > .env <<'ENV'
+MYSQL_ROOT_PASSWORD=change-me
+MYSQL_PASSWORD=change-me
+MONGO_INITDB_ROOT_PASSWORD=change-me
+AUTH_JWT_SECRET=change-me-to-a-long-random-secret
+ENV
+
+docker compose up -d --build
+```
+
+默认端口：
+
+| 服务 | 地址 |
 | --- | --- |
-| Agent | 农场助手智能体，由 Application Chat + Router + Runtime Loop + Executor + Reflector 组成 |
-| Advisor | 历史概念已收敛到 `application/chat` + `agent/runtime` + `agent/guardrails` + `agent/executor`，文档中仅作兼容术语 |
-| Skill | 单一能力模块，按 `.claude/rules/skill-writing.md` 契约实现，分只读 / 写操作 |
-| TaskState | `agent_task_states` 中保存的跨轮任务工作状态，只在相关性门打开时进入 Router/Context |
-| PlanIR | 面向规划层的结构化计划表达，描述任务步骤、依赖、风险和响应契约，不直接执行 |
-| ExecutionPlan | `PlanIR` 面向 Runtime 的安全投影，解析到 operation / skill / 参数 / 确认策略 |
-| ContextBundle | Runtime 消费的动态上下文包，由 Selector + Budget + Compressor 构造 |
-| MemoryService | 短时记忆 + 长时记忆 + Retrieval + Observation 的统一接口端口 |
-| PromptComposer | 把 Snippet 组合成最终 system prompt 的渲染器，受 `prompt/` 治理 |
-| DataFlywheel | 样本加工台：从会话/trace/仿真失败中提取 → 规则候选 → LLM 预标注 → 人工确认 → 回归/评测/训练数据 |
-| Simulation | 回归执行台：跑 DB-backed regression cases |
-| Evaluation | 趋势评分台：版本对比通过率、工具选择准确率、pending 漏拦截率 |
-| Pending Action | 写操作需用户确认的暂存动作，支持确认/取消/过期 |
-| Pending Plan | 多步骤写操作需用户确认的暂存计划，由 `ExecutionPlan` 或 runtime draft 投影生成 |
-| Smart Fill | 移动端智能填写统一入口：`/smart-fill/scenarios` 列场景 + `/smart-fill/parse` 解析 |
-| Farm Cockpit | 移动端首页驾驶舱，承载每日建议、关键指标、快捷入口 |
-| Yaya | 移动端 AI 助理对话页（芽芽 IP） |
+| 后端 API | `http://127.0.0.1:18000` |
+| 管理后台 | `http://127.0.0.1:18080` |
+| 健康检查 | `http://127.0.0.1:18000/health` |
 
-## 变更记录
+LLM、天气、RAG、Skill 向量召回等外部能力通过 `backend/config.yaml` 或环境变量配置；模板文件不会包含真实密钥。
 
-| 版本 | 日期 | 变更 | 作者 |
-| --- | --- | --- | --- |
-| v0.1 | 2026-06-19 | 创建目录骨架与核心章节初稿（00-04 共 25 篇） | BlockShip |
-| v0.2 | 2026-06-19 | 补齐 05_系统测试（4 篇）+ 06_项目管理（3 篇），共 32 篇骨架完成 | BlockShip |
-| v0.3 | 2026-06-19 | [03_Context工程] § 6 压缩策略改为贴合实际代码（5 道关卡 + 多轮失忆根因 + 主流方案对比 + 推荐方案）；[04_Memory工程] § 6 短期记忆补"当前实现 / 已识别问题 / 修复方向"，新增 § 12 多轮失忆治理路线、§ 13 存储演进路线（Redis 决策：当前不上） | BlockShip |
-| v0.4 | 2026-06-19 | [01_正式设计/06_数据飞轮与评测] 新增 § 9 Discovery Layer 与风险发现（2 级过滤 + 取 max 评分 + 规则引擎 + LLM Judge + 工作台 3 处改动 + MVP 4.5 人日），原 § 9-§ 12 顺延为 § 10-§ 13；[00_预设计/02_系统功能及技术架构总设计] 架构图 + 五大子系统表 + § 5.7 决策 + § 7 落地状态补 Discovery Layer | BlockShip |
-| v0.5 | 2026-06-19 | 知识与记忆架构梳理（brainstorming 产出）：[04_Memory工程] § 7 长时记忆补 § 7.2 落地实施（candidate→confirmed 流转 + memory_records 新建表 + 与 summary 共触发）；§ 8 检索补 § 8.2 引入 Qdrant 触发条件（4 条同时满足）+ § 8.3 实施边界；§ 14 当前状态 / § 16 相关文档同步；[02_Skill引擎与契约] create_crop_template 加 region 注释。详见 [docs/superpowers/specs/2026-06-19-knowledge-and-memory-architecture-design.md](docs/superpowers/specs/2026-06-19-knowledge-and-memory-architecture-design.md) | BlockShip |
-| v0.6 | 2026-06-19 | 脱敏：删除对比章节中的具体外部项目名与路径（[Readme]、[01_Agent平台架构] § 9、[02_系统功能及技术架构总设计] § 6、[04_Memory工程] § 15）；删除生产服务器 IP（[07_可观测与运维] § 11、[03_技术选型与依赖] § 5.1） | BlockShip |
-| v0.7 | 2026-06-19 | 深度脱敏补漏：[07_可观测与运维] § 5 删除外部风格对齐说明，§ 11 部署路径 / 服务名 / 运维脚本全部改为占位（`<repo_dir>` / `<service_name>`）；[03_技术选型与依赖] § 5 同步；[03_接口协议/03_外部服务接口] § 5/§ 6 日志路径 + systemd unit 中所有 `/root/workspace/...` 改占位、User 字段改 `<deploy_user>` | BlockShip |
-| v0.8 | 2026-06-19 | 作物地域化同步：新建 [openspec/changes/extend-crop-template-with-region-tag](openspec/changes/extend-crop-template-with-region-tag/proposal.md) delta 提案（proposal/design/specs/tasks 完整）；同步 [04_相关规范/03_数据库与迁移规范] 表清单 `crops → crop_templates` + region_tag 说明；[01_正式设计/08_业务模块化] CropPort 签名加 region + 新增 list_system_templates / import_system_template；[02_产品需求/01_核心能力清单] 作物管理补地域化变体；[03_接口协议/01_HTTP_API协议] 补 `GET /crops/templates/system?region=` 与 `POST /import` 端点 | BlockShip |
-| v0.9 | 2026-06-20 | 新增 [01_正式设计/10_数据库结构设计]：以 `backend/sql/farm_manager.sql` 生产 dump 为基准，反推 33 张表（含 `alembic_version`）的字段、约束、索引、外键；附接口→表映射矩阵、生产 vs 代码层差异对账、预留待建表（`memory_records`/`audit_logs`/`evaluation_reports` 等） | BlockShip |
-| v1.0 | 2026-06-22 | Running summary Phase A 落地：`conversations.summary` 自动生成与持久化、`set_session_summary()` 同步缓存、ConversationSelector 注入 `conversation_summary` block；长期记忆提取仍保持拆分提案单独推进 | BlockShip |
-| v1.1 | 2026-06-22 | 新增 [01_正式设计/12_Skill路由选择架构]：定义 Skill Catalog、Rule Classifier、Router Policy、Direct Routing、Tool Chain、Trace 与批量回归门禁；明确 `get_farm_status` 只用于泛化农场状态，禁止所有读 Skill 隐式扩展到农场状态 | BlockShip |
-| v1.2 | 2026-06-23 | 新增 [01_正式设计/13_Agent范式规范化设计]：定性当前单主 Agent + Skill + 触发式反思范式，补当前/目标架构图、Reflection 触发规范、Skill 触发树、农事用工子树、不过度设计的三阶段落地与回归种子 | BlockShip |
-| v1.3 | 2026-07-06 | [01_正式设计/06_数据飞轮与评测] 补充问题仓与规则候选治理：明确人工坏会话入仓、IssueRepositoryEntry、RuleCandidatePackage、正例/反例验证、晋级门禁，以及“作物/茬口/农场状态”Skill 选错专项样板 | BlockShip |
-| v1.4 | 2026-07-24 | 按真实代码扫描校准入口文档：React Native 改 Flutter；旧 `app.core/api/models/schemas/services/modules/simulation` 入口改为 `bootstrap/application/domains/agent/context/memory/platforms/shared/infra/skills`；HTTP API、数据库来源、Simulation/Evaluation 状态和路线图同步当前实现 | Codex |
-| v1.5 | 2026-07-30 | 同步 Agent Planning Runtime 收敛：TaskState 读取增加相关性门，Context 注入受 `task_state_should_inject` 控制，`PlanIR` 经 `ExecutionPlan` adapter 投影到 `PendingPlan`，Skill registry operation 元数据扩展，`TurnResult` 结构化 TaskState 更新路径入规 | Codex |
+### 本地开发
 
-## 协议
+后端：
 
-[CC BY-NC 4.0](docs/farm-manager-design-spec/LICENSE) © BlockShip — 允许分享与改编，必须署名，不得用于商业目的。
+```bash
+cd backend
+python -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+管理后台：
+
+```bash
+cd admin-web
+pnpm install
+pnpm dev
+```
+
+移动端：
+
+```bash
+cd mobile-app
+flutter pub get
+flutter run
+```
+
+## 常用检查
+
+```bash
+# 后端
+cd backend
+ruff check .
+pytest -v
+
+# 管理后台
+cd admin-web
+pnpm lint
+pnpm test
+
+# 移动端
+cd mobile-app
+flutter analyze
+flutter test
+```
+
+仓库还提供架构与复杂度门禁：
+
+```bash
+bash scripts/check-layer-deps.sh
+bash scripts/check-complexity-budget.sh
+bash scripts/check-guide-sensor-pairing.sh
+```
+
+## 开发约定
+
+- **分支**：默认使用 `codex/*` 或独立 worktree 开发，通过 PR 合并。
+- **提交**：提交信息使用 Conventional Commits，例如 `feat:`、`fix:`、`docs:`、`refactor:`、`test:`。
+- **文档同步**：新增 API、数据模型、Skill、配置、部署或安全策略时，同步更新对应设计文档。
+- **测试策略**：需求明确且可测试时补自动化测试；涉及不可自动验证的设计变更，至少补结构检查和人工审查点。
+- **安全边界**：不提交 `.env`、真实密钥、凭证、生产连接串或大体积临时产物。
+- **资源归档**：README 只引用 `docs/assets/screenshots/` 中的稳定截图；`output/` 只作为生成物和候选素材池。
+
+## 文档入口
+
+| 文档 | 用途 |
+| --- | --- |
+| [AGENTS.md](AGENTS.md) | Agent 工作规则、项目地图和硬性约束 |
+| [系统架构](docs/architecture/overview.md) | 当前架构事实源和模块边界 |
+| [后端系统架构](docs/architecture/backend-architecture.md) | 后端目录职责、请求链路和 Agent 平台拆分 |
+| [设计规范](docs/farm-manager-design-spec/README.md) | 完整设计规范、接口协议、测试策略和项目管理 |
+| [Agent 开发标准](docs/agent/agent-development-standard.md) | Agent / Skill / Context / Trace 开发硬规范 |
+| [API 协议](docs/reference/api-spec.yaml) | OpenAPI / HTTP 协议参考 |
+| [当前迭代](docs/plans/current-sprint.md) | 当前 sprint 状态和后续任务 |
+
+## 截图与素材约定
+
+根 README 只引用稳定文档资产：`docs/assets/screenshots/`。`output/` 目录用于生成物、设计候选和临时截图沉淀，不作为长期文档引用入口。
+
+## 许可证
+
+[CC BY-NC 4.0](docs/farm-manager-design-spec/LICENSE) © BlockShip。允许分享与改编，必须署名，不得用于商业目的。

@@ -7,6 +7,7 @@ from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 from app.agent.reflector import ReflectionDecision
 from app.agent.reflector.checks import check_tool_result_discarded_reply
 from app.agent.runtime import node_helpers as _node_helpers
+from app.agent.runtime.final_response import guard_final_response
 from app.agent.runtime.llm_invocation import _invoke_llm_with_retry
 from app.agent.runtime.llm_response_repair import (
     _normalize_content_tool_calls,
@@ -40,6 +41,15 @@ async def _invoke_and_repair_response(
         max_retries=max_retries,
     )
     await _wait_for_preload(preload_task)
+    final_response_request = prompt_context.get("final_response_request")
+    if final_response_request is not None:
+        response = await guard_final_response(
+            response=response,
+            llm=llm,
+            request=final_response_request,
+            collector=route_context["collector"],
+        )
+        return response, invoke_meta
     response = await _repair_llm_response(
         response=response,
         llm=llm,
@@ -301,6 +311,11 @@ def _record_response_and_result(
     _node_helpers._record_final_reply_data_source_trace(
         collector=route_context["collector"],
         messages=prompt_context["messages"],
+        tool_results=(
+            prompt_context["final_response_request"].tool_results
+            if prompt_context.get("final_response_request") is not None
+            else None
+        ),
     )
     return {
         "messages": [response],

@@ -78,6 +78,9 @@ WAGE_FIELD_KEYS = (
 NO_WAGE_FIELD_KEYS = ("no_wage", "wage_policy")
 NO_WAGE_VALUES = ("none", "no_wage", "free", "不计工资", "无工资")
 WORK_ORDER_TOOLS = ("create_operation_work_order", "manage_labor_payment")
+FINAL_CONTEXT_NODE = ("final_context", "build")
+OUTPUT_GUARD_NODE = ("output_guard", "final_json_leak_check")
+FINAL_DATA_SOURCE_NODE = ("response", "final_reply_data_source")
 
 
 def detect_issue_candidates(
@@ -97,7 +100,74 @@ def detect_issue_candidates(
     pending_tools = _pending_tools(pending_lifecycle)
     user_input_preview = _evidence_text(user_input)
     selected_tools_text = ", ".join(selected_tools) if selected_tools else "无"
+    final_context = _final_context_summary(events)
+    guard_diagnosis = _output_guard_diagnosis(events)
+    data_source = _final_reply_data_source(events)
 
+    if guard_diagnosis:
+        candidates.append(
+            _candidate(
+                "json_leak_detected",
+                "high",
+                (
+                    "final_response 输出触发防泄漏保护，"
+                    f"leak_type={guard_diagnosis['leak_type']} "
+                    f"action={guard_diagnosis['action']}"
+                ),
+                _diagnostic_evidence(
+                    user_input=user_input,
+                    assistant_reply=assistant_reply,
+                    events=events,
+                    guard=guard_diagnosis,
+                    final_context=final_context,
+                    data_source=data_source,
+                ),
+                "json_leak_detected",
+            )
+        )
+    if _discarded_tool_result_reply(
+        assistant_reply=assistant_reply,
+        successful_tools=successful_tools,
+        events=events,
+    ):
+        candidates.append(
+            _candidate(
+                "tool_result_discarded_reply",
+                "high",
+                "已有工具结果，但最终回复丢弃工具结果或声称需要先调用工具",
+                _diagnostic_evidence(
+                    user_input=user_input,
+                    assistant_reply=assistant_reply,
+                    events=events,
+                    guard=guard_diagnosis,
+                    final_context=final_context,
+                    data_source=data_source,
+                ),
+                "tool_result_discarded_reply",
+            )
+        )
+    trace_log_mismatch = _trace_log_tool_choice_mismatch(events)
+    if trace_log_mismatch:
+        candidates.append(
+            _candidate(
+                "trace_log_inconsistent",
+                "medium",
+                (
+                    "trace 与 app.log 记录的 LLM invocation 参数不一致："
+                    f"trace_tool_choice={trace_log_mismatch['trace_tool_choice']} "
+                    f"log_tool_choice={trace_log_mismatch['log_tool_choice']}"
+                ),
+                _diagnostic_evidence(
+                    user_input=user_input,
+                    assistant_reply=assistant_reply,
+                    events=events,
+                    guard=guard_diagnosis,
+                    final_context=final_context,
+                    data_source=data_source,
+                ),
+                "trace_log_inconsistent",
+            )
+        )
     if (
         _needs_external_data(user_input)
         and not selected_tools
@@ -214,6 +284,184 @@ def _candidate(
         "evidence": evidence,
         "suggested_label": suggested_label,
     }
+
+
+def _node_payload(event: dict[str, Any]) -> dict[str, Any]:
+    payload = event.get("payload")
+    if isinstance(payload, dict):
+        return payload
+    return event
+
+
+def _node_matches(event: dict[str, Any], node_type: str, node_name: str) -> bool:
+    payload = _node_payload(event)
+    return (
+        str(payload.get("node_type") or "") == node_type
+        and str(payload.get("node_name") or "") == node_name
+    )
+
+
+def _output_data(event: dict[str, Any]) -> dict[str, Any]:
+    payload = _node_payload(event)
+    output_data = payload.get("output_data") or {}
+    return output_data if isinstance(output_data, dict) else {}
+
+
+def _input_data(event: dict[str, Any]) -> dict[str, Any]:
+    payload = _node_payload(event)
+    input_data = payload.get("input_data") or {}
+    return input_data if isinstance(input_data, dict) else {}
+
+
+def _output_guard_diagnosis(events: list[dict[str, Any]]) -> dict[str, str] | None:
+    for event in events:
+        if not _node_matches(event, *OUTPUT_GUARD_NODE):
+            continue
+        output_data = _output_data(event)
+        leak_type = str(output_data.get("leak_type") or "")
+        action = str(output_data.get("action") or "")
+        passed = output_data.get("passed")
+        if passed is True or action == "pass" or not leak_type:
+            continue
+        return {
+            "leak_type": leak_type,
+            "action": action or "unknown",
+            "retry_count": str(output_data.get("retry_count") or 0),
+        }
+    return None
+
+
+def _final_context_summary(events: list[dict[str, Any]]) -> dict[str, str]:
+    for event in events:
+        if not _node_matches(event, *FINAL_CONTEXT_NODE):
+            continue
+        output_data = _output_data(event)
+        tool_results = output_data.get("tool_results") or []
+        tool_summary = _tool_result_summary(tool_results)
+        return {
+            "tool_summary": tool_summary,
+            "tool_result_count": str(output_data.get("tool_result_count") or 0),
+            "dropped_tool_call_history": str(
+                bool(output_data.get("dropped_tool_call_history"))
+            ),
+        }
+    return {
+        "tool_summary": "未记录",
+        "tool_result_count": "未记录",
+        "dropped_tool_call_history": "未记录",
+    }
+
+
+def _tool_result_summary(tool_results: Any) -> str:
+    if not isinstance(tool_results, list) or not tool_results:
+        return "无"
+    parts: list[str] = []
+    for item in tool_results[:3]:
+        if not isinstance(item, dict):
+            continue
+        tool_name = str(item.get("tool_name") or "unknown")
+        status = str(item.get("status") or "unknown")
+        parts.append(f"{tool_name}({status})")
+    return ", ".join(parts) if parts else "无"
+
+
+def _final_reply_data_source(events: list[dict[str, Any]]) -> str:
+    for event in events:
+        if not _node_matches(event, *FINAL_DATA_SOURCE_NODE):
+            continue
+        output_data = _output_data(event)
+        data_source = output_data.get("data_source")
+        if data_source:
+            return str(data_source)
+    return "未记录"
+
+
+def _discarded_tool_result_reply(
+    *,
+    assistant_reply: str | None,
+    successful_tools: list[str],
+    events: list[dict[str, Any]],
+) -> bool:
+    if successful_tools and assistant_reply and "需要先调用工具" in assistant_reply:
+        return True
+    for event in events:
+        if not _node_matches(
+            event, "reflection_check", "post_tool_result_regeneration"
+        ):
+            continue
+        output_data = _output_data(event)
+        reason = str(output_data.get("reason") or output_data.get("decision") or "")
+        if "tool_result" in reason or "discard" in reason.lower():
+            return True
+    return False
+
+
+def _trace_log_tool_choice_mismatch(
+    events: list[dict[str, Any]],
+) -> dict[str, str] | None:
+    for event in events:
+        if not _node_matches(
+            event, "llm_call", str(_node_payload(event).get("node_name") or "")
+        ):
+            continue
+        input_data = _input_data(event)
+        payload = _node_payload(event)
+        trace_tool_choice = input_data.get("tool_choice")
+        log_tool_choice = (
+            payload.get("log_tool_choice")
+            or payload.get("app_log_tool_choice")
+            or input_data.get("log_tool_choice")
+            or input_data.get("app_log_tool_choice")
+        )
+        if (
+            trace_tool_choice
+            and log_tool_choice
+            and trace_tool_choice != log_tool_choice
+        ):
+            return {
+                "trace_tool_choice": str(trace_tool_choice),
+                "log_tool_choice": str(log_tool_choice),
+            }
+    return None
+
+
+def _diagnostic_evidence(
+    *,
+    user_input: str | None,
+    assistant_reply: str | None,
+    events: list[dict[str, Any]],
+    guard: dict[str, str] | None,
+    final_context: dict[str, str],
+    data_source: str,
+) -> str:
+    return " | ".join(
+        [
+            f"request_id={_event_field(events, 'request_id')}",
+            f"session_id={_event_field(events, 'session_id')}",
+            f"user={_evidence_text(user_input)}",
+            f"final={_evidence_text(assistant_reply)}",
+            f"guard={_guard_text(guard)}",
+            f"tool_summary={final_context['tool_summary']}",
+            f"final_context=tools:{final_context['tool_result_count']} "
+            f"dropped:{final_context['dropped_tool_call_history']}",
+            f"data_source={data_source}",
+        ]
+    )
+
+
+def _event_field(events: list[dict[str, Any]], key: str) -> str:
+    for event in events:
+        payload = _node_payload(event)
+        value = payload.get(key) or event.get(key)
+        if value:
+            return str(value)[:80]
+    return "未记录"
+
+
+def _guard_text(guard: dict[str, str] | None) -> str:
+    if not guard:
+        return "未记录"
+    return f"{guard['leak_type']}/{guard['action']}/retry={guard['retry_count']}"
 
 
 def _successful_tools(events: list[dict[str, Any]]) -> list[str]:

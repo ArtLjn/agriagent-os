@@ -318,11 +318,13 @@ def _record_llm_error_trace(
         node_name=model_name,
         input_data={
             "input_summary": input_summary,
-            "provider": circuit_key.split("/", 1)[0] if "/" in circuit_key else "unknown",
+            "provider": circuit_key.split("/", 1)[0]
+            if "/" in circuit_key
+            else "unknown",
             "model": model_name,
             "role": model_role,
             "selected_tools": list(selected_tool_names),
-            "tool_choice": tool_choice if selected_tool_names else "none",
+            "tool_choice": tool_choice,
             "message_count": message_count,
             "timeout_seconds": _llm_attempt_timeout_seconds(),
         },

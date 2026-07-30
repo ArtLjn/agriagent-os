@@ -132,6 +132,11 @@ function displayValue(value: unknown): string {
   return JSON.stringify(value);
 }
 
+function displayAuditValue(value: unknown): string {
+  const text = displayValue(value);
+  return text === '-' ? '未记录' : text;
+}
+
 function displayList(value: unknown): string {
   if (!Array.isArray(value)) return displayValue(value);
   return value.map(displayValue).join(', ');
@@ -1035,6 +1040,8 @@ function TracePayloadSummary({
   }
   if (isContextTracePayload(payload)) return <ContextTraceSummary outputData={payload} showRaw={false} />;
   if (isRouterTracePayload(payload)) return <RouterTraceSummary outputData={payload} showRaw={false} />;
+  if (nodeType === 'final_context') return <FinalContextTraceSummary outputData={payload} />;
+  if (nodeType === 'output_guard') return <OutputGuardTraceSummary outputData={payload} />;
   if (nodeType === 'llm_call') return <LlmTraceSummary outputData={payload} />;
   if (nodeType === 'skill_call') return <SkillCallTraceSummary outputData={payload} />;
   if (nodeType === 'tool_selection') return <ToolSelectionTraceSummary outputData={payload} />;
@@ -1081,6 +1088,70 @@ function LlmTraceSummary({ outputData }: { outputData: Record<string, unknown> }
         </div>
       )}
       {error && <div style={{ ...previewStyle, marginTop: 10, borderColor: '#7c2d12' }}>{displayValue(error.message)}</div>}
+    </section>
+  );
+}
+
+function FinalContextTraceSummary({ outputData }: { outputData: Record<string, unknown> }) {
+  const toolResults = asRecordList(outputData.tool_results);
+  return (
+    <section style={summaryPanelStyle}>
+      <div style={{ ...sectionTitleStyle, justifyContent: 'space-between' }}>
+        <span>Final 上下文边界</span>
+        <Tag color={outputData.dropped_tool_call_history ? 'warning' : 'success'}>
+          dropped_tool_call_history: {displayAuditValue(outputData.dropped_tool_call_history)}
+        </Tag>
+      </div>
+      <div style={metricGridStyle}>
+        <Metric label="source_message_count" value={outputData.source_message_count ?? '未记录'} />
+        <Metric label="final_message_count" value={outputData.final_message_count ?? '未记录'} />
+        <Metric label="tool_result_count" value={outputData.tool_result_count ?? '未记录'} />
+        <Metric label="dropped_tool_call_history" value={outputData.dropped_tool_call_history ?? '未记录'} />
+      </div>
+      {toolResults.length > 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+          {toolResults.map((result, index) => (
+            <div key={`${displayValue(result.tool_name)}-${index}`} style={sourceCardStyle}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <Tag color={statusTagColor(String(result.status ?? 'success'))}>
+                  {displayAuditValue(result.status)}
+                </Tag>
+                <span style={{ color: ACCENT, fontFamily: 'monospace', fontWeight: 600 }}>
+                  {displayAuditValue(result.tool_name)}
+                </span>
+                <span style={{ color: TEXT_DIM, fontFamily: 'monospace', fontSize: 12 }}>
+                  {displayAuditValue(result.tool_call_id)}
+                </span>
+              </div>
+              <div style={{ marginTop: 8 }}>
+                <PillRow label="facts" value={result.facts} color="cyan" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ ...previewStyle, marginTop: 10 }}>tool_results: 未记录</div>
+      )}
+    </section>
+  );
+}
+
+function OutputGuardTraceSummary({ outputData }: { outputData: Record<string, unknown> }) {
+  const passed = outputData.passed === true;
+  return (
+    <section style={summaryPanelStyle}>
+      <div style={{ ...sectionTitleStyle, justifyContent: 'space-between' }}>
+        <span>最终回复防泄漏</span>
+        <Tag color={passed ? 'success' : 'warning'}>
+          {passed ? '通过' : '拦截'}
+        </Tag>
+      </div>
+      <div style={metricGridStyle}>
+        <Metric label="passed" value={outputData.passed ?? '未记录'} />
+        <Metric label="leak_type" value={outputData.leak_type ?? '未记录'} />
+        <Metric label="action" value={outputData.action ?? '未记录'} />
+        <Metric label="retry_count" value={outputData.retry_count ?? '未记录'} />
+      </div>
     </section>
   );
 }
@@ -1280,6 +1351,69 @@ function nodeDetailPayload(node: TraceNodeDetail): Record<string, unknown> {
     input_data: node.input_data,
     output_data: node.output_data,
   };
+}
+
+function findTimelineNode(
+  timeline: TraceTimeline,
+  nodeType: string,
+  nodeName?: string,
+): GanttNode | null {
+  for (const round of timeline.rounds) {
+    const matched = round.nodes.find(
+      (node) => node.node_type === nodeType && (!nodeName || node.node_name === nodeName),
+    );
+    if (matched) return matched;
+  }
+  return null;
+}
+
+function outputRecordFromNode(node: GanttNode | null): Record<string, unknown> {
+  return payloadRecord(node?.output_data) ?? {};
+}
+
+function firstToolResultName(toolResults: unknown): string {
+  const results = asRecordList(toolResults);
+  if (results.length === 0) return '未记录';
+  return results
+    .map((result) => {
+      const name = displayAuditValue(result.tool_name);
+      const status = displayAuditValue(result.status);
+      return `${name}(${status})`;
+    })
+    .join(', ');
+}
+
+function formatAuditTraceBlock(item: TraceItem, timeline: TraceTimeline): string {
+  const finalContextNode = findTimelineNode(timeline, 'final_context', 'build');
+  const outputGuardNode = findTimelineNode(timeline, 'output_guard', 'final_json_leak_check');
+  const dataSourceNode = findTimelineNode(timeline, 'response', 'final_reply_data_source');
+  const finalReplyNode = findTimelineNode(timeline, 'agent_response');
+  const finalContext = outputRecordFromNode(finalContextNode);
+  const outputGuard = outputRecordFromNode(outputGuardNode);
+  const dataSource = outputRecordFromNode(dataSourceNode);
+  const finalReply = outputRecordFromNode(finalReplyNode);
+  const duration =
+    finalContextNode?.duration_ms ??
+    outputGuardNode?.duration_ms ??
+    finalReplyNode?.duration_ms ??
+    item.total_duration_ms;
+  const boundary = finalContextNode || outputGuardNode ? 'AI 可接 / Final Agent 隔离' : '未记录';
+  const action = outputGuard.action ?? finalReply.reason ?? item.summary.status;
+  const result = finalReply.reply_preview ?? finalReply.reply ?? item.summary.status_reason ?? item.summary.status;
+
+  return [
+    `[审计追踪] ${displayAuditValue(item.request_id)} final_response`,
+    `工单 ID: ${displayAuditValue(item.session_id ?? item.request_id)}`,
+    `Run ID: ${displayAuditValue(item.request_id)}`,
+    `Trace ID: ${displayAuditValue(item.request_id)}`,
+    `边界: ${boundary}`,
+    `SOP: ${outputGuardNode ? 'Output Guard 已记录' : '未记录'}`,
+    `工具: ${firstToolResultName(finalContext.tool_results)}`,
+    `工具结果: count=${displayAuditValue(finalContext.tool_result_count)} source=${displayAuditValue(dataSource.data_source)}`,
+    `最终动作: ${displayAuditValue(action)}`,
+    `结果: ${displayAuditValue(result)}`,
+    `耗时: ${displayAuditValue(duration)}ms`,
+  ].join('\n');
 }
 
 async function copyRawTracePayload(value: unknown) {
@@ -1749,6 +1883,19 @@ export default function TraceMonitor() {
     }
   }
 
+  async function copyAuditTraceBlock(item: TraceItem) {
+    if (!item.timeline) {
+      message.warning('Timeline 尚未加载');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(formatAuditTraceBlock(item, item.timeline));
+      message.success('审计追踪已复制到剪贴板');
+    } catch {
+      message.error('复制失败');
+    }
+  }
+
   const handleCleanup = async () => {
     if (!cleanupDate) {
       message.warning('请选择清理日期');
@@ -1938,14 +2085,24 @@ export default function TraceMonitor() {
                   )}
                   <span style={{ marginLeft: 'auto', color: TEXT_DIM, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
                     {expandedCards.has(item.request_id) && item.timeline && (
-                      <Button
-                        size="small"
-                        icon={<CopyOutlined />}
-                        onClick={(e) => { e.stopPropagation(); copyTimingReport(item.timeline!); }}
-                        style={{ background: 'transparent', borderColor: BORDER, color: TEXT_DIM, fontSize: 12 }}
-                      >
-                        复制耗时
-                      </Button>
+                      <>
+                        <Button
+                          size="small"
+                          icon={<CopyOutlined />}
+                          onClick={(e) => { e.stopPropagation(); copyAuditTraceBlock(item); }}
+                          style={{ background: 'transparent', borderColor: BORDER, color: TEXT_DIM, fontSize: 12 }}
+                        >
+                          复制审计追踪
+                        </Button>
+                        <Button
+                          size="small"
+                          icon={<CopyOutlined />}
+                          onClick={(e) => { e.stopPropagation(); copyTimingReport(item.timeline!); }}
+                          style={{ background: 'transparent', borderColor: BORDER, color: TEXT_DIM, fontSize: 12 }}
+                        >
+                          复制耗时
+                        </Button>
+                      </>
                     )}
                     <span style={{ minWidth: 150, textAlign: 'right' }}>
                       {formatTraceTime(item.created_at)}
