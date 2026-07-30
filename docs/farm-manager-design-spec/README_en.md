@@ -1,185 +1,286 @@
 <p align="center">
-  <img src="./banner.png" alt="AgriAgent OS Design Spec" width="100%">
+  <img src="./banner.png" alt="AgriAgentOS" width="100%">
 </p>
 
 <p align="center">
-  English | <a href="./README.md">简体中文</a>
+  English | <a href="../../README.md">简体中文</a>
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI">
+  <img src="https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python">
   <img src="https://img.shields.io/badge/React-20232A?style=flat-square&logo=react&logoColor=61DAFB" alt="React">
   <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript">
   <img src="https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite">
   <img src="https://img.shields.io/badge/Flutter-02569B?style=flat-square&logo=flutter&logoColor=white" alt="Flutter">
   <img src="https://img.shields.io/badge/LangChain-1C3C3C?style=flat-square" alt="LangChain">
   <img src="https://img.shields.io/badge/SQLAlchemy-D71F00?style=flat-square&logo=sqlalchemy&logoColor=white" alt="SQLAlchemy">
-  <img src="https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker">
+  <img src="https://img.shields.io/badge/MySQL-4479A1?style=flat-square&logo=mysql&logoColor=white" alt="MySQL">
+  <img src="https://img.shields.io/badge/MongoDB-47A248?style=flat-square&logo=mongodb&logoColor=white" alt="MongoDB">
   <img src="https://img.shields.io/badge/AI_Agent-111827?style=flat-square" alt="AI Agent">
-  <img src="https://img.shields.io/badge/Farm_Management-2E7D32?style=flat-square" alt="Farm Management">
 </p>
 
-# AgriAgent OS Design Spec
+<p align="center">
+  <img src="https://img.shields.io/badge/Monorepo-backend%20%7C%20admin%20%7C%20mobile-111827?style=flat-square" alt="Monorepo">
+  <img src="https://img.shields.io/badge/Docs-Design%20Docs-2563EB?style=flat-square" alt="Design Docs">
+  <img src="https://img.shields.io/badge/OpenSpec-change%20workflow-7C3AED?style=flat-square" alt="OpenSpec">
+  <img src="https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Compose">
+  <img src="https://img.shields.io/badge/Tests-pytest%20%7C%20vitest%20%7C%20flutter-16A34A?style=flat-square" alt="Tests">
+  <img src="https://img.shields.io/badge/License-CC%20BY--NC%204.0-6B7280?style=flat-square" alt="License">
+</p>
 
-> Version: v1.5 (draft, calibrated against the 2026-07-30 codebase: Agent Planning Runtime convergence, TaskState Relevance Gate, PlanIR → ExecutionPlan → PendingPlan adapter, Skill registry operation metadata)
-> Last calibrated: 2026-07-30
-> Maintainer: BlockShip
-> Status: draft, continuously aligned with `docs/architecture/` and the codebase
+<h2 id="overview">🌱 Overview</h2>
 
----
+AgriAgentOS is an AI Agent operating system for agricultural operations. It covers a mobile operations workspace, natural-language bookkeeping, activity records, crop templates, weather-assisted planning, an admin console, and an Agent data flywheel. The project uses a FastAPI backend, a React admin console, and a Flutter mobile app. Around Skill, Context, Memory, Trace, and Evaluation, it builds a governable, observable, and testable Agent platform.
 
-## What is this
+Full architecture, API contracts, Agent runtime rules, and project governance live in the [design documents](./README.md).
 
-This repo is the **single source of truth** for the AgriAgent OS project's design spec. It consolidates the architectural decisions, module boundaries, interface contracts, and coding rules scattered across `docs/architecture/`, `docs/design/`, `.claude/rules/`, and `backend/app/**` into one place — so future iterations stay aligned across the team and across AI agents.
+<h2 id="quick-links">🧭 Quick Links</h2>
 
-Reference layout: the six-bucket pattern (pre-design / formal design / interface protocols / related rules / system testing / project management) used by mainstream agent design docs.
-
-## Relationship to existing docs
-
-| Existing doc | Role in this spec |
+| Entry | What it covers |
 | --- | --- |
-| `docs/architecture/overview.md` | Folded into [00_pre-design/02_system_function_and_tech_architecture.md](./00_预设计/02_系统功能及技术架构总设计.md) |
-| `docs/architecture/boundaries.md` | Boundary matrices sink into each module's "may depend on / must not depend on" table in [01_formal_design/01_agent_platform_architecture.md](./01_正式设计/01_Agent平台架构.md) |
-| `docs/architecture/agent-data-flywheel-industrial-roadmap.md` | Condensed and linked from [01_formal_design/06_data_flywheel_and_evaluation.md](./01_正式设计/06_数据飞轮与评测.md) |
-| `docs/architecture/evolution-roadmap.md` | Folded into [06_project_management/01_milestones_and_roadmap.md](./06_项目管理/01_里程碑与路线图.md) |
-| `.claude/rules/*.md` | Cited as authoritative; this spec does not restate the clauses, only points to them |
-| `.claude/rules/skill-writing.md` | Aligned with [01_formal_design/02_skill_engine_and_contract.md](./01_正式设计/02_Skill引擎与契约.md); on conflict, `skill-writing.md` wins |
+| [Screenshots](#screenshots) | Admin technical console and mobile business screens |
+| [Core Capabilities](#core-capabilities) | Agent, operational data, smart fill, and data flywheel |
+| [Architecture Highlights](#architecture-highlights) | Runtime, Skill, Context, Memory, and Trace boundaries |
+| [Quick Start](#quick-start) | Docker Compose and local development |
+| [Common Checks](#common-checks) | Backend, admin console, mobile, and architecture gates |
+| [Documentation](#documentation) | Design docs, architecture docs, API spec, and current sprint |
 
-Conflict resolution priority: code and `AGENTS.md` hard rules > `docs/architecture/` > this spec > historical commits. If this spec diverges from the real code, update this spec first; changing the implementation requires a separate design/code change.
+## Who Should Read This
 
-## Directory overview
+| Role | What you get |
+| --- | --- |
+| Agent engineer | Skill Registry, Context Engine, Memory Service, Runtime Loop, Reflection, and Trace feedback loops |
+| Backend engineer | FastAPI layering, domain folders, platform capabilities, database models, and Alembic constraints |
+| Frontend engineer | React admin console, Flutter mobile app, API boundaries, and real business screens |
+| Product / operations | Operations workspace, crop templates, ledger, weather, user management, and data flywheel |
+| Evaluation / QA | Simulation, Evaluation, TraceMonitor, DataFlywheel, and repair-pack workflows |
 
-| Folder | Contents | Primary audience |
+<h2 id="screenshots">🖼️ Screenshots</h2>
+
+### 🛠️ Admin Technical Console
+
+<table>
+  <tr>
+    <td align="center"><img src="../assets/screenshots/admin-trace-monitor.png" alt="Trace Monitor" width="320"><br>Trace Monitor</td>
+    <td align="center"><img src="../assets/screenshots/admin-token-dashboard.png" alt="Token Dashboard" width="320"><br>Token Dashboard</td>
+    <td align="center"><img src="../assets/screenshots/admin-playground.png" alt="Agent Playground" width="320"><br>Agent Playground</td>
+  </tr>
+  <tr>
+    <td align="center"><img src="../assets/screenshots/admin-data-flywheel.png" alt="DataFlywheel" width="320"><br>DataFlywheel</td>
+    <td align="center"><img src="../assets/screenshots/admin-skill-registry.png" alt="Skill Registry" width="320"><br>Skill Registry</td>
+    <td align="center"><img src="../assets/screenshots/admin-skill-router-eval.png" alt="Skill Router Eval" width="320"><br>Skill Router Eval</td>
+  </tr>
+  <tr>
+    <td align="center"><img src="../assets/screenshots/admin-prompt-inspector.png" alt="Prompt Inspector" width="320"><br>Prompt Inspector</td>
+    <td align="center"><img src="../assets/screenshots/admin-user-management.png" alt="User Management" width="320"><br>User Management</td>
+    <td align="center"><img src="../assets/screenshots/admin-weather.png" alt="Weather Context" width="320"><br>Weather Context</td>
+  </tr>
+</table>
+
+### 📱 Mobile Business Workspace
+
+<table>
+  <tr>
+    <td align="center"><img src="../assets/screenshots/mobile-home.png" alt="Home Workspace" width="180"><br>Home Workspace</td>
+    <td align="center"><img src="../assets/screenshots/mobile-record.png" alt="AI Smart Fill" width="180"><br>AI Smart Fill</td>
+    <td align="center"><img src="../assets/screenshots/mobile-yaya.png" alt="AI Assistant" width="180"><br>AI Assistant</td>
+    <td align="center"><img src="../assets/screenshots/mobile-ledger.png" alt="Ledger Overview" width="180"><br>Ledger Overview</td>
+    <td align="center"><img src="../assets/screenshots/mobile-crop-templates.png" alt="Crop Templates" width="180"><br>Crop Templates</td>
+  </tr>
+</table>
+
+<h2 id="core-capabilities">⚙️ Core Capabilities</h2>
+
+- **Agricultural AI Agent**: natural-language Q&A, tool calls, SSE streaming, write-operation confirmation, and final-response auditing.
+- **Operational data management**: costs, income, credit, labor, activity logs, planting cycles, plots, and work orders.
+- **Smart fill**: the mobile app uses `/smart-fill/scenarios` and `/smart-fill/parse` to generate form drafts before any business write.
+- **Crop template library**: system templates, farm copies, growth stages, duplicate checks, and template maintenance.
+- **Context and memory**: ContextBundle, TaskState, short-term summaries, and explicit long-term memory control the Agent input surface.
+- **Observability and data flywheel**: TraceMonitor, Simulation, Evaluation, DataFlywheel, and repair packs close the failure-to-regression loop.
+- **Admin console**: users, configuration, skills, tokens, traces, data flywheel, simulation, evaluation, and operations dashboards.
+
+## Capability Matrix
+
+| Capability | Coverage | Main entry |
 | --- | --- | --- |
-| [00_pre-design](./00_预设计) | System vision, overall tech architecture, tech selection | Everyone, especially newcomers |
-| [01_formal_design](./01_正式设计) | Agent platform, Skills, Context, Memory, Prompt, DataFlywheel, business modules, frontend contract | Backend + Agent engineers |
-| [02_product_requirements](./02_产品需求) | Core capability list, non-functional requirements | Product + engineering |
-| [03_interface_protocols](./03_接口协议) | HTTP API, Agent internal interfaces, external services, Skill contract | Engineers + integration partners |
-| [04_related_rules](./04_相关规范) | Prompt/persona, security, database, frontend/backend coding, anti-pollution | Everyone |
-| [05_system_testing](./05_系统测试) | Test pyramid, regression set, Simulation, Evaluation | QA + engineering |
-| [06_project_management](./06_项目管理) | Milestones, work breakdown, Git conventions | PM + engineering |
+| Agent Runtime | Tool calls, parallel execution, final response, output constraints, write confirmation | `backend/app/agent/` |
+| Skill System | Skill registry, operation metadata, permissions, schema, routing evaluation | `backend/app/skills/` |
+| Context Engineering | ContextBundle, selector, token budget, TaskState relevance gate | `backend/app/context/` |
+| Memory Engineering | Short-term window, session summary, explicit long-term memory, observation events | `backend/app/memory/` |
+| Prompt Engineering | Prompt registry, snippet composition, rendering, replay | `backend/app/prompt/` |
+| Data Flywheel | Sample queue, LLM pre-labeling, human confirmation, issue chain, repair pack | `backend/app/platforms/data_flywheel/` |
+| Simulation & Evaluation | Simulation cases, evaluation replay, router regression, report aggregation | `backend/app/platforms/evaluation/` |
+| Admin Console | Trace, Token, Skill, Prompt, Playground, users, weather, data flywheel | `admin-web/src/` |
+| Mobile App | Home, workspace, AI assistant, ledger, crop templates, profile settings | `mobile-app/lib/` |
 
-### Full index
+<h2 id="architecture-highlights">🏗️ Architecture Highlights</h2>
 
-> Note: the underlying files are named in Chinese for now; the English links below point to the same paths.
+AgriAgentOS is not just an LLM wired to a chat box. It separates risky writes, context pollution, wrong tool selection, and unauditable answers into explicit engineering boundaries:
 
-#### 00_pre-design
-- [01_system_vision_and_goals.md](./00_预设计/01_系统愿景与目标.md)
-- [02_system_function_and_tech_architecture.md](./00_预设计/02_系统功能及技术架构总设计.md)
-- [03_tech_selection_and_dependencies.md](./00_预设计/03_技术选型与依赖.md)
+- **Runtime decoupled from business logic**: Runtime owns the node state machine, tool calls, and final response. It does not own Prompt, Context, Memory, or domain rules.
+- **Skill operations as contracts**: A Skill carries operation metadata, input schema, risk level, confirmation policy, and routing hints.
+- **Explainable context**: Context is built by selector, budget, compressor, and trace payloads instead of dumping the database or raw traces into prompts.
+- **Fail-closed writes**: Costs, crops, work orders, labor, and other business writes enter pending action or pending plan by default; missing critical fields are not guessed.
+- **Trace to data flywheel**: Real requests, tool calls, model outputs, and failure evidence can become samples for evaluation, regression, and repair packs.
+- **Directories as boundaries**: New backend code belongs in `domains/*`, `platforms/*`, or the Agent platform boundary, not in legacy technical-layer folders.
 
-#### 01_formal_design
-- [01_agent_platform_architecture.md](./01_正式设计/01_Agent平台架构.md)
-- [02_skill_engine_and_contract.md](./01_正式设计/02_Skill引擎与契约.md)
-- [03_context_engineering.md](./01_正式设计/03_Context工程.md)
-- [04_memory_engineering.md](./01_正式设计/04_Memory工程.md)
-- [05_prompt_engineering.md](./01_正式设计/05_Prompt工程.md)
-- [06_data_flywheel_and_evaluation.md](./01_正式设计/06_数据飞轮与评测.md)
-- [07_observability_and_ops.md](./01_正式设计/07_可观测与运维.md)
-- [08_business_modularization.md](./01_正式设计/08_业务模块化.md)
-- [09_frontend_and_mobile_contract.md](./01_正式设计/09_前端与移动端契约.md)
-- [10_database_schema_design.md](./01_正式设计/10_数据库结构设计.md)
-- [11_skill_design/weather_skill.md](./01_正式设计/11_Skill设计/天气Skill.md)
-- [12_skill_routing_architecture.md](./01_正式设计/12_Skill路由选择架构.md)
-- [13_agent_paradigm_normalization.md](./01_正式设计/13_Agent范式规范化设计.md)
-- [14_mongodb_migration_plan.md](./01_正式设计/14_MongoDB迁移方案.md)
+## Tech Stack
 
-#### 02_product_requirements
-- [01_core_capability_list.md](./02_产品需求/01_核心能力清单.md)
-- [02_non_functional_requirements.md](./02_产品需求/02_非功能性需求.md)
-
-#### 03_interface_protocols
-- [01_http_api_protocol.md](./03_接口协议/01_HTTP_API协议.md)
-- [02_agent_internal_interfaces.md](./03_接口协议/02_Agent内部接口.md)
-- [03_external_service_interfaces.md](./03_接口协议/03_外部服务接口.md)
-- [04_skill_interface_contract.md](./03_接口协议/04_Skill接口契约.md)
-
-#### 04_related_rules
-- [01_prompt_and_persona_rules.md](./04_相关规范/01_Prompt与人设规范.md)
-- [02_security_and_permission_rules.md](./04_相关规范/02_安全与权限规范.md)
-- [03_database_and_migration_rules.md](./04_相关规范/03_数据库与迁移规范.md)
-- [04_frontend_coding_rules.md](./04_相关规范/04_前端编码规范.md)
-- [05_python_coding_rules.md](./04_相关规范/05_Python编码规范.md)
-- [06_anti_pollution_and_doc_sync_rules.md](./04_相关规范/06_防污染与文档同步规范.md)
-
-#### 05_system_testing
-- [01_test_pyramid_and_strategy.md](./05_系统测试/01_测试金字塔与策略.md)
-- [02_regression_test_set.md](./05_系统测试/02_回归测试集.md)
-- [03_simulation_testing.md](./05_系统测试/03_Simulation仿真测试.md)
-- [04_evaluation.md](./05_系统测试/04_Evaluation评测.md)
-
-#### 06_project_management
-- [01_milestones_and_roadmap.md](./06_项目管理/01_里程碑与路线图.md)
-- [02_work_breakdown.md](./06_项目管理/02_工作拆解.md)
-- [03_git_and_collaboration_rules.md](./06_项目管理/03_Git与协作规范.md)
-
-## Reading paths
-
-| Who you are | Suggested order |
+| Module | Technology |
 | --- | --- |
-| Newcomer onboarding | 00 → 02 → 03 → 01 |
-| Backend engineer | 01.01 → 01.02 → 01.03 → 03.02 → 04 |
-| Agent / Prompt engineer | 01.01 → 01.02 → 01.05 → 04.01 → 06 |
-| Mobile engineer | 02 → 03.01 → 01.09 → 04.04 |
-| Admin Web engineer | 02 → 03.01 → 01.09 → 04.04 |
-| Product / PM | 02 → 00.01 → 06 |
-| QA | 05 → 03 → 01 |
+| Backend | FastAPI, SQLAlchemy, Pydantic, Alembic, LangChain, Skillify |
+| Data | MySQL 8.x, MongoDB 7, JSONL event log |
+| Admin console | React 19, TypeScript, Vite, Ant Design 5, Vitest |
+| Mobile app | Flutter, Riverpod, Dio, GoRouter, Flutter Secure Storage |
+| Agent platform | Skill Registry, Context Engine, Memory Service, Runtime Loop, Reflection, Trace, Evaluation |
+| Deployment | Docker Compose, Uvicorn, Nginx static frontend container |
 
-## Hard constraints (PR-blocking)
+## Module Map
 
-1. **Dependency direction**: backend targets `bootstrap/routes → application/domains/platforms/agent → shared/infra`; do not add legacy `app.core`, `app.api`, `app.models`, `app.schemas`, `app.services`, `app.modules`, or `app.simulation` entries. Frontend remains `api → components → layouts → pages`. See [01.01 agent_platform_architecture](./01_正式设计/01_Agent平台架构.md).
-2. **Cross-cutting concerns**: auth / log / telemetry / trace only via dependency injection. Business layers must not import them directly.
-3. **File & method size limits**: production Python files ≤ 1000 lines; 500-1000 lines is an observation/review range; methods should stay ≤ 50 lines and require justification or step extraction above 80 lines; classes ≤ 200 lines; method parameters ≤ 5.
-4. **New code must have tests**: target ≥ 80% coverage, critical paths must be covered.
-5. **Skill contract**: real Skill code lives under `backend/app/skills/*/`; every Skill must ship a `skill.md`, write-operation scripts live under `scripts/` when needed, and the contract follows [01.02 skill_engine_and_contract](./01_正式设计/02_Skill引擎与契约.md).
-6. **Structured logging**: no `print` / `console.log` for debugging; logs must carry `trace_id`.
-7. **Database changes**: Alembic only; no manual SQL DDL; MySQL 8.x with `utf8mb4` charset.
-8. **Write Skills cannot be cached**, and must not guess business-critical fields when parameters are missing.
+| Module | Purpose | Main concern |
+| --- | --- | --- |
+| `backend/app/bootstrap/` | FastAPI app factory, route registration, middleware, lifespan | Clear and testable startup |
+| `backend/app/domains/` | Users, farms, crops, finance, weather, sessions | Business rules stay out of platform code |
+| `backend/app/application/` | Chat, sessions, suggestions, reports | Thin API entry points |
+| `backend/app/agent/` | Runtime, planner, executor, guardrails, reflection | Decomposable Agent execution |
+| `backend/app/skills/` | Skill implementation, registration, permission, schema | Governable and testable tools |
+| `backend/app/platforms/` | admin, data_flywheel, evaluation, simulation | Platform capabilities isolated from domains |
+| `admin-web/` | React admin console | Operations, evaluation, traces, and data flywheel |
+| `mobile-app/` | Flutter mobile app | User-facing operations workspace |
 
-## Maintenance cadence
+## Project Structure
 
-- **Triggers for editing this spec**: ① add/modify an API endpoint; ② add/modify a data model; ③ add/modify a Skill; ④ modify config or deployment; ⑤ modify security policy; ⑥ add a functional module.
-- **Every formal PR**: if it hits any trigger above, the corresponding chapter must be updated in the same PR with a link back.
-- **Quarterly review**: cross-check the index against the real structure of `backend/app/`, `admin-web/src/`, `mobile-app/lib/`. Inconsistencies are fixed by the original author.
+```text
+backend/app/
+├── bootstrap/       # App factory, route registration, middleware, exceptions, lifespan
+├── domains/         # Users, farms, crops, finance, weather, sessions
+├── application/     # Chat, sessions, suggestions, reports
+├── agent/           # Agent runtime, planner, executor, guardrails, reflection
+├── skills/          # Skill implementation, registration, permissions, schema, adapters
+├── prompt/          # Prompt registry, composition, rendering, replay
+├── context/         # ContextBundle, selector, budget, compression, task state
+├── memory/          # Short-term memory, explicit long-term memory, observation
+├── platforms/       # admin, data_flywheel, evaluation, simulation, shared
+├── shared/          # Config, database, logging, security, time, model registry
+├── infra/           # trace, Mongo, rate limit, cache, circuit breaker, RAG client
+└── ops/             # seed, audit, operations helpers
 
-## Glossary
+admin-web/           # React admin console
+mobile-app/          # Flutter mobile app
+docs/                # Architecture, design, standards, screenshot assets
+openspec/            # Change proposals and capability specifications
+```
 
-| Term | Definition |
+Do not recreate legacy backend entry folders such as `app.core`, `app.api`, `app.models`, `app.schemas`, `app.services`, `app.modules`, or `app.simulation`.
+
+<h2 id="quick-start">🚀 Quick Start</h2>
+
+### Docker Compose
+
+```bash
+cp backend/config.yaml.example backend/config.yaml
+
+cat > .env <<'ENV'
+MYSQL_ROOT_PASSWORD=change-me
+MYSQL_PASSWORD=change-me
+MONGO_INITDB_ROOT_PASSWORD=change-me
+AUTH_JWT_SECRET=change-me-to-a-long-random-secret
+ENV
+
+docker compose up -d --build
+```
+
+Default ports:
+
+| Service | URL |
 | --- | --- |
-| Agent | The farm-assistant intelligent agent, composed of Application Chat + Router + Runtime Loop + Executor + Reflector |
-| Advisor | Historical compatibility term now split into `application/chat`, `agent/runtime`, `agent/guardrails`, and `agent/executor` |
-| Skill | Single-capability module, implemented per the `.claude/rules/skill-writing.md` contract; either read-only or write |
-| TaskState | Cross-turn working task state stored in `agent_task_states`; injected into Router/Context only when the relevance gate opens |
-| PlanIR | Planner-facing structured plan expression: steps, dependencies, risks, and response contract; never executed directly |
-| ExecutionPlan | Runtime-facing safe projection of `PlanIR`, resolved to operation / skill / params / confirmation policy |
-| ContextBundle | The dynamic context bundle consumed by Runtime; built by Selector + Budget + Compressor |
-| MemoryService | Unified port for short-term memory + long-term memory + Retrieval + Observation |
-| PromptComposer | Renderer that stitches snippets into the final system prompt, governed by `prompt/` |
-| DataFlywheel | Sample workbench: extracts from sessions / traces / simulation failures → rule candidates → LLM pre-labeling → human confirmation → regression / evaluation / training data |
-| Simulation | Regression executor: runs DB-backed regression cases |
-| Evaluation | Trend scorer: pass rate / tool-selection accuracy / pending-miss rate across versions |
-| Pending Action | A write-op action that requires user confirmation; supports confirm / cancel / expire |
-| Pending Plan | A multi-step write plan that requires user confirmation; built from `ExecutionPlan` or runtime draft |
-| Smart Fill | Mobile-side unified entry for smart form filling: `/smart-fill/scenarios` lists scenarios + `/smart-fill/parse` parses |
-| Farm Cockpit | Mobile home dashboard; carries daily advice, key metrics, quick entries |
-| Yaya | Mobile AI assistant chat page (the "Yaya" IP) |
+| Backend API | `http://127.0.0.1:18000` |
+| Admin console | `http://127.0.0.1:18080` |
+| Health check | `http://127.0.0.1:18000/health` |
 
-## Changelog
+LLM, weather, RAG, and vector retrieval settings are configured through `backend/config.yaml` or environment variables. Template files do not contain real secrets.
 
-| Version | Date | Change | Author |
-| --- | --- | --- | --- |
-| v0.1 | 2026-06-19 | Created the directory scaffold and the first drafts of the core chapters (25 chapters across 00–04) | BlockShip |
-| v0.2 | 2026-06-19 | Filled in 05_system_testing (4 chapters) + 06_project_management (3 chapters); the 32-chapter scaffold is complete | BlockShip |
-| v0.3 | 2026-06-19 | [03_context_engineering] § 6 compression strategy rewritten to match the actual code (5 stages + multi-turn amnesia root causes + comparison of mainstream approaches + recommended approach); [04_memory_engineering] § 6 short-term memory adds "current implementation / identified issues / fix directions"; adds § 12 multi-turn amnesia remediation roadmap and § 13 storage evolution roadmap (Redis decision: not yet) | BlockShip |
-| v0.4 | 2026-06-19 | [01_formal_design/06_data_flywheel_and_evaluation] adds § 9 Discovery Layer and risk discovery (2-level filter + max-score + rule engine + LLM Judge + 3 workbench tweaks + 4.5 person-day MVP); the original § 9–§ 12 shift to § 10–§ 13; [00_pre-design/02_system_function_and_tech_architecture] architecture diagram + five-subsystem table + § 5.7 decision + § 7 landing status adds Discovery Layer | BlockShip |
-| v0.5 | 2026-06-19 | Knowledge & Memory architecture brainstorming output: [04_memory_engineering] § 7 long-term memory adds § 7.2 implementation (candidate→confirmed transitions + new `memory_records` table + shared trigger with summary); § 8 retrieval adds § 8.2 four conditions for adopting Qdrant + § 8.3 implementation boundaries; § 14 current status / § 16 related docs synced; [02_skill_engine_and_contract] `create_crop_template` gets a region note | BlockShip |
-| v0.6 | 2026-06-19 | Redaction: dropped concrete external project names and paths from comparison chapters ([Readme], [01_agent_platform_architecture] § 9, [02_system_function_and_tech_architecture] § 6, [04_memory_engineering] § 15); removed the production server IP ([07_observability_and_ops] § 11, [03_tech_selection_and_dependencies] § 5.1) | BlockShip |
-| v0.7 | 2026-06-19 | Deeper redaction pass: [07_observability_and_ops] § 5 drops the "align with smart-home LOGBUS style" line, § 11 deployment paths / service names / ops scripts all turned into placeholders (`<repo_dir>` / `<service_name>`); [03_tech_selection_and_dependencies] § 5 synced; [03_interface_protocols/03_external_service_interfaces] § 5/§ 6 log paths + every `/root/workspace/...` in the systemd unit turned into placeholders, User field turned into `<deploy_user>` | BlockShip |
-| v0.8 | 2026-06-19 | Region-tag sync: created [openspec/changes/extend-crop-template-with-region-tag](../../openspec/changes/extend-crop-template-with-region-tag/proposal.md) delta proposal (full proposal/design/specs/tasks); synced [04_related_rules/03_database_and_migration_rules] table list `crops → crop_templates` + region_tag note; [01_formal_design/08_business_modularization] CropPort signature adds region + new `list_system_templates` / `import_system_template`; [02_product_requirements/01_core_capability_list] crop management gets region variants; [03_interface_protocols/01_http_api_protocol] adds `GET /crops/templates/system?region=` and `POST /import` endpoints | BlockShip |
-| v0.9 | 2026-06-20 | Added [01_formal_design/10_database_schema_design]: using `backend/sql/farm_manager.sql` production dump as the baseline, derives the fields, constraints, indexes, and foreign keys of 33 tables (including `alembic_version`); adds an interface→table mapping matrix, a production-vs-code delta reconciliation, and a reserved-tables list (`memory_records` / `audit_logs` / `evaluation_reports`, etc.) | BlockShip |
-| v1.4 | 2026-07-24 | Calibrated entry docs against real code: React Native changed to Flutter; legacy `app.core/api/models/schemas/services/modules/simulation` entries replaced by `bootstrap/application/domains/agent/context/memory/platforms/shared/infra/skills`; HTTP API, database source, Simulation/Evaluation status, and roadmap synced to current implementation | Codex |
-| v1.5 | 2026-07-30 | Synced Agent Planning Runtime convergence: TaskState retrieval now has a relevance gate, Context injection is controlled by `task_state_should_inject`, `PlanIR` projects to `PendingPlan` through the `ExecutionPlan` adapter, Skill registry operation metadata expanded, and `TurnResult` becomes the preferred structured TaskState update input | Codex |
+### Local Development
+
+Backend:
+
+```bash
+cd backend
+python -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+Admin console:
+
+```bash
+cd admin-web
+pnpm install
+pnpm dev
+```
+
+Mobile app:
+
+```bash
+cd mobile-app
+flutter pub get
+flutter run
+```
+
+## Common Checks
+
+```bash
+# Backend
+cd backend
+ruff check .
+pytest -v
+
+# Admin console
+cd admin-web
+pnpm lint
+pnpm test
+
+# Mobile app
+cd mobile-app
+flutter analyze
+flutter test
+```
+
+Architecture and complexity gates:
+
+```bash
+bash scripts/check-layer-deps.sh
+bash scripts/check-complexity-budget.sh
+bash scripts/check-guide-sensor-pairing.sh
+```
+
+## Development Conventions
+
+- **Branching**: use `codex/*` or a dedicated worktree by default, then merge through a PR.
+- **Commits**: use Conventional Commits, such as `feat:`, `fix:`, `docs:`, `refactor:`, and `test:`.
+- **Doc sync**: when APIs, data models, Skills, config, deployment, or security policy change, update the matching design documents.
+- **Testing**: add automated tests for clear and testable requirements; for design-only or non-automatable changes, add structure checks and human-review points.
+- **Security**: do not commit `.env`, real secrets, credentials, production connection strings, or bulky temporary artifacts.
+- **Assets**: README pages reference stable screenshots in `docs/assets/screenshots/`; `output/` is only a candidate asset pool.
+
+<h2 id="documentation">📚 Documentation</h2>
+
+| Document | Purpose |
+| --- | --- |
+| [AGENTS.md](../../AGENTS.md) | Agent working rules, project map, and hard constraints |
+| [Architecture overview](../architecture/overview.md) | Current architecture source of truth and module boundaries |
+| [Backend architecture](../architecture/backend-architecture.md) | Backend responsibilities, request flow, and Agent platform split |
+| [Design documents](./README.md) | Formal design, interface protocols, testing strategy, and project management |
+| [Agent development standard](../agent/agent-development-standard.md) | Agent / Skill / Context / Trace development rules |
+| [API spec](../reference/api-spec.yaml) | OpenAPI / HTTP protocol reference |
+| [Current sprint](../plans/current-sprint.md) | Current sprint status and follow-up tasks |
+
+## Screenshot & Asset Policy
+
+The README pages only reference stable documentation assets under `docs/assets/screenshots/`. The `output/` directory is used for generated artifacts, design candidates, and temporary screenshot storage, not as a long-term documentation source.
 
 ## License
 
-[CC BY-NC 4.0](./LICENSE) © BlockShip — share and adapt with attribution, no commercial use.
+[CC BY-NC 4.0](./LICENSE) © BlockShip. You may share and adapt with attribution. Commercial use is not permitted.

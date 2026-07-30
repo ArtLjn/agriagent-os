@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  简体中文 | <a href="docs/farm-manager-design-spec/README_en.md">English Design Spec</a>
+  简体中文 | <a href="docs/farm-manager-design-spec/README_en.md">English</a>
 </p>
 
 <p align="center">
@@ -22,20 +22,20 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Monorepo-backend%20%7C%20admin%20%7C%20mobile-111827?style=flat-square" alt="Monorepo">
-  <img src="https://img.shields.io/badge/Docs-Design%20Spec-2563EB?style=flat-square" alt="Design Spec">
+  <img src="https://img.shields.io/badge/Docs-Design%20Docs-2563EB?style=flat-square" alt="Design Docs">
   <img src="https://img.shields.io/badge/OpenSpec-change%20workflow-7C3AED?style=flat-square" alt="OpenSpec">
   <img src="https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Compose">
   <img src="https://img.shields.io/badge/Tests-pytest%20%7C%20vitest%20%7C%20flutter-16A34A?style=flat-square" alt="Tests">
   <img src="https://img.shields.io/badge/License-CC%20BY--NC%204.0-6B7280?style=flat-square" alt="License">
 </p>
 
-## 项目概览
+<h2 id="项目概览">🌱 项目概览</h2>
 
 AgriAgentOS 是一个面向农业经营场景的 AI Agent 操作系统，覆盖移动端经营工作台、自然语言记账、农事记录、作物模板、天气辅助规划、后台运维和 Agent 数据飞轮。项目采用 FastAPI 后端、React 管理后台和 Flutter 移动端，并围绕 Skill、Context、Memory、Trace 和 Evaluation 构建可治理、可观测、可评测的农业 Agent 平台。
 
 完整架构、接口协议、Agent 运行规范和项目治理说明见 [设计文档](docs/farm-manager-design-spec/README.md)。
 
-## 快速导航
+<h2 id="快速导航">🧭 快速导航</h2>
 
 | 入口 | 说明 |
 | --- | --- |
@@ -56,9 +56,9 @@ AgriAgentOS 是一个面向农业经营场景的 AI Agent 操作系统，覆盖�
 | 产品 / 运营 | 了解农业经营工作台、作物模板、账务、天气、用户管理和数据飞轮能力 |
 | 评测 / QA | 了解 Simulation、Evaluation、TraceMonitor、DataFlywheel 和 repair pack 的问题闭环 |
 
-## 界面预览
+<h2 id="界面预览">🖼️ 界面预览</h2>
 
-### 管理端技术界面
+### 🛠️ 管理端技术界面
 
 <table>
   <tr>
@@ -78,7 +78,7 @@ AgriAgentOS 是一个面向农业经营场景的 AI Agent 操作系统，覆盖�
   </tr>
 </table>
 
-### 移动端业务界面
+### 📱 移动端业务界面
 
 <table>
   <tr>
@@ -90,7 +90,7 @@ AgriAgentOS 是一个面向农业经营场景的 AI Agent 操作系统，覆盖�
   </tr>
 </table>
 
-## 核心能力
+<h2 id="核心能力">⚙️ 核心能力</h2>
 
 - **AI 农业 Agent**：支持自然语言问答、工具调用、SSE 流式回复、写操作确认和最终回复审计。
 - **经营数据管理**：覆盖成本、收入、赊账、人工、农事日志、种植周期、地块和作业单。
@@ -114,7 +114,7 @@ AgriAgentOS 是一个面向农业经营场景的 AI Agent 操作系统，覆盖�
 | 管理后台 | Trace、Token、Skill、Prompt、Playground、用户、天气、数据飞轮 | `admin-web/src/` |
 | 移动端 | 首页、工作台、AI 助理、账本、作物模板、个人设置 | `mobile-app/lib/` |
 
-## 架构亮点
+<h2 id="架构亮点">🏗️ 架构亮点</h2>
 
 AgriAgentOS 的重点不是把 LLM 接到一个聊天框，而是把农业场景里的高风险写操作、上下文污染、工具选择错误和回复不可审计问题拆成可治理的工程边界：
 
@@ -174,7 +174,7 @@ openspec/            # 需求变更和能力规格
 
 新增后端代码不得重新创建 `app.core`、`app.api`、`app.models`、`app.schemas`、`app.services`、`app.modules`、`app.simulation` 等旧技术层入口。
 
-## 快速启动
+<h2 id="快速启动">🚀 快速启动</h2>
 
 ### Docker Compose
 
@@ -265,14 +265,14 @@ bash scripts/check-guide-sensor-pairing.sh
 - **安全边界**：不提交 `.env`、真实密钥、凭证、生产连接串或大体积临时产物。
 - **资源归档**：README 只引用 `docs/assets/screenshots/` 中的稳定截图；`output/` 只作为生成物和候选素材池。
 
-## 文档入口
+<h2 id="文档入口">📚 文档入口</h2>
 
 | 文档 | 用途 |
 | --- | --- |
 | [AGENTS.md](AGENTS.md) | Agent 工作规则、项目地图和硬性约束 |
 | [系统架构](docs/architecture/overview.md) | 当前架构事实源和模块边界 |
 | [后端系统架构](docs/architecture/backend-architecture.md) | 后端目录职责、请求链路和 Agent 平台拆分 |
-| [设计规范](docs/farm-manager-design-spec/README.md) | 完整设计规范、接口协议、测试策略和项目管理 |
+| [设计文档](docs/farm-manager-design-spec/README.md) | 完整设计文档、接口协议、测试策略和项目管理 |
 | [Agent 开发标准](docs/agent/agent-development-standard.md) | Agent / Skill / Context / Trace 开发硬规范 |
 | [API 协议](docs/reference/api-spec.yaml) | OpenAPI / HTTP 协议参考 |
 | [当前迭代](docs/plans/current-sprint.md) | 当前 sprint 状态和后续任务 |
