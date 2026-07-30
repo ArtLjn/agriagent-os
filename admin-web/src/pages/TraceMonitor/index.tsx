@@ -742,7 +742,11 @@ function PillRow({
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         {values.length > 0 ? (
           values.map((item, index) => (
-            <Tag key={`${label}-${displayValue(item)}-${index}`} color={color}>
+            <Tag
+              key={`${label}-${displayValue(item)}-${index}`}
+              color={color}
+              style={tagWrapStyle}
+            >
               {displayValue(item)}
             </Tag>
           ))
@@ -939,7 +943,7 @@ function Metric({ label, value }: { label: string; value: unknown }) {
   return (
     <div style={{ minWidth: 0 }}>
       <div style={{ color: TEXT_DIM, fontSize: 11, marginBottom: 2 }}>{label}</div>
-      <div style={{ color: TEXT, fontSize: 13, wordBreak: 'break-word' }}>
+      <div style={{ ...containedTextStyle, color: TEXT, fontSize: 13 }}>
         {displayValue(value)}
       </div>
     </div>
@@ -948,7 +952,7 @@ function Metric({ label, value }: { label: string; value: unknown }) {
 
 function NodeTraceVisualization({ node }: { node: TraceNodeDetail }) {
   return (
-    <Space direction="vertical" style={{ width: '100%' }} size="middle">
+    <Space direction="vertical" style={detailStackStyle} size="middle">
       <NodeHeader node={node} />
       {hasTracePayload(node.input_data) && (
         <TracePayloadSummary title="输入数据" value={node.input_data} nodeType={node.node_type} mode="input" />
@@ -1321,9 +1325,13 @@ function RawTraceDetails({
         border: `1px solid ${BORDER}`,
         fontSize: 12,
         margin: '8px 0 0 0',
+        maxWidth: '100%',
         maxHeight: 640,
         overflow: 'auto',
+        overflowWrap: 'anywhere',
         whiteSpace: 'pre-wrap',
+        wordBreak: 'break-word',
+        boxSizing: 'border-box',
       }}>
         {formatTracePayload(value)}
       </pre>
@@ -1387,6 +1395,9 @@ const summaryPanelStyle: CSSProperties = {
   border: `1px solid ${BORDER}`,
   borderRadius: 8,
   padding: 12,
+  minWidth: 0,
+  maxWidth: '100%',
+  boxSizing: 'border-box',
 };
 
 const sectionTitleStyle: CSSProperties = {
@@ -1403,12 +1414,14 @@ const metricGridStyle: CSSProperties = {
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
   gap: 10,
+  minWidth: 0,
 };
 
 const blockMetaGridStyle: CSSProperties = {
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
   gap: 8,
+  minWidth: 0,
 };
 
 const blockStyle: CSSProperties = {
@@ -1419,6 +1432,9 @@ const blockStyle: CSSProperties = {
   border: `1px solid ${BORDER}`,
   borderRadius: 6,
   padding: 10,
+  minWidth: 0,
+  maxWidth: '100%',
+  boxSizing: 'border-box',
 };
 
 const nestedPanelStyle: CSSProperties = {
@@ -1426,6 +1442,9 @@ const nestedPanelStyle: CSSProperties = {
   border: `1px solid ${BORDER}`,
   borderRadius: 6,
   padding: 10,
+  minWidth: 0,
+  maxWidth: '100%',
+  boxSizing: 'border-box',
 };
 
 const sourceCardStyle: CSSProperties = {
@@ -1436,6 +1455,9 @@ const sourceCardStyle: CSSProperties = {
   border: `1px solid ${BORDER}`,
   borderRadius: 6,
   padding: 10,
+  minWidth: 0,
+  maxWidth: '100%',
+  boxSizing: 'border-box',
 };
 
 const scoreGroupStyle: CSSProperties = {
@@ -1444,6 +1466,8 @@ const scoreGroupStyle: CSSProperties = {
   borderRadius: 6,
   padding: 10,
   minWidth: 0,
+  maxWidth: '100%',
+  boxSizing: 'border-box',
 };
 
 const recallOverviewStyle: CSSProperties = {
@@ -1508,7 +1532,12 @@ const previewStyle: CSSProperties = {
   padding: 8,
   fontSize: 12,
   lineHeight: 1.6,
+  minWidth: 0,
+  maxWidth: '100%',
+  overflowWrap: 'anywhere',
   whiteSpace: 'pre-wrap',
+  wordBreak: 'break-word',
+  boxSizing: 'border-box',
 };
 
 const sourceStyle: CSSProperties = {
@@ -1517,6 +1546,8 @@ const sourceStyle: CSSProperties = {
   gap: 8,
   color: TEXT_DIM,
   fontSize: 12,
+  minWidth: 0,
+  maxWidth: '100%',
 };
 
 const nodeHeroStyle: CSSProperties = {
@@ -1524,6 +1555,33 @@ const nodeHeroStyle: CSSProperties = {
   border: `1px solid ${BORDER}`,
   borderRadius: 8,
   padding: 14,
+  minWidth: 0,
+  maxWidth: '100%',
+  boxSizing: 'border-box',
+};
+
+const containedTextStyle: CSSProperties = {
+  minWidth: 0,
+  maxWidth: '100%',
+  overflowWrap: 'anywhere',
+  wordBreak: 'break-word',
+};
+
+const tagWrapStyle: CSSProperties = {
+  maxWidth: '100%',
+  whiteSpace: 'normal',
+  overflowWrap: 'anywhere',
+  wordBreak: 'break-word',
+};
+
+const detailStackStyle: CSSProperties = {
+  width: '100%',
+  maxWidth: '100%',
+  minWidth: 0,
+};
+
+const traceDrawerBodyStyle: CSSProperties = {
+  overflowX: 'hidden',
 };
 
 export default function TraceMonitor() {
@@ -2005,6 +2063,7 @@ export default function TraceMonitor() {
         width={760}
         onClose={() => setDrawerOpen(false)}
         open={drawerOpen}
+        styles={{ body: traceDrawerBodyStyle }}
       >
         {nodeDetail ? (
           <NodeTraceVisualization node={nodeDetail} />

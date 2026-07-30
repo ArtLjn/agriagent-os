@@ -720,6 +720,54 @@ describe('TraceMonitor query 初始化', () => {
     expect(screen.queryByText('Context 摘要')).not.toBeInTheDocument();
   });
 
+  it('节点详情长 JSON 字段允许在面板内断行', async () => {
+    const longPlanDraft = `plan_draft:${'x'.repeat(240)}`;
+    mockedGetTimeline.mockResolvedValueOnce({
+      request_id: 'req-1',
+      rounds: [
+        {
+          round_index: 0,
+          nodes: [
+            {
+              node_type: 'post_process',
+              node_name: 'post_tool_result',
+              duration_ms: 0,
+              status: 'success',
+              token_usage: null,
+              start_time: null,
+              error_message: null,
+              input_data: {
+                selected_tools: [],
+                tool_call_ids: ['call_0b309b594e324610a60021a4'],
+                plan_draft: longPlanDraft,
+              },
+              output_data: null,
+            },
+          ],
+        },
+      ],
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/dev/traces?request_id=req-1']}>
+        <TraceMonitor />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: '打开节点 post_tool_result' }));
+
+    const matches = await screen.findAllByText(new RegExp(`plan_draft:.*${'x'.repeat(24)}`));
+    const preview = matches.find((element) => element.tagName === 'DIV');
+    if (!preview) {
+      throw new Error('未找到输入数据预览块');
+    }
+    expect(preview).toHaveStyle({
+      maxWidth: '100%',
+      overflowWrap: 'anywhere',
+      wordBreak: 'break-word',
+    });
+  });
+
   it('展开 trace 时展示请求级根因、指标和恢复建议', async () => {
     mockedListTraceRequests.mockResolvedValueOnce({
       total: 1,
