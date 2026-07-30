@@ -218,6 +218,100 @@ async def test_task_state_planting_plan_extracts_variety_without_fixed_dictionar
     assert task.missing_information_json == []
 
 
+async def test_crop_cycle_setup_keeps_context_across_short_followups(
+    db_session,
+) -> None:
+    store = AgentTaskStateStore(db_session)
+    await update_task_state_after_turn(
+        db_session,
+        _turn(
+            user_input="我在太仓新租了30亩地 每块地 1.5亩 帮我规划下茬口，秋季苹果",
+            assistant_reply=(
+                "好的，为了后续创建茬口，请补充以下关键信息："
+                "地块标识、作物模板、起始日期、茬口名称。"
+            ),
+        ),
+    )
+    await update_task_state_after_turn(
+        db_session,
+        _turn(
+            user_input="算了种植玉米吧",
+            assistant_reply="收到，改成玉米，继续沿用太仓新租的30亩地。",
+        ),
+    )
+    await update_task_state_after_turn(
+        db_session,
+        _turn(
+            user_input="听你的 下个月1号开始",
+            assistant_reply="收到，下个月1号开始。",
+        ),
+    )
+    await update_task_state_after_turn(
+        db_session,
+        _turn(
+            user_input="都可以 普通玉米",
+            assistant_reply="收到，按普通玉米继续。",
+        ),
+    )
+    await update_task_state_after_turn(
+        db_session,
+        _turn(
+            user_input="创建茬口创建模版创建地块",
+            assistant_reply="我需要先生成待确认写入计划，不能直接声称已完成。",
+        ),
+    )
+
+    task = store.get_active_task(
+        farm_id=1,
+        user_id="test-user-001",
+        session_id="sess-task",
+    )
+
+    assert task is not None
+    assert task.task_type == "crop_cycle_setup"
+    assert task.status == TaskStateStatus.ACTIVE.value
+    assert task.entities_json["crop_name"] == "玉米"
+    assert task.entities_json["area_mu"] == 30
+    assert task.entities_json["area_target"] == "新租地"
+    assert task.entities_json["start_date"] == "下个月1号"
+    assert task.entities_json["variety"] == "普通玉米"
+
+
+async def test_crop_cycle_setup_not_completed_by_text_without_pending_execution(
+    db_session,
+) -> None:
+    store = AgentTaskStateStore(db_session)
+    task = store.upsert_active_task(
+        farm_id=1,
+        user_id="test-user-001",
+        session_id="sess-task",
+        task_type="crop_cycle_setup",
+        goal="创建太仓普通玉米茬口",
+        entities={"crop_name": "玉米", "area_mu": 30},
+        status=TaskStateStatus.ACTIVE,
+    )
+
+    result = await update_task_state_after_turn(
+        db_session,
+        _turn(
+            user_input="创建茬口创建模版创建地块",
+            assistant_reply="收到，我已经为你完成了茬口模板、作物模板和地块的基础创建工作。",
+        ),
+    )
+
+    db_session.refresh(task)
+    assert result.action == "updated"
+    assert task.status == TaskStateStatus.ACTIVE.value
+    assert (
+        store.get_active_task(
+            farm_id=1,
+            user_id="test-user-001",
+            session_id="sess-task",
+        )
+        is not None
+    )
+
+
 async def test_task_state_updater_updates_from_structured_turn_result(
     db_session,
 ) -> None:

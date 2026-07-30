@@ -27,6 +27,9 @@ _TASK_ACTION_CONTINUE_RE = re.compile(
     r"(确认(?:创建|执行)|按刚才(?:的方案)?(?:创建|执行)?|"
     r"就这样|按这个来|照这个做|执行吧|创建吧)"
 )
+_CROP_CYCLE_SETUP_WRITE_RE = re.compile(
+    r"(?:创建|新建|新增|建|搞好|落地).{0,16}(?:茬口|模[板版]|地块|种植单元)"
+)
 
 
 @dataclass(frozen=True)
@@ -85,8 +88,12 @@ def evaluate_task_state_relevance(
         return _decision(0.0, "do_not_inject", "用户输入为空")
     if _looks_like_continuation(normalized):
         return _decision(0.9, "inject", "命中任务承接/确认表达")
+    if _matches_task_specific_continuation(normalized, active_task):
+        return _decision(0.85, "inject", "命中当前任务领域承接表达")
     if _matches_missing_information(normalized, active_task):
         return _decision(0.85, "inject", "用户输入匹配当前任务缺失信息")
+    if _mentions_known_task_entity(normalized, active_task):
+        return _decision(0.8, "inject", "用户输入提到当前任务已知实体")
     if _looks_like_bypass_query(normalized):
         return _decision(0.1, "do_not_inject", "命中独立旁路查询")
 
@@ -159,6 +166,13 @@ def _looks_like_continuation(normalized: str) -> bool:
     )
 
 
+def _matches_task_specific_continuation(normalized: str, active_task: dict) -> bool:
+    task_type = str(active_task.get("task_type") or "")
+    if task_type == "crop_cycle_setup":
+        return bool(_CROP_CYCLE_SETUP_WRITE_RE.search(normalized))
+    return False
+
+
 def _matches_missing_information(normalized: str, active_task: dict) -> bool:
     missing = _missing_text(active_task)
     if not missing:
@@ -174,6 +188,31 @@ def _matches_missing_information(normalized: str, active_task: dict) -> bool:
             _UNIT_NAME_RE.search(normalized) or _looks_like_short_unit_name(normalized)
         )
     return False
+
+
+def _mentions_known_task_entity(normalized: str, active_task: dict) -> bool:
+    entities = active_task.get("entities")
+    if not isinstance(entities, dict):
+        return False
+    values = list(_flatten_entity_values(entities))
+    return any(value and value in normalized for value in values)
+
+
+def _flatten_entity_values(value: Any) -> list[str]:
+    if isinstance(value, dict):
+        values: list[str] = []
+        for item in value.values():
+            values.extend(_flatten_entity_values(item))
+        return values
+    if isinstance(value, list):
+        values = []
+        for item in value:
+            values.extend(_flatten_entity_values(item))
+        return values
+    if isinstance(value, str | int | float):
+        text = str(value).strip()
+        return [text] if len(text) >= 2 else []
+    return []
 
 
 def _missing_text(active_task: dict) -> str:

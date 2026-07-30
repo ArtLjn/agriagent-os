@@ -84,6 +84,34 @@ def test_relevance_injects_confirmation_when_waiting_next_action() -> None:
     assert decision.decision == "inject"
 
 
+def test_relevance_injects_crop_cycle_setup_write_continuation() -> None:
+    decision = evaluate_task_state_relevance(
+        "创建茬口创建模版创建地块",
+        _active_task(
+            task_type="crop_cycle_setup",
+            missing_information=["种植单元名称"],
+        ),
+    )
+
+    assert decision.should_inject is True
+    assert decision.decision == "inject"
+    assert decision.score >= 0.75
+
+
+def test_relevance_injects_entity_followup_for_active_task() -> None:
+    decision = evaluate_task_state_relevance(
+        "都可以 普通玉米",
+        _active_task(
+            task_type="crop_cycle_setup",
+            missing_information=["品种"],
+        ),
+    )
+
+    assert decision.should_inject is True
+    assert decision.decision == "inject"
+    assert decision.score >= 0.75
+
+
 def test_relevance_rejects_weather_bypass_query() -> None:
     decision = evaluate_task_state_relevance(
         "天气怎么样？",
