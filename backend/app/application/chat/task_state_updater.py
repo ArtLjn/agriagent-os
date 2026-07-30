@@ -22,6 +22,20 @@ class TaskStateTurn:
     pending_action: object | None = None
     pending_plan: object | None = None
     pending_decision_handled: bool = False
+    turn_result: TurnResult | None = None
+
+
+@dataclass(frozen=True)
+class TurnResult:
+    """Planner/Executor 输出的结构化轮次结果。"""
+
+    intent: str = ""
+    task_type: str = ""
+    entities: dict[str, object] = field(default_factory=dict)
+    missing_slots: list[str] = field(default_factory=list)
+    plan_result: dict[str, object] | None = None
+    execution_result: dict[str, object] | None = None
+    facts: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -33,6 +47,7 @@ class TaskStateUpdateResult:
     task_id: str | None = None
     task_type: str = ""
     missing_information: list[str] = field(default_factory=list)
+    source: str = "reply_regex"
 
 
 async def update_task_state_after_turn(
@@ -49,6 +64,9 @@ async def update_task_state_after_turn(
         user_id=turn.user_id,
         session_id=turn.session_id,
     )
+    structured_result = _update_from_turn_result(store, turn, active)
+    if structured_result is not None:
+        return structured_result
     pending_completion = _complete_existing_task_after_pending_decision(
         store, turn, active
     )
@@ -76,6 +94,116 @@ async def update_task_state_after_turn(
         missing=missing,
         start_reason=start_reason,
     )
+
+
+def _update_from_turn_result(
+    store: AgentTaskStateStore,
+    turn: TaskStateTurn,
+    active,
+) -> TaskStateUpdateResult | None:
+    result = turn.turn_result
+    if result is None or not _has_structured_task_signal(result):
+        return None
+    execution_status = _execution_status(result)
+    if active is not None and execution_status in {"completed", "success"}:
+        task = store.mark_completed(
+            farm_id=turn.farm_id,
+            user_id=turn.user_id or "",
+            session_id=turn.session_id or "",
+            task_id=active.task_id,
+        )
+        return TaskStateUpdateResult(
+            action="completed",
+            reason="turn_result_execution_completed",
+            task_id=task.task_id if task else active.task_id,
+            task_type=active.task_type,
+            source="turn_result",
+        )
+    if active is not None and execution_status in {"cancelled", "canceled"}:
+        task = store.mark_cancelled(
+            farm_id=turn.farm_id,
+            user_id=turn.user_id or "",
+            session_id=turn.session_id or "",
+            task_id=active.task_id,
+        )
+        return TaskStateUpdateResult(
+            action="cancelled",
+            reason="turn_result_execution_cancelled",
+            task_id=task.task_id if task else active.task_id,
+            task_type=active.task_type,
+            source="turn_result",
+        )
+
+    task_type = result.task_type or (active.task_type if active is not None else "")
+    if not task_type:
+        return None
+    entities = _structured_entities(result, active)
+    missing = list(result.missing_slots)
+    status = TaskStateStatus.WAITING_USER if missing else TaskStateStatus.ACTIVE
+    observations = _structured_observations(turn, result, active)
+    task = store.upsert_active_task(
+        farm_id=turn.farm_id,
+        user_id=turn.user_id or "",
+        session_id=turn.session_id or "",
+        task_type=task_type,
+        goal=active.goal if active is not None else _compact_text(turn.user_input),
+        entities=entities,
+        observations=observations,
+        missing_information=missing,
+        next_action=_next_action_for_task(task_type, missing, entities)
+        or "继续处理当前任务",
+        status=status,
+        expires_at=active.expires_at if active is not None else None,
+    )
+    return TaskStateUpdateResult(
+        action="updated" if active is not None else "created",
+        reason="turn_result_structured",
+        task_id=task.task_id,
+        task_type=task.task_type,
+        missing_information=missing,
+        source="turn_result",
+    )
+
+
+def _has_structured_task_signal(result: TurnResult) -> bool:
+    return bool(
+        result.task_type
+        or result.entities
+        or result.missing_slots
+        or result.plan_result
+        or result.execution_result
+        or result.facts
+    )
+
+
+def _execution_status(result: TurnResult) -> str:
+    payload = result.execution_result or {}
+    return str(payload.get("status") or "").strip().lower()
+
+
+def _structured_entities(result: TurnResult, active) -> dict[str, object]:
+    entities = dict(active.entities_json or {}) if active is not None else {}
+    entities.update(result.entities)
+    entities.update(result.facts)
+    return entities
+
+
+def _structured_observations(
+    turn: TaskStateTurn,
+    result: TurnResult,
+    active,
+) -> list[str]:
+    observations = list(active.observations_json or []) if active is not None else []
+    if result.plan_result:
+        observations = _merge_unique(observations, ["结构化规划结果已更新"])
+    if result.execution_result:
+        observations = _merge_unique(observations, ["结构化执行结果已更新"])
+    if result.entities or result.facts:
+        observations = _merge_unique(
+            observations,
+            [f"用户补充：{_compact_text(turn.user_input)}"],
+        )
+    return observations
 
 
 def _create_new_task_state(
@@ -157,7 +285,9 @@ def _skip_reason_before_decision(turn: TaskStateTurn) -> str:
         return "pending_write_confirmation"
     if turn.pending_plan is not None and not _is_crop_cycle_setup_turn(turn):
         return "pending_write_confirmation"
-    if not _compact_text(turn.user_input) or not _compact_text(turn.assistant_reply):
+    if not _compact_text(turn.user_input):
+        return "empty_turn"
+    if not _compact_text(turn.assistant_reply) and turn.turn_result is None:
         return "empty_turn"
     if _is_side_query(turn.user_input):
         return "side_query"
@@ -838,4 +968,9 @@ def _skipped(
     )
 
 
-__all__ = ["TaskStateTurn", "TaskStateUpdateResult", "update_task_state_after_turn"]
+__all__ = [
+    "TaskStateTurn",
+    "TaskStateUpdateResult",
+    "TurnResult",
+    "update_task_state_after_turn",
+]

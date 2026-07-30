@@ -33,6 +33,13 @@ class OperationDefinition:
     description: str = ""
     confirmation: str | None = None
     cache_invalidation: tuple[str, ...] = ()
+    input_schema: dict[str, Any] = field(default_factory=dict)
+    output_schema: dict[str, Any] = field(default_factory=dict)
+    side_effect: str = "none"
+    requires_confirmation: bool = False
+    executor_ref: str = ""
+    planner_hints: tuple[str, ...] = ()
+    failure_policy: str = "repair"
 
 
 @dataclass(frozen=True)
@@ -137,6 +144,13 @@ def _load_capabilities(path: Path) -> dict[str, CapabilityDefinition]:
                 cache_invalidation=tuple(
                     _as_str_list(operation.get("cache_invalidation"))
                 ),
+                input_schema=dict(operation.get("input_schema") or {}),
+                output_schema=dict(operation.get("output_schema") or {}),
+                side_effect=str(operation.get("side_effect") or "none"),
+                requires_confirmation=bool(operation.get("requires_confirmation")),
+                executor_ref=str(operation.get("executor_ref") or ""),
+                planner_hints=tuple(_as_str_list(operation.get("planner_hints"))),
+                failure_policy=str(operation.get("failure_policy") or "repair"),
             )
             for name, operation in dict(item.get("operations") or {}).items()
         }
@@ -153,9 +167,7 @@ def _load_capabilities(path: Path) -> dict[str, CapabilityDefinition]:
             owner=str(item.get("owner", "")),
             status=str(item.get("status", "")),
             operations=operations,
-            context_dependencies=tuple(
-                _as_str_list(item.get("context_dependencies"))
-            ),
+            context_dependencies=tuple(_as_str_list(item.get("context_dependencies"))),
             cache_invalidation=tuple(_as_str_list(item.get("cache_invalidation"))),
             disabled_reason=item.get("disabled_reason"),
         )

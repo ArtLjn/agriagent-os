@@ -7,8 +7,14 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
 from app.agent.runtime.tool_executor import _parallel_tool_node
+from app.agent.task_graph.models import PlanIR, PlanIRStep
 from app.context.core.models import ContextBlock, ContextBundle
-from app.infra.pending_actions import get_pending, get_pending_plan, remove_pending
+from app.infra.pending_actions import (
+    CONTRACT_BLOCKED_MARKER,
+    get_pending,
+    get_pending_plan,
+    remove_pending,
+)
 from app.skills.metadata import SkillMetadata, SkillPermissionLevel
 
 pytestmark = pytest.mark.no_db
@@ -218,6 +224,206 @@ async def test_create_crop_cycle_builds_template_preflight_pending_plan() -> Non
     assert "请确认将执行 2 步" in result["messages"][0].content
     assert "确认作物模板" in result["messages"][0].content
     assert "确认管理茬口" not in result["messages"][0].content
+    tool.ainvoke.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_plan_ir_source_creates_crop_cycle_setup_pending_plan() -> None:
+    tool = _write_tool("manage_crop_cycle")
+    collector = MagicMock()
+    plan_ir = PlanIR(
+        ir_id="pir-crop-cycle-tool-pending",
+        task_type="crop_cycle_setup",
+        intent="create_crop_cycle",
+        planner_version="test-v1",
+        context_hash="ctx-1",
+        response_contract="pending_plan",
+        steps=[
+            PlanIRStep(
+                step_id="ensure_template",
+                op="approval",
+                capability="manage_crop_templates",
+                args={
+                    "operation": "create_template",
+                    "crop_name": "西瓜",
+                    "variety": "8424",
+                },
+                side_effect="write",
+            ),
+            PlanIRStep(
+                step_id="create_cycle",
+                op="approval",
+                capability="manage_crop_cycle",
+                args={
+                    "operation": "create_cycle",
+                    "crop_name": "西瓜",
+                    "variety": "8424",
+                    "area": "20",
+                },
+                needs=["ensure_template"],
+                side_effect="write",
+            ),
+        ],
+    )
+    state = {
+        "messages": [
+            HumanMessage(content="帮我创建西瓜8424茬口20亩"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc-cycle-plan-ir",
+                        "name": "manage_crop_cycle",
+                        "args": {"operation": "create_cycle"},
+                    }
+                ],
+            ),
+        ],
+        "farm_id": 1,
+        "session_id": "sess-crop-plan-ir",
+        "plan_ir": plan_ir,
+    }
+
+    with (
+        patch(
+            "app.agent.runtime.tool_executor.get_langchain_tools", return_value=[tool]
+        ),
+        patch("app.agent.runtime.tool_executor.get_collector", return_value=collector),
+        patch(
+            "app.agent.runtime.plan_ir_pending.get_collector", return_value=collector
+        ),
+        patch("app.agent.runtime.tool_pending.get_collector", return_value=collector),
+        patch(
+            "app.infra.pending_actions.pending_plan_service.create_pending_plan",
+            return_value=SimpleNamespace(plan_id="plan-crop-plan-ir"),
+        ),
+    ):
+        result = await _parallel_tool_node(state)
+
+    plan = get_pending_plan(1, session_id="sess-crop-plan-ir")
+    assert plan is not None
+    assert [step.tool_name for step in plan.steps] == [
+        "manage_crop_templates",
+        "manage_crop_cycle",
+    ]
+    assert plan.steps[0].params["operation"] == "create_template"
+    assert plan.steps[1].depends_on == ["ensure_template"]
+    assert plan.router_decision["source"] == "plan_ir"
+    recorded_node_names = [
+        call.kwargs["node_name"] for call in collector.record.call_args_list
+    ]
+    assert "planner.generate" in recorded_node_names
+    assert "plan.validate" in recorded_node_names
+    assert "execution_plan.compile" in recorded_node_names
+    assert "pending_plan.create" in recorded_node_names
+    assert "请确认将执行 2 步" in result["messages"][0].content
+    tool.ainvoke.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_malformed_plan_ir_returns_contract_blocked_message() -> None:
+    tool = _write_tool("manage_crop_cycle")
+    collector = MagicMock()
+    state = {
+        "messages": [
+            HumanMessage(content="帮我创建西瓜茬口"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc-malformed-plan-ir",
+                        "name": "manage_crop_cycle",
+                        "args": {"operation": "create_cycle"},
+                    }
+                ],
+            ),
+        ],
+        "farm_id": 1,
+        "session_id": "sess-malformed-plan-ir",
+        "plan_ir": {"ir_id": "broken"},
+    }
+
+    with (
+        patch(
+            "app.agent.runtime.tool_executor.get_langchain_tools", return_value=[tool]
+        ),
+        patch("app.agent.runtime.tool_executor.get_collector", return_value=collector),
+        patch(
+            "app.agent.runtime.plan_ir_pending.get_collector", return_value=collector
+        ),
+        patch("app.agent.runtime.tool_pending.get_collector", return_value=collector),
+    ):
+        result = await _parallel_tool_node(state)
+
+    assert get_pending_plan(1, session_id="sess-malformed-plan-ir") is None
+    assert result["messages"][0].content.startswith(CONTRACT_BLOCKED_MARKER)
+    assert "invalid_plan_ir" in result["messages"][0].content
+    tool.ainvoke.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_invalid_plan_ir_blocks_fallback_pending_plan_creation() -> None:
+    tool = _write_tool("manage_crop_cycle")
+    collector = MagicMock()
+    state = {
+        "messages": [
+            HumanMessage(content="帮我创建西瓜茬口20亩"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc-invalid-plan-ir",
+                        "name": "manage_crop_cycle",
+                        "args": {
+                            "operation": "create_cycle",
+                            "crop_name": "西瓜",
+                            "area": "20",
+                        },
+                    }
+                ],
+            ),
+        ],
+        "farm_id": 1,
+        "session_id": "sess-invalid-plan-ir",
+        "plan_ir": PlanIR(
+            ir_id="pir-invalid-capability",
+            task_type="crop_cycle_setup",
+            intent="create_crop_cycle",
+            planner_version="test-v1",
+            context_hash="ctx-1",
+            response_contract="pending_plan",
+            steps=[
+                PlanIRStep(
+                    step_id="create_cycle",
+                    op="approval",
+                    capability="missing_capability",
+                    args={"operation": "create_cycle"},
+                    side_effect="write",
+                )
+            ],
+        ),
+    }
+
+    with (
+        patch(
+            "app.agent.runtime.tool_executor.get_langchain_tools", return_value=[tool]
+        ),
+        patch("app.agent.runtime.tool_executor.get_collector", return_value=collector),
+        patch(
+            "app.agent.runtime.plan_ir_pending.get_collector", return_value=collector
+        ),
+        patch("app.agent.runtime.tool_pending.get_collector", return_value=collector),
+        patch(
+            "app.infra.pending_actions.pending_plan_service.create_pending_plan",
+            return_value=SimpleNamespace(plan_id="should-not-create"),
+        ) as create_pending_plan,
+    ):
+        result = await _parallel_tool_node(state)
+
+    assert get_pending_plan(1, session_id="sess-invalid-plan-ir") is None
+    assert result["messages"][0].content.startswith(CONTRACT_BLOCKED_MARKER)
+    assert "unknown_capability" in result["messages"][0].content
+    create_pending_plan.assert_not_called()
     tool.ainvoke.assert_not_awaited()
 
 

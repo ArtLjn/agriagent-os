@@ -43,6 +43,7 @@ class ContextBuildRequest:
     user_id: str | None = None
     session_id: str | None = None
     include_retrieval: bool = False
+    task_state_should_inject: bool = True
 
 
 @dataclass(frozen=True)

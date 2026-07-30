@@ -6,7 +6,9 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
 from app.agent.executor.models import PendingActionDecision
+from app.context.task_state.store import AgentTaskStateStore, TaskStateStatus
 from app.domains.conversation.models import Conversation, ConversationMessage
+from app.infra.pending_actions import remove_pending, store_pending_plan
 from app.shared.compatibility import UTC
 
 
@@ -314,6 +316,217 @@ class TestAdvisorInvoke:
         assert isinstance(messages[0], HumanMessage)
         assert messages[0].content == "问题"
 
+    @patch(
+        "app.agent.executor.pending_actions._execute_write_skill",
+        new_callable=AsyncMock,
+    )
+    @patch("app.application.advice.advisor.stream_agent_loop")
+    @patch("app.application.advice.advisor.get_collector", create=True)
+    @patch("app.application.advice.advisor.run_agent_loop", new_callable=AsyncMock)
+    def test_invoke_advisor_pending_confirmation_preempts_task_state_load(
+        self,
+        mock_loop: AsyncMock,
+        mock_get_collector: MagicMock,
+        mock_stream_loop: MagicMock,
+        mock_execute_skill: AsyncMock,
+        db_session,
+        monkeypatch,
+    ) -> None:
+        """真实 pending plan 确认优先于 active task 承接，不进入 runtime。"""
+        session_id = "sess-task"
+        monkeypatch.setattr(
+            "app.infra.pending_actions.SessionLocal",
+            lambda: db_session,
+            raising=False,
+        )
+        monkeypatch.setattr(
+            "app.agent.executor.pending_actions.SessionLocal",
+            lambda: db_session,
+            raising=False,
+        )
+        remove_pending(1, session_id=session_id)
+        AgentTaskStateStore(db_session).upsert_active_task(
+            farm_id=1,
+            user_id="test-user-001",
+            session_id=session_id,
+            task_type="crop_cycle_setup",
+            goal="帮我创建西瓜8424茬口，再新增20亩地",
+            entities={
+                "crop_name": "西瓜",
+                "variety": "8424",
+                "area_mu": 20,
+            },
+            missing_information=[],
+            next_action="等待用户确认创建茬口和种植单元",
+            status=TaskStateStatus.WAITING_USER,
+        )
+        store_pending_plan(
+            farm_id=1,
+            session_id=session_id,
+            raw_user_input="帮我创建西瓜8424茬口，再新增20亩地",
+            router_decision={"selected_tools": ["manage_crop_cycle"]},
+            steps=[
+                {
+                    "step_id": "create_crop_cycle",
+                    "tool_name": "manage_crop_cycle",
+                    "params": {
+                        "action": "create",
+                        "crop_name": "西瓜",
+                        "variety": "8424",
+                    },
+                }
+            ],
+        )
+        mock_execute_skill.return_value = "已创建茬口"
+
+        from app.application.advice.advisor import invoke_advisor
+
+        try:
+            result = asyncio.run(
+                invoke_advisor(
+                    "确认",
+                    farm_id=1,
+                    db=db_session,
+                    session_id=session_id,
+                    user_id="test-user-001",
+                )
+            )
+        finally:
+            remove_pending(1, session_id=session_id)
+
+        assert "已执行" in result
+        assert "已创建茬口" in result
+        mock_loop.assert_not_awaited()
+        mock_stream_loop.assert_not_called()
+        mock_get_collector.assert_not_called()
+        mock_execute_skill.assert_awaited_once()
+
+    @patch(
+        "app.application.advice.advisor.handle_pending_action",
+        new_callable=AsyncMock,
+    )
+    @patch("app.application.advice.advisor.get_collector", create=True)
+    @patch("app.application.advice.advisor.run_agent_loop", new_callable=AsyncMock)
+    def test_invoke_advisor_loads_active_task_state_before_agent_loop(
+        self,
+        mock_loop: AsyncMock,
+        mock_get_collector: MagicMock,
+        mock_pending: AsyncMock,
+        db_session,
+    ) -> None:
+        """有 db 时，advisor 在进入 runtime 前加载 active task 并评估相关性。"""
+        store = AgentTaskStateStore(db_session)
+        task = store.upsert_active_task(
+            farm_id=1,
+            user_id="test-user-001",
+            session_id="sess-task",
+            task_type="planting_plan",
+            goal="帮我规划玉米种植",
+            entities={"crop": "玉米"},
+            missing_information=["种植面积"],
+            next_action="等待用户补充：种植面积",
+            status=TaskStateStatus.WAITING_USER,
+        )
+        mock_pending.return_value = PendingActionDecision.unhandled()
+        mock_msg = MagicMock()
+        mock_msg.content = "收到，按 20 亩继续。"
+        mock_loop.return_value = {"messages": [mock_msg]}
+        collector = MagicMock()
+        mock_get_collector.return_value = collector
+
+        from app.application.advice.advisor import invoke_advisor
+
+        result = asyncio.run(
+            invoke_advisor(
+                "20亩",
+                farm_id=1,
+                db=db_session,
+                session_id="sess-task",
+                user_id="test-user-001",
+            )
+        )
+
+        assert result == "收到，按 20 亩继续。"
+        initial_state = mock_loop.await_args.args[0]
+        assert initial_state["active_task_state"]["task_id"] == task.task_id
+        assert initial_state["active_task_state"]["task_type"] == "planting_plan"
+        assert initial_state["task_state_relevance"]["should_inject"] is True
+        assert initial_state["task_state_relevance"]["decision"] == "inject"
+        assert initial_state["task_state_context_should_inject"] is True
+
+        recorded_node_names = [
+            call.kwargs["node_name"] for call in collector.record.call_args_list
+        ]
+        assert "task_state.load" in recorded_node_names
+        assert "task_state.relevance" in recorded_node_names
+        load_trace = next(
+            call.kwargs
+            for call in collector.record.call_args_list
+            if call.kwargs["node_name"] == "task_state.load"
+        )
+        assert load_trace["output_data"]["task"] == {
+            "task_id": task.task_id,
+            "task_type": "planting_plan",
+            "status": TaskStateStatus.WAITING_USER,
+            "missing_information_count": 1,
+            "has_entities": True,
+            "has_observations": False,
+            "has_next_action": True,
+            "expires_at": task.expires_at.isoformat(),
+        }
+        assert "goal" not in load_trace["output_data"]["task"]
+        assert "entities" not in load_trace["output_data"]["task"]
+
+    @patch(
+        "app.application.advice.advisor.handle_pending_action",
+        new_callable=AsyncMock,
+    )
+    @patch("app.application.advice.advisor.get_collector", create=True)
+    @patch("app.application.advice.advisor.run_agent_loop", new_callable=AsyncMock)
+    def test_invoke_advisor_disables_task_state_context_when_irrelevant(
+        self,
+        mock_loop: AsyncMock,
+        mock_get_collector: MagicMock,
+        mock_pending: AsyncMock,
+        db_session,
+    ) -> None:
+        """低相关输入不应让旧 TaskState 进入 prompt context。"""
+        AgentTaskStateStore(db_session).upsert_active_task(
+            farm_id=1,
+            user_id="test-user-001",
+            session_id="sess-task-weather",
+            task_type="planting_plan",
+            goal="帮我规划玉米种植",
+            entities={"crop": "玉米"},
+            missing_information=["种植面积"],
+            next_action="等待用户补充：种植面积",
+            status=TaskStateStatus.WAITING_USER,
+        )
+        mock_pending.return_value = PendingActionDecision.unhandled()
+        mock_msg = MagicMock()
+        mock_msg.content = "今天适合看天气。"
+        mock_loop.return_value = {"messages": [mock_msg]}
+        mock_get_collector.return_value = MagicMock()
+
+        from app.application.advice.advisor import invoke_advisor
+
+        result = asyncio.run(
+            invoke_advisor(
+                "天气怎么样？",
+                farm_id=1,
+                db=db_session,
+                session_id="sess-task-weather",
+                user_id="test-user-001",
+            )
+        )
+
+        assert result == "今天适合看天气。"
+        initial_state = mock_loop.await_args.args[0]
+        assert initial_state["active_task_state"]["task_type"] == "planting_plan"
+        assert initial_state["task_state_relevance"]["should_inject"] is False
+        assert initial_state["task_state_context_should_inject"] is False
+        assert "task_state_routing_input" not in initial_state
+
 
 class TestAdvisorStream:
     """测试流式 Agent 调用。"""
@@ -357,3 +570,79 @@ class TestAdvisorStream:
             5,
             current_user_input="新问题",
         )
+
+    @patch(
+        "app.application.advice.advisor.handle_pending_action",
+        new_callable=AsyncMock,
+    )
+    @patch("app.application.advice.advisor.get_collector", create=True)
+    @patch("app.application.advice.advisor._async_build_history_messages")
+    @patch("app.application.advice.advisor.stream_agent_loop")
+    @pytest.mark.asyncio
+    async def test_stream_advisor_loads_active_task_state_before_agent_loop(
+        self,
+        mock_stream_loop: MagicMock,
+        mock_build_history: MagicMock,
+        mock_get_collector: MagicMock,
+        mock_pending: AsyncMock,
+        db_session,
+    ) -> None:
+        """流式入口也应在 runtime 前加载 active task，且 HumanMessage 保持原文。"""
+        store = AgentTaskStateStore(db_session)
+        task = store.upsert_active_task(
+            farm_id=1,
+            user_id="test-user-001",
+            session_id="sess-stream-task",
+            task_type="planting_plan",
+            goal="帮我规划玉米种植",
+            entities={"crop": "玉米"},
+            missing_information=["种植面积"],
+            next_action="等待用户补充：种植面积",
+            status=TaskStateStatus.WAITING_USER,
+        )
+        mock_pending.return_value = PendingActionDecision.unhandled()
+        mock_build_history.return_value = []
+        collector = MagicMock()
+        mock_get_collector.return_value = collector
+        captured_state = {}
+
+        async def _fake_astream(state, *args, **kwargs):
+            captured_state.update(state)
+            yield {"llm": {"messages": [AIMessage(content="收到，继续处理。")]}}
+
+        mock_stream_loop.side_effect = _fake_astream
+
+        from app.application.advice.advisor import stream_advisor
+
+        chunks = []
+        async for chunk in stream_advisor(
+            "20亩",
+            farm_id=1,
+            db=db_session,
+            session_id="sess-stream-task",
+            user_id="test-user-001",
+        ):
+            chunks.append(chunk)
+
+        assert "".join(chunks) == "收到，继续处理。"
+        assert captured_state["active_task_state"]["task_id"] == task.task_id
+        assert captured_state["active_task_state"]["task_type"] == "planting_plan"
+        assert captured_state["task_state_relevance"]["should_inject"] is True
+        assert captured_state["task_state_relevance"]["decision"] == "inject"
+        assert captured_state["task_state_context_should_inject"] is True
+        assert len(captured_state["messages"]) == 1
+        assert isinstance(captured_state["messages"][0], HumanMessage)
+        assert captured_state["messages"][0].content == "20亩"
+
+        recorded_node_names = [
+            call.kwargs["node_name"] for call in collector.record.call_args_list
+        ]
+        assert "task_state.load" in recorded_node_names
+        assert "task_state.relevance" in recorded_node_names
+        relevance_trace = next(
+            call.kwargs
+            for call in collector.record.call_args_list
+            if call.kwargs["node_name"] == "task_state.relevance"
+        )
+        assert relevance_trace["input_data"]["missing_information_count"] == 1
+        assert "missing_information" not in relevance_trace["input_data"]

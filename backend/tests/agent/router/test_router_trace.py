@@ -174,6 +174,75 @@ def test_runtime_router_decision_returns_measured_duration() -> None:
     assert duration_ms == 12
 
 
+def test_runtime_router_uses_task_state_routing_input_when_relevant(
+    monkeypatch,
+) -> None:
+    captured_messages: list[str] = []
+
+    def fake_route_tools(message, runtime_tools, **_kwargs):
+        captured_messages.append(message)
+        return RouterDecision(selected_tools=["create_crop_cycle"])
+
+    monkeypatch.setattr(_node_helpers, "_route_tools", fake_route_tools)
+
+    _resolve_router_decision(
+        state={
+            "active_task_state": {
+                "task_type": "planting_plan",
+                "missing_information": ["种植面积"],
+                "entities": {"crop": "玉米"},
+            },
+            "task_state_relevance": {
+                "score": 0.9,
+                "decision": "inject",
+                "reason": "补充缺失面积",
+                "should_inject": True,
+            },
+        },
+        normal_msgs=[],
+        user_msg="20亩",
+        tools=[],
+    )
+
+    assert captured_messages
+    assert "当前任务：planting_plan" in captured_messages[0]
+    assert "缺失信息：种植面积" in captured_messages[0]
+    assert "已知实体：crop=玉米" in captured_messages[0]
+    assert "用户输入：20亩" in captured_messages[0]
+
+
+def test_runtime_router_keeps_original_input_when_task_state_irrelevant(
+    monkeypatch,
+) -> None:
+    captured_messages: list[str] = []
+
+    def fake_route_tools(message, runtime_tools, **_kwargs):
+        captured_messages.append(message)
+        return RouterDecision(selected_tools=["weather"])
+
+    monkeypatch.setattr(_node_helpers, "_route_tools", fake_route_tools)
+
+    _resolve_router_decision(
+        state={
+            "active_task_state": {
+                "task_type": "planting_plan",
+                "missing_information": ["种植面积"],
+            },
+            "task_state_relevance": {
+                "score": 0.1,
+                "decision": "do_not_inject",
+                "reason": "天气旁路",
+                "should_inject": False,
+            },
+        },
+        normal_msgs=[],
+        user_msg="天气怎么样？",
+        tools=[],
+    )
+
+    assert captured_messages == ["天气怎么样？"]
+
+
 def test_record_router_plan_trace_preserves_router_duration() -> None:
     collector = MagicMock()
     decision = RouterDecision(selected_tools=["get_farm_status"])
@@ -190,6 +259,30 @@ def test_record_router_plan_trace_preserves_router_duration() -> None:
     collector.record.assert_called_once()
     assert collector.record.call_args.kwargs["node_name"] == "skill_router"
     assert collector.record.call_args.kwargs["duration_ms"] == 12
+
+
+def test_record_router_plan_trace_separates_raw_and_augmented_input() -> None:
+    collector = MagicMock()
+    decision = RouterDecision(selected_tools=["create_crop_cycle"])
+
+    payload = _node_helpers._record_router_plan_trace(
+        collector=collector,
+        router_decision=decision,
+        user_msg="20亩",
+        routing_augmented_input="当前任务：planting_plan\n用户输入：20亩",
+        farm_id=1,
+        session_id="session-1",
+        duration_ms=12,
+    )
+
+    assert payload["raw_user_input"] == "20亩"
+    assert payload["routing_augmented_input"] == (
+        "当前任务：planting_plan\n用户输入：20亩"
+    )
+    assert collector.record.call_args.kwargs["input_data"] == {
+        "message": "20亩",
+        "routing_augmented": True,
+    }
 
 
 @pytest.mark.asyncio
@@ -234,7 +327,10 @@ async def test_llm_node_records_skill_router_trace() -> None:
         if call.kwargs.get("node_type") == "skill_router"
     )
     assert router_trace.kwargs["node_name"] == "skill_router"
-    assert router_trace.kwargs["input_data"] == {"message": user_msg[:500]}
+    assert router_trace.kwargs["input_data"] == {
+        "message": user_msg[:500],
+        "routing_augmented": False,
+    }
     output_data = router_trace.kwargs["output_data"]
     assert output_data["schema_version"] == 2
     assert output_data["selected"]["tools"] == ["get_farm_status"]

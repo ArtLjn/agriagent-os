@@ -9,15 +9,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-TaskType = Literal[
-    "planting_plan",
-    "field_work_assignment",
-    "inventory_management",
-    "cost_analysis",
-    "pest_diagnosis",
-    "retry_or_resume",
-    "legacy_skill_fallback",
-]
+from app.agent.task_types import TaskType
+
 FactSourceKind = Literal[
     "user_input", "tool_result", "memory", "rag", "derived", "system"
 ]

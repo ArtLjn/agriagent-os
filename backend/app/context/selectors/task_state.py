@@ -21,8 +21,11 @@ class TaskStateSelector:
         farm_id: int,
         user_id: str | None = None,
         session_id: str | None = None,
+        task_state_should_inject: bool = True,
         **_kwargs,
     ) -> list[ContextBlock]:
+        if not task_state_should_inject:
+            return []
         task = AgentTaskStateStore(db).get_active_task(
             farm_id=farm_id,
             user_id=user_id,

@@ -138,6 +138,7 @@ async def _get_runtime_context_bundle(
     session_id: str | None = None,
     query: str = "",
     memory_context_loader=None,
+    task_state_should_inject: bool = True,
 ) -> tuple[ContextBundle, dict]:
     """构建 Runtime ContextBundle，并返回兼容旧 prompt 的 farm context。"""
 
@@ -170,6 +171,7 @@ async def _get_runtime_context_bundle(
                         farm_id=farm_id,
                         user_id=user_id,
                         session_id=session_id,
+                        task_state_should_inject=task_state_should_inject,
                     ),
                     memory_context=memory_context,
                     context_pack=context_pack,
@@ -252,6 +254,7 @@ def _runtime_context_request(
     farm_id: int,
     user_id: str | None,
     session_id: str | None,
+    task_state_should_inject: bool = True,
 ):
     from app.context.core.policy import ContextBuildRequest
 
@@ -263,6 +266,7 @@ def _runtime_context_request(
         farm_id=farm_id,
         user_id=user_id,
         session_id=session_id,
+        task_state_should_inject=task_state_should_inject,
     )
 
 

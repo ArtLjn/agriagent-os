@@ -1,4 +1,8 @@
-"""Task Graph Runtime 骨架。"""
+"""Legacy Task Graph Runtime 骨架。
+
+该包仅作为 task_graph planning compile artifact 的历史测试与兼容边界保留；
+长期生产 Runtime 是 pending_plan + task_state。
+"""
 
 from app.agent.task_graph.runtime.scheduler import next_runnable_nodes
 from app.agent.task_graph.runtime.state import (
@@ -14,8 +18,11 @@ from app.agent.task_graph.runtime.state import (
     wait_for_user,
 )
 
+LEGACY_RUNTIME_STATUS = "legacy_planning_compile_artifact"
+
 __all__ = [
     "ExecutionStateTransitionError",
+    "LEGACY_RUNTIME_STATUS",
     "cancel_execution",
     "create_execution_state",
     "fail_execution",

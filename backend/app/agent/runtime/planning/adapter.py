@@ -5,13 +5,19 @@ from __future__ import annotations
 from dataclasses import asdict, replace
 from typing import Any
 
-from app.agent.runtime.planning.models import PlanDraft, PlanIssue, PlanStep, PlanValidationResult
+from app.agent.runtime.planning.models import (
+    PlanDraft,
+    PlanIssue,
+    PlanStep,
+    PlanValidationResult,
+)
 from app.agent.router.models import IntentFrame, RouterDecision
 
 
 def plan_draft_from_router_decision(
     *,
     raw_user_input: str,
+    routing_augmented_input: str | None = None,
     decision: RouterDecision,
     farm_id: int | None = None,
     session_id: str | None = None,
@@ -29,6 +35,7 @@ def plan_draft_from_router_decision(
         session_id=session_id or "",
         farm_id=farm_id or 0,
         raw_user_input=raw_user_input,
+        routing_augmented_input=routing_augmented_input or "",
         route_type=route_type,
         source="rule_gate",
         intent_frames=[asdict(frame) for frame in decision.frames],

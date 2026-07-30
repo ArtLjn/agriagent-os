@@ -1,4 +1,8 @@
-"""最小 Runtime Scheduler。"""
+"""Legacy 最小 Runtime Scheduler。
+
+仅保留为 task_graph planning compile artifact 的兼容测试对象；生产调度以
+PendingPlan 顺序执行为准。
+"""
 
 from __future__ import annotations
 

@@ -7,9 +7,23 @@ from app.agent.reflector import ReflectorService
 from app.agent.reflector.models import ReflectionDecision, ReflectionTrigger
 from app.agent.router import SkillRouter
 from app.agent.runtime.crop_cycle_setup_planner import build_crop_cycle_setup_steps
+from app.agent.runtime.plan_ir_pending import (
+    PlanIRPendingPlanBlocked,
+    PlanIRPendingPlanCandidate,
+    build_plan_ir_pending_plan_candidate,
+)
 from app.agent.runtime.tool_metadata import (
     _PermissionDecision,
     _permission_trace_output,
+)
+from app.agent.runtime.tool_pending_trace import (
+    blocked_missing_fields,
+    first_param_source_diagnosis,
+    pending_plan_contract_diagnostics,
+    pending_plan_contract_error_message,
+    pending_steps_trace_payload,
+    redact_trace_payload,
+    tool_calls_trace_payload,
 )
 from app.agent.runtime.tool_arg_validation import validate_pending_tool_args
 from app.agent.runtime.tool_pending_args import (
@@ -45,6 +59,23 @@ def _pending_plan_tool_message(
     tool_calls: list[dict],
 ) -> list[ToolMessage] | None:
     """如果 router 已生成多步骤写计划，则存储 pending plan 并返回确认消息。"""
+    plan_ir_candidate = build_plan_ir_pending_plan_candidate(state)
+    if isinstance(plan_ir_candidate, PlanIRPendingPlanBlocked):
+        return _plan_ir_contract_blocked_messages(plan_ir_candidate, tool_calls)
+    if isinstance(plan_ir_candidate, PlanIRPendingPlanCandidate):
+        if plan_ir_candidate.steps and _tool_calls_match_plan_steps(
+            tool_calls, plan_ir_candidate.steps
+        ):
+            return _store_pending_plan_from_steps(
+                state=state,
+                farm_id=farm_id,
+                original_input=original_input,
+                tool_calls=tool_calls,
+                steps=plan_ir_candidate.steps,
+                router_decision=plan_ir_candidate.router_decision,
+                source="plan_ir",
+            )
+
     plan_draft = state.get("plan_draft")
     draft_steps = _validated_plan_draft_steps(
         plan_draft,
@@ -126,6 +157,20 @@ def _tool_calls_match_plan_steps(tool_calls: list[dict], steps: list[dict]) -> b
 def _same_tool_name_sequence(tool_calls: list[dict], steps: list[dict]) -> bool:
     return [str(tool_call.get("name") or "") for tool_call in tool_calls] == [
         str(step.get("tool_name") or step.get("skill_name") or "") for step in steps
+    ]
+
+
+def _plan_ir_contract_blocked_messages(
+    error: PlanIRPendingPlanBlocked,
+    tool_calls: list[dict],
+) -> list[ToolMessage]:
+    content = "PlanIR 无法安全创建待确认计划：" + "；".join(error.codes)
+    return [
+        ToolMessage(
+            content=f"{CONTRACT_BLOCKED_MARKER} {content}",
+            tool_call_id=tool_call["id"],
+        )
+        for tool_call in tool_calls
     ]
 
 
@@ -318,6 +363,23 @@ def _store_confirmed_pending_plan_messages(
         router_decision=router_decision,
         steps=pending_steps,
     )
+    get_collector().record(
+        node_type="pending_plan",
+        node_name="pending_plan.create",
+        input_data={
+            "raw_user_input": original_input[:500],
+            "session_id": session_id,
+            "source": router_decision.get("source")
+            if isinstance(router_decision, dict)
+            else "",
+        },
+        output_data={
+            "status": "created",
+            "step_count": len(pending_steps),
+            "steps": pending_steps_trace_payload(pending_steps),
+        },
+        duration_ms=0,
+    )
     messages = [
         ToolMessage(
             content="已纳入待确认计划。",
@@ -341,7 +403,7 @@ def _pending_plan_contract_messages(
 ) -> list[ToolMessage] | None:
     """pending plan 创建前逐步校验 operation contract。"""
     blocked = []
-    steps_before_validation = _pending_steps_trace_payload(pending_steps)
+    steps_before_validation = pending_steps_trace_payload(pending_steps)
     for step in pending_steps:
         validation = validate_pending_tool_args(
             skill_name=step.tool_name,
@@ -358,16 +420,16 @@ def _pending_plan_contract_messages(
                 "tool_name": step.tool_name,
                 "message": validation.message,
                 "contract_validation": validation.trace_payload(),
-                "params_after_validation": _redact_trace_payload(step.params),
+                "params_after_validation": redact_trace_payload(step.params),
             }
         )
     if not blocked:
         return None
 
     collector = get_collector()
-    tool_calls_payload = _tool_calls_trace_payload(tool_calls)
-    steps_after_validation = _pending_steps_trace_payload(pending_steps)
-    diagnostics = _pending_plan_contract_diagnostics(
+    tool_calls_payload = tool_calls_trace_payload(tool_calls)
+    steps_after_validation = pending_steps_trace_payload(pending_steps)
+    diagnostics = pending_plan_contract_diagnostics(
         blocked_steps=blocked,
         tool_calls=tool_calls_payload,
     )
@@ -384,12 +446,12 @@ def _pending_plan_contract_messages(
         data={
             "source": source,
             "tool": blocked[0]["tool_name"],
-            "missing_fields": _blocked_missing_fields(blocked),
-            "diagnosis": _first_param_source_diagnosis(diagnostics),
+            "missing_fields": blocked_missing_fields(blocked),
+            "diagnosis": first_param_source_diagnosis(diagnostics),
         },
         error={
             "type": "contract_validation_error",
-            "message": _pending_plan_contract_error_message(blocked),
+            "message": pending_plan_contract_error_message(blocked),
             "recover": "ask_user_to_supply_missing_fields_or_rebuild_plan_from_tool_calls",
         },
     )
@@ -401,7 +463,7 @@ def _pending_plan_contract_messages(
             "source": source,
             "tool_calls": tool_calls_payload,
             "pending_steps_before_validation": steps_before_validation,
-            "router_decision": _redact_trace_payload(router_decision),
+            "router_decision": redact_trace_payload(router_decision),
         },
         output_data={
             "status": "contract_blocked",
@@ -412,7 +474,7 @@ def _pending_plan_contract_messages(
             "diagnostics": diagnostics,
         },
         duration_ms=0,
-        error_message=_pending_plan_contract_error_message(blocked),
+        error_message=pending_plan_contract_error_message(blocked),
     )
     return [
         ToolMessage(
@@ -456,165 +518,6 @@ def _validated_plan_draft_steps(
             }
         )
     return normalized
-
-
-def _pending_steps_trace_payload(
-    pending_steps: list[PendingPlanStep],
-) -> list[dict[str, Any]]:
-    return [
-        {
-            "step_id": step.step_id,
-            "step_index": step.step_index,
-            "tool_name": step.tool_name,
-            "params": _redact_trace_payload(step.params),
-            "depends_on": list(step.depends_on),
-        }
-        for step in pending_steps
-    ]
-
-
-def _tool_calls_trace_payload(tool_calls: list[dict]) -> list[dict[str, Any]]:
-    return [
-        {
-            "id": str(tool_call.get("id") or ""),
-            "name": str(tool_call.get("name") or ""),
-            "args": _redact_trace_payload(dict(tool_call.get("args") or {})),
-        }
-        for tool_call in tool_calls
-    ]
-
-
-def _pending_plan_contract_diagnostics(
-    *,
-    blocked_steps: list[dict[str, Any]],
-    tool_calls: list[dict[str, Any]],
-) -> dict[str, Any]:
-    return {
-        "param_source_diffs": [
-            diff
-            for blocked_step in blocked_steps
-            if (
-                diff := _pending_step_tool_call_diff(
-                    blocked_step=blocked_step,
-                    tool_calls=tool_calls,
-                )
-            )
-        ]
-    }
-
-
-def _blocked_missing_fields(blocked_steps: list[dict[str, Any]]) -> list[str]:
-    fields: list[str] = []
-    seen: set[str] = set()
-    for step in blocked_steps:
-        validation = step.get("contract_validation")
-        if not isinstance(validation, dict):
-            continue
-        for field in validation.get("missing_fields") or []:
-            field_name = str(field)
-            if field_name in seen:
-                continue
-            fields.append(field_name)
-            seen.add(field_name)
-    return fields
-
-
-def _first_param_source_diagnosis(diagnostics: dict[str, Any]) -> str | None:
-    diffs = diagnostics.get("param_source_diffs")
-    if not isinstance(diffs, list) or not diffs:
-        return None
-    first = diffs[0]
-    if not isinstance(first, dict):
-        return None
-    diagnosis = first.get("diagnosis")
-    return str(diagnosis) if diagnosis else None
-
-
-def _pending_step_tool_call_diff(
-    *,
-    blocked_step: dict[str, Any],
-    tool_calls: list[dict[str, Any]],
-) -> dict[str, Any] | None:
-    tool_name = str(blocked_step.get("tool_name") or "")
-    related_calls = [call for call in tool_calls if call.get("name") == tool_name]
-    if not related_calls:
-        return None
-
-    validation = blocked_step.get("contract_validation")
-    missing_fields = []
-    if isinstance(validation, dict):
-        missing_fields = [
-            str(field) for field in validation.get("missing_fields") or []
-        ]
-
-    fields_present_in_tool_calls: dict[str, list[str]] = {}
-    for field in missing_fields:
-        call_ids = [
-            str(call.get("id") or "")
-            for call in related_calls
-            if _trace_args_has_field(call.get("args"), field)
-        ]
-        if call_ids:
-            fields_present_in_tool_calls[field] = call_ids
-
-    if not fields_present_in_tool_calls:
-        return {
-            "step_id": blocked_step.get("step_id"),
-            "tool_name": tool_name,
-            "related_tool_call_ids": [call["id"] for call in related_calls],
-            "missing_fields": missing_fields,
-            "diagnosis": "pending_step_and_tool_calls_missing_required_fields",
-        }
-
-    return {
-        "step_id": blocked_step.get("step_id"),
-        "tool_name": tool_name,
-        "related_tool_call_ids": [call["id"] for call in related_calls],
-        "missing_fields": missing_fields,
-        "fields_present_in_tool_calls": fields_present_in_tool_calls,
-        "diagnosis": "pending_step_missing_field_present_in_llm_tool_call",
-    }
-
-
-def _trace_args_has_field(args: Any, field: str) -> bool:
-    if not isinstance(args, dict):
-        return False
-    value = args.get(field)
-    return value is not None and value != ""
-
-
-def _pending_plan_contract_error_message(blocked: list[dict[str, Any]]) -> str:
-    details = "; ".join(
-        f"{item['step_id']} {item['tool_name']}: {item['message']}" for item in blocked
-    )
-    return f"pending plan contract blocked: {details}"
-
-
-_SENSITIVE_TRACE_KEYS = {
-    "api_key",
-    "authorization",
-    "credential",
-    "password",
-    "secret",
-    "token",
-}
-
-
-def _redact_trace_payload(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {
-            key: "[REDACTED]"
-            if _is_sensitive_trace_key(key)
-            else _redact_trace_payload(item)
-            for key, item in value.items()
-        }
-    if isinstance(value, list):
-        return [_redact_trace_payload(item) for item in value]
-    return value
-
-
-def _is_sensitive_trace_key(key: Any) -> bool:
-    return str(key).strip().lower() in _SENSITIVE_TRACE_KEYS
 
 
 def _validated_plan_draft_action_args(
@@ -857,8 +760,8 @@ def _pending_action_message(
     *,
     state: AgentState,
     name: str,
-    raw_args: dict,
     args: dict,
+    raw_args: dict | None = None,
     farm_id: int,
     original_input: str,
     tool_call_id: str,
@@ -871,7 +774,7 @@ def _pending_action_message(
         return None
     pending_args = _pending_storage_args(
         name=name,
-        args=raw_args,
+        args=raw_args or args,
         permission_decision=permission_decision,
     )
     execution_args = _resolve_pending_execution_args(

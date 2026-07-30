@@ -92,6 +92,7 @@ class PlanDraft:
     farm_id: int
     raw_user_input: str
     route_type: RouteType
+    routing_augmented_input: str = ""
     steps: list[PlanStep] = field(default_factory=list)
     intent_frames: list[dict[str, Any]] = field(default_factory=list)
     evidence: dict[str, Any] = field(default_factory=dict)

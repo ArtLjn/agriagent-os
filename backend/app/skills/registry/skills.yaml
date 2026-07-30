@@ -215,6 +215,16 @@ capabilities:
       create_cycle:
         risk: write_confirm
         description: 创建种植周期并生成阶段计划。
+        input_schema:
+          operation: create_cycle
+        output_schema:
+          type: crop_cycle
+        side_effect: write
+        requires_confirmation: true
+        executor_ref: skill:manage_crop_cycle
+        planner_hints:
+          - 创建茬口前应确认作物模板存在；需要用户确认后执行。
+        failure_policy: ask_user
         legacy_aliases:
           - create_crop_cycle
         cache_invalidation:

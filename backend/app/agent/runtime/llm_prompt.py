@@ -26,6 +26,7 @@ async def _prepare_context_bundle(
     user_id: int | None,
     session_id: str | None,
     query: str = "",
+    task_state_should_inject: bool = True,
 ):
     """准备 runtime context bundle 和 farm context。"""
     if prepared_context_bundle is not None:
@@ -42,6 +43,7 @@ async def _prepare_context_bundle(
             query=query,
             user_id=user_id,
             session_id=session_id,
+            task_state_should_inject=task_state_should_inject,
         )
     if not context_bundle.blocks and farm_ctx.get("display_name") == "农友":
         farm_ctx = await _get_farm_context(farm_id)

@@ -4,6 +4,7 @@ import asyncio
 import logging
 import time
 from collections.abc import AsyncGenerator
+from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from sqlalchemy.orm import Session
@@ -19,7 +20,14 @@ from app.agent.runtime.loop import (
     run_agent_loop,
     stream_agent_loop,
 )
+from app.agent.runtime.task_state_relevance import (
+    evaluate_task_state_relevance,
+    task_state_payload,
+    task_state_routing_input,
+)
 from app.context.pack import ContextPackService
+from app.context.task_state import AgentTaskStateStore
+from app.infra.trace_collector import get_collector
 from app.infra.trace_context import clear_trace, init_trace, set_round_index
 from app.shared.logging import log_event
 from app.domains.conversation.models import Conversation
@@ -198,6 +206,174 @@ def _unsupported_capability_reply(user_input: str) -> str | None:
     return None
 
 
+def _load_task_state_for_agent(
+    *,
+    db: Session | None,
+    farm_id: int,
+    user_id: str | None,
+    session_id: str | None,
+    user_input: str,
+) -> tuple[dict | None, dict | None, str | None]:
+    """读取当前 active task，并给早期 router 生成相关性决策。"""
+    if db is None:
+        return None, None, None
+
+    started_at = time.perf_counter()
+    task = AgentTaskStateStore(db).get_active_task(
+        farm_id=farm_id,
+        user_id=user_id,
+        session_id=session_id,
+    )
+    payload = task_state_payload(task)
+    _record_task_state_load_trace(
+        farm_id=farm_id,
+        user_id=user_id,
+        session_id=session_id,
+        payload=payload,
+        started_at=started_at,
+    )
+
+    started_at = time.perf_counter()
+    relevance = evaluate_task_state_relevance(user_input, payload).to_dict()
+    _record_task_state_relevance_trace(
+        user_input=user_input,
+        payload=payload,
+        relevance=relevance,
+        started_at=started_at,
+    )
+    routing_input = (
+        task_state_routing_input(user_input, payload)
+        if relevance.get("should_inject") and payload is not None
+        else None
+    )
+    return payload, relevance, routing_input
+
+
+def _record_task_state_load_trace(
+    *,
+    farm_id: int,
+    user_id: str | None,
+    session_id: str | None,
+    payload: dict | None,
+    started_at: float,
+) -> None:
+    """记录 active task 早期读取 trace。"""
+    _record_task_state_trace(
+        node_name="task_state.load",
+        input_data={
+            "farm_id": farm_id,
+            "user_id": user_id,
+            "session_id": session_id,
+        },
+        output_data={
+            "found": payload is not None,
+            "task": _task_state_trace_summary(payload),
+        },
+        started_at=started_at,
+    )
+
+
+def _record_task_state_relevance_trace(
+    *,
+    user_input: str,
+    payload: dict | None,
+    relevance: dict,
+    started_at: float,
+) -> None:
+    """记录 active task 早期相关性 trace。"""
+    _record_task_state_trace(
+        node_name="task_state.relevance",
+        input_data={
+            "user_message": user_input[:200],
+            "active_task_type": payload.get("task_type") if payload else None,
+            "missing_information_count": _list_count(
+                payload.get("missing_information") if payload else None
+            ),
+            "has_next_action": bool(payload.get("next_action") if payload else None),
+        },
+        output_data=relevance,
+        started_at=started_at,
+    )
+
+
+def _record_task_state_trace(
+    *,
+    node_name: str,
+    input_data: dict[str, Any],
+    output_data: dict[str, Any],
+    started_at: float,
+) -> None:
+    """记录 TaskState 早期检索与相关性 trace。"""
+    try:
+        get_collector().record(
+            node_type="task_state",
+            node_name=node_name,
+            input_data=input_data,
+            output_data=output_data,
+            start_time=time.time(),
+            duration_ms=max(1, int((time.perf_counter() - started_at) * 1000)),
+        )
+    except Exception:
+        return
+
+
+def _task_state_trace_summary(payload: dict | None) -> dict | None:
+    """最小化 active task trace，避免导出用户业务详情。"""
+    if not payload:
+        return None
+    return {
+        "task_id": payload.get("task_id"),
+        "task_type": payload.get("task_type"),
+        "status": payload.get("status"),
+        "missing_information_count": _list_count(payload.get("missing_information")),
+        "has_entities": bool(payload.get("entities")),
+        "has_observations": bool(payload.get("observations")),
+        "has_next_action": bool(payload.get("next_action")),
+        "expires_at": payload.get("expires_at") or "",
+    }
+
+
+def _list_count(value: Any) -> int:
+    if isinstance(value, list):
+        return len(value)
+    if value:
+        return 1
+    return 0
+
+
+def _agent_initial_state(
+    *,
+    messages: list[HumanMessage | AIMessage],
+    farm_id: int,
+    farm_uid: str | None,
+    intent: IntentType,
+    user_id: str | None,
+    session_id: str,
+    active_task_state: dict | None,
+    task_state_relevance: dict | None,
+    task_state_routing_input_value: str | None,
+) -> dict:
+    """构造进入 runtime 的初始 state。"""
+    state = {
+        "messages": messages,
+        "farm_id": farm_id,
+        "farm_uid": farm_uid,
+        "intent": intent.value,
+        "user_id": user_id,
+        "session_id": session_id,
+    }
+    if active_task_state is not None:
+        state["active_task_state"] = active_task_state
+    if task_state_relevance is not None:
+        state["task_state_relevance"] = task_state_relevance
+        state["task_state_context_should_inject"] = bool(
+            task_state_relevance.get("should_inject")
+        )
+    if task_state_routing_input_value is not None:
+        state["task_state_routing_input"] = task_state_routing_input_value
+    return state
+
+
 async def invoke_advisor(
     user_input: str,
     farm_id: int,
@@ -274,6 +450,16 @@ async def invoke_advisor(
             )
             return reply
 
+        active_task_state, task_state_relevance, task_state_routing_input_value = (
+            _load_task_state_for_agent(
+                db=db,
+                farm_id=farm_id,
+                user_id=user_id,
+                session_id=session_id,
+                user_input=user_input,
+            )
+        )
+
         # 构建历史消息 + 当前消息
         history = await _async_build_history_messages(
             db, conversation_id, current_user_input=user_input
@@ -281,14 +467,17 @@ async def invoke_advisor(
         messages = history + [HumanMessage(content=user_input)]
 
         result = await run_agent_loop(
-            {
-                "messages": messages,
-                "farm_id": farm_id,
-                "farm_uid": farm_uid,
-                "intent": intent.value,
-                "user_id": user_id,
-                "session_id": session_id,
-            },
+            _agent_initial_state(
+                messages=messages,
+                farm_id=farm_id,
+                farm_uid=farm_uid,
+                intent=intent,
+                user_id=user_id,
+                session_id=session_id,
+                active_task_state=active_task_state,
+                task_state_relevance=task_state_relevance,
+                task_state_routing_input_value=task_state_routing_input_value,
+            ),
             max_steps=15,
         )
         reply = result["messages"][-1].content
@@ -423,6 +612,16 @@ async def stream_advisor(
             yield reply
             return
 
+        active_task_state, task_state_relevance, task_state_routing_input_value = (
+            _load_task_state_for_agent(
+                db=db,
+                farm_id=farm_id,
+                user_id=user_id,
+                session_id=session_id,
+                user_input=user_input,
+            )
+        )
+
         # ④ 进入 ReAct Agent：拼历史消息 + 当前消息作为初始 state
         history = await _async_build_history_messages(
             db, conversation_id, current_user_input=user_input
@@ -432,14 +631,17 @@ async def stream_advisor(
         # stream_agent_loop 每次 yield 形如 {"llm": update} / {"tools": update}
         # 这里只关心 update.messages 里新增的消息类型，做日志和最终回复提取
         async for event in stream_agent_loop(
-            {
-                "messages": messages,
-                "farm_id": farm_id,
-                "farm_uid": farm_uid,
-                "intent": intent.value,
-                "user_id": user_id,
-                "session_id": session_id,
-            },
+            _agent_initial_state(
+                messages=messages,
+                farm_id=farm_id,
+                farm_uid=farm_uid,
+                intent=intent,
+                user_id=user_id,
+                session_id=session_id,
+                active_task_state=active_task_state,
+                task_state_relevance=task_state_relevance,
+                task_state_routing_input_value=task_state_routing_input_value,
+            ),
             max_steps=15,
         ):
             for node, state in event.items():

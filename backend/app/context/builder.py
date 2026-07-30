@@ -147,9 +147,11 @@ class ContextBuilder:
                 memory_context=memory_context,
                 context_pack=context_pack,
                 context_dependency_map=policy_result.dependency_map,
+                task_state_should_inject=request.task_state_should_inject,
                 policy_trace={
                     "intent": request.intent,
                     "selected_tool_names": list(request.selected_tool_names),
+                    "task_state_should_inject": request.task_state_should_inject,
                     "enabled_layers": sorted(
                         layer.value for layer in policy_result.enabled_layers
                     ),
@@ -164,6 +166,7 @@ class ContextBuilder:
         bundle.metadata["policy"] = {
             "intent": request.intent,
             "selected_tool_names": list(request.selected_tool_names),
+            "task_state_should_inject": request.task_state_should_inject,
             "enabled_layers": sorted(
                 layer.value for layer in policy_result.enabled_layers
             ),

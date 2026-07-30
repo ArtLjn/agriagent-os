@@ -1,4 +1,8 @@
-"""ExecutionState 创建与状态流转辅助。"""
+"""Legacy ExecutionState 创建与状态流转辅助。
+
+仅保留为 task_graph planning compile artifact 的兼容测试对象；生产执行状态以
+PendingPlan 为准。
+"""
 
 from __future__ import annotations
 

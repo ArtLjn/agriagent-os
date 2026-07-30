@@ -247,6 +247,7 @@ def _record_router_plan_trace(
     collector,
     router_decision: RouterDecision,
     user_msg: str,
+    routing_augmented_input: str | None = None,
     farm_id: int,
     session_id: str | None,
     duration_ms: int | None = None,
@@ -254,6 +255,7 @@ def _record_router_plan_trace(
     """记录 skill router trace，并返回 plan draft payload。"""
     plan_draft = plan_draft_from_router_decision(
         raw_user_input=user_msg,
+        routing_augmented_input=routing_augmented_input,
         decision=router_decision,
         farm_id=farm_id,
         session_id=session_id,
@@ -268,7 +270,10 @@ def _record_router_plan_trace(
     collector.record(
         node_type="skill_router",
         node_name="skill_router",
-        input_data={"message": user_msg[:500]},
+        input_data={
+            "message": user_msg[:500],
+            "routing_augmented": bool(routing_augmented_input),
+        },
         output_data=router_trace_payload,
         token_usage={
             "schema_token_estimate": router_decision.schema_token_estimate,

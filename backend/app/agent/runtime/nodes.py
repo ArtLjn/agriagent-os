@@ -17,6 +17,7 @@ from app.agent.runtime.messages import (
     sliding_window_compact,
 )
 from app.agent.runtime import node_helpers as _node_helpers
+from app.agent.runtime.task_state_relevance import routing_input_for_task_state
 from app.agent.runtime.support import QUOTA_REJECT_MESSAGES, check_quota
 from app.agent.runtime.tool_executor import _parallel_tool_node
 from app.agent.router import RouterDecision
@@ -312,6 +313,7 @@ def _prepare_route_context(
     user_msg: str,
     has_tool_results: bool,
 ) -> dict:
+    routing_user_msg = routing_input_for_task_state(state, user_msg)
     router_decision, router_duration_ms = _resolve_router_decision(
         state=state,
         normal_msgs=normal_msgs,
@@ -326,6 +328,7 @@ def _prepare_route_context(
         collector=collector,
         router_decision=router_decision,
         user_msg=user_msg,
+        routing_user_msg=routing_user_msg,
         farm_id=farm_id,
         session_id=session_id,
         has_tool_results=has_tool_results,
@@ -348,6 +351,7 @@ def _prepare_route_context(
         "collector": collector,
         "session_id": session_id,
         "user_msg": user_msg,
+        "routing_user_msg": routing_user_msg,
         "plan_draft_payload": plan_draft_payload,
         "should_record_router_trace": should_record_router_trace,
         "selected_names": selected_names,
@@ -363,10 +367,11 @@ def _resolve_router_decision(
 ) -> tuple[RouterDecision, int | None]:
     should_measure_route = state.get("router_decision") is None and not normal_msgs
     started_at = time.perf_counter() if should_measure_route else None
+    routing_user_msg = routing_input_for_task_state(state, user_msg)
     router_decision = _node_helpers._resolve_router_decision(
         prepared_router_decision=state.get("router_decision"),
         normal_msgs=normal_msgs,
-        user_msg=user_msg,
+        user_msg=routing_user_msg,
         tools=tools,
         route_tools_func=lambda message, runtime_tools: _node_helpers._route_tools(
             message,
@@ -387,6 +392,7 @@ def _resolve_plan_trace(
     collector,
     router_decision: RouterDecision,
     user_msg: str,
+    routing_user_msg: str,
     farm_id: int,
     session_id: str | None,
     has_tool_results: bool,
@@ -399,6 +405,9 @@ def _resolve_plan_trace(
             collector=collector,
             router_decision=router_decision,
             user_msg=user_msg,
+            routing_augmented_input=(
+                routing_user_msg if routing_user_msg != user_msg else None
+            ),
             farm_id=farm_id,
             session_id=session_id,
             duration_ms=router_duration_ms,
@@ -464,6 +473,9 @@ async def _prepare_llm_prompt(
         query=route_context.get("user_msg", ""),
         user_id=state.get("user_id"),
         session_id=route_context["session_id"],
+        task_state_should_inject=bool(
+            state.get("task_state_context_should_inject", True)
+        ),
     )
     system_text, prompt_scene, system_prompt_duration_ms = _compose_timed_system_prompt(
         state=state,

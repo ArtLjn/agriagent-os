@@ -8,6 +8,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.application.chat.task_state_updater import (
     TaskStateTurn,
+    TurnResult,
     update_task_state_after_turn,
 )
 from app.context.selectors.task_state import TaskStateSelector
@@ -26,6 +27,7 @@ def _turn(
     pending_action: object | None = None,
     pending_plan: object | None = None,
     pending_decision_handled: bool = False,
+    turn_result: TurnResult | None = None,
 ) -> TaskStateTurn:
     return TaskStateTurn(
         farm_id=1,
@@ -36,6 +38,7 @@ def _turn(
         pending_action=pending_action,
         pending_plan=pending_plan,
         pending_decision_handled=pending_decision_handled,
+        turn_result=turn_result,
     )
 
 
@@ -72,6 +75,41 @@ async def test_task_state_updater_writes_waiting_task_when_reply_requests_info(
     assert task.next_action == "等待用户补充：补光灯功率"
     assert result.action == "created"
     assert result.task_id == task.task_id
+
+
+async def test_task_state_updater_prefers_structured_turn_result_for_new_task(
+    db_session,
+) -> None:
+    result = await update_task_state_after_turn(
+        db_session,
+        _turn(
+            user_input="20亩",
+            assistant_reply="",
+            turn_result=TurnResult(
+                intent="plan_crop_cycle",
+                task_type="planting_plan",
+                entities={"crop": "玉米", "area_mu": 20},
+                missing_slots=["品种"],
+                plan_result={"validation_status": "blocked"},
+            ),
+        ),
+    )
+
+    task = AgentTaskStateStore(db_session).get_active_task(
+        farm_id=1,
+        user_id="test-user-001",
+        session_id="sess-task",
+    )
+
+    assert result.action == "created"
+    assert result.reason == "turn_result_structured"
+    assert result.source == "turn_result"
+    assert task is not None
+    assert task.task_type == "planting_plan"
+    assert task.status == TaskStateStatus.WAITING_USER.value
+    assert task.entities_json["crop"] == "玉米"
+    assert task.entities_json["area_mu"] == 20
+    assert task.missing_information_json == ["品种"]
 
 
 async def test_task_state_updater_writes_from_natural_planting_intent(
@@ -177,6 +215,45 @@ async def test_task_state_planting_plan_extracts_variety_without_fixed_dictionar
 
     assert task is not None
     assert task.entities_json["variety"] == "紫玉米"
+    assert task.missing_information_json == []
+
+
+async def test_task_state_updater_updates_from_structured_turn_result(
+    db_session,
+) -> None:
+    store = AgentTaskStateStore(db_session)
+    task = store.upsert_active_task(
+        farm_id=1,
+        user_id="test-user-001",
+        session_id="sess-task",
+        task_type="planting_plan",
+        goal="帮我规划玉米种植",
+        entities={"crop": "玉米"},
+        missing_information=["种植面积"],
+        next_action="等待用户补充：种植面积",
+        status=TaskStateStatus.WAITING_USER,
+    )
+
+    result = await update_task_state_after_turn(
+        db_session,
+        _turn(
+            user_input="20亩",
+            assistant_reply="",
+            turn_result=TurnResult(
+                intent="plan_crop_cycle",
+                task_type="planting_plan",
+                entities={"area_mu": 20},
+                missing_slots=[],
+            ),
+        ),
+    )
+
+    db_session.refresh(task)
+    assert result.action == "updated"
+    assert result.reason == "turn_result_structured"
+    assert result.source == "turn_result"
+    assert task.status == TaskStateStatus.ACTIVE.value
+    assert task.entities_json["area_mu"] == 20
     assert task.missing_information_json == []
 
 
@@ -553,6 +630,40 @@ async def test_task_state_marks_crop_setup_complete_after_pending_confirm(
         )
         is None
     )
+
+
+async def test_task_state_marks_complete_from_structured_execution_result(
+    db_session,
+) -> None:
+    store = AgentTaskStateStore(db_session)
+    task = store.upsert_active_task(
+        farm_id=1,
+        user_id="test-user-001",
+        session_id="sess-task",
+        task_type="crop_cycle_setup",
+        goal="创建西瓜8424茬口",
+        status=TaskStateStatus.ACTIVE,
+    )
+
+    result = await update_task_state_after_turn(
+        db_session,
+        _turn(
+            user_input="确认",
+            assistant_reply="",
+            pending_decision_handled=True,
+            turn_result=TurnResult(
+                task_type="crop_cycle_setup",
+                execution_result={"status": "completed"},
+                facts={"cycle_id": 1},
+            ),
+        ),
+    )
+
+    db_session.refresh(task)
+    assert result.action == "completed"
+    assert result.reason == "turn_result_execution_completed"
+    assert result.source == "turn_result"
+    assert task.status == TaskStateStatus.COMPLETED.value
 
 
 async def test_task_state_recovers_from_fresh_db_session(db_session) -> None:
