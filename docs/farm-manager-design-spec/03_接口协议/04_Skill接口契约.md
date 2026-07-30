@@ -7,7 +7,9 @@
 ## 1. Skill 调用协议
 
 ```
-Executor 接收 LangChain ToolCall
+Runtime 接收 PlanIR 或 LangChain ToolCall
+  ├─ PlanIR → validate → ExecutionPlan → PendingPlan candidate
+  └─ ToolCall → Executor
   ↓
 解析 tool_call.name → SkillRegistry.get(name) → Skill 实例
   ↓
@@ -26,6 +28,8 @@ Skill.execute(params, context) → SkillResult
   ↓
 返回 ToolMessage 给 Runtime
 ```
+
+PlanIR 路径不直接调用 Skill。它必须先由 registry resolver 将 capability / operation 解析为 `skill_name`、`params`、`requires_confirmation` 和 `side_effect`，再进入 PendingPlan。无法解析或确认策略不满足时 fail-closed。
 
 ## 2. SkillResult 协议
 
@@ -98,6 +102,39 @@ class PendingActionResult(BaseModel):
     skill_result: SkillResult | None
     error: str | None
 ```
+
+### 3.1 PendingPlan 协议
+
+PendingPlan 用于多步骤写操作确认，来源可以是 runtime `PlanDraft`，也可以是 `PlanIR → ExecutionPlan` adapter。
+
+```python
+class PendingPlanStep(BaseModel):
+    step_id: str
+    tool_name: str
+    params: dict
+    depends_on: list[str] = []
+
+class PendingPlanCreate(BaseModel):
+    summary: str
+    steps: list[PendingPlanStep]
+    expires_at: datetime
+    metadata: dict = {}
+
+class PendingPlan(PendingPlanCreate):
+    id: str
+    farm_id: int
+    user_id: int
+    session_id: str
+    status: PendingStatus
+    created_at: datetime
+```
+
+约束：
+
+- `steps` 不能为空。
+- 每个写步骤必须来自 registry 中声明 `requires_confirmation=True` 的 operation。
+- `depends_on` 只能引用同一 plan 内已存在的 step。
+- adapter 写入 metadata 时必须保留 `source_ir_id`、`task_type` 和 validation version，便于 trace 回放。
 
 ## 4. SkillContext 协议
 
@@ -205,7 +242,7 @@ POST /agent/chat
 {"message": "确认", "session_id": "..."}
 ```
 
-当前仓库未暴露独立 `/pending/*` HTTP 路由。用户确认/取消由下一轮 `/agent/chat` 或 `/agent/chat/stream` 消息进入 `handle_pending_action()`，再执行 pending action / pending plan。
+当前仓库未暴露独立 `/pending/*` HTTP 路由。用户确认/取消由下一轮 `/agent/chat` 或 `/agent/chat/stream` 消息进入 pending handler，再执行 pending action / pending plan。
 
 ### 6.6 Executor 真正执行
 

@@ -21,8 +21,8 @@
 
 # AgriAgent OS 设计规范（Design Spec）
 
-> 版本：v1.4（草稿，按 2026-07-24 代码现状校准关键章节：后端真实分层、Flutter 移动端、HTTP 路由、数据库模型、Simulation/Evaluation 入口）
-> 最近校准：2026-07-24
+> 版本：v1.6（草稿，按 2026-07-30 代码现状校准关键章节：Agent Planning Runtime 收敛、TaskState Relevance Gate、PlanIR → ExecutionPlan → PendingPlan adapter、Skill registry operation 元数据、Final Agent 防泄漏协议、Agent 日志诊断协议）
+> 最近校准：2026-07-30
 > 维护人：BlockShip  
 > 文档状态：草稿，持续对齐 `docs/architecture/` 与代码现状
 
@@ -80,6 +80,9 @@
 - [11_Skill设计/天气Skill.md](./01_正式设计/11_Skill设计/天气Skill.md)
 - [12_Skill路由选择架构.md](./01_正式设计/12_Skill路由选择架构.md)
 - [13_Agent范式规范化设计.md](./01_正式设计/13_Agent范式规范化设计.md)
+- [14_MongoDB迁移方案.md](./01_正式设计/14_MongoDB迁移方案.md)
+- [15_Agent运行协议与防泄漏设计.md](./01_正式设计/15_Agent运行协议与防泄漏设计.md)
+- [16_Agent日志与诊断设计.md](./01_正式设计/16_Agent日志与诊断设计.md)
 
 #### 02_产品需求
 - [01_核心能力清单.md](./02_产品需求/01_核心能力清单.md)
@@ -116,7 +119,7 @@
 | --- | --- |
 | 新人 onboarding | 00 → 02 → 03 → 01 |
 | 后端工程师 | 01.01 → 01.02 → 01.03 → 03.02 → 04 |
-| Agent/Prompt 工程师 | 01.01 → 01.02 → 01.12 → 01.13 → 01.05 → 04.01 → 06 |
+| Agent/Prompt 工程师 | 01.01 → 01.02 → 01.12 → 01.13 → 01.15 → 01.16 → 01.05 → 04.01 → 06 |
 | 移动端工程师 | 02 → 03.01 → 01.09 → 04.04 |
 | Admin Web 工程师 | 02 → 03.01 → 01.09 → 04.04 |
 | 产品/PM | 02 → 00.01 → 06 |
@@ -146,6 +149,9 @@
 | Agent | 农场助手智能体，由 Application Chat + Router + Runtime Loop + Executor + Reflector 组成 |
 | Advisor | 历史概念已收敛到 `application/chat` + `agent/runtime` + `agent/guardrails` + `agent/executor`，文档中仅作兼容术语 |
 | Skill | 单一能力模块，按 `.claude/rules/skill-writing.md` 契约实现，分只读 / 写操作 |
+| TaskState | `agent_task_states` 中保存的跨轮任务工作状态，只在相关性门打开时进入 Router/Context |
+| PlanIR | 面向规划层的结构化计划表达，描述任务步骤、依赖、风险和响应契约，不直接执行 |
+| ExecutionPlan | `PlanIR` 面向 Runtime 的安全投影，解析到 operation / skill / 参数 / 确认策略 |
 | ContextBundle | Runtime 消费的动态上下文包，由 Selector + Budget + Compressor 构造 |
 | MemoryService | 短时记忆 + 长时记忆 + Retrieval + Observation 的统一接口端口 |
 | PromptComposer | 把 Snippet 组合成最终 system prompt 的渲染器，受 `prompt/` 治理 |
@@ -153,6 +159,7 @@
 | Simulation | 回归执行台：跑 DB-backed regression cases |
 | Evaluation | 趋势评分台：版本对比通过率、工具选择准确率、pending 漏拦截率 |
 | Pending Action | 写操作需用户确认的暂存动作，支持确认/取消/过期 |
+| Pending Plan | 多步骤写操作需用户确认的暂存计划，由 `ExecutionPlan` 或 runtime draft 投影生成 |
 | Smart Fill | 移动端智能填写统一入口：`/smart-fill/scenarios` 列场景 + `/smart-fill/parse` 解析 |
 | Farm Cockpit | 移动端首页驾驶舱，承载每日建议、关键指标、快捷入口 |
 | Yaya | 移动端 AI 助理对话页（芽芽 IP） |
@@ -175,6 +182,8 @@
 | v1.2 | 2026-06-23 | 新增 [01_正式设计/13_Agent范式规范化设计]：定性当前单主 Agent + Skill + 触发式反思范式，补当前/目标架构图、Reflection 触发规范、Skill 触发树、农事用工子树、不过度设计的三阶段落地与回归种子 | BlockShip |
 | v1.3 | 2026-07-06 | [01_正式设计/06_数据飞轮与评测] 补充问题仓与规则候选治理：明确人工坏会话入仓、IssueRepositoryEntry、RuleCandidatePackage、正例/反例验证、晋级门禁，以及“作物/茬口/农场状态”Skill 选错专项样板 | BlockShip |
 | v1.4 | 2026-07-24 | 按真实代码扫描校准入口文档：React Native 改 Flutter；旧 `app.core/api/models/schemas/services/modules/simulation` 入口改为 `bootstrap/application/domains/agent/context/memory/platforms/shared/infra/skills`；HTTP API、数据库来源、Simulation/Evaluation 状态和路线图同步当前实现 | Codex |
+| v1.5 | 2026-07-30 | 同步 Agent Planning Runtime 收敛：TaskState 读取增加相关性门，Context 注入受 `task_state_should_inject` 控制，`PlanIR` 经 `ExecutionPlan` adapter 投影到 `PendingPlan`，Skill registry operation 元数据扩展，`TurnResult` 结构化 TaskState 更新路径入规 | Codex |
+| v1.6 | 2026-07-30 | 新增 [01_正式设计/15_Agent运行协议与防泄漏设计](./01_正式设计/15_Agent运行协议与防泄漏设计.md) 与 [01_正式设计/16_Agent日志与诊断设计](./01_正式设计/16_Agent日志与诊断设计.md)：明确 Tool Agent / Final Agent 阶段隔离、`tool_choice=none`、FinalContextBuilder、Output Guard、app.log / trace / JSONL / DataFlywheel 四层证据体系 | Codex |
 
 ## 协议
 

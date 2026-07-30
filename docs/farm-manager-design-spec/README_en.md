@@ -21,8 +21,8 @@
 
 # AgriAgent OS Design Spec
 
-> Version: v1.4 (draft, calibrated against the 2026-07-24 codebase: backend layering, Flutter mobile app, HTTP routes, database models, Simulation/Evaluation entry points)
-> Last calibrated: 2026-07-24
+> Version: v1.5 (draft, calibrated against the 2026-07-30 codebase: Agent Planning Runtime convergence, TaskState Relevance Gate, PlanIR → ExecutionPlan → PendingPlan adapter, Skill registry operation metadata)
+> Last calibrated: 2026-07-30
 > Maintainer: BlockShip
 > Status: draft, continuously aligned with `docs/architecture/` and the codebase
 
@@ -79,6 +79,10 @@ Conflict resolution priority: code and `AGENTS.md` hard rules > `docs/architectu
 - [08_business_modularization.md](./01_正式设计/08_业务模块化.md)
 - [09_frontend_and_mobile_contract.md](./01_正式设计/09_前端与移动端契约.md)
 - [10_database_schema_design.md](./01_正式设计/10_数据库结构设计.md)
+- [11_skill_design/weather_skill.md](./01_正式设计/11_Skill设计/天气Skill.md)
+- [12_skill_routing_architecture.md](./01_正式设计/12_Skill路由选择架构.md)
+- [13_agent_paradigm_normalization.md](./01_正式设计/13_Agent范式规范化设计.md)
+- [14_mongodb_migration_plan.md](./01_正式设计/14_MongoDB迁移方案.md)
 
 #### 02_product_requirements
 - [01_core_capability_list.md](./02_产品需求/01_核心能力清单.md)
@@ -145,6 +149,9 @@ Conflict resolution priority: code and `AGENTS.md` hard rules > `docs/architectu
 | Agent | The farm-assistant intelligent agent, composed of Application Chat + Router + Runtime Loop + Executor + Reflector |
 | Advisor | Historical compatibility term now split into `application/chat`, `agent/runtime`, `agent/guardrails`, and `agent/executor` |
 | Skill | Single-capability module, implemented per the `.claude/rules/skill-writing.md` contract; either read-only or write |
+| TaskState | Cross-turn working task state stored in `agent_task_states`; injected into Router/Context only when the relevance gate opens |
+| PlanIR | Planner-facing structured plan expression: steps, dependencies, risks, and response contract; never executed directly |
+| ExecutionPlan | Runtime-facing safe projection of `PlanIR`, resolved to operation / skill / params / confirmation policy |
 | ContextBundle | The dynamic context bundle consumed by Runtime; built by Selector + Budget + Compressor |
 | MemoryService | Unified port for short-term memory + long-term memory + Retrieval + Observation |
 | PromptComposer | Renderer that stitches snippets into the final system prompt, governed by `prompt/` |
@@ -152,6 +159,7 @@ Conflict resolution priority: code and `AGENTS.md` hard rules > `docs/architectu
 | Simulation | Regression executor: runs DB-backed regression cases |
 | Evaluation | Trend scorer: pass rate / tool-selection accuracy / pending-miss rate across versions |
 | Pending Action | A write-op action that requires user confirmation; supports confirm / cancel / expire |
+| Pending Plan | A multi-step write plan that requires user confirmation; built from `ExecutionPlan` or runtime draft |
 | Smart Fill | Mobile-side unified entry for smart form filling: `/smart-fill/scenarios` lists scenarios + `/smart-fill/parse` parses |
 | Farm Cockpit | Mobile home dashboard; carries daily advice, key metrics, quick entries |
 | Yaya | Mobile AI assistant chat page (the "Yaya" IP) |
@@ -170,6 +178,7 @@ Conflict resolution priority: code and `AGENTS.md` hard rules > `docs/architectu
 | v0.8 | 2026-06-19 | Region-tag sync: created [openspec/changes/extend-crop-template-with-region-tag](../../openspec/changes/extend-crop-template-with-region-tag/proposal.md) delta proposal (full proposal/design/specs/tasks); synced [04_related_rules/03_database_and_migration_rules] table list `crops → crop_templates` + region_tag note; [01_formal_design/08_business_modularization] CropPort signature adds region + new `list_system_templates` / `import_system_template`; [02_product_requirements/01_core_capability_list] crop management gets region variants; [03_interface_protocols/01_http_api_protocol] adds `GET /crops/templates/system?region=` and `POST /import` endpoints | BlockShip |
 | v0.9 | 2026-06-20 | Added [01_formal_design/10_database_schema_design]: using `backend/sql/farm_manager.sql` production dump as the baseline, derives the fields, constraints, indexes, and foreign keys of 33 tables (including `alembic_version`); adds an interface→table mapping matrix, a production-vs-code delta reconciliation, and a reserved-tables list (`memory_records` / `audit_logs` / `evaluation_reports`, etc.) | BlockShip |
 | v1.4 | 2026-07-24 | Calibrated entry docs against real code: React Native changed to Flutter; legacy `app.core/api/models/schemas/services/modules/simulation` entries replaced by `bootstrap/application/domains/agent/context/memory/platforms/shared/infra/skills`; HTTP API, database source, Simulation/Evaluation status, and roadmap synced to current implementation | Codex |
+| v1.5 | 2026-07-30 | Synced Agent Planning Runtime convergence: TaskState retrieval now has a relevance gate, Context injection is controlled by `task_state_should_inject`, `PlanIR` projects to `PendingPlan` through the `ExecutionPlan` adapter, Skill registry operation metadata expanded, and `TurnResult` becomes the preferred structured TaskState update input | Codex |
 
 ## License
 

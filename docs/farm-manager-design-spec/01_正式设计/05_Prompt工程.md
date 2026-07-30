@@ -188,7 +188,28 @@ class PromptReplay:
 - 同一逻辑只有一处 snippet 实现（不重复）
 - Prompt 中的敏感词由 `filter_output` 兜底，不在 prompt 里写黑名单
 
-## 12. 当前状态
+## 12. Final Response Prompt
+
+最终回复阶段使用独立 prompt，不复用 Tool Agent 的工具选择上下文。
+
+固定规则：
+
+- 当前处于最终回复阶段。
+- 禁止调用工具。
+- 禁止输出 JSON。
+- 禁止输出 `tool_calls` / `function_call` 格式。
+- 禁止输出工具参数或内部协议。
+- 只返回给用户看的自然语言。
+
+有工具结果时必须增加：
+
+- 当前轮已有工具结果，回答必须基于工具结果。
+- 不要说“不需要调用工具”。
+- 不要说“需要先调用工具”，除非本轮确实没有工具结果。
+
+Final prompt 的输入必须来自 `FinalResponseRequest`，不能直接消费原始 `AIMessage(tool_calls)` 或 `ToolMessage`。详细协议见 [15_Agent运行协议与防泄漏设计](./15_Agent运行协议与防泄漏设计.md)。
+
+## 13. 当前状态
 
 - ✅ Registry / Composer / Renderer 骨架
 - 🚧 Provider prompt cache 能力探测与适配
@@ -197,9 +218,10 @@ class PromptReplay:
 - 🚧 版本治理细化（changelog、A/B）
 - 🚧 Snapshot 测试（捕获 prompt 退化）
 
-## 13. 相关文档
+## 14. 相关文档
 
 - [01_Agent平台架构](./01_Agent平台架构.md)
 - [03_Context工程](./03_Context工程.md)
 - [02_Skill引擎与契约](./02_Skill引擎与契约.md)
 - [04_相关规范/01_Prompt与人设规范](../04_相关规范/01_Prompt与人设规范.md)
+- [15_Agent运行协议与防泄漏设计](./15_Agent运行协议与防泄漏设计.md)

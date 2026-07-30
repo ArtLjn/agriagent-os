@@ -22,8 +22,8 @@ Context 工程的目标是：**按当前意图、工具依赖和安全边界，�
 | Context 数据模型 | `ContextBlock` 表示单个上下文块；`ContextBundle` 是 block 集合、预算结果和 metadata，已经从旧版固定字段模型切换为 block 架构 | 已落地 |
 | 分区化渲染 | `ContextDocument` / `ContextRenderer` 将 bundle 映射到固定分区：`[Role & Policies]`、`[Task]`、`[Evidence]`、`[Context]`、`[Output]` | 已落地 |
 | 外部知识检索 | `KnowledgeSelector` + `RAGKnowledgeProvider` 调 QuillRAG 只读 `retrieve`，生成 `rag_knowledge` block 进入 Evidence 分区 | 已落地 |
-| Task Context | `agent_task_states` 保存同 farm/user/session 最近一个 active 或 waiting_user 任务，`active_task_state` 进入 Task 分区 | 已落地 |
-| TaskState 写入闭环 | `task_state_updater.update_task_state_after_turn()` 在聊天轮次结束后保守更新任务状态，pending 确认链路会跳过 | 已落地 |
+| Task Context | `agent_task_states` 保存同 farm/user/session 最近一个 active 或 waiting_user 任务；读取后先经过 TaskState Relevance Gate，只有相关性达标时 `active_task_state` 才进入 Task 分区 | 已落地 |
+| TaskState 写入闭环 | `task_state_updater.update_task_state_after_turn()` 在聊天轮次结束后保守更新任务状态；优先消费结构化 `TurnResult`，没有结构化信号时才走兼容文本解析，pending 确认链路会跳过 | 已落地 |
 | 显式长期记忆 | 用户明确说“记住/以后默认/帮我记一下”时写入 MySQL `memory_records` confirmed 记忆，下一轮经 `long_term_memory` block 注入 | 已落地 |
 | 会话摘要与压缩边界 | `conversations.summary` / `summary_updated_at` 承载完整新版 running summary；`conversations.meta_json.context_cursor` 记录摘要覆盖边界 | 已落地 |
 | ContextPack | `ContextPackService` 从持久化 conversation/messages 构建唯一会话上下文包，输出 `conversation_summary`、`recent_messages` 和诊断信息 | 已落地 |
@@ -56,6 +56,7 @@ ContextBuildRequest
   - context_dependencies / selected_skill_metadata
   - farm_id / user_id / session_id
   - include_retrieval
+  - task_state_should_inject
         ↓
 ContextPolicy.resolve()
   - 选择 HOT / WORKING / RETRIEVAL 层
@@ -153,7 +154,7 @@ class ContextBundle:
 | `FarmSelector` | MySQL `farms` / user nickname | `farm` | base selector，总是尝试 |
 | `UserSettingsSelector` | MySQL 用户设置 | `user_settings` | base selector，总是尝试 |
 | `CycleSelector` | MySQL 种植周期 | `cycle` | base selector；作物/农事工具依赖也会要求 |
-| `TaskStateSelector` | MySQL `agent_task_states` | `active_task_state` | base selector；同 farm/user/session 有 active 或 waiting_user 状态时注入 |
+| `TaskStateSelector` | MySQL `agent_task_states` | `active_task_state` | base selector；仅当 `ContextBuildRequest.task_state_should_inject=True` 且同 farm/user/session 有 active 或 waiting_user 状态时注入 |
 | `MemorySelector` | ContextPack / MemoryService / long-term store | `conversation_summary`、`recent_messages`、`pending_action`、`temporary_task_state`、`long_term_memory`；兼容期可输出 `short_term_recent`、`short_term_summary` | base selector；有 `context_pack` 时优先使用 ContextPack 并跳过旧短时对话块 |
 | `ConversationSelector` | MySQL conversation messages / summary | `conversation`、`conversation_summary` | 兼容 selector；有 `context_pack` 时让位，避免与 ContextPack 重复注入 |
 | `LedgerSelector` | MySQL 账务 | `ledger` | 记账、查账、人工、成本分类等工具依赖触发 |
@@ -243,14 +244,16 @@ Task Context 解决“多轮任务在同一 session 内可恢复”的问题。
 
 读路径：
 
-- `TaskStateSelector` 默认随 base selectors 执行。
-- 只读取同 `farm_id`、`user_id`、`session_id` 下最近一个未过期 `active` 或 `waiting_user` 状态。
-- 输出 `active_task_state` block，进入 `[Task]` 分区。
+- Application / advisor 在 Router 前通过 `AgentTaskStateStore.get_active_task()` 读取同 `farm_id`、`user_id`、`session_id` 下最近一个未过期 `active` 或 `waiting_user` 状态。
+- `evaluate_task_state_relevance(user_input, task_state_payload)` 计算本轮输入与历史任务的相关性，典型高相关是“继续”“确认”“补充大棚面积”，低相关是“天气怎么样”“今天温度多少”等新话题。
+- 只有相关性门打开时，Router 才使用 task-aware routing input，`AgentState.task_state_context_should_inject=True`。
+- 相关性低时，Router 只看原始用户输入，`ContextBuildRequest.task_state_should_inject=False`，`TaskStateSelector` 返回空 block，历史任务不进入 `[Task]` 分区。
 
 写路径：
 
 - 非流式和流式聊天在回复生成后调用 `update_task_state_after_turn()`。
-- updater 不调用 LLM，不访问 Runtime 内部节点，只消费本轮用户输入、助手回复、farm/user/session 和 pending 状态。
+- updater 不调用 LLM，不访问 Runtime 内部节点；当前优先消费 `TurnResult(intent, task_type, entities, missing_slots, plan_result, execution_result)` 这类结构化结果，避免重新正则解析助手回复。
+- 当调用方还没有结构化结果时，updater 才使用用户输入、助手回复、farm/user/session 和 pending 状态做兼容文本解析。
 - 有 pending action、pending plan，或本轮已经处理 pending 确认/取消时跳过，避免覆盖确认链路。
 - 计划、诊断、方案等任务且助手明确追问缺失信息时，创建或更新 waiting_user task。
 - 用户补充信息后更新 observations/entities/missing_information；取消时标记 cancelled；完成时标记 completed。
@@ -258,6 +261,7 @@ Task Context 解决“多轮任务在同一 session 内可恢复”的问题。
 当前明确不做：
 
 - 不做多任务调度。
+- 不把低相关历史任务注入 Router 或 Context。
 - 不做复杂多任务 planner；当前仅与 Router/PlanDraft 的轻量计划状态协作。
 - 不把普通账务查询或记账确认流程升级为 TaskState。
 - 不把 TaskState 自动写入长期记忆或 RAG。
@@ -303,7 +307,7 @@ Memory Context 分为会话压缩包、结构化短时状态和显式长期记�
 - `token_budget` / `token_estimate`。
 - selected、compressed、dropped block 的摘要。
 - selector errors、allowlist filtered keys、context dependency diagnostics。
-- policy 摘要：intent、selected tool names、enabled layers、dependency keys。
+- policy 摘要：intent、selected tool names、enabled layers、dependency keys、`task_state_should_inject`。
 - section 摘要：分区名、token 估算、block key/source/purpose/required/compressed/reason。
 - 每个 block 的短 preview，经过截断和敏感信息脱敏。
 - RAG 摘要：collection、requested/actual mode、warning、source_count、top_score、前 5 条安全 source metadata。
@@ -364,6 +368,7 @@ Trace 写入失败不能影响主链路。Mongo trace 只能服务调试、质�
 - Mongo trace 不参与主问答决策，也不作为状态恢复来源。
 - Farm Manager 不保存 embedding key，不管理向量索引生命周期。
 - Pending action / pending plan 确认链路优先级高于 TaskState 和长期记忆写入。
+- TaskState 注入必须受相关性门控制；`active_task_state` 存在不等于本轮必须注入。
 - 新增 block key 必须同步 allowlist、renderer 分区和必要测试，不能靠未知 key fallback 长期运行。
 
 ## 13. 相关实现与文档

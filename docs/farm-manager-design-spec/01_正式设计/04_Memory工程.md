@@ -16,15 +16,15 @@
 
 ## 2. 部署边界（关键约束）
 
-**当前 2C4G 部署不内置 RAG、向量数据库、embedding 模型或重排服务**。长期记忆和检索只通过 `MemoryService` 端口预留扩展点：
+**当前 2C4G 部署不内置向量数据库、embedding 模型或重排服务**。外部 QuillRAG 只作为可选只读检索服务接入；长期记忆通过 MySQL `memory_records` 保存用户显式确认的记忆，不依赖本地向量库。
 
 | 场景 | 当前行为 | 未来 |
 | --- | --- | --- |
-| `MemoryService.build_context()` | 返回空长期记忆上下文 | 接入外部 RAG service |
-| `MemoryService.search()` | 返回空检索结果 | 接入向量检索 |
-| `MemoryService.observe()` | 写入短时记忆 + JSONL event | 同步到 RAG |
+| `MemoryService.build_context()` | 读取会话摘要、最近消息和 confirmed 长期记忆，交给 ContextPack / MemorySelector 注入 | 引入更强检索和排序 |
+| `MemoryService.search()` | 当前不作为主聊天语义检索入口；外部知识由 Context 的 `KnowledgeSelector` 调 QuillRAG | 接入更完整的记忆检索 |
+| `MemoryService.observe()` | 记录 observation 事件，显式长期记忆由 `memory/explicit.py` 写入 MySQL | 人工确认后再考虑同步到外部知识库 |
 
-未配置外部 RAG 时，Agent 靠短时记忆 + 业务工具 + Prompt 正常执行。
+未配置外部 RAG 时，Agent 靠 ContextPack 会话上下文 + confirmed 长期记忆 + 业务工具 + Prompt 正常执行。
 
 ## 3. 架构
 
@@ -267,18 +267,28 @@ class RetrievalPort(Protocol):
 ## 11. 与 Context 工程的接口
 
 ```
-ContextBuilder
+ContextPackService / MemorySelector
   ↓
-调用 MemoryService.build_context(MemoryContextRequest)
+读取 conversations.summary、recent_messages、memory_records
   ↓
-返回 MemoryView：
-  ├─ recent_messages（最近对话）
-  ├─ active_preferences（用户偏好）
-  ├─ relevant_events（按 intent 检索的事件）
-  └─ summary（会话级摘要，如有）
+输出 ContextBlock：
+  ├─ conversation_summary
+  ├─ recent_messages
+  └─ long_term_memory
   ↓
-注入 ContextBundle.memory
+ContextBuilder 统一预算、压缩和分区渲染
 ```
+
+### 11.1 与 TaskState / Planning 的边界
+
+TaskState 不是 Memory。`agent_task_states` 保存的是“当前任务工作台”：任务类型、已知实体、缺失槽位、等待用户补充的信息和过期时间。它服务多轮任务恢复，不代表用户希望系统长期记住某个事实。
+
+边界规则：
+
+- `TurnResult` 可以驱动 TaskState 更新，但不能直接创建长期 Memory。
+- 用户明确说“记住/以后默认/帮我记一下”时，才由显式记忆链路写 `memory_records`。
+- TaskState 读取后必须经过 Relevance Gate；低相关历史任务不进入 Context。
+- Pending Action / Pending Plan 确认链路优先于 TaskState 和 Memory 更新，避免确认上下文被摘要或任务状态覆盖。
 
 ## 12. 多轮失忆治理路线
 

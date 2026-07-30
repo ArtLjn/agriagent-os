@@ -6,7 +6,7 @@
 
 ## 1. Skill 是什么
 
-Skill 是 Agent 调用业务能力的**能力包**。当前实现采用 `skillify` SDK 加载 `backend/app/skills/*/skill.md`，再由 `backend/app/skills/registry/*.yaml` 描述 capability、operation、risk、legacy alias 和治理信息。
+Skill 是 Agent 调用业务能力的**能力包**。当前实现采用 `skillify` SDK 加载 `backend/app/skills/*/skill.md`，再由 `backend/app/skills/registry/*.yaml` 描述 capability、operation、risk、legacy alias 和治理信息。Registry 也是 Planning adapter 的事实源，operation 元数据必须包含 schema、side effect、confirmation、executor ref、planner hints 和 failure policy，避免 Planner 直接猜测 Runtime 执行入口。
 
 Farm Manager 当前代码落地 13 个 Skill 包，覆盖记账、账务分类、茬口、作物模板、地块、农事日志、工单、工人、工资、用户设置、农场状态、天气和外部搜索。一个 Skill 包可以暴露多个 operation，例如 `manage_cost` 覆盖 `create_cost_record`、`get_cost_summary`、`get_debt_summary`、`settle_debt` 等 legacy alias。
 
@@ -82,7 +82,7 @@ parameters:
 | `write` | `write_confirm`（默认） | 是 | 禁止 | 禁止 | 禁止 |
 | `write` | `write`（特殊：幂等无副作用） | 否 | 禁止 | 谨慎允许 | 谨慎允许 |
 
-**写操作默认走 Pending Action 二次确认**，例外需要在 `skill.md` 显式声明并经人工评审。
+**写操作默认走 Pending Action / Pending Plan 二次确认**：单个写操作进入 Pending Action，多步骤写计划进入 Pending Plan。例外需要在 `skill.md` 和 registry operation 中显式声明并经人工评审。
 
 ## 5. Skill 类实现规范
 
@@ -174,13 +174,27 @@ class CreateCostRecordSkill(Skill):
 ```
 1. `SkillManager(python_packages=["app.skills"])` 扫描 `backend/app/skills/*/skill.md`
 2. `app/skills/registry/loader.py` 读取 `skills.yaml`、`domains.yaml`、`aliases.yaml`
-3. `app/skills/metadata.py` 把 capability / operation / risk / legacy alias 附加到 Skill 和 LangChain Tool
-4. `agent/router/service.py` 结合 registry、classifier、retriever、policy 选择候选工具
-5. `agent/runtime/tool_executor.py` 调用 `Skill.execute(params, SkillContext)`
-6. Trace 记录 tool call、latency、token、reflection 和 router evidence
+3. loader 校验 operation 的 input_schema / output_schema / side_effect / requires_confirmation / executor_ref / planner_hints / failure_policy
+4. `app/skills/metadata.py` 把 capability / operation / risk / legacy alias 附加到 Skill 和 LangChain Tool
+5. `agent/router/service.py` 结合 registry、classifier、retriever、policy 选择候选工具
+6. `agent/runtime/planning/execution_plan.py` 在 PlanIR 接入时解析 capability / operation 到可执行 skill
+7. `agent/runtime/tool_executor.py` 调用 `Skill.execute(params, SkillContext)`
+8. Trace 记录 tool call、latency、token、reflection、router evidence 和 planning adapter evidence
 ```
 
-## 8. Skill 与 Router 的关系
+## 8. Capability / Operation / Skill 边界
+
+当前系统保留三层语义，不允许把 Capability 直接等同于 Skill：
+
+| 层 | 说明 | 示例 | 主要消费者 |
+| --- | --- | --- | --- |
+| Capability | 面向业务的能力集合，表达“能做什么” | 创建种植周期、管理人工工资 | Router、Planner、产品文档 |
+| Operation | 某个能力下可治理的动作，携带 schema、风险、确认、side effect、executor ref | `crop_cycle.create`、`labor_payment.settle` | Registry resolver、ExecutionPlan adapter、测试 |
+| Skill Tool | Runtime 真正绑定和执行的 LangChain / skillify 工具 | `manage_crop_cycle`、`manage_labor_payment` | Tool selector、Executor |
+
+Planning 只产生 capability / operation / inputs / dependencies；Runtime adapter 负责把它们解析为 Skill Tool。这样既能复用 `skills/registry`，也不会重新创建一套 `agent/capabilities` 或把 Skill 包膨胀成工作流引擎。
+
+## 9. Skill 与 Router 的关系
 
 ```
 用户输入 → agent/router
@@ -209,7 +223,7 @@ LLM 决定调用哪个 → Executor 执行
 
 详细设计见 [../../../docs/specs/2026-07-27-skill-router-hybrid-recall-eval-design.md](../../../docs/specs/2026-07-27-skill-router-hybrid-recall-eval-design.md)。
 
-## 9. Skill 错误处理
+## 10. Skill 错误处理
 
 | 错误码 | 场景 | 处理 |
 | --- | --- | --- |
@@ -218,14 +232,17 @@ LLM 决定调用哪个 → Executor 执行
 | `DB_ERROR` | 数据库异常 | 返回 FAILED + 通用错误消息，记日志 |
 | `PERMISSION_DENIED` | 越权 | 返回 FAILED + 权限提示 |
 | `PENDING_REQUIRED` | 写操作需确认 | 返回 NEED_CLARIFY + 确认话术 |
+| `PLAN_IR_INVALID` | PlanIR 缺步骤、字段类型错误或结构 malformed | fail-closed，进入合同阻断 trace，不执行 Skill |
+| `EXECUTION_PLAN_COMPILE_ERROR` | capability / operation 无法解析到安全 Skill 或参数不满足契约 | fail-closed，提示重新确认或澄清 |
+| `PENDING_PLAN_CONTRACT_BLOCKED` | 多步骤 pending plan 缺 TTL、步骤、确认策略或 side effect 不安全 | 阻断创建 PendingPlan |
 | `EXTERNAL_SERVICE_ERROR` | 天气/LLM 失败 | 返回 FAILED + 降级提示 |
 
 **禁止**：
 - 把内部异常 traceback 暴露给用户
 - 缺参时猜测业务关键字段（如金额、分类）
-- 写操作不经过 Pending 直接执行（除非显式声明 `permission: write`）
+- 写操作不经过 Pending Action / Pending Plan 直接执行（除非显式声明 `permission: write` 并通过人工评审）
 
-## 10. 测试规范
+## 11. 测试规范
 
 ```
 backend/tests/skills/test_<skill_name>.py
@@ -240,7 +257,7 @@ DB 必须 mock，使用 `unittest.mock.patch`。
 
 CI 校验：`backend/tests/skills/test_skill_docs.py` 扫描全量 `skill.md` 契约。
 
-## 11. Skill 治理流程
+## 12. Skill 治理流程
 
 ```
 新增 Skill：
@@ -249,9 +266,11 @@ CI 校验：`backend/tests/skills/test_skill_docs.py` 扫描全量 `skill.md` �
   3. 按需实现 scripts/main.py
   4. 在 backend/tests/skills/ 写测试
   5. 更新 backend/app/skills/registry/skills.yaml / aliases.yaml
-  6. 更新 docs/agent/skill-coverage-matrix.md
-  7. 在 DataFlywheel 创建初始 regression case（可选）
-  8. PR 评审：触发词去重、与现有 Skill 边界、参数 schema 完整性
+  6. 对新增 operation 补齐 input_schema / output_schema / side_effect / requires_confirmation / executor_ref / planner_hints / failure_policy
+  7. 更新 docs/agent/skill-coverage-matrix.md
+  8. 如 operation 会被 PlanIR 使用，补 ExecutionPlan adapter / registry resolver 测试
+  9. 在 DataFlywheel 创建初始 regression case（可选）
+  10. PR 评审：触发词去重、与现有 Skill 边界、参数 schema 完整性、pending 策略
 
 废弃 Skill：
   1. 在 skill.md frontmatter 增加 deprecated: true

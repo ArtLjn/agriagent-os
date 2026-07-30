@@ -22,6 +22,8 @@
 - 不把 Skill 变成互相调用的复杂工作流引擎。
 - 不改变现有写操作必须确认的安全边界。
 
+截至 2026-07-30，规范化方向已收敛为：保留现有单主 Runtime，吸收 Planning 的结构化表达能力；`PlanIR` 不替代 Runtime，而是经 `ExecutionPlan` adapter 投影为 `PendingPlan`。`task_graph/runtime` 仅保留 legacy 标记，不作为在线 DAG Runtime 继续演进。
+
 ## 2. 当前范式定性
 
 当前系统是一个单 Agent 流水线：
@@ -30,16 +32,21 @@
 flowchart TD
     U["用户输入"] --> UC["Application Use Case"]
     UC --> P0["Pending 检查<br/>已有待确认动作?"]
-    P0 --> R["SkillRouter<br/>RuleIntentClassifier + RouterPolicy"]
+    P0 --> TS["TaskState Retrieval"]
+    TS --> TG["TaskState Relevance Gate"]
+    TG --> R["SkillRouter<br/>RuleIntentClassifier + RouterPolicy"]
     R --> C["ContextBundle<br/>按 selected_tools 注入上下文"]
     C --> L["LLM Node<br/>绑定 selected tools"]
     L --> H{"LLM 生成 tool_calls?"}
     H -->|是| T["Tool Executor"]
     H -->|否| FR["Post-tool Reflection<br/>仅在 selected_tools/tool_messages 存在时触发"]
-    T --> W{"写操作?"}
-    W -->|是| PA["Pending Action / Pending Plan<br/>确认后执行"]
+    T --> W{"写操作或 PlanIR?"}
+    W -->|PlanIR| EP["ExecutionPlan Adapter<br/>PlanIR -> PendingPlan"]
+    W -->|单写入| PA["Pending Action<br/>确认后执行"]
+    EP --> PA2["Pending Plan<br/>确认后执行"]
     W -->|否| RT["执行只读 Skill"]
     PA --> L
+    PA2 --> L
     RT --> L
     FR --> O["最终回复"]
 ```
@@ -53,6 +60,8 @@ flowchart TD
 | `LLM Node` | 绑定候选工具并生成 tool_call | 若无候选工具，模型可能直接文本声称成功 |
 | `Tool Executor` | 写操作拦截为 pending | 只有生成了 tool_call 才能创建 pending |
 | `Reflector` | 检查 pending 文案、工具失败、工具后回复 | 不是前置语义拆解器，router 无候选时会短路 |
+| `TaskState Relevance Gate` | 判断历史 TaskState 是否与当前输入相关 | 不能把历史任务直接作为 Router 判定依据 |
+| `ExecutionPlan Adapter` | 把 PlanIR 安全投影到 PendingPlan | 不能替代 Executor 或绕过 pending |
 
 ## 3. 当前缺口样例
 
@@ -157,7 +166,7 @@ flowchart TD
 
 ## 5. Agent 输入后的完整生命周期
 
-长期目标是所有会话轮次都经过轻量 `PlanDraft`，但不是每轮都调用 LLM 深度规划。`PlanDraft` 是单主 Agent 内部的结构化运行时数据，用来统一表达“直接回复、读取、单写入、多写入、澄清”五类结果。
+长期目标是所有会话轮次都经过轻量 `PlanDraft` 或等价结构化计划，但不是每轮都调用 LLM 深度规划。`PlanDraft` 是单主 Agent 内部的结构化运行时数据，用来统一表达“直接回复、读取、单写入、多写入、澄清”五类结果；`PlanIR` 是面向更强 Planner 的计划表达，必须经 `ExecutionPlan` adapter 才能进入 Runtime。
 
 ### 5.1 总体生命周期
 
@@ -170,15 +179,21 @@ flowchart TD
     PE -->|确认| EX0["Pending Executor<br/>执行已存计划"]
     PE -->|取消/修正| CLR["清理或重建 PlanDraft"]
 
-    P0 -->|否| G["Rule Gate<br/>安全门 / 高频短语 / 负例分流"]
+    P0 -->|否| TS["TaskState Retrieval"]
+    TS --> RG["Task Relevance Gate"]
+    RG --> G["Rule Gate<br/>安全门 / 高频短语 / 负例分流"]
     G --> PD["PlanDraft Builder<br/>统一计划草稿"]
     PD --> SP{"是否复杂或多意图?"}
     SP -->|否| A1["Adapter<br/>RouterDecision -> PlanDraft"]
     SP -->|是| LP["Structured Router Plan<br/>结构化 JSON 规划"]
     A1 --> DV["Domain Validator<br/>业务字段与上下文校验"]
     LP --> DV
+    DV --> IR{"是否产出 PlanIR?"}
+    IR -->|是| EP["ExecutionPlan Adapter<br/>operation -> skill"]
+    EP --> RT
+    IR -->|否| RT
 
-    DV --> RT{"route_type"}
+    RT{"route_type"}
     RT -->|direct_reply| DR["Direct Reply<br/>普通回复"]
     RT -->|read_plan| RP["Read Tool Binding<br/>只读 Skill"]
     RT -->|write_pending_action| WPA["Pending Action<br/>单写入确认"]
@@ -204,8 +219,10 @@ flowchart TD
 | 阶段 | 产物 | 说明 |
 | --- | --- | --- |
 | Conversation Intake | `TurnContext` | 收集会话、用户、农场、时间、pending 状态 |
+| Task Relevance Gate | `TaskStateRelevance` | 判断 active task 是否能影响本轮 Router/Context |
 | Rule Gate | `evidence` | 快速识别问候、查询、明显写入、高风险成功话术 |
 | PlanDraft Builder | `PlanDraft` | 所有轮次统一成计划草稿 |
+| PlanIR Adapter | `ExecutionPlan` | 将 PlanIR 的 capability / operation / inputs 投影到 Runtime 的 skill / params / confirmation |
 | Domain Validator | `PlanValidationResult` | 业务字段完整性、唯一性、权限、默认值推断 |
 | Route Resolver | `route_type` | 决定 direct reply/read/pending action/pending plan/clarification |
 | Executor/Pending | `ToolResult` 或 `PendingAction/Plan` | 执行只读；写入只存待确认 |
@@ -272,6 +289,18 @@ classDiagram
 | `write_pending_action` | 单个写操作 | 存 pending action |
 | `write_pending_plan` | 多个有依赖的写操作 | 存 pending plan |
 | `clarification` | 缺关键字段或歧义 | 追问，不执行 |
+
+### 5.2.1 PlanIR / ExecutionPlan / PendingPlan 分层
+
+`PlanIR` 和 `PendingPlan` 中间必须有 `ExecutionPlan`，避免 Planner 直接写 Runtime 存储合同。
+
+| 层 | 面向谁 | 保存什么 | 不做什么 |
+| --- | --- | --- | --- |
+| `PlanIR` | Planner / Validator | task_type、steps、capability、operation、inputs、depends_on、risk、response_contract | 不保存 pending 状态，不直接执行 Skill |
+| `ExecutionPlan` | Runtime adapter / Executor | skill_name、params、requires_confirmation、side_effect、depends_on、validation_version | 不做用户确认持久化，不绕过权限 |
+| `PendingPlan` | 数据库 / 用户确认 | pending id、steps、summary、TTL、status、执行结果 | 不重新推理业务计划 |
+
+当前接入策略：先覆盖 pending 链路完整的任务，例如 `crop_cycle_setup`；`planting_plan` 仍可保留离线/legacy planner 产物，扩大覆盖前必须补 trace 对比和 evaluation case。
 
 ### 5.3 PlanDraft 生成来源
 
@@ -847,9 +876,10 @@ Skill 是原子能力，不是 Agent。
 
 只做三件事：
 
-1. 给农事/用工句补规则识别，例如“人名 + 干了/做了 + 数量 + 作业类型”。
-2. final 前增加成功写入话术守门：即使 selected_tools 为空，也不能放行“已记录/已创建/已保存”。
-3. 为该类输入补路由回归。
+1. 保留 TaskState Retrieval + Relevance Gate，防止历史任务污染 Router/Context。
+2. 给农事/用工句补规则识别，例如“人名 + 干了/做了 + 数量 + 作业类型”。
+3. final 前增加成功写入话术守门：即使 selected_tools 为空，也不能放行“已记录/已创建/已保存”。
+4. 为该类输入补路由回归。
 
 验收：
 
@@ -859,15 +889,17 @@ Skill 是原子能力，不是 Agent。
 
 ### Phase 2：轻量多意图计划
 
-复用 `IntentFrame` 和 `pending_plan`，只支持确定性场景：
+复用 `IntentFrame`、`PlanDraft` 和 `pending_plan`，只支持确定性场景：
 
 - 新工人 + 作业。
 - 作业 + 用工 + 明确工资。
 - 作业 + 用工 + 默认工资可唯一确定。
+- `crop_cycle_setup` 这类已有 pending / confirmation / skill 链路的任务。
 
 验收：
 
 - pending plan 步骤数量与确认文案一致。
+- PlanIR 进入 Runtime 前必须先编译为 ExecutionPlan，非法计划 fail-closed。
 - 写步骤参数非空。
 - 无法唯一确定时追问。
 

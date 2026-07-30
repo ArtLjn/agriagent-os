@@ -47,10 +47,23 @@ async def stream_agent_loop(state: AgentState, max_steps: int = 15) -> AsyncIter
 # agent/runtime/state.py
 class AgentState(TypedDict):
     messages: list[BaseMessage]
-    tool_calls: list[ToolCall]
-    pending: PendingAction | None
-    reflection: ReflectionResult | None
-    metadata: RuntimeMetadata
+    farm_id: int
+    farm_uid: str | None
+    intent: str
+    user_id: str | None
+    session_id: str | None
+    user_role: NotRequired[str | None]
+    system_prompt: NotRequired[str | None]
+    context_bundle: NotRequired[ContextBundle | None]
+    selected_tool_names: NotRequired[list[str] | None]
+    router_decision: NotRequired[RouterDecision | None]
+    plan_draft: NotRequired[dict | None]
+    plan_ir: NotRequired[object | None]
+    active_task_state: NotRequired[dict | None]
+    task_state_relevance: NotRequired[dict | None]
+    task_state_context_should_inject: NotRequired[bool]
+    task_state_routing_input: NotRequired[str | None]
+    trace_round_index: NotRequired[int | None]
 
 # agent/runtime/tool_executor.py
 class ToolExecutor:
@@ -93,7 +106,65 @@ class PendingManager:
         """清理过期，返回清理数。"""
 ```
 
-## 6. Reflector 接口
+## 6. Planning / PendingPlan 接口
+
+```python
+# agent/task_graph/models.py
+class PlanIR(BaseModel):
+    ir_id: str
+    task_type: str
+    steps: list[PlanIRStep]
+    planner_version: str
+    context_hash: str
+    response_contract: dict
+
+class PlanIRStep(BaseModel):
+    step_id: str
+    capability: str | None
+    operation: str | None
+    inputs: dict
+    depends_on: list[str]
+    side_effect: str
+
+# agent/runtime/planning/execution_plan.py
+@dataclass(frozen=True)
+class ExecutionStep:
+    step_id: str
+    capability: str
+    operation: str
+    skill_name: str
+    params: dict
+    depends_on: list[str]
+    requires_confirmation: bool
+    side_effect: str
+
+@dataclass(frozen=True)
+class ExecutionPlan:
+    plan_id: str
+    source_ir_id: str
+    task_type: str
+    steps: list[ExecutionStep]
+    validation_version: str = "execution-plan-v1"
+
+def compile_plan_ir_to_execution_plan(plan_ir: PlanIR, *, registry: SkillRegistry | None = None) -> ExecutionPlan:
+    """PlanIR → Runtime 可执行合同；未知 capability / operation fail-closed。"""
+
+def pending_steps_from_execution_plan(plan: ExecutionPlan) -> list[dict]:
+    """ExecutionPlan → pending_plan_service 可存储 steps。"""
+
+# agent/runtime/plan_ir_pending.py
+def build_plan_ir_pending_plan_candidate(state: AgentState) -> PlanIRPendingPlanCandidate | PlanIRPendingPlanBlocked | None:
+    """从 state.plan_ir 构建 PendingPlan candidate；非法计划返回 blocked。"""
+```
+
+边界：
+
+- `PlanIR` 面向 Planner，描述“为什么、怎么拆、依赖和风险”，不直接执行。
+- `ExecutionPlan` 面向 Runtime，描述“哪个 skill、参数、顺序、是否需要确认”。
+- `PendingPlan` 面向数据库和用户确认，保存状态、TTL、确认结果和执行结果。
+- `task_graph/runtime` 不再作为在线执行 Runtime，只保留 legacy 兼容标记。
+
+## 7. Reflector 接口
 
 ```python
 # agent/reflector/
@@ -113,7 +184,7 @@ class ReflectionResult(BaseModel):
     trace_payload: dict       # 写入 reflection_trace 表
 ```
 
-## 7. Prompt 接口
+## 8. Prompt 接口
 
 ```python
 # prompt/composer.py
@@ -134,33 +205,42 @@ class ComposedPrompt(BaseModel):
     metadata: PromptMetadata     # token, snippet_versions
 ```
 
-## 8. Context 接口
+## 9. Context 接口
 
 ```python
 # context/builder.py
-class ContextBuilder:
-    async def build(self, request: ContextBuildRequest) -> ContextBundle:
-        """构建 ContextBundle。"""
+def build_runtime_context_bundle(
+    db: Session,
+    request: ContextBuildRequest,
+    memory_context: MemoryView | None = None,
+    context_pack: ContextPack | None = None,
+) -> ContextBundle:
+    """构建 Runtime 消费的 ContextBundle。"""
 
-class ContextBuildRequest(BaseModel):
-    farm_id: int
-    intent: Intent
-    tool_names: list[str]
-    session_id: str
+@dataclass(frozen=True)
+class ContextBuildRequest:
+    intent: str = "chat"
+    query: str = ""
+    selected_tool_names: list[str] = field(default_factory=list)
+    context_dependencies: list[str] = field(default_factory=list)
+    selected_skill_metadata: dict[str, dict] = field(default_factory=dict)
+    farm_id: int = 0
+    user_id: str | None = None
+    session_id: str | None = None
+    include_retrieval: bool = False
+    task_state_should_inject: bool = True
 
-class ContextBundle(BaseModel):
-    farm: FarmFacts
-    cycle: CycleFacts | None
-    settings: UserSettingsFacts
-    ledger: LedgerSnapshot | None
-    weather: WeatherSnapshot | None
-    conversation: ConversationSummary
-    memory: MemoryView
-    preload: PreloadKnowledge | None
-    metadata: ContextMetadata
+@dataclass
+class ContextBundle:
+    blocks: list[ContextBlock]
+    token_budget: int
+    token_estimate: int
+    compressed_blocks: list[ContextBlock]
+    dropped_blocks: list[ContextBlock]
+    metadata: dict
 ```
 
-## 9. Memory 接口
+## 10. Memory 接口
 
 ```python
 # memory/service.py
@@ -172,7 +252,7 @@ class MemoryService:
     async def consolidate(self, session_id: str) -> ConsolidationResult: ...
 ```
 
-## 10. Skill 接口
+## 11. Skill 接口
 
 ```python
 # skillify Skill，由 app/skills/__init__.py 转为 LangChain StructuredTool
@@ -197,7 +277,39 @@ class SkillResult(BaseModel):
     pending: PendingActionCreate | None  # 需要确认时触发 Pending plan
 ```
 
-## 11. Trace 接口
+## 12. TaskState 更新接口
+
+```python
+# application/chat/task_state_updater.py
+@dataclass(frozen=True)
+class TurnResult:
+    intent: str = ""
+    task_type: str = ""
+    entities: dict[str, object] = field(default_factory=dict)
+    missing_slots: list[str] = field(default_factory=list)
+    plan_result: dict[str, object] | None = None
+    execution_result: dict[str, object] | None = None
+    facts: dict[str, object] = field(default_factory=dict)
+
+@dataclass(frozen=True)
+class TaskStateTurn:
+    farm_id: int
+    user_id: str | None
+    session_id: str | None
+    user_input: str
+    assistant_reply: str
+    pending_action: object | None = None
+    pending_plan: object | None = None
+    pending_decision_handled: bool = False
+    turn_result: TurnResult | None = None
+
+async def update_task_state_after_turn(db: Session, turn: TaskStateTurn) -> TaskStateUpdateResult:
+    """优先基于 TurnResult 结构化结果更新 TaskState；pending 确认链路跳过。"""
+```
+
+`TurnResult` 是未来 TaskState 更新的首选输入。兼容期允许基于助手回复做保守文本解析，但新增 Planner / Executor 能提供结构化结果时，不能再反向正则解析自然语言回复。
+
+## 13. Trace 接口
 
 ```python
 # infra/trace_collector.py
@@ -207,7 +319,51 @@ class TraceCollector:
     def emit(self, event: TraceEvent) -> None: ...
 ```
 
-## 12. 调用链全景
+## 14. Final Response 接口
+
+Final Response 接口用于把 ReAct 内部消息投影为用户可见回复上下文。它是防止 function call JSON 泄漏的核心边界。
+
+```python
+# agent/runtime/final_context.py
+@dataclass(frozen=True)
+class ToolResultSummary:
+    tool_name: str
+    operation: str | None
+    status: str
+    permission_level: str
+    summary: str
+    facts: dict[str, object]
+    error_code: str | None = None
+
+@dataclass(frozen=True)
+class FinalResponseConstraints:
+    forbid_tools: bool = True
+    forbid_json: bool = True
+    forbid_function_call_format: bool = True
+    language: str = "zh-CN"
+
+@dataclass(frozen=True)
+class FinalResponseRequest:
+    user_query: str
+    tool_results: list[ToolResultSummary]
+    context_blocks: list[dict[str, object]]
+    constraints: FinalResponseConstraints
+    trace_meta: dict[str, object]
+
+class FinalContextBuilder:
+    def build(self, state: AgentState) -> FinalResponseRequest:
+        """从 AgentState 构建 final 阶段上下文，不透传原始 AIMessage.tool_calls。"""
+```
+
+约束：
+
+- final 阶段 LLM 调用必须使用 `tools=[]` 和 `tool_choice="none"`。
+- `FinalContextBuilder` 不返回原始 `AIMessage(tool_calls)`。
+- `FinalContextBuilder` 不返回原始 `ToolMessage`，只返回 `ToolResultSummary`。
+- final prompt 只消费 `FinalResponseRequest`，不直接消费 ReAct 消息历史。
+- Output Guard 发现 JSON / function call 泄漏时，必须写 trace 并按 [15_Agent运行协议与防泄漏设计](../01_正式设计/15_Agent运行协议与防泄漏设计.md) 处理。
+
+## 15. 调用链全景
 
 ```
 HTTP Request
@@ -215,40 +371,54 @@ HTTP Request
   → application/chat/use_case.py 或 stream_chat.py
     → ConversationService.save_user_message
     → pending plan / pending action 检查
+    → AgentTaskStateStore.get_active_task
+    → evaluate_task_state_relevance
+      → low relevance: 不注入 active task，Router 只看原始输入
+      → high relevance: task_state_routing_input + task_state_should_inject=True
     → agent/runtime/loop.py
       → Guardrails.check_input
       → SkillRouter.route
-      → ContextBuilder.build
-        → MemoryService.build_context
+      → build_runtime_context_bundle
+        → ContextPack / MemorySelector / TaskStateSelector / KnowledgeSelector
       → PromptComposer.compose
       → stream_agent_loop / run_agent_loop
         → LLM call
+        → state.plan_ir 存在时：PlanIR → ExecutionPlan → PendingPlan candidate
         → ToolExecutor.execute
           → Skill.execute
             → domains.<domain>.service
         → Reflector.check
+        → FinalContextBuilder.build
+        → Final Agent(tools=[], tool_choice=none)
+        → OutputGuard.check_final_response
       → Guardrails.filter_output
     → ConversationService.save_assistant_message
+    → update_task_state_after_turn(TurnResult 优先，文本解析兜底)
     → MemoryService.observe
     → TraceCollector.emit
   → Response / SSE
 ```
 
-## 13. 错误传递
+## 16. 错误传递
 
 | 层 | 错误类型 | 处理 |
 | --- | --- | --- |
 | API | HTTPException | 直接返回 |
 | UseCase | UseCaseError | 转 HTTPException |
 | Runtime | AgentLoopMaxStepsExceeded | 返回降级回复 |
+| Planning adapter | PLAN_IR_INVALID / EXECUTION_PLAN_COMPILE_ERROR | fail-closed，返回合同阻断或澄清，不执行 Skill |
 | ToolExecutor | SkillError | 转 ToolMessage（error） |
 | Skill | ResultStatus.FAILED | 返回中文提示 |
 | Memory | MemoryError | 跳过记忆，主流程继续 |
 | Trace | TraceError | 静默丢弃（不影响主流程） |
+| FinalContext | FINAL_CONTEXT_CONTRACT_VIOLATION | fail-closed，不调用 final LLM，写 trace |
+| OutputGuard | FINAL_JSON_LEAK_DETECTED | 重试一次；仍失败则抽取自然语言或 fail-closed，写 DataFlywheel issue |
 
-## 14. 相关文档
+## 17. 相关文档
 
 - [01_HTTP_API协议](./01_HTTP_API协议.md)
 - [03_外部服务接口](./03_外部服务接口.md)
 - [04_Skill接口契约](./04_Skill接口契约.md)
 - [01_正式设计/01_Agent平台架构](../01_正式设计/01_Agent平台架构.md)
+- [01_正式设计/15_Agent运行协议与防泄漏设计](../01_正式设计/15_Agent运行协议与防泄漏设计.md)
+- [01_正式设计/16_Agent日志与诊断设计](../01_正式设计/16_Agent日志与诊断设计.md)
