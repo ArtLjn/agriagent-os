@@ -625,7 +625,7 @@ P0 ──→ P1 ──→ P2 ──→ P3
 | [agent-module-remediation.md](./2026-07-12-agent-module-remediation.md) | agent 模块专项整改 | 与本 spec 决策 B 重叠部分以本 spec 为准（更新、更全） |
 | [../architecture/boundaries.md](../architecture/boundaries.md) | 依赖方向定义 | P2 完成后更新：新增 `application/`、`skills/`、`platforms/` 的边界规则 |
 | [../architecture/overview.md](../architecture/overview.md) | 系统总览 | P2 完成后更新"当前落地目录"小节 |
-| [../architecture/evolution-roadmap.md](../architecture/evolution-roadmap.md) | 演进路线 | P3 完成后追加"2026-07 目录重设计完成"里程碑 |
+| [../farm-manager-design-spec/06_项目管理/01_里程碑与路线图.md](../farm-manager-design-spec/06_项目管理/01_里程碑与路线图.md) | 演进路线 | P3 完成后追加"2026-07 目录重设计完成"里程碑 |
 
 ---
 

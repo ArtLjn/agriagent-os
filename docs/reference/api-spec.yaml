@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
-  title: Farm Manager API Reference
+  title: AgriAgentOS API Reference
   version: 0.1.0
-  description: Farm Manager 后端 API 摘要，当前记录作物模板系统库相关契约。
+  description: AgriAgentOS 后端 API 摘要，当前记录作物模板系统库相关契约。
 servers:
   - url: /api/v1
 paths:

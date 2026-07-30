@@ -10,17 +10,17 @@
 
 ## 写入路径
 
-- `app.evaluation.discovery.rule_engine.evaluate_turn()`：规则引擎根据 turn 上下文计算 `hit_rule_ids`，写回 `rule_hits`、`rule_score`、`risk_score`、`risk_dominant_signal`、`risk_severity`。
-- `app.services.agent_turn_service.finish_turn()`：补全助手消息后调用规则评估。
-- `app.services.agent_turn_service.mark_event_range()`：事件日志范围补齐后重新调用规则评估。
-- `app.evaluation.discovery.judge_worker._apply_judge_result()`：不写 `rule_hits`，但读取 `rule_score` 后刷新综合风险分。
+- `app.platforms.evaluation.discovery.rule_engine.evaluate_turn()`：规则引擎根据 turn 上下文计算 `hit_rule_ids`，写回 `rule_hits`、`rule_score`、`risk_score`、`risk_dominant_signal`、`risk_severity`。
+- `app.agent.turn_service.finish_turn()`：补全助手消息后调用规则评估。
+- `app.agent.turn_service.mark_event_range()`：事件日志范围补齐后重新调用规则评估。
+- `app.platforms.evaluation.discovery.judge_worker._apply_judge_result()`：不写 `rule_hits`，但读取 `rule_score` 后刷新综合风险分。
 
 ## 读取路径
 
 - `app.platforms.data_flywheel.service`：样本列表和详情直接返回 `rule_hits`，并基于 rule hits 生成 issue candidates。
 - `app.platforms.data_flywheel.review_issue_chain.service`：按 `risk_score`、`risk_severity` 筛选候选，结合 rule hits 生成问题链上下文。
 - `app.platforms.data_flywheel.review_issue_chain.helpers`：在风险上下文、诊断摘要和证据完整性判断中读取 rule hits。
-- `app.evaluation.discovery.judge_worker`：构造 judge 输入时读取 rule hits；低风险闲聊判断也依赖 rule hits 是否为空。
+- `app.platforms.evaluation.discovery.judge_worker`：构造 judge 输入时读取 rule hits；低风险闲聊判断也依赖 rule hits 是否为空。
 - 测试覆盖包括 `backend/tests/services/test_agent_turn_service.py`、`backend/tests/api/test_admin_data_flywheel.py`、`backend/tests/api/test_admin_data_flywheel_review_issue_chain_closure.py`。
 
 ## 数据特征与统计脚本

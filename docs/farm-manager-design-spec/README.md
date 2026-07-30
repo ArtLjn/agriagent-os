@@ -41,7 +41,7 @@
 | `docs/architecture/overview.md` | 被本章 [00_预设计/02_系统功能及技术架构总设计.md](./00_预设计/02_系统功能及技术架构总设计.md) 整合 |
 | `docs/architecture/boundaries.md` | 边界矩阵下沉到 [01_正式设计/01_Agent平台架构.md](./01_正式设计/01_Agent平台架构.md) 各模块的「可依赖 / 禁止依赖」表 |
 | `docs/architecture/agent-data-flywheel-industrial-roadmap.md` | 浓缩并指针到 [01_正式设计/06_数据飞轮与评测.md](./01_正式设计/06_数据飞轮与评测.md) |
-| `docs/architecture/evolution-roadmap.md` | 演进路线归口到 [06_项目管理/01_里程碑与路线图.md](./06_项目管理/01_里程碑与路线图.md) |
+| `docs/archive/2026-07-30-design-drift/docs/architecture/evolution-roadmap.md` | 历史演进路线已归档，当前路线图归口到 [06_项目管理/01_里程碑与路线图.md](./06_项目管理/01_里程碑与路线图.md) |
 | `.claude/rules/*.md` | 引用为权威，本 Spec 不复述条款，只索引位置 |
 | `.claude/rules/skill-writing.md` | 与 [01_正式设计/02_Skill引擎与契约.md](./01_正式设计/02_Skill引擎与契约.md) 一致，冲突时以 `skill-writing.md` 为准 |
 

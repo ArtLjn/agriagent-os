@@ -9,7 +9,7 @@ farm-manager，FastAPI 后端 + React+TS 前端
 | 你想做什么 | 去哪里看 |
 |-----------|---------|
 | 了解系统架构 | docs/architecture/overview.md |
-| 了解系统演进路线图 | docs/architecture/evolution-roadmap.md |
+| 了解系统演进路线图 | docs/farm-manager-design-spec/06_项目管理/01_里程碑与路线图.md |
 | 了解 Agent 平台目标架构 | docs/architecture/overview.md#agent-平台边界 |
 | 了解 Agent 开发硬规范 | docs/agent/agent-development-standard.md |
 | 了解模块边界和依赖规则 | docs/architecture/boundaries.md |
