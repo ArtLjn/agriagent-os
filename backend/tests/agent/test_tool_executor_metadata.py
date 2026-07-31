@@ -2140,11 +2140,11 @@ async def test_disabled_read_or_external_tool_rejects_without_execution(
 
 
 @pytest.mark.asyncio
-async def test_registry_hidden_web_search_rejects_even_when_metadata_enabled():
+async def test_registry_active_web_search_executes_with_external_network_metadata():
     tool = SimpleNamespace(
         name="web_search",
         args_schema=None,
-        ainvoke=AsyncMock(return_value="不应执行"),
+        ainvoke=AsyncMock(return_value="SearchHub 搜索结果"),
         skill_metadata=SkillMetadata(
             permission_level=SkillPermissionLevel.EXTERNAL_NETWORK,
             enabled=True,
@@ -2180,17 +2180,18 @@ async def test_registry_hidden_web_search_rejects_even_when_metadata_enabled():
         result = await _parallel_tool_node(state)
 
     assert get_pending(1) is None
-    assert "工具已禁用" in result["messages"][0].content
-    assert "SearXNG 引擎不稳定" in result["messages"][0].content
-    tool.ainvoke.assert_not_awaited()
+    assert result["messages"][0].content == "SearchHub 搜索结果"
+    tool.ainvoke.assert_awaited_once_with(
+        {"operation": "search", "query": "最新农业政策"}
+    )
     output_data = collector.record.call_args.kwargs["output_data"]
-    assert output_data["status"] == "disabled"
+    assert output_data["status"] == "success"
     assert output_data["permission_level"] == "external_network"
     assert "legacy_tool_name" not in output_data
     assert output_data["resolved_capability"] == "web_search"
     assert output_data["resolved_operation"] == "search"
     assert output_data["operation_risk"] == "external_network"
-    assert "SearXNG 引擎不稳定" in output_data["disabled_reason"]
+    assert "disabled_reason" not in output_data
 
 
 @pytest.mark.asyncio

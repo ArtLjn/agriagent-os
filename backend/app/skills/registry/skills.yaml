@@ -741,8 +741,7 @@ capabilities:
       - 实时
     version: v2
     owner: agent-platform
-    status: hidden
-    disabled_reason: SearXNG 引擎不稳定（CAPTCHA/限流），暂禁用
+    status: active
     context_dependencies:
       - external_search
     operations:

@@ -173,6 +173,12 @@ class TestYamlConfig:
 
         assert settings.data_flywheel.llm_prelabel_enabled is True
 
+    @pytest.mark.no_db
+    def test_secrets_config_does_not_expose_langsmith_api_key(self):
+        from app.shared.config import SecretsConfig
+
+        assert "langsmith_api_key" not in SecretsConfig.model_fields
+
     def test_config_example_covers_settings_schema(self):
         from app.shared.config import Settings
 
@@ -250,7 +256,9 @@ class TestSkillVectorStoreConfig:
         assert config.sync_timeout_seconds == 30.0
         assert config.sync_on_startup is True
 
-    @pytest.mark.parametrize("field_name", ["top_k", "timeout_seconds", "sync_timeout_seconds"])
+    @pytest.mark.parametrize(
+        "field_name", ["top_k", "timeout_seconds", "sync_timeout_seconds"]
+    )
     def test_skill_vector_store_numeric_values_must_be_positive(self, field_name):
         from app.shared.config import SkillVectorStoreConfig
 

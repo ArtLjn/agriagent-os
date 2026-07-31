@@ -124,8 +124,8 @@ class SecretsConfig(BaseModel):
     qweather_appid: str = ""
     qweather_appsecret: str = ""
     langsearch_api_key: str = ""
-    langsmith_api_key: str = ""
-    searxng_url: str = ""
+    searchhub_base_url: str = ""
+    searchhub_api_key: str = ""
 
 
 class AIConfig(BaseModel):

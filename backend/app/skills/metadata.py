@@ -67,7 +67,6 @@ _DEFAULT_WRITE_CONFIRMATION = ConfirmationSchema(
 )
 
 _EXTERNAL_NETWORK_SKILLS = frozenset({"web_search", "weather"})
-_WEB_SEARCH_DISABLED_REASON = "SearXNG 引擎不稳定（CAPTCHA/限流），暂禁用"
 
 _WRITE_CONFIRM_SKILLS = WRITE_SKILLS
 
@@ -86,8 +85,7 @@ _READ_SKILL_METADATA: dict[str, dict[str, Any]] = {
         "permission_level": SkillPermissionLevel.EXTERNAL_NETWORK,
         "context_dependencies": ["external_search"],
         "evaluation_tags": ["read", "search", "external_network"],
-        "enabled": False,
-        "disabled_reason": _WEB_SEARCH_DISABLED_REASON,
+        "enabled": True,
     },
 }
 

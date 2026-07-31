@@ -329,8 +329,6 @@ aliases:
     codes = {issue.code for issue in issues}
 
     assert "duplicate_alias" in codes
-    assert "web_search_must_stay_disabled" in codes
-    assert "web_search_missing_disabled_reason" in codes
     assert "web_search_invalid_risk" in codes
     assert "weather_must_stay_active" in codes
     assert "weather_invalid_risk" in codes

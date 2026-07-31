@@ -145,21 +145,6 @@ def _web_search_guardrail(registry: SkillRegistry) -> list[GovernanceIssue]:
             _guardrail_issue("web_search_missing_capability", "capabilities.web_search")
         )
         return issues
-    if capability.status == "active":
-        issues.append(
-            _guardrail_issue(
-                "web_search_must_stay_disabled",
-                "capabilities.web_search.status",
-                "web_search 必须保持 hidden/disabled，避免误暴露不稳定外部搜索。",
-            )
-        )
-    if not capability.disabled_reason:
-        issues.append(
-            _guardrail_issue(
-                "web_search_missing_disabled_reason",
-                "capabilities.web_search.disabled_reason",
-            )
-        )
     if operation is None or operation.risk != "external_network":
         issues.append(
             _guardrail_issue(

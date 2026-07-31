@@ -101,8 +101,8 @@ secrets:
   qweather_appsecret: "" # 和风天气签名认证 appsecret，旧方案备用。
   dashscope_api_key: "" # DashScope 专用 key；当前默认 LLM 走 ai.api_key。
   langsearch_api_key: "" # LangSearch 搜索 key；为空则相关搜索能力不可用。
-  searxng_url: ""       # SearXNG 地址；为空时 web_search 走降级/不可用路径。
-  langsmith_api_key: "" # 兼容旧密钥集中管理字段；未启用 LangSmith 时保持空。
+  searchhub_base_url: "" # SearchHub 服务地址，例如 https://search.example.com；真实值建议走环境变量。
+  searchhub_api_key: "" # SearchHub API Key；真实值只放私密 config 或 SECRETS__SEARCHHUB_API_KEY。
 
 # Agent trace 采集与清理配置，用于 admin-web 链路追踪、数据飞轮样本证据和 token 统计。
 trace:

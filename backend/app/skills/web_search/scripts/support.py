@@ -84,7 +84,7 @@ async def rewrite_query(raw_query: str) -> str:
 
 
 async def format_results(query: str, data: dict, rewritten: str = "") -> str:
-    """将 SearXNG 完整响应格式化为带编号引用的结构化文本。"""
+    """将搜索服务响应格式化为带编号引用的结构化文本。"""
     lines: list[str] = []
     answers = data.get("answers", [])
     if answers:
@@ -102,6 +102,8 @@ async def format_results(query: str, data: dict, rewritten: str = "") -> str:
         if content:
             lines.append(f"  {content}")
         lines.append("")
+
+    _append_searchhub_agent_summary(lines, data)
 
     items = data.get("results", [])
     raw_count = len(items)
@@ -130,6 +132,84 @@ async def format_results(query: str, data: dict, rewritten: str = "") -> str:
         )
 
     return "\n".join(lines)
+
+
+def _append_searchhub_agent_summary(lines: list[str], data: dict) -> None:
+    agent = data.get("agent") or {}
+    grounded_answer = data.get("grounded_answer") or {}
+    evidence = data.get("evidence") or {}
+    trace = data.get("trace") or {}
+    if not any((agent, grounded_answer, evidence, trace)):
+        return
+
+    if agent:
+        lines.append(f"Agent 可回答: {agent.get('answerable', False)}")
+        if agent.get("source_count") is not None:
+            lines.append(f"推荐来源数: {agent.get('source_count')}")
+        if agent.get("suggested_next_action"):
+            lines.append(f"下一步建议: {agent.get('suggested_next_action')}")
+    if trace.get("request_id") or trace.get("provider"):
+        trace_parts = [
+            part
+            for part in (
+                f"request_id={trace.get('request_id')}"
+                if trace.get("request_id")
+                else "",
+                f"provider={trace.get('provider')}" if trace.get("provider") else "",
+            )
+            if part
+        ]
+        lines.append(f"追踪: {', '.join(trace_parts)}")
+
+    markdown = grounded_answer.get("markdown") or ""
+    if markdown:
+        lines.append("")
+        lines.append("基于证据的回答:")
+        lines.append(markdown.strip())
+
+    _append_searchhub_sources(lines, data, evidence, grounded_answer)
+    if lines and lines[-1]:
+        lines.append("")
+
+
+def _append_searchhub_sources(
+    lines: list[str], data: dict, evidence: dict, grounded_answer: dict
+) -> None:
+    sources = evidence.get("answer_sources") or grounded_answer.get("citations") or []
+    if sources:
+        lines.append("")
+        lines.append("答案来源:")
+        for source in sources[:8]:
+            if not isinstance(source, dict):
+                continue
+            title = source.get("title", "")
+            url = source.get("url", "")
+            confidence = source.get("confidence")
+            suffix = f" 置信度={confidence}" if confidence is not None else ""
+            lines.append(f"- {title}{suffix}")
+            if url:
+                lines.append(f"  {url}")
+
+    results = data.get("results") or []
+    if not results:
+        return
+    lines.append("")
+    lines.append("推荐来源:")
+    for result in results[:5]:
+        title = result.get("title", "")
+        url = result.get("url", "")
+        score = result.get("score", 0)
+        quality = result.get("source_quality", "unknown")
+        domain_category = result.get("domain_category", "unknown")
+        domain_weight = result.get("domain_weight", 0)
+        snippet = result.get("content") or result.get("snippet", "")
+        lines.append(
+            f"- [{quality} 分数={score} 领域={domain_category}:{domain_weight}] {title}"
+        )
+        if url:
+            lines.append(f"  {url}")
+        if snippet:
+            lines.append(f"  {snippet[:220]}")
 
 
 async def _append_search_results(

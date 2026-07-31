@@ -350,8 +350,7 @@ def test_manage_labor_payment_call_metadata_infers_operation_risk():
     assert worker_id_settle_metadata.operation == "settle_payment"
     assert worker_id_settle_metadata.operation_risk == "write_confirm"
     assert (
-        worker_id_settle_metadata.permission_level
-        == SkillPermissionLevel.WRITE_CONFIRM
+        worker_id_settle_metadata.permission_level == SkillPermissionLevel.WRITE_CONFIRM
     )
     assert wage_metadata.operation == "manage_wage"
     assert wage_metadata.operation_risk == "write_confirm"
@@ -374,7 +373,11 @@ def test_manage_labor_payment_pending_args_infer_single_settlement_only():
         original_input="老王还欠多少人工钱",
     )
 
-    assert settle_args == {"worker": "老王", "operation": "settle_payment"}
+    assert settle_args == {
+        "worker": "老王",
+        "operation": "settle_payment",
+        "scope": "worker",
+    }
     assert query_args == {"worker": "老王"}
 
 
@@ -408,7 +411,9 @@ def test_manage_planting_units_call_metadata_infers_operation_risk():
     query_metadata = get_skill_call_metadata(
         _ManagePlantingUnitsSkill(), {"operation": "query_units"}
     )
-    legacy_empty_query_metadata = get_skill_call_metadata(_ManagePlantingUnitsSkill(), {})
+    legacy_empty_query_metadata = get_skill_call_metadata(
+        _ManagePlantingUnitsSkill(), {}
+    )
     legacy_cycle_query_metadata = get_skill_call_metadata(
         _ManagePlantingUnitsSkill(), {"cycle_id": 1}
     )
@@ -505,9 +510,7 @@ def test_manage_farm_logs_legacy_metadata_uses_shared_capability_operations():
 
 
 def test_manage_farm_logs_canonical_operation_overrides_self_alias():
-    query_metadata = resolve_skill_capability_metadata(
-        "manage_farm_logs", "query_logs"
-    )
+    query_metadata = resolve_skill_capability_metadata("manage_farm_logs", "query_logs")
     manage_metadata = resolve_skill_capability_metadata(
         "manage_farm_logs", "manage_log"
     )
@@ -552,8 +555,8 @@ def test_default_external_network_skill_metadata():
 
     assert metadata.permission_level == SkillPermissionLevel.EXTERNAL_NETWORK
     assert metadata.risk_level == SkillRiskLevel.LOW
-    assert metadata.enabled is False
-    assert metadata.disabled_reason == "SearXNG 引擎不稳定（CAPTCHA/限流），暂禁用"
+    assert metadata.enabled is True
+    assert metadata.disabled_reason is None
     assert metadata.metadata_incomplete is False
 
 

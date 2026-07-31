@@ -45,6 +45,13 @@ class TestWebSearchMeta:
         assert "categories" in schema["properties"]
         assert "categories" not in schema["required"]
 
+    def test_parameters_schema_optional_embedding_filter(self):
+        schema = self.skill.parameters_schema()
+        prop = schema["properties"]["enable_embedding_filter"]
+        assert prop["type"] == "boolean"
+        assert "精筛" in prop["description"]
+        assert "enable_embedding_filter" not in schema["required"]
+
 
 # ─── 分类检测测试 ───
 
@@ -156,7 +163,7 @@ class TestDeduplicate:
 
 class TestRerankResults:
     def test_relevance_overrides_searx_score(self):
-        """高相关低 SearXNG 得分的结果应排在低相关高得分前面。"""
+        """高相关低搜索分的结果应排在低相关高得分前面。"""
         items = [
             {
                 "title": "睢宁县百科",
@@ -212,9 +219,7 @@ class TestRewriteQuery:
         mock_response.content = "2026年6月西瓜批发市场价格走势"
         mock_llm.ainvoke = AsyncMock(return_value=mock_response)
 
-        with patch(
-            "app.skills.web_search.scripts.main.get_llm", return_value=mock_llm
-        ):
+        with patch("app.skills.web_search.scripts.main.get_llm", return_value=mock_llm):
             result = await _rewrite_query("西瓜价格")
 
         assert result == "2026年6月西瓜批发市场价格走势"
@@ -226,9 +231,7 @@ class TestRewriteQuery:
         mock_response.content = "改写后：2026年西瓜市场行情"
         mock_llm.ainvoke = AsyncMock(return_value=mock_response)
 
-        with patch(
-            "app.skills.web_search.scripts.main.get_llm", return_value=mock_llm
-        ):
+        with patch("app.skills.web_search.scripts.main.get_llm", return_value=mock_llm):
             result = await _rewrite_query("西瓜")
 
         assert result == "2026年西瓜市场行情"
@@ -240,9 +243,7 @@ class TestRewriteQuery:
         mock_response.content = "2026年西瓜行情\n这是额外解释"
         mock_llm.ainvoke = AsyncMock(return_value=mock_response)
 
-        with patch(
-            "app.skills.web_search.scripts.main.get_llm", return_value=mock_llm
-        ):
+        with patch("app.skills.web_search.scripts.main.get_llm", return_value=mock_llm):
             result = await _rewrite_query("西瓜")
 
         assert result == "2026年西瓜行情"
@@ -268,9 +269,7 @@ class TestRewriteQuery:
         mock_response.content = "西瓜价格"
         mock_llm.ainvoke = AsyncMock(return_value=mock_response)
 
-        with patch(
-            "app.skills.web_search.scripts.main.get_llm", return_value=mock_llm
-        ):
+        with patch("app.skills.web_search.scripts.main.get_llm", return_value=mock_llm):
             result = await _rewrite_query("西瓜价格")
 
         assert result == "西瓜价格"
@@ -283,9 +282,7 @@ class TestRewriteQuery:
         mock_response.content = "西瓜"
         mock_llm.ainvoke = AsyncMock(return_value=mock_response)
 
-        with patch(
-            "app.skills.web_search.scripts.main.get_llm", return_value=mock_llm
-        ):
+        with patch("app.skills.web_search.scripts.main.get_llm", return_value=mock_llm):
             result = await _rewrite_query("西瓜价格行情走势")
 
         assert result == "西瓜价格行情走势"
@@ -551,6 +548,52 @@ class TestFormatResults:
 
         assert "这是从网页抓取到的完整内容" in result
 
+    @pytest.mark.asyncio
+    async def test_searchhub_agent_response_displayed(self):
+        data = {
+            "query": "苏州西瓜种植方法",
+            "rewrite_query": "苏州 西瓜 种植 技术",
+            "results": [
+                {
+                    "title": "苏州西瓜栽培技术",
+                    "url": "https://example.com/agri",
+                    "content": "定植后注意水肥管理和病害预防。" * 6,
+                    "source_quality": "trusted",
+                    "domain_category": "gov",
+                    "domain_weight": 0.9,
+                    "score": 0.86,
+                }
+            ],
+            "agent": {"answerable": True, "source_count": 1},
+            "grounded_answer": {
+                "answerable": True,
+                "markdown": "苏州西瓜种植应先控水促根，再按长势追肥。",
+                "citations": [
+                    {
+                        "title": "苏州西瓜栽培技术",
+                        "url": "https://example.com/agri",
+                    }
+                ],
+            },
+            "evidence": {
+                "answer_sources": [
+                    {
+                        "title": "苏州西瓜栽培技术",
+                        "url": "https://example.com/agri",
+                        "confidence": 0.92,
+                    }
+                ]
+            },
+            "trace": {"request_id": "req_1", "provider": "duckduckgo"},
+        }
+
+        result = await _format_results("苏州西瓜种植方法", data)
+
+        assert "Agent 可回答: True" in result
+        assert "苏州西瓜种植应先控水促根" in result
+        assert "推荐来源" in result
+        assert "trusted" in result
+
 
 # ─── 正常流程测试 ───
 
@@ -559,6 +602,245 @@ class TestWebSearchNormal:
     def setup_method(self):
         clear_cache("web_search")
         self.skill = WebSearchSkill()
+
+    @pytest.mark.asyncio
+    async def test_searchhub_post_payload_and_auth_headers(self):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {
+            "query": "西瓜价格",
+            "rewrite_query": "西瓜 价格 行情",
+            "results": [
+                {
+                    "title": "西瓜价格",
+                    "url": "https://example.com",
+                    "content": "批发价0.6元/斤" * 10,
+                    "score": 1.0,
+                }
+            ],
+            "agent": {"answerable": True, "source_count": 1},
+            "evidence": {},
+            "trace": {"request_id": "req_1", "provider": "duckduckgo"},
+        }
+
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        mock_settings = MagicMock()
+        mock_settings.secrets.searchhub_base_url = "https://search.example.com/"
+        mock_settings.secrets.searchhub_api_key = "test-searchhub-key"
+
+        with (
+            patch(
+                "app.skills.web_search.scripts.main.httpx.AsyncClient",
+                return_value=mock_client,
+            ),
+            patch("app.skills.web_search.scripts.main.settings", mock_settings),
+            patch(
+                "app.skills.web_search.scripts.main._rewrite_query",
+                return_value="西瓜价格",
+            ),
+        ):
+            result = await self.skill.execute(
+                {
+                    "query": "西瓜价格",
+                    "top_k": 8,
+                    "enable_fetch": True,
+                    "enable_embedding_filter": True,
+                    "domain": "agriculture",
+                    "region": "苏州",
+                    "crop": "西瓜",
+                },
+                None,
+            )
+
+        assert result.status.value == "success"
+        mock_client.post.assert_awaited_once()
+        url = mock_client.post.call_args.args[0]
+        kwargs = mock_client.post.call_args.kwargs
+        assert url == "https://search.example.com/search"
+        assert kwargs["json"] == {
+            "query": "西瓜价格",
+            "top_k": 8,
+            "enable_fetch": True,
+            "enable_embedding_filter": True,
+            "domain": "agriculture",
+            "region": "苏州",
+            "crop": "西瓜",
+            "time_range": "m",
+        }
+        assert kwargs["headers"]["Authorization"] == "Bearer test-searchhub-key"
+        assert kwargs["headers"]["X-API-Key"] == "test-searchhub-key"
+
+    @pytest.mark.asyncio
+    async def test_embedding_filter_participates_in_cache_key(self):
+        first_response = MagicMock()
+        first_response.status_code = 200
+        first_response.raise_for_status = MagicMock()
+        first_response.json.return_value = {
+            "results": [
+                {
+                    "title": "普通搜索",
+                    "url": "https://example.com/general",
+                    "content": "普通搜索结果" * 10,
+                    "score": 1.0,
+                }
+            ],
+            "answers": [],
+            "infoboxes": [],
+        }
+        second_response = MagicMock()
+        second_response.status_code = 200
+        second_response.raise_for_status = MagicMock()
+        second_response.json.return_value = {
+            "results": [
+                {
+                    "title": "精筛搜索",
+                    "url": "https://example.com/embedding",
+                    "content": "embedding 精筛搜索结果" * 10,
+                    "score": 1.0,
+                }
+            ],
+            "answers": [],
+            "infoboxes": [],
+        }
+
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(side_effect=[first_response, second_response])
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        mock_settings = MagicMock()
+        mock_settings.secrets.searchhub_base_url = "http://test:8888"
+
+        with (
+            patch(
+                "app.skills.web_search.scripts.main.httpx.AsyncClient",
+                return_value=mock_client,
+            ),
+            patch("app.skills.web_search.scripts.main.settings", mock_settings),
+            patch(
+                "app.skills.web_search.scripts.main._rewrite_query",
+                return_value="缓存精筛测试",
+            ),
+            patch(
+                "app.skills.web_search.scripts.main._fetch_page_content",
+                return_value=None,
+            ),
+        ):
+            first = await self.skill.execute({"query": "缓存精筛测试"}, None)
+            second = await self.skill.execute(
+                {"query": "缓存精筛测试", "enable_embedding_filter": True}, None
+            )
+
+        assert first.status.value == "success"
+        assert second.status.value == "success"
+        assert mock_client.post.call_count == 2
+        first_payload = mock_client.post.call_args_list[0].kwargs["json"]
+        second_payload = mock_client.post.call_args_list[1].kwargs["json"]
+        assert first_payload["enable_embedding_filter"] is False
+        assert second_payload["enable_embedding_filter"] is True
+
+    @pytest.mark.asyncio
+    async def test_important_fresh_price_query_enables_embedding_filter_automatically(
+        self,
+    ):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {
+            "results": [
+                {
+                    "title": "今日西瓜批发价格",
+                    "url": "https://example.com/price",
+                    "content": "今日西瓜主产区批发价格行情" * 10,
+                    "score": 1.0,
+                }
+            ],
+            "answers": [],
+            "infoboxes": [],
+        }
+
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        mock_settings = MagicMock()
+        mock_settings.secrets.searchhub_base_url = "http://test:8888"
+
+        with (
+            patch(
+                "app.skills.web_search.scripts.main.httpx.AsyncClient",
+                return_value=mock_client,
+            ),
+            patch("app.skills.web_search.scripts.main.settings", mock_settings),
+            patch(
+                "app.skills.web_search.scripts.main._rewrite_query",
+                return_value="今天西瓜价格",
+            ),
+            patch(
+                "app.skills.web_search.scripts.main._fetch_page_content",
+                return_value=None,
+            ),
+        ):
+            result = await self.skill.execute({"query": "今天西瓜价格"}, None)
+
+        assert result.status.value == "success"
+        payload = mock_client.post.call_args.kwargs["json"]
+        assert payload["enable_embedding_filter"] is True
+
+    @pytest.mark.asyncio
+    async def test_explicit_false_disables_auto_embedding_filter(self):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {
+            "results": [
+                {
+                    "title": "今日西瓜批发价格",
+                    "url": "https://example.com/price",
+                    "content": "今日西瓜主产区批发价格行情" * 10,
+                    "score": 1.0,
+                }
+            ],
+            "answers": [],
+            "infoboxes": [],
+        }
+
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        mock_settings = MagicMock()
+        mock_settings.secrets.searchhub_base_url = "http://test:8888"
+
+        with (
+            patch(
+                "app.skills.web_search.scripts.main.httpx.AsyncClient",
+                return_value=mock_client,
+            ),
+            patch("app.skills.web_search.scripts.main.settings", mock_settings),
+            patch(
+                "app.skills.web_search.scripts.main._rewrite_query",
+                return_value="今天西瓜价格",
+            ),
+            patch(
+                "app.skills.web_search.scripts.main._fetch_page_content",
+                return_value=None,
+            ),
+        ):
+            result = await self.skill.execute(
+                {"query": "今天西瓜价格", "enable_embedding_filter": False}, None
+            )
+
+        assert result.status.value == "success"
+        payload = mock_client.post.call_args.kwargs["json"]
+        assert payload["enable_embedding_filter"] is False
 
     @pytest.mark.asyncio
     async def test_successful_search(self):
@@ -580,12 +862,12 @@ class TestWebSearchNormal:
         }
 
         mock_client = AsyncMock()
-        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.post = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
         mock_settings = MagicMock()
-        mock_settings.secrets.searxng_url = "http://test:8888"
+        mock_settings.secrets.searchhub_base_url = "http://test:8888"
 
         with (
             patch(
@@ -619,12 +901,12 @@ class TestWebSearchNormal:
         }
 
         mock_client = AsyncMock()
-        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.post = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
         mock_settings = MagicMock()
-        mock_settings.secrets.searxng_url = "http://test:8888"
+        mock_settings.secrets.searchhub_base_url = "http://test:8888"
 
         with (
             patch(
@@ -643,7 +925,7 @@ class TestWebSearchNormal:
         assert "未找到" in result.reply
 
     @pytest.mark.asyncio
-    async def test_with_explicit_categories(self):
+    async def test_legacy_categories_are_not_sent_to_searchhub(self):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.raise_for_status = MagicMock()
@@ -661,12 +943,12 @@ class TestWebSearchNormal:
         }
 
         mock_client = AsyncMock()
-        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.post = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
         mock_settings = MagicMock()
-        mock_settings.secrets.searxng_url = "http://test:8888"
+        mock_settings.secrets.searchhub_base_url = "http://test:8888"
 
         with (
             patch(
@@ -685,12 +967,13 @@ class TestWebSearchNormal:
         ):
             await self.skill.execute({"query": "test", "categories": "news"}, None)
 
-        first_call_url = mock_client.get.call_args_list[0][0][0]
-        assert "categories=news" in first_call_url
+        payload = mock_client.post.call_args.kwargs["json"]
+        assert payload["query"] == "test"
+        assert "categories" not in payload
 
     @pytest.mark.asyncio
-    async def test_auto_detect_news_category(self):
-        """含新闻关键词的查询自动分类为 news。"""
+    async def test_auto_detect_fresh_query_maps_time_range_to_searchhub(self):
+        """含新闻关键词的查询会映射 SearchHub 时间过滤。"""
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.raise_for_status = MagicMock()
@@ -708,12 +991,12 @@ class TestWebSearchNormal:
         }
 
         mock_client = AsyncMock()
-        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.post = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
         mock_settings = MagicMock()
-        mock_settings.secrets.searxng_url = "http://test:8888"
+        mock_settings.secrets.searchhub_base_url = "http://test:8888"
 
         with (
             patch(
@@ -732,13 +1015,13 @@ class TestWebSearchNormal:
         ):
             await self.skill.execute({"query": "最新西瓜新闻"}, None)
 
-        first_call_url = mock_client.get.call_args_list[0][0][0]
-        assert "categories=news" in first_call_url
+        payload = mock_client.post.call_args.kwargs["json"]
+        assert payload["time_range"] == "m"
 
     @pytest.mark.asyncio
-    async def test_unconfigured_searxng_url(self):
+    async def test_unconfigured_searchhub_base_url(self):
         mock_settings = MagicMock()
-        mock_settings.secrets.searxng_url = ""
+        mock_settings.secrets.searchhub_base_url = ""
 
         with (
             patch("app.skills.web_search.scripts.main.settings", mock_settings),
@@ -777,12 +1060,12 @@ class TestWebSearchError:
         import httpx
 
         mock_client = AsyncMock()
-        mock_client.get = AsyncMock(side_effect=httpx.TimeoutException("timeout"))
+        mock_client.post = AsyncMock(side_effect=httpx.TimeoutException("timeout"))
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
         mock_settings = MagicMock()
-        mock_settings.secrets.searxng_url = "http://test:8888"
+        mock_settings.secrets.searchhub_base_url = "http://test:8888"
 
         with (
             patch(
@@ -813,12 +1096,12 @@ class TestWebSearchError:
         )
 
         mock_client = AsyncMock()
-        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.post = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
         mock_settings = MagicMock()
-        mock_settings.secrets.searxng_url = "http://test:8888"
+        mock_settings.secrets.searchhub_base_url = "http://test:8888"
 
         with (
             patch(
@@ -839,12 +1122,12 @@ class TestWebSearchError:
     @pytest.mark.asyncio
     async def test_connection_error(self):
         mock_client = AsyncMock()
-        mock_client.get = AsyncMock(side_effect=ConnectionError("refused"))
+        mock_client.post = AsyncMock(side_effect=ConnectionError("refused"))
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
         mock_settings = MagicMock()
-        mock_settings.secrets.searxng_url = "http://test:8888"
+        mock_settings.secrets.searchhub_base_url = "http://test:8888"
 
         with (
             patch(
@@ -863,8 +1146,8 @@ class TestWebSearchError:
         assert "异常" in result.reply
 
     @pytest.mark.asyncio
-    async def test_news_fallback_to_general(self):
-        """news 分类无结果时自动 fallback 到 general。"""
+    async def test_time_range_fallback_removes_searchhub_time_filter(self):
+        """带时间过滤无结果时，第二次 SearchHub 请求移除时间过滤。"""
         empty_response = MagicMock()
         empty_response.status_code = 200
         empty_response.raise_for_status = MagicMock()
@@ -891,12 +1174,12 @@ class TestWebSearchError:
         }
 
         mock_client = AsyncMock()
-        mock_client.get = AsyncMock(side_effect=[empty_response, fallback_response])
+        mock_client.post = AsyncMock(side_effect=[empty_response, fallback_response])
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
         mock_settings = MagicMock()
-        mock_settings.secrets.searxng_url = "http://test:8888"
+        mock_settings.secrets.searchhub_base_url = "http://test:8888"
 
         with (
             patch(
@@ -914,12 +1197,84 @@ class TestWebSearchError:
             ),
         ):
             result = await self.skill.execute(
-                {"query": "fallback_test_unique", "categories": "news"}, None
+                {"query": "最新fallback_test_unique"}, None
             )
 
         assert result.status.value == "success"
         assert "fallback结果" in result.reply
-        assert mock_client.get.call_count == 2
-        # 第二次调用应使用 general
-        second_call_url = mock_client.get.call_args_list[1][0][0]
-        assert "categories=general" in second_call_url
+        assert mock_client.post.call_count == 2
+        first_payload = mock_client.post.call_args_list[0].kwargs["json"]
+        second_payload = mock_client.post.call_args_list[1].kwargs["json"]
+        assert first_payload["time_range"] == "m"
+        assert "time_range" not in second_payload
+
+    @pytest.mark.asyncio
+    async def test_weak_first_result_retries_with_embedding_filter(self):
+        weak_response = MagicMock()
+        weak_response.status_code = 200
+        weak_response.raise_for_status = MagicMock()
+        weak_response.json.return_value = {
+            "results": [
+                {
+                    "title": "无关页面",
+                    "engines": ["bing"],
+                    "score": 1.0,
+                    "url": "https://a.com",
+                    "content": "泛泛而谈的网页内容" * 10,
+                }
+            ],
+            "answers": [],
+            "infoboxes": [],
+            "agent": {"answerable": False, "source_count": 0},
+        }
+
+        refined_response = MagicMock()
+        refined_response.status_code = 200
+        refined_response.raise_for_status = MagicMock()
+        refined_response.json.return_value = {
+            "results": [
+                {
+                    "title": "南方玉米种植资料",
+                    "engines": ["bing"],
+                    "score": 1.0,
+                    "url": "https://b.com",
+                    "content": "南方玉米种植关键资料" * 10,
+                }
+            ],
+            "answers": [],
+            "infoboxes": [],
+            "agent": {"answerable": True, "source_count": 1},
+        }
+
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(side_effect=[weak_response, refined_response])
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        mock_settings = MagicMock()
+        mock_settings.secrets.searchhub_base_url = "http://test:8888"
+
+        with (
+            patch(
+                "app.skills.web_search.scripts.main.httpx.AsyncClient",
+                return_value=mock_client,
+            ),
+            patch("app.skills.web_search.scripts.main.settings", mock_settings),
+            patch(
+                "app.skills.web_search.scripts.main._rewrite_query",
+                return_value="南方玉米种植资料",
+            ),
+            patch(
+                "app.skills.web_search.scripts.main._fetch_page_content",
+                return_value=None,
+            ),
+        ):
+            result = await self.skill.execute({"query": "南方玉米种植资料"}, None)
+
+        assert result.status.value == "success"
+        assert "南方玉米种植资料" in result.reply
+        assert mock_client.post.call_count == 2
+        first_payload = mock_client.post.call_args_list[0].kwargs["json"]
+        second_payload = mock_client.post.call_args_list[1].kwargs["json"]
+        assert first_payload["enable_embedding_filter"] is False
+        assert second_payload["enable_embedding_filter"] is True
