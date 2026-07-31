@@ -10,7 +10,11 @@ from typing import Any
 
 from app.infra.quillrag_client import QuillRAGClient
 from app.shared.config import RAGServiceConfig, SkillVectorStoreConfig, settings
-from app.skills.registry import CapabilityDefinition, OperationDefinition, load_skill_registry
+from app.skills.registry import (
+    CapabilityDefinition,
+    OperationDefinition,
+    load_skill_registry,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -61,9 +65,11 @@ class SkillVectorSyncer:
             retry=config.retry,
         )
 
-    def sync(self) -> SkillVectorSyncResult:
+    def sync(self, *, force: bool = False) -> SkillVectorSyncResult:
         if not self.config.enabled:
-            return SkillVectorSyncResult(enabled=False, collection=self.config.collection)
+            return SkillVectorSyncResult(
+                enabled=False, collection=self.config.collection
+            )
         if not _effective_url(self.config, self.rag_config):
             return SkillVectorSyncResult(
                 enabled=True,
@@ -75,8 +81,14 @@ class SkillVectorSyncer:
         collection_action = self._ensure_collection()
         documents = build_skill_route_documents()
         registry_hash = build_skill_registry_hash(documents)
-        remote_registry_hash = self._load_remote_registry_hash()
-        if remote_registry_hash == registry_hash:
+        expected_doc_ids = {document.doc_id for document in documents}
+        expected_doc_ids.add(_MANIFEST_DOC_ID)
+        remote_registry_hash, remote_doc_ids = self._load_remote_state()
+        if (
+            not force
+            and remote_registry_hash == registry_hash
+            and expected_doc_ids <= remote_doc_ids
+        ):
             return SkillVectorSyncResult(
                 enabled=True,
                 collection=self.config.collection,
@@ -133,7 +145,8 @@ class SkillVectorSyncer:
             raise RuntimeError(result.error_code or "ENSURE_COLLECTION_FAILED")
         return str(result.data.get("action") or "")
 
-    def _load_remote_registry_hash(self) -> str:
+    def _load_remote_state(self) -> tuple[str, set[str]]:
+        """读取远端 manifest hash 与全部已入库 doc_id 集合。"""
         result = self.client.list_documents(
             collection=self.config.collection,
             page=1,
@@ -145,13 +158,16 @@ class SkillVectorSyncer:
                 self.config.collection,
                 result.error_code,
             )
-            return ""
+            return "", set()
+        registry_hash = ""
+        doc_ids: set[str] = set()
         for document in result.documents:
+            doc_ids.add(document.doc_id)
             if document.doc_id != _MANIFEST_DOC_ID:
                 continue
             metadata = _metadata_from_extra(document.extra)
-            return str(metadata.get("registry_hash") or "")
-        return ""
+            registry_hash = str(metadata.get("registry_hash") or "")
+        return registry_hash, doc_ids
 
     def _sync_manifest(
         self,
@@ -185,7 +201,9 @@ def sync_skill_vectors_on_startup() -> SkillVectorSyncResult:
     """应用启动时调用；失败只由调用方决定是否阻断。"""
     config = settings.skill_vector_store
     if not (config.enabled and config.sync_on_startup):
-        return SkillVectorSyncResult(enabled=config.enabled, collection=config.collection)
+        return SkillVectorSyncResult(
+            enabled=config.enabled, collection=config.collection
+        )
     result = SkillVectorSyncer(config=config, rag_config=settings.rag_service).sync()
     logger.info(
         "Skill 向量同步完成 | collection=%s status=%s total=%s synced=%s "
@@ -337,11 +355,18 @@ def _effective_api_key(
 def main() -> None:
     parser = argparse.ArgumentParser(description="同步 Skill 向量集合")
     parser.add_argument("--collection", default=settings.skill_vector_store.collection)
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="跳过 hash 与完整性检查，强制重新写入全部路由。",
+    )
     args = parser.parse_args()
     config = settings.skill_vector_store.model_copy(
         update={"enabled": True, "collection": args.collection}
     )
-    result = SkillVectorSyncer(config=config, rag_config=settings.rag_service).sync()
+    result = SkillVectorSyncer(config=config, rag_config=settings.rag_service).sync(
+        force=args.force
+    )
     print(
         f"collection={result.collection} status={result.sync_status} "
         f"total={result.total} synced={result.synced} skipped={result.skipped} "

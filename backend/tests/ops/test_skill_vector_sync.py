@@ -113,7 +113,8 @@ def test_skill_vector_syncer_skips_ingest_when_manifest_matches() -> None:
         QuillRAGListedDocument(
             doc_id="skill:__manifest__",
             extra={"metadata": {"registry_hash": registry_hash}},
-        )
+        ),
+        *[QuillRAGListedDocument(doc_id=document.doc_id) for document in documents],
     ]
     syncer = SkillVectorSyncer(
         config=SkillVectorStoreConfig(
@@ -134,6 +135,72 @@ def test_skill_vector_syncer_skips_ingest_when_manifest_matches() -> None:
     assert result.failed == 0
     assert client.collections == ["farm_manager_skill_routes_v1"]
     assert client.ingested == []
+
+
+def test_skill_vector_syncer_resyncs_when_route_document_missing() -> None:
+    """manifest hash 匹配但远端缺少部分路由文档时应重新同步。"""
+    documents = build_skill_route_documents()
+    registry_hash = build_skill_registry_hash(documents)
+    client = _FakeClient()
+    # 仅保留 manifest 与部分路由，模拟用户手动删除部分向量
+    client.documents = [
+        QuillRAGListedDocument(
+            doc_id="skill:__manifest__",
+            extra={"metadata": {"registry_hash": registry_hash}},
+        ),
+        *[
+            QuillRAGListedDocument(doc_id=document.doc_id)
+            for document in documents
+            if document.doc_id != "skill:manage_cost.query_summary"
+        ],
+    ]
+    syncer = SkillVectorSyncer(
+        config=SkillVectorStoreConfig(
+            enabled=True,
+            url="http://rag.local",
+            collection="farm_manager_skill_routes_v1",
+        ),
+        rag_config=RAGServiceConfig(),
+        client=client,  # type: ignore[arg-type]
+    )
+
+    result = syncer.sync()
+
+    assert result.sync_status == "synced"
+    assert result.synced == len(documents)
+    assert result.failed == 0
+    assert any(
+        item["doc_id"] == "skill:manage_cost.query_summary" for item in client.ingested
+    )
+
+
+def test_skill_vector_syncer_force_overrides_manifest_match() -> None:
+    """force=True 时即使 hash 与完整性都满足也强制重新写入。"""
+    documents = build_skill_route_documents()
+    registry_hash = build_skill_registry_hash(documents)
+    client = _FakeClient()
+    client.documents = [
+        QuillRAGListedDocument(
+            doc_id="skill:__manifest__",
+            extra={"metadata": {"registry_hash": registry_hash}},
+        ),
+        *[QuillRAGListedDocument(doc_id=document.doc_id) for document in documents],
+    ]
+    syncer = SkillVectorSyncer(
+        config=SkillVectorStoreConfig(
+            enabled=True,
+            url="http://rag.local",
+            collection="farm_manager_skill_routes_v1",
+        ),
+        rag_config=RAGServiceConfig(),
+        client=client,  # type: ignore[arg-type]
+    )
+
+    result = syncer.sync(force=True)
+
+    assert result.sync_status == "synced"
+    assert result.synced == len(documents)
+    assert result.failed == 0
 
 
 def test_skill_vector_syncer_does_not_update_manifest_when_document_fails() -> None:
