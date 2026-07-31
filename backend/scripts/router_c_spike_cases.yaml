@@ -1,0 +1,63 @@
+# Router 方案 C Spike 测试用例
+#
+# 字段:
+#   name:         case 唯一标识
+#   user_input:   模拟用户输入
+#   expect_tool:  期望工具名(人判断的 ground truth)
+#                 web_search / get_farm_status / weather / get_cost_summary 等
+#   note:         说明这个 case 在测什么
+
+cases:
+  # === web_search 强信号 (人/事件/时政) ===
+  - name: putin_news
+    user_input: 普京最近在干嘛
+    expect_tool: web_search
+    note: 时政人物动态, 规则路径应允许 web_search
+
+  - name: trump_news
+    user_input: 特朗普今天在干嘛
+    expect_tool: web_search
+    note: 时政人物动态, 规则路径应允许 web_search
+
+  # === web_search 弱信号 (规则 miss 的 case) ===
+  - name: watermelon_price
+    user_input: 今天苏州西瓜价格是
+    expect_tool: web_search
+    note: 当前规则路径 miss 的核心 bug case
+
+  - name: policy_query
+    user_input: 今年农业补贴政策有什么变化
+    expect_tool: web_search
+    note: 政策类, skill.md triggers 含"政策"但 hints 表无
+
+  - name: market_time
+    user_input: 番茄什么时候上市
+    expect_tool: web_search
+    note: 上市时间类, skill.md triggers 含"上市"但 hints 表无
+
+  - name: crop_trend
+    user_input: 今年水稻行情怎么样
+    expect_tool: web_search
+    note: 行情类, 价格/行情词完全不在 hints 表
+
+  # === web_search blocker 边界 ===
+  - name: farm_blocker
+    user_input: 我农场的西瓜今天价格
+    expect_tool: web_search
+    note: 含"农场"blocker, 但主体意图是问外部价格
+
+  # === 不应调 web_search 的 case ===
+  - name: farm_status
+    user_input: 查询我的农场现在有哪些茬口
+    expect_tool: get_farm_status
+    note: 内部查询, 不应调 web_search
+
+  - name: cost_internal
+    user_input: 我这个月花了多少钱
+    expect_tool: get_cost_summary
+    note: 内部账务, 不应调 web_search
+
+  - name: weather_query
+    user_input: 明天苏州天气
+    expect_tool: weather
+    note: 天气类, 应调 weather 不应调 web_search

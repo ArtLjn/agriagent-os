@@ -1,0 +1,55 @@
+# Planner Probe 测试用例
+#
+# 编写规则:
+#   - name:          case 唯一标识, 用于 --cases 过滤
+#   - user_input:    模拟用户输入
+#   - expect_task_type: 期望命中的 TaskType, 见枚举
+#   - expect_capabilities: 期望出现的 capability 名(catalog 中的 key)
+#                          写 approval 表示期望出现 approval 类 op
+#   - note:          备注, 解释这个 case 在测什么
+#
+# 新增 case 直接追加到 cases 列表, 不需要改 probe 代码。
+
+cases:
+  - name: standard
+    user_input: 帮我规划秋季草莓, 大概 20 亩
+    expect_task_type: planting_plan
+    expect_capabilities:
+      - QueryCropTemplate
+      - CalculatePlantingLayout
+      - SynthesizePlantingPlan
+      - ProposeCreateCyclePlan
+    note: 标准四步, 查模板→算布局→综合方案→生成 pending
+
+  - name: missing_slot
+    user_input: 帮我规划草莓
+    expect_task_type: planting_plan
+    expect_capabilities:
+      - SynthesizeRequiredSlotQuestions
+    note: 缺面积/季节, 应只追问, 不查询
+
+  - name: pure_read
+    user_input: 查询我的农场现在有哪些茬口
+    expect_task_type: legacy_skill_fallback
+    expect_capabilities:
+      - QueryActiveCycles
+    note: 纯读, 单步即可
+
+  - name: write_intent
+    user_input: 帮我创建一个西瓜茬口 8424
+    expect_task_type: crop_cycle_setup
+    expect_capabilities:
+      - ProposeCreateCyclePlan
+      - approval
+    note: 写意图, 必须 pending_only + approval
+
+  - name: composite
+    user_input: 规划春季番茄 10 亩, 顺便算一下成本
+    expect_task_type: planting_plan
+    expect_capabilities:
+      - QueryCropTemplate
+      - CalculatePlantingLayout
+      - SynthesizePlantingPlan
+      - ProposeCreateCyclePlan
+      - AnalyzeCost
+    note: 复合任务, 应出现 AnalyzeCost 分支
