@@ -361,7 +361,6 @@ class RouterPolicy:
             if candidate.risk == "read"
             and candidate.enabled
             and candidate.name not in self._model_choice_excluded_read_tools
-            and self._allow_model_choice_read_candidate(message, candidate)
         ]
         if not selected:
             return None
@@ -396,15 +395,6 @@ class RouterPolicy:
             scores=trace_scores([frame], selected),
             evidence=decision_evidence([frame], selected, []),
         )
-
-    @staticmethod
-    def _allow_model_choice_read_candidate(
-        message: str,
-        candidate: ToolCandidate,
-    ) -> bool:
-        if candidate.name != "web_search":
-            return True
-        return signals.looks_like_web_search(message)
 
     def _max_tools_for_frames(self, frames: list[IntentFrame]) -> int:
         if len(frames) > 1:

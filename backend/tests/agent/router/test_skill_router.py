@@ -160,21 +160,13 @@ def test_public_recent_what_doing_keeps_search_rule_over_vector_noise() -> None:
     assert decision.frames[0].intent == "query_web_search"
 
 
-def test_internal_recent_farm_read_does_not_expose_web_search_by_default() -> None:
-    decision = SkillRouter().route(
-        "农场最近在干嘛",
-        [
-            _tool("web_search"),
-            _tool("get_farm_status"),
-            _tool("manage_cost"),
-            _tool("manage_crop_cycle"),
-        ],
-    )
+def test_web_search_candidate_preserved_after_recall() -> None:
+    """BM25+向量召回的 web_search 候选不再被关键词规则二次过滤.
 
-    assert "web_search" not in decision.selected_tools
-
-
-def test_internal_recent_worker_read_filters_web_search_vector_noise() -> None:
+    依据: docs/specs/2026-07-31-agent-harness-design.md 阶段 0 + openspec
+    change `remove-web-search-rule-special-case`. Layer 1 召回结果应直接进入
+    Layer 3 LLM 自选, 不得在 policy/service 层用关键词规则踢出 web_search.
+    """
     router = SkillRouter()
 
     def vector_search(_query: str, candidates) -> dict[str, float]:
@@ -192,7 +184,22 @@ def test_internal_recent_worker_read_filters_web_search_vector_noise() -> None:
         [_tool("web_search"), _tool("manage_workers"), _tool("weather")],
     )
 
-    assert "web_search" not in decision.selected_tools
+    assert "web_search" in decision.selected_tools
+
+
+def test_farm_blocker_with_external_price_intent_keeps_web_search() -> None:
+    """boundary case: 含'农场'blocker 但意图是外部价格的输入, web_search 应保留.
+
+    依据: router_c_spike.py 实证 farm_blocker case. 旧关键词规则会因'农场'
+    blocker 踢出 web_search, 但用户真实意图是问外部价格. 删特判后 web_search
+    保留, 由 LLM 自决.
+    """
+    decision = SkillRouter().route(
+        "我农场的西瓜今天价格",
+        [_tool("web_search"), _tool("get_farm_status")],
+    )
+
+    assert "web_search" in decision.selected_tools
 
 
 def test_disabled_web_search_is_rejected_without_selection() -> None:

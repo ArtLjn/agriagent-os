@@ -458,11 +458,6 @@ class SkillRouter:
             scores,
             evidence=evidence,
         )
-        candidates = [
-            candidate
-            for candidate in candidates
-            if candidate.name != "web_search" or signals.looks_like_web_search(message)
-        ]
         names = [candidate.name for candidate in candidates]
         if signals.looks_like_planting_unit_query(message):
             return [

@@ -113,6 +113,13 @@ WEB_CURRENT_EVENT_TOPIC_HINTS = (
     "做什么",
     "做啥",
     "有什么动作",
+    "价格",
+    "行情",
+    "政策",
+    "补贴",
+    "上市",
+    "下市",
+    "热点",
 )
 WEB_SEARCH_INTERNAL_BLOCKERS = (
     "农场",
