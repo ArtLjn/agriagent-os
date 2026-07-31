@@ -150,6 +150,9 @@ WRITE_PATTERNS: dict[str, list[re.Pattern]] = {
         ),
     ],
     "manage_user_settings": [
+        re.compile(r"(?:修改|更改|调整|更新|设置|改).{0,6}城市.{0,6}(?:为|成|到)"),
+        re.compile(r"城市.{0,4}(?:改成|改为|改到|设置为|更新为|换成|调整为)"),
+        re.compile(r"(?:把|将).{0,8}城市.{0,8}(?:改成|改为|设为|换成|调整为|更新为)"),
         re.compile(
             r"(?:修改|更改|调整|更新|改).*(?:用户设置|我的设置|默认城市|天气城市|显示名|昵称|助手角色|回复语气|回答风格)"
         ),
@@ -321,9 +324,7 @@ PLANTING_ADVICE_HINTS = (
     "什么时候",
 )
 
-DISABLED_SKILLS: set[str] = {
-    "web_search",
-}
+DISABLED_SKILLS: set[str] = set()
 TOOL_CHAIN_MAP: dict[str, list[str]] = {
     "calculate_arithmetic": [],
     "weather": [],

@@ -9,6 +9,8 @@ from dataclasses import dataclass, field
 
 from langchain_core.tools import BaseTool
 
+from app.agent.router import classifier_signals as signals
+from app.agent.router.classifier_hints import WEB_SEARCH_INTERNAL_BLOCKERS
 from app.agent.router.service import SkillRouter
 from app.agent.router.rules import (
     DISABLED_SKILLS,
@@ -21,6 +23,17 @@ from app.agent.router.rules import (
 )
 
 logger = logging.getLogger(__name__)
+
+_EXPLICIT_EXTERNAL_SEARCH_HINTS = (
+    "搜索",
+    "网上",
+    "新闻",
+    "价格",
+    "上市",
+    "政策",
+    "热点",
+    "实时",
+)
 
 
 @dataclass(frozen=True)
@@ -69,6 +82,14 @@ def _tool_enabled(tool: BaseTool) -> bool:
     return tool.name not in DISABLED_SKILLS
 
 
+def _should_drop_rule_web_search(user_message: str) -> bool:
+    if signals.looks_like_web_search(user_message):
+        return False
+    if any(hint in user_message for hint in _EXPLICIT_EXTERNAL_SEARCH_HINTS):
+        return False
+    return any(hint in user_message for hint in WEB_SEARCH_INTERNAL_BLOCKERS)
+
+
 def select_tools(
     user_message: str,
     all_tools: list[BaseTool],
@@ -99,6 +120,9 @@ def select_tools(
 
     if "manage_crop_cycle" in candidates:
         candidates.discard("get_farm_status")
+
+    if "web_search" in candidates and _should_drop_rule_web_search(user_message):
+        candidates.discard("web_search")
 
     if "manage_farm_logs" in candidates:
         candidates.discard("get_farm_status")
@@ -150,7 +174,9 @@ def select_tools(
         candidates.difference_update({"manage_cost", "manage_farm_logs"})
 
     if "update_operation_work_order" in candidates:
-        candidates.difference_update({"create_operation_work_order", "manage_farm_logs"})
+        candidates.difference_update(
+            {"create_operation_work_order", "manage_farm_logs"}
+        )
 
     candidates.intersection_update(enabled_tool_names)
 

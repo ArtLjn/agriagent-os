@@ -95,6 +95,18 @@ def _tools(names: list[str]):
             "update_settings",
         ),
         (
+            "修改城市为睢宁",
+            "manage_user_settings",
+            "manage_settings",
+            "update_settings",
+        ),
+        (
+            "城市改为睢宁",
+            "manage_user_settings",
+            "manage_settings",
+            "update_settings",
+        ),
+        (
             "设置默认天气城市为苏州",
             "manage_user_settings",
             "manage_settings",

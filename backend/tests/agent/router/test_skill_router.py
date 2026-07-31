@@ -60,10 +60,10 @@ def test_catalog_marks_disabled_tools() -> None:
     assert catalog.get("web_search").enabled is False
 
 
-def test_catalog_falls_back_to_disabled_skills() -> None:
+def test_catalog_uses_registry_active_status_without_metadata() -> None:
     catalog = SkillCatalog.from_tools([_tool("web_search")])
 
-    assert catalog.get("web_search").enabled is False
+    assert catalog.get("web_search").enabled is True
 
 
 def test_catalog_metadata_enabled_overrides_disabled_skills() -> None:
@@ -86,10 +86,122 @@ def test_explicit_web_search_selects_enabled_search_tool() -> None:
     assert decision.frames[0].risk == "read"
 
 
+def test_public_recent_activity_selects_enabled_search_tool() -> None:
+    tool = _tool("web_search")
+    tool.skill_metadata = type("SkillMetadataStub", (), {"enabled": True})()
+
+    decision = SkillRouter().route(
+        "最近特朗普有啥活动",
+        [tool, _tool("get_farm_status")],
+    )
+
+    assert decision.selected_tools == ["web_search"]
+    assert decision.frames[0].intent == "query_web_search"
+
+
+def test_public_recent_what_doing_selects_enabled_search_tool() -> None:
+    tool = _tool("web_search")
+    tool.skill_metadata = type("SkillMetadataStub", (), {"enabled": True})()
+
+    decision = SkillRouter().route(
+        "特朗普最近在干嘛",
+        [tool, _tool("get_farm_status")],
+    )
+
+    assert decision.selected_tools == ["web_search"]
+    assert decision.frames[0].intent == "query_web_search"
+
+
+def test_public_recent_activity_keeps_search_rule_over_vector_noise() -> None:
+    tool = _tool("web_search")
+    tool.skill_metadata = type("SkillMetadataStub", (), {"enabled": True})()
+    router = SkillRouter()
+
+    def vector_search(_query: str, candidates) -> dict[str, float]:
+        return {
+            f"{candidate.name}.{candidate.operation}": (
+                0.95 if candidate.name == "get_farm_status" else 0.2
+            )
+            for candidate in candidates
+        }
+
+    router._hybrid_retriever = HybridOperationRetriever(vector_search=vector_search)
+
+    decision = router.route(
+        "最近特朗普有啥活动",
+        [tool, _tool("get_farm_status")],
+    )
+
+    assert decision.selected_tools == ["web_search"]
+    assert decision.frames[0].intent == "query_web_search"
+
+
+def test_public_recent_what_doing_keeps_search_rule_over_vector_noise() -> None:
+    tool = _tool("web_search")
+    tool.skill_metadata = type("SkillMetadataStub", (), {"enabled": True})()
+    router = SkillRouter()
+
+    def vector_search(_query: str, candidates) -> dict[str, float]:
+        return {
+            f"{candidate.name}.{candidate.operation}": (
+                0.95 if candidate.name == "manage_farm_logs" else 0.2
+            )
+            for candidate in candidates
+        }
+
+    router._hybrid_retriever = HybridOperationRetriever(vector_search=vector_search)
+
+    decision = router.route(
+        "特朗普最近在干嘛",
+        [tool, _tool("manage_farm_logs"), _tool("get_farm_status")],
+    )
+
+    assert decision.selected_tools == ["web_search"]
+    assert decision.frames[0].intent == "query_web_search"
+
+
+def test_internal_recent_farm_read_does_not_expose_web_search_by_default() -> None:
+    decision = SkillRouter().route(
+        "农场最近在干嘛",
+        [
+            _tool("web_search"),
+            _tool("get_farm_status"),
+            _tool("manage_cost"),
+            _tool("manage_crop_cycle"),
+        ],
+    )
+
+    assert "web_search" not in decision.selected_tools
+
+
+def test_internal_recent_worker_read_filters_web_search_vector_noise() -> None:
+    router = SkillRouter()
+
+    def vector_search(_query: str, candidates) -> dict[str, float]:
+        return {
+            f"{candidate.name}.{candidate.operation}": (
+                0.97 if candidate.name == "web_search" else 0.18
+            )
+            for candidate in candidates
+        }
+
+    router._hybrid_retriever = HybridOperationRetriever(vector_search=vector_search)
+
+    decision = router.route(
+        "这个工人最近在干嘛",
+        [_tool("web_search"), _tool("manage_workers"), _tool("weather")],
+    )
+
+    assert "web_search" not in decision.selected_tools
+
+
 def test_disabled_web_search_is_rejected_without_selection() -> None:
+    tool = _tool("web_search")
+    tool.skill_metadata = type("SkillMetadataStub", (), {"enabled": False})()
+
     decision = SkillRouter().route(
         "搜索一下天气新闻",
-        [_tool("web_search"), _tool("get_farm_status")],
+        [tool, _tool("get_farm_status")],
     )
 
     assert decision.selected_tools == []
@@ -1145,6 +1257,8 @@ def test_settings_read_query_does_not_expose_write_tool(message: str) -> None:
     [
         "把默认天气城市改成苏州",
         "设置默认天气城市为苏州",
+        "修改城市为睢宁",
+        "城市改为睢宁",
         "修改助手回复角色",
         "设置默认经纬度为31.2,120.6",
         "把默认经纬度改成31.2,120.6",
@@ -1160,6 +1274,24 @@ def test_settings_update_uses_write_confirm_operation(message: str) -> None:
     assert decision.selected_operations == {"manage_settings": ["update_settings"]}
     assert decision.frames[0].risk == "write_confirm"
     assert decision.frames[0].requires_confirmation is True
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "修改城市为睢宁",
+        "城市改为睢宁",
+    ],
+)
+def test_bare_city_update_prefers_settings_over_crop_cycle(message: str) -> None:
+    decision = SkillRouter().route(
+        message,
+        [_tool("manage_user_settings"), _tool("manage_crop_cycle")],
+    )
+
+    assert decision.selected_tools == ["manage_user_settings"]
+    assert decision.selected_operations == {"manage_settings": ["update_settings"]}
+    assert decision.frames[0].risk == "write_confirm"
 
 
 @pytest.mark.parametrize(

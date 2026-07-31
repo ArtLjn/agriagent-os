@@ -35,7 +35,13 @@ def looks_like_calculation_request(message: str) -> bool:
 
 
 def looks_like_web_search(message: str) -> bool:
-    return has_any(message, hints.WEB_SEARCH_HINTS)
+    if has_any(message, hints.WEB_SEARCH_HINTS):
+        return True
+    return (
+        has_any(message, hints.WEB_CURRENT_EVENT_TIME_HINTS)
+        and has_any(message, hints.WEB_CURRENT_EVENT_TOPIC_HINTS)
+        and not has_any(message, hints.WEB_SEARCH_INTERNAL_BLOCKERS)
+    )
 
 
 def looks_like_weather_query(message: str) -> bool:
@@ -345,8 +351,43 @@ def looks_like_user_settings_query(message: str) -> bool:
 def looks_like_update_user_settings(message: str) -> bool:
     if has_any(message, hints.USER_SETTINGS_READ_HINTS):
         return False
-    return has_any(message, hints.USER_SETTINGS_HINTS) and any(
+    explicit_settings_update = has_any(message, hints.USER_SETTINGS_HINTS) and any(
         re.search(pattern, message) for pattern in hints.USER_SETTINGS_UPDATE_PATTERNS
+    )
+    return explicit_settings_update or _looks_like_bare_city_settings_update(message)
+
+
+def _looks_like_bare_city_settings_update(message: str) -> bool:
+    if "城市" not in message:
+        return False
+    if has_any(message, hints.USER_SETTINGS_READ_HINTS):
+        return False
+    if has_any(
+        message,
+        (
+            "农场",
+            "茬口",
+            "作物",
+            "种植",
+            "地块",
+            "大棚",
+            "棚区",
+            "种植单元",
+            "作业",
+            "工人",
+            "账",
+            "成本",
+            "分类",
+        ),
+    ):
+        return False
+    return any(
+        re.search(pattern, message)
+        for pattern in (
+            r"(?:修改|更改|调整|更新|设置|改).{0,6}城市.{0,6}(?:为|成|到)",
+            r"城市.{0,4}(?:改成|改为|改到|设置为|更新为|换成|调整为)",
+            r"(?:把|将).{0,8}城市.{0,8}(?:改成|改为|设为|换成|调整为|更新为)",
+        )
     )
 
 

@@ -458,6 +458,11 @@ class SkillRouter:
             scores,
             evidence=evidence,
         )
+        candidates = [
+            candidate
+            for candidate in candidates
+            if candidate.name != "web_search" or signals.looks_like_web_search(message)
+        ]
         names = [candidate.name for candidate in candidates]
         if signals.looks_like_planting_unit_query(message):
             return [
@@ -675,6 +680,8 @@ class SkillRouter:
         rule_frames: list[IntentFrame],
         retrieved_frames: list[IntentFrame],
     ) -> bool:
+        if any(frame.intent == "query_web_search" for frame in rule_frames):
+            return True
         recall = retrieved_frames[0].evidence.get("recall") if retrieved_frames else {}
         if not isinstance(recall, dict):
             return False

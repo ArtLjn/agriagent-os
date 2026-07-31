@@ -219,6 +219,11 @@ class TestWritePatternMatching:
         result = select_tools("默认城市改成杭州", _make_tools())
         assert result == ["manage_user_settings"]
 
+    @pytest.mark.parametrize("message", ["修改城市为睢宁", "城市改为睢宁"])
+    def test_bare_city_update_uses_settings_skill(self, message):
+        result = select_tools(message, _make_tools())
+        assert result == ["manage_user_settings"]
+
 
 class TestQueryKeywordMatching:
     def test_weather_query(self):

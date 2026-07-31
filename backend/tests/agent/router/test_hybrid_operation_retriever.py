@@ -31,7 +31,9 @@ def _operation_candidates(names: list[str]):
     return candidates
 
 
-def test_hybrid_retriever_keeps_debt_operation_when_generic_query_terms_pollute_bm25() -> None:
+def test_hybrid_retriever_keeps_debt_operation_when_generic_query_terms_pollute_bm25() -> (
+    None
+):
     candidates = _operation_candidates(
         [
             "get_farm_status",
@@ -56,7 +58,9 @@ def test_hybrid_retriever_keeps_debt_operation_when_generic_query_terms_pollute_
     assert "lexical" in result.evidence["manage_cost.query_debt"]["sources"]
 
 
-def test_hybrid_retriever_penalizes_candidates_that_only_match_low_signal_terms() -> None:
+def test_hybrid_retriever_penalizes_candidates_that_only_match_low_signal_terms() -> (
+    None
+):
     candidates = _operation_candidates(
         ["manage_cost", "manage_cost_categories", "manage_workers"]
     )
@@ -64,13 +68,28 @@ def test_hybrid_retriever_penalizes_candidates_that_only_match_low_signal_terms(
     result = HybridOperationRetriever().retrieve("我有哪些欠款", candidates, limit=5)
 
     debt_score = result.evidence["manage_cost.query_debt"]["score"]
-    worker_score = result.evidence["manage_workers.query_workers"]["score"]
     category_score = result.evidence.get(
         "manage_cost_categories.query_categories",
         {"score": 0.0},
     )["score"]
-    assert debt_score > worker_score
+    assert "manage_workers.query_workers" not in result.evidence
     assert debt_score > category_score
+
+
+def test_hybrid_retriever_drops_candidates_that_only_match_generic_terms() -> None:
+    candidates = _operation_candidates(
+        [
+            "get_farm_status",
+            "manage_crop_cycle",
+            "manage_labor_payment",
+            "manage_planting_units",
+        ]
+    )
+
+    result = HybridOperationRetriever().retrieve("这个最近当前", candidates, limit=5)
+
+    assert result.selected_candidates == []
+    assert result.evidence == {}
 
 
 def test_hybrid_retriever_routes_expense_query_to_cost_summary() -> None:
@@ -286,15 +305,15 @@ def test_labor_wage_record_prior_overrides_settlement_vector_noise() -> None:
 
     assert result.top_candidates[0]["route"] == "manage_labor_payment.manage_wage"
     assert result.evidence["manage_labor_payment.manage_wage"]["operation_prior"] > 0
-    assert result.evidence["manage_labor_payment.settle_payment"][
-        "operation_prior"
-    ] < 0
+    assert result.evidence["manage_labor_payment.settle_payment"]["operation_prior"] < 0
 
 
 def test_completed_irrigation_log_beats_work_order_vector_noise() -> None:
     candidates = [
         candidate
-        for candidate in _operation_candidates(["manage_work_orders", "manage_farm_logs"])
+        for candidate in _operation_candidates(
+            ["manage_work_orders", "manage_farm_logs"]
+        )
         if candidate.operation in {"create_work_order", "create_log", "manage_log"}
     ]
     vector_scores = {
@@ -308,9 +327,9 @@ def test_completed_irrigation_log_beats_work_order_vector_noise() -> None:
     ).retrieve("我今天给水稻浇水了", candidates, limit=5)
 
     assert result.top_candidates[0]["route"] == "manage_farm_logs.create_log"
-    assert result.evidence["manage_work_orders.create_work_order"][
-        "operation_prior"
-    ] < 0
+    assert (
+        result.evidence["manage_work_orders.create_work_order"]["operation_prior"] < 0
+    )
 
 
 def test_hybrid_retriever_never_calls_vector_search_without_index(caplog) -> None:

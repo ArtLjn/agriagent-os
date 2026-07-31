@@ -48,7 +48,8 @@ FALLBACK_SCORING_WEIGHTS = HybridScoringWeights(
 _STOP_TERMS = frozenset("a an and are for how i is me much my of please the to".split())
 _LOW_SIGNAL_TERMS = frozenset(
     "今天 昨天 前天 现在 当前 最近 本周 这周 本月 这个月 查询 查看 看看 "
-    "看一下 我 我的 有哪些 有哪 哪些 多少 列表 明细 统计 show list what which".split()
+    "看一下 我 我的 有哪些 有哪 哪些 多少 列表 明细 统计 这个 那个 "
+    "这些 那些 这里 那里 这边 那边 show list what which".split()
 )
 
 _TOKEN_ALIASES = {
@@ -91,21 +92,15 @@ _COST_RECORD_WRITE_TERMS = frozenset(
     "买 卖 采购 购入 销售 收入 支出 花了 账单 记账".split()
 )
 _CATEGORY_MANAGEMENT_TERMS = frozenset("分类 类别 科目 category categories".split())
-_COST_ANALYTICS_QUERY_TERMS = frozenset(
-    "趋势 同比 环比 分析 比上个月 比去年".split()
-)
-_FARM_LOG_CREATE_TERMS = frozenset(
-    "记录 记一下 浇水 施肥 打药 除草 翻地 育苗".split()
-)
+_COST_ANALYTICS_QUERY_TERMS = frozenset("趋势 同比 环比 分析 比上个月 比去年".split())
+_FARM_LOG_CREATE_TERMS = frozenset("记录 记一下 浇水 施肥 打药 除草 翻地 育苗".split())
 _FARM_LOG_QUERY_TERMS = frozenset("查询 查看 看看 最近 历史 日志 哪些 农事".split())
 _WORK_ORDER_CREATE_TERMS = frozenset("安排 派 叫 让 用工 作业单 工人 干活".split())
 _UPDATE_DELETE_TERMS = frozenset("修改 更新 删除 删掉 更正 纠正 改成 改为".split())
 _LABOR_WAGE_RECORD_TERMS = frozenset(
     "来了 上工 出勤 一天 日薪 工资 工钱 人工费 每天".split()
 )
-_LABOR_WAGE_RECORD_STRONG_TERMS = frozenset(
-    "来了 上工 出勤 一天 日薪 每天".split()
-)
+_LABOR_WAGE_RECORD_STRONG_TERMS = frozenset("来了 上工 出勤 一天 日薪 每天".split())
 _LABOR_PAYROLL_QUERY_TERMS = frozenset(
     "发薪 应发 应该发 未付 工资 工钱 人工钱 多少钱 多少".split()
 )
@@ -176,7 +171,9 @@ class HybridOperationRetriever:
         limit: int = 5,
         candidate_scope: str | None = None,
     ) -> HybridRetrievalResult:
-        enabled_candidates = [candidate for candidate in candidates if candidate.enabled]
+        enabled_candidates = [
+            candidate for candidate in candidates if candidate.enabled
+        ]
         if not enabled_candidates:
             return HybridRetrievalResult(selected_names=[])
 
@@ -227,8 +224,7 @@ class HybridOperationRetriever:
             selected_candidates=[candidate for candidate, _signals in selected],
             scores={signals.route_key: signals.score for _candidate, signals in kept},
             evidence={
-                signals.route_key: _evidence(signals)
-                for _candidate, signals in kept
+                signals.route_key: _evidence(signals) for _candidate, signals in kept
             },
             recall=_recall_summary(
                 candidate_scope=candidate_scope,
@@ -640,14 +636,15 @@ def _bm25_scores(
         _route_key(candidate): _candidate_terms(candidate) for candidate in candidates
     }
     doc_count = len(candidates)
-    if not query_terms or doc_count == 0:
+    ranking_terms = query_terms - _LOW_SIGNAL_TERMS
+    if not ranking_terms or doc_count == 0:
         return {}
     avg_len = sum(sum(terms.values()) for terms in doc_terms.values()) / doc_count
     scores: dict[str, float] = {}
     for route_key, terms in doc_terms.items():
         doc_len = sum(terms.values()) or 1.0
         score = 0.0
-        for term in query_terms:
+        for term in ranking_terms:
             tf = terms.get(term, 0.0)
             if tf <= 0:
                 continue
@@ -698,7 +695,11 @@ def _registry_prior(candidate: ToolCandidate) -> float:
 
 
 def _operation_prior(candidate: ToolCandidate, query_terms: set[str]) -> float:
-    alias_prior = 0.03 if candidate.legacy_alias == candidate.name else 0.0
+    alias_prior = 0.0
+    if candidate.legacy_alias == candidate.name:
+        alias_prior = (
+            0.05 if candidate.risk in {"write_confirm", "write_high"} else 0.03
+        )
     if candidate.capability == "manage_farm_logs":
         return _farm_log_operation_prior(candidate, query_terms, alias_prior)
     if candidate.capability == "manage_labor_payment":
@@ -781,7 +782,9 @@ def _labor_payment_operation_prior(
         return 0.14 + alias_prior
     if candidate.operation == "settle_payment" and strong_wage_record:
         return -0.45 + alias_prior
-    if candidate.operation == "settle_payment" and not (query_terms & _LABOR_SETTLE_TERMS):
+    if candidate.operation == "settle_payment" and not (
+        query_terms & _LABOR_SETTLE_TERMS
+    ):
         return -0.18 + alias_prior
     return alias_prior
 
