@@ -20,6 +20,7 @@ from app.skills.metadata import (
 from app.ops.skill_route_eval import (
     active_eval_tools,
     default_route_cases_path,
+    evaluate_router_routes,
     evaluate_route_recall,
     load_route_cases,
     preview_route_recall_detail,
@@ -124,10 +125,12 @@ def get_skill_route_recall_dataset() -> dict:
 def evaluate_skill_route_recall_dataset(
     request: SkillRouteRecallEvalRequest,
 ) -> dict:
-    """批量评测 JSON 测试集的 Skill 候选召回率。"""
+    """批量评测 JSON 测试集的候选召回率和最终 Router 命中率。"""
     path = default_route_cases_path()
     cases = load_route_cases(path)
-    report = evaluate_route_recall(cases, active_eval_tools(), top_k=request.top_k)
+    tools = active_eval_tools()
+    recall_report = evaluate_route_recall(cases, tools, top_k=request.top_k)
+    router_report = evaluate_router_routes(cases, tools)
     return {
         "dataset": {
             "path": path.name,
@@ -135,7 +138,9 @@ def evaluate_skill_route_recall_dataset(
             "total": len(cases),
         },
         "top_k": request.top_k,
-        "report": asdict(report),
+        "report": asdict(recall_report),
+        "recall_report": asdict(recall_report),
+        "router_report": asdict(router_report),
     }
 
 

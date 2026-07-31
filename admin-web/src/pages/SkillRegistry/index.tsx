@@ -338,20 +338,42 @@ export default function SkillRegistry() {
                   }}
                 >
                   <Metric label="测试集" value={evalResult.dataset.path} />
-                  <Metric label="样本数" value={String(evalResult.report.total)} />
-                  <Metric label="Recall@1" value={formatPercent(evalResult.report.recall_at_1)} />
-                  <Metric label={`Recall@${evalResult.top_k}`} value={formatPercent(evalResult.report.recall_at_k)} />
+                  <Metric label="样本数" value={String(evalResult.recall_report.total)} />
+                  <Metric label="Recall@1" value={formatPercent(evalResult.recall_report.recall_at_1)} />
+                  <Metric
+                    label={`Recall@${evalResult.top_k}`}
+                    value={formatPercent(evalResult.recall_report.recall_at_k)}
+                  />
                   <Metric
                     label={`Operation@${evalResult.top_k}`}
-                    value={formatPercent(evalResult.report.operation_recall_at_k)}
+                    value={formatPercent(evalResult.recall_report.operation_recall_at_k)}
                   />
-                  <Metric label="失败样本" value={String(evalResult.report.failures.length)} />
+                  <Metric
+                    label="Route 命中"
+                    value={formatPercent(evalResult.router_report.route_accuracy)}
+                  />
+                  <Metric
+                    label="Exact Match"
+                    value={formatPercent(evalResult.router_report.exact_match_rate)}
+                  />
+                  <Metric
+                    label="召回失败"
+                    value={String(evalResult.recall_report.failures.length)}
+                  />
+                  <Metric
+                    label="最终路由失败"
+                    value={String(evalResult.router_report.failures.length)}
+                  />
+                  <Metric
+                    label="多选/误选"
+                    value={String(evalResult.router_report.strict_failures.length)}
+                  />
                 </div>
-                {evalResult.report.failures.length > 0 && (
+                {evalResult.recall_report.failures.length > 0 && (
                   <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
-                    {evalResult.report.failures.map((failure) => (
+                    {evalResult.recall_report.failures.map((failure) => (
                       <div
-                        key={failure.case_id}
+                        key={`recall-${failure.case_id}`}
                         style={{
                           backgroundColor: '#0d1117',
                           border: `1px solid ${BORDER}`,
@@ -387,6 +409,58 @@ export default function SkillRegistry() {
                         </div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                           {failure.top_k.map((route) => (
+                            <Tag key={routeLabel(route)} color="default">
+                              {routeLabel(route)}
+                            </Tag>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {evalResult.router_report.failures.length > 0 && (
+                  <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
+                    {evalResult.router_report.failures.map((failure) => (
+                      <div
+                        key={`router-${failure.case_id}`}
+                        style={{
+                          backgroundColor: '#0d1117',
+                          border: `1px solid ${BORDER}`,
+                          borderRadius: 6,
+                          padding: 12,
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            flexWrap: 'wrap',
+                            gap: 8,
+                            marginBottom: 8,
+                          }}
+                        >
+                          <Typography.Text strong style={{ color: TEXT }}>
+                            {failure.case_id}
+                          </Typography.Text>
+                          <Tag color="error">
+                            {routeLabel(failure.expected)}
+                          </Tag>
+                        </div>
+                        <div
+                          style={{
+                            color: TEXT,
+                            fontSize: 14,
+                            marginBottom: 8,
+                            overflowWrap: 'anywhere',
+                          }}
+                        >
+                          {failure.message}
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                          <Tag color="gold">
+                            {failure.selection_path}
+                          </Tag>
+                          {failure.selected.map((route) => (
                             <Tag key={routeLabel(route)} color="default">
                               {routeLabel(route)}
                             </Tag>

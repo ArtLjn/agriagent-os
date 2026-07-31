@@ -184,6 +184,20 @@ describe('SkillRegistry', () => {
         operation_recall_at_k: 1,
         failures: [],
       },
+      recall_report: {
+        total: 6,
+        recall_at_1: 1,
+        recall_at_k: 1,
+        operation_recall_at_k: 1,
+        failures: [],
+      },
+      router_report: {
+        total: 6,
+        route_accuracy: 1,
+        exact_match_rate: 1,
+        failures: [],
+        strict_failures: [],
+      },
     });
 
     render(<SkillRegistry />);

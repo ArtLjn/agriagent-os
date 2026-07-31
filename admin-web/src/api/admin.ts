@@ -367,6 +367,23 @@ export interface SkillRouteRecallFailure {
   scores: Record<string, number>;
 }
 
+export interface SkillRouteRouterFailure {
+  case_id: string;
+  message: string;
+  expected: {
+    skill: string;
+    operation: string | null;
+  };
+  selected: Array<{
+    skill: string;
+    operation: string | null;
+  }>;
+  selected_tools: string[];
+  selected_operations: Record<string, string[]>;
+  selection_path: string;
+  reason: string;
+}
+
 export interface SkillRouteRecallReport {
   total: number;
   recall_at_1: number;
@@ -375,10 +392,20 @@ export interface SkillRouteRecallReport {
   failures: SkillRouteRecallFailure[];
 }
 
+export interface SkillRouteRouterReport {
+  total: number;
+  route_accuracy: number;
+  exact_match_rate: number;
+  failures: SkillRouteRouterFailure[];
+  strict_failures: SkillRouteRouterFailure[];
+}
+
 export interface SkillRouteRecallEvalResponse {
   dataset: SkillRouteRecallDataset;
   top_k: number;
   report: SkillRouteRecallReport;
+  recall_report: SkillRouteRecallReport;
+  router_report: SkillRouteRouterReport;
 }
 
 export async function previewSkillRouteRecall(

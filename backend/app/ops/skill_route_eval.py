@@ -15,8 +15,10 @@ from app.agent.router import classifier_signals as signals
 from app.agent.router.catalog import SkillCatalog
 from app.agent.router.hybrid_retriever import HybridOperationRetriever
 from app.agent.router.intent import IntentType, classify_intent
-from app.agent.router.models import ToolCandidate
+from app.agent.router.models import RouterDecision, ToolCandidate
+from app.agent.router.service import SkillRouter
 from app.agent.router.skill_vector_store import build_skill_vector_search_fn
+from app.infra.trace_diagnostics import selection_path
 from app.skills.registry import OperationDefinition, load_skill_registry
 
 
@@ -75,6 +77,27 @@ class RouteRecallReport:
     recall_at_k: float
     operation_recall_at_k: float
     failures: list[RouteRecallFailure]
+
+
+@dataclass(frozen=True)
+class RouterRouteFailure:
+    case_id: str
+    message: str
+    expected: ExpectedRoute
+    selected: list[ExpectedRoute]
+    selected_tools: list[str]
+    selected_operations: dict[str, list[str]]
+    selection_path: str
+    reason: str
+
+
+@dataclass(frozen=True)
+class RouterRouteReport:
+    total: int
+    route_accuracy: float
+    exact_match_rate: float
+    failures: list[RouterRouteFailure]
+    strict_failures: list[RouterRouteFailure]
 
 
 def load_route_cases(path: Path) -> list[RouteRecallCase]:
@@ -181,6 +204,44 @@ def evaluate_route_recall(
         recall_at_k=_ratio(hit_k, total),
         operation_recall_at_k=_ratio(operation_hit_k, total),
         failures=failures,
+    )
+
+
+def evaluate_router_routes(
+    cases: list[RouteRecallCase],
+    tools: list[BaseTool],
+    *,
+    router: SkillRouter | None = None,
+) -> RouterRouteReport:
+    """评测 SkillRouter 最终 selected_tools/selected_operations 是否命中样本。"""
+    route_router = router or SkillRouter()
+    failures: list[RouterRouteFailure] = []
+    strict_failures: list[RouterRouteFailure] = []
+    hit = 0
+    exact_hit = 0
+
+    for case in cases:
+        decision = route_router.route(case.message, tools)
+        selected = _decision_routes(decision.selected_operations)
+        accepted = _accepted_routes(case)
+        route_hit = any(route in accepted for route in selected)
+        exact_route_hit = _exact_route_match(selected, accepted)
+        if route_hit:
+            hit += 1
+        else:
+            failures.append(_router_route_failure(case, decision, selected))
+        if exact_route_hit:
+            exact_hit += 1
+        else:
+            strict_failures.append(_router_route_failure(case, decision, selected))
+
+    total = len(cases)
+    return RouterRouteReport(
+        total=total,
+        route_accuracy=_ratio(hit, total),
+        exact_match_rate=_ratio(exact_hit, total),
+        failures=failures,
+        strict_failures=strict_failures,
     )
 
 
@@ -378,6 +439,42 @@ def _looks_like_write_message(message: str) -> bool:
 
 def _accepted_routes(case: RouteRecallCase) -> set[ExpectedRoute]:
     return {case.expected, *case.acceptable}
+
+
+def _decision_routes(selected_operations: dict[str, list[str]]) -> list[ExpectedRoute]:
+    routes: list[ExpectedRoute] = []
+    for skill, operations in selected_operations.items():
+        if not operations:
+            routes.append(ExpectedRoute(skill=skill))
+            continue
+        routes.extend(
+            ExpectedRoute(skill=skill, operation=operation) for operation in operations
+        )
+    return routes
+
+
+def _exact_route_match(
+    selected: list[ExpectedRoute],
+    accepted: set[ExpectedRoute],
+) -> bool:
+    return len(selected) == 1 and bool(selected) and selected[0] in accepted
+
+
+def _router_route_failure(
+    case: RouteRecallCase,
+    decision: RouterDecision,
+    selected: list[ExpectedRoute],
+) -> RouterRouteFailure:
+    return RouterRouteFailure(
+        case_id=case.id,
+        message=case.message,
+        expected=case.expected,
+        selected=selected,
+        selected_tools=list(decision.selected_tools),
+        selected_operations=dict(decision.selected_operations),
+        selection_path=selection_path(decision),
+        reason=decision.reason,
+    )
 
 
 def _route_from_candidate(candidate: ToolCandidate) -> ExpectedRoute:

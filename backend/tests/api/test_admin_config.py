@@ -68,7 +68,9 @@ class TestListSkills:
 
 
 class TestSkillRouteRecall:
-    def test_preview_returns_ranked_skill_candidates(self, db_session, monkeypatch) -> None:
+    def test_preview_returns_ranked_skill_candidates(
+        self, db_session, monkeypatch
+    ) -> None:
         ensure_admin_user(db_session)
         vector_calls: list[str] = []
 
@@ -115,16 +117,16 @@ class TestSkillRouteRecall:
         assert data["candidates"][0]["operation"] == "query_logs"
         assert data["candidates"][0]["score"] > 0
         assert "vector" in data["candidates"][0]["evidence"]["sources"]
-        assert data["candidates"][0]["evidence"]["score"] == data["candidates"][0]["score"]
+        assert (
+            data["candidates"][0]["evidence"]["score"] == data["candidates"][0]["score"]
+        )
         assert data["skill_router"]["selected"]["operations"] == {
             "manage_farm_logs": ["query_logs"]
         }
         assert data["skill_router"]["summary"].get("fallback") != (
             "model_choice_read_default"
         )
-        assert data["skill_router"]["recall"]["path"] == (
-            "bm25_vector_hybrid"
-        )
+        assert data["skill_router"]["recall"]["path"] == ("bm25_vector_hybrid")
         assert data["skill_router"]["recall"]["vector_search_used"] is True
 
     def test_dataset_eval_uses_json_cases(self, db_session, monkeypatch) -> None:
@@ -140,6 +142,10 @@ class TestSkillRouteRecall:
             "app.ops.skill_route_eval.build_skill_vector_search_fn",
             lambda: fake_vector_search,
         )
+        monkeypatch.setattr(
+            "app.agent.router.service.build_skill_vector_search_fn",
+            lambda: fake_vector_search,
+        )
         with auth_override_scope(app):
             resp = TestClient(app).post(
                 "/admin/skills/route-recall/evaluate",
@@ -153,6 +159,12 @@ class TestSkillRouteRecall:
         assert data["report"]["total"] >= 1
         assert data["report"]["recall_at_k"] >= data["report"]["recall_at_1"]
         assert "failures" in data["report"]
+        assert data["recall_report"] == data["report"]
+        assert data["router_report"]["total"] == data["dataset"]["total"]
+        assert "route_accuracy" in data["router_report"]
+        assert "exact_match_rate" in data["router_report"]
+        assert "failures" in data["router_report"]
+        assert "strict_failures" in data["router_report"]
 
     def test_dataset_contains_debt_query_regression_case(self, db_session) -> None:
         ensure_admin_user(db_session)
