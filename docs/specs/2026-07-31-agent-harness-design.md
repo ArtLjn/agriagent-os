@@ -430,6 +430,8 @@ Round N+1:  用户「确认」 / 「取消」 / 「改一下,改成 Y」
 | 3 | task_state_updater 靠启发式 | 多数 turn 落 `no_task_state_signal` 兜底 | Stage 5 升级 hybrid updater |
 | 4 | 没有显式 Planner 阶段 | trace 难读, 评测难做 | Stage 2 新增 |
 | 5 | SkillRouter 对 web_search 做规则特判,误杀 BM25+向量召回 | "今天苏州西瓜价格是" 调到 get_farm_status 答非所问 | 阶段 0 删 `_allow_model_choice_read_candidate` web_search 分支 |
+| 6 | `TaskStateSelector.task_state_should_inject` 是死开关 (永远 True),relevance 与 ContextBundle 注入脱钩 | 闲聊 "你好" 也强塞 active_task_state 进 bundle,LLM 困惑 | 阶段 1.5 修复闸门 |
+| 7 | task_state `missing_information` 永不更新,没有 turn 后 hook | LLM 一直看到"缺失面积",反复追问同样问题 | 阶段 1.5 加 entity extractor + upsert |
 
 ---
 
@@ -503,6 +505,55 @@ BM25+向量已经把 web_search 召回到候选里(Layer 1 工作正常),但 pol
 
 **回滚**：移除注入即可。
 
+### 阶段 1.5:TaskState 在 ContextBundle 的闸门与更新（修复缺陷 #6, #7）
+
+**问题定位**:基于 `backend/scripts/context_multiturn_spike.py` 实证 (2026-07-31,3 scenario):
+
+**缺陷 #6:relevance 与 TaskStateSelector 脱钩 (过度注入)**
+
+`app/context/selectors/task_state.py:18-28` 的 `task_state_should_inject` 是死开关 (永远 True,来自 `ContextBuildRequest` 默认值)。spike 实测 `task_state_db_injection` scenario:
+
+| turn | user_input | relevance | bundle 含 active_task_state? |
+|---|---|---|---|
+| 1 | 你好 | 0.10/do_not_inject | ✓ (不该有) |
+| 2 | 我想新建茬口 | 0.85/inject | ✓ |
+| 3 | 20 亩 | 0.85/inject | ✓ |
+| 4 | 就叫 3 号棚 | 0.85/inject | ✓ |
+
+selector 完全不消费 relevance 决策,闲聊时也强塞 task_state。
+
+**缺陷 #7:task_state missing_information 永不更新**
+
+spike 实测 turn 3 user 说 "20 亩"、turn 4 说 "就叫 3 号棚" 后,bundle 里 missing 仍是 `['面积', '种植单元名称']`,没有任何 turn 后 hook 把用户回答反映回 task_state。LLM 一直看到"缺失面积",会反复追问。
+
+**Layer 0 最小改动 (一周内)**:
+
+1. **修复 #6**:在 `app/context/builder.py:build_runtime_context_bundle` 入口先跑 `evaluate_task_state_relevance(user_input, active_task_dict)`,把 `should_inject` 真正传给 `ContextBuildRequest.task_state_should_inject`(覆盖默认 True)
+2. **修复 #7**:加 lightweight entity extractor(先规则复用 `task_state_relevance.py` 里的 `_AREA_RE/_UNIT_NAME_RE/_SEASON_RE`,后 LLM),在 turn 后调 `AgentTaskStateStore.upsert_active_task(missing_information=[剔除已补字段])`
+
+**Layer 1 工程加固 (一月内)**:
+
+3. 加 trace 告警:`relevance.should_inject=True` 但 bundle 缺 active_task_state (或反之) → warning,让脱钩可见
+4. summary 触发参数收窄:`session_summary_message_threshold` 12→8, `session_summary_debounce_minutes` 30→10 (实证依据见下)
+5. 把 `context_multiturn_spike.py` 接入 CI 作回归 probe
+
+**实证依据 (summary 触发参数收窄)**:
+
+`recent_messages_truncation` scenario (13 turns) 跑出:
+
+- turn 1 user 决定"西瓜 20 亩",turn 9 改"番茄 30 亩"
+- turn 11 summary 触发,内容:"用户计划种植作物及面积变更:初始决定:种植西瓜 20 亩。最新更正(第 9 轮):改种番茄 30 亩。"
+- turn 13 bundle token 从 204→104,cursor-based summary 完美救回 recent 截断的关键事实
+- 但 threshold=12 时,turn 9-10 之间存在"recent 已截断 + summary 未触发"的失忆窗口;threshold=8 可消除该窗口
+
+**验证**:
+
+- `task_state_db_injection` scenario: turn 1 "你好" 不应注入 task_state,turn 3 后 missing 应自动剔除 "面积"
+- `recent_messages_truncation` scenario: turn 9-10 之间问 "我之前决定种什么" 能从 summary 拉回
+- 4 个 turn 的 `block_previews` 在 trace 里可见关键事实更新
+
+**回滚**:恢复 `task_state_should_inject` 默认 True;移除 entity extractor。
+
 ### 阶段 2：把「假 Planning」显式化（修复缺陷 #4）
 
 **最小改动**：
@@ -546,14 +597,17 @@ BM25+向量已经把 web_search 召回到候选里(Layer 1 工作正常),但 pol
 
 1. 是否修复 SkillRouter 单工具关键词特判? → 推进阶段 0
 2. 是否让 task_state 在 r1 可见？ → 推进阶段 1
-3. 是否让 Planner 显式化？ → 推进阶段 2
-4. 是否解决 task_graph 接入决策？ → 推进阶段 3
-5. 是否在第六节"不做的事"清单里？ → 拒绝
-6. 是否引入新抽象层？ → 默认拒绝，需 PR 说明保留理由
+3. 是否修复 task_state 在 ContextBundle 的过度注入或永不更新？ → 推进阶段 1.5
+4. 是否让 Planner 显式化？ → 推进阶段 2
+5. 是否解决 task_graph 接入决策？ → 推进阶段 3
+6. 是否在第六节"不做的事"清单里？ → 拒绝
+7. 是否引入新抽象层？ → 默认拒绝，需 PR 说明保留理由
 
-只有 1-4 答 "是" 或 5-6 答 "否" 才进入实施。
+只有 1-5 答 "是" 或 6-7 答 "否" 才进入实施。
 
 **SkillRouter 改动额外检查**:任何在 router 加的关键词规则,必须问"这是 Layer 2 硬规则(风险/兜底/预算)还是 Layer 1 召回信号?"。如果是后者,应该写进 skill.md triggers 让 BM25+向量处理,而不是堆在 classifier_signals 里。
+
+**TaskState / ContextBundle 改动额外检查**:任何修改 `TaskStateSelector` 或 `task_state_should_inject` 的改动,必须问"这个开关是否真正消费了 `evaluate_task_state_relevance` 的决策?"。任何修改 task_state 写入路径的改动,必须问"用户回答后,missing_information 是否会被自动剔除?"。如果答"否",该改动会加剧缺陷 #6/#7,拒绝。
 
 ---
 
@@ -582,3 +636,4 @@ cd backend
 |---|---|
 | 2026-07-31 | 初版,基于 Planner Probe 实测结果 + 2026-07-30 收敛方案,合并现状与目标 |
 | 2026-07-31 | 加入 5.0 SkillRouter 分层治理架构原则 + 阶段 0 (删 web_search 特判),基于 router_c_spike.py 10 case 实证 |
+| 2026-07-31 | 加入阶段 1.5 (TaskState 闸门 + 更新 hook) + 缺陷 #6/#7,基于 context_multiturn_spike.py 3 scenario 实证 (task_state_db_injection / recent_messages_truncation / write_flow_with_task_state) |
