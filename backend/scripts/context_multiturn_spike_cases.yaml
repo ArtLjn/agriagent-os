@@ -1,0 +1,175 @@
+# Context 多轮对话 Spike 剧本
+#
+# 每个 scenario 跑一个独立的多轮对话，观察:
+#   - summary 触发时机 (threshold 覆盖默认 12)
+#   - ContextBundle 预算化 (block 选中/压缩/丢弃)
+#   - TaskState relevance 判定 (seed 后看承接命中)
+#   - LLM summary 增量更新质量
+#
+# 字段说明:
+#   name                    : scenario 唯一标识
+#   description             : 这个 scenario 想观察什么
+#   farm_id                 : 用哪个农场 (默认 2)
+#   summary_threshold       : 覆盖 settings.ai.session_summary_message_threshold
+#                             (设小一点便于在剧本里看到 summary 触发)
+#   token_budget            : ContextBuilder 的 max_tokens (设小便于看到压缩/丢弃)
+#   intent                  : query / write / greeting
+#   selected_tool_names     : 假装 router 选了这些工具
+#   context_dependencies    : 显式声明依赖 (来自 router registry)
+#   assistant_mode          : echo / llm_short / scripted
+#                             - echo      : 直接回 "(echo) ..."
+#                             - llm_short : 调 generation LLM 短回复 (max_tokens=120)
+#                             - scripted  : 用 turn.assistant_reply 字段
+#   seed_active_task        : 可选, 在 TaskState 表里种一条 active 任务态
+#                             (task_type / goal / entities / missing_information)
+#   turns                   : 一轮一项
+#                             - user_input            本轮用户输入
+#                             - assistant_reply       mode=scripted 时使用
+#                             - expect_summary_change 本轮预期是否触发 summary 更新
+#                             - note                  说明
+
+scenarios:
+  - name: long_query_summary_trigger
+    description: 7 轮纯查询对话, threshold=4, 观察 summary 在哪一轮真正落库
+    farm_id: 2
+    summary_threshold: 4
+    token_budget: 800
+    intent: query
+    selected_tool_names: [get_farm_status]
+    context_dependencies: [farm, crop_cycles, recent_operations]
+    assistant_mode: llm_short
+    turns:
+      - user_input: 我农场现在有哪些茬口
+        note: 第 1 轮, summary 还没触发
+      - user_input: 西瓜现在价格多少
+        note: 第 2 轮, 与农场内部数据无关
+      - user_input: 今年秋季适合种什么
+        note: 第 3 轮
+      - user_input: 番茄茬口什么时候收
+        note: 第 4 轮, 应该到 threshold (4 条 user msg)
+        expect_summary_change: true
+      - user_input: 明天苏州天气怎么样
+        note: 第 5 轮, 旁路 query
+      - user_input: 我农场工人今天做了什么
+        note: 第 6 轮
+      - user_input: 上个月成本汇总
+        note: 第 7 轮, 应再次触发 summary
+        expect_summary_change: true
+
+  - name: write_flow_with_task_state
+    description: 5 轮写操作流程, seed 一条 active task, 观察 task_state 承接判定
+    farm_id: 2
+    summary_threshold: 6
+    token_budget: 1000
+    intent: write
+    selected_tool_names: [manage_crop_cycle]
+    context_dependencies: [crop_templates, planting_units, crop_cycles]
+    assistant_mode: scripted
+    seed_active_task:
+      task_type: crop_cycle_setup
+      goal: 创建秋季草莓茬口
+      entities:
+        crop: 草莓
+        season: 秋季
+      missing_information:
+        - 面积
+        - 种植单元名称
+    turns:
+      - user_input: 你好
+        assistant_reply: 您好, 我是农场助手, 有什么可以帮您?
+        note: 闲聊, task_state relevance 应判低分 (bypass)
+      - user_input: 我想新建一个茬口
+        assistant_reply: 好的, 请问种什么作物?
+        note: 进入写操作语境
+      - user_input: 草莓
+        assistant_reply: 好的, 草莓. 请问种多少亩?
+        note: 命中 task_state 缺失信息 (面积还没补)
+      - user_input: 20 亩
+        assistant_reply: 收到, 20 亩. 用哪个种植单元?
+        note: _AREA_RE 命中, relevance 应高分
+      - user_input: 就叫 3 号棚吧
+        assistant_reply: 已为您记录, 确认创建吗?
+        note: _UNIT_NAME_RE 命中, relevance 应高分
+
+  - name: token_budget_compression
+    description: 3 轮高频信息密集对话, token_budget=300 极小, 观察压缩/丢弃
+    farm_id: 2
+    summary_threshold: 8
+    token_budget: 300
+    intent: query
+    selected_tool_names: [get_farm_status, get_cost_summary]
+    context_dependencies: [farm, crop_cycles, recent_operations, cost_summary, debt_summary]
+    assistant_mode: echo
+    turns:
+      - user_input: 帮我把农场现状 茬口 工人 账务 全部列出来
+        note: 故意要拿多块 context, 触发预算化
+      - user_input: 同时告诉我最近成本和欠款情况
+        note: 继续叠 dependencies
+      - user_input: 现在的茬口都需要做什么作业
+        note: 第 3 轮, 看压缩 block 是否还能撑住
+
+  - name: task_state_db_injection
+    description: seed active_task 到 agent_task_states 表, 验证 bundle 是否真注入 active_task_state block
+    farm_id: 2
+    summary_threshold: 8
+    token_budget: 1000
+    intent: write
+    selected_tool_names: [manage_crop_cycle]
+    context_dependencies: [crop_templates, planting_units, crop_cycles]
+    assistant_mode: echo
+    seed_active_task:
+      task_type: crop_cycle_setup
+      goal: 创建秋季草莓茬口
+      entities:
+        crop: 草莓
+        season: 秋季
+      missing_information:
+        - 面积
+        - 种植单元名称
+    turns:
+      - user_input: 你好
+        note: 闲聊, relevance 应判低分; task_state selector 即使有 seed 也不注入
+      - user_input: 我想新建茬口
+        note: 承接, relevance 高分; 验证 active_task_state block 是否进 bundle
+      - user_input: 20 亩
+        note: 命中 _AREA_RE; 验证 active_task_state block 是否仍在 bundle 里
+      - user_input: 就叫 3 号棚
+        note: 命中 _UNIT_NAME_RE; 验证 active_task_state block 是否仍在 bundle 里
+
+  - name: recent_messages_truncation
+    description: 15 轮长对话, threshold=20 (推迟 summary), 观察 recent_messages 截断失忆
+    farm_id: 2
+    summary_threshold: 20
+    token_budget: 1000
+    intent: query
+    selected_tool_names: [get_farm_status]
+    context_dependencies: [farm, crop_cycles]
+    assistant_mode: echo
+    turns:
+      - user_input: 第 1 轮 我决定种植西瓜 20 亩
+        note: 关键决策 1
+      - user_input: 第 2 轮 普通问题
+        note: filler
+      - user_input: 第 3 轮 普通问题
+        note: filler
+      - user_input: 第 4 轮 普通问题
+        note: filler
+      - user_input: 第 5 轮 普通问题
+        note: filler
+      - user_input: 第 6 轮 普通问题
+        note: filler
+      - user_input: 第 7 轮 普通问题
+        note: filler
+      - user_input: 第 8 轮 普通问题
+        note: filler
+      - user_input: 第 9 轮 我决定改种番茄 30 亩
+        note: 关键决策 2 (此时 recent_messages limit=8 应该还覆盖得到)
+      - user_input: 第 10 轮 普通问题
+        note: filler
+      - user_input: 第 11 轮 普通问题
+        note: filler
+      - user_input: 第 12 轮 普通问题
+        note: filler
+      - user_input: 第 13 轮 我之前决定种什么来着
+        note: 问关键决策 — 第 9 轮的"番茄 30 亩"应该还在 recent; 第 1 轮的"西瓜 20 亩"应该已被挤出
+
