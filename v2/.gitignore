@@ -17,6 +17,9 @@ business/data/*.json
 agent/data/memory.json
 agent/data/conversations/
 
+# Logs (runtime output, never commit)
+logs/
+
 # Env
 .env
 .env.local
