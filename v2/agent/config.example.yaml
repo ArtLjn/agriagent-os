@@ -1,0 +1,28 @@
+# Agent 服务配置模板（不含真实密钥）。
+# 复制为 config.yaml 后填入真实值。
+
+server:
+  host: "127.0.0.1"
+  port: 8000
+
+mongodb:
+  enabled: true
+  uri: "mongodb://USER:PASSWORD@HOST:27017/?authSource=admin"
+  database: "farm_manager"
+  tls: false
+  connect_timeout_ms: 2000
+  server_selection_timeout_ms: 2000
+  max_pool_size: 20
+  collections:
+    conversation_messages: "conversationMessages"
+    trace_records: "traceRecords"
+
+ai:
+  model: "qwen3.6-35b-a3b"
+  api_key: ""
+  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  enable_thinking: false
+  parallel_tool_calls: true
+
+business_mcp:
+  url: "http://127.0.0.1:9876/mcp"

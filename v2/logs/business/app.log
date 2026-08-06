@@ -1,0 +1,164 @@
+2026-08-06 11:01:10,892 │ - │ - │ - │ business.db │ INFO │ database connection ok: 192.168.1.14:3306/farm_manager?charset=utf8mb4
+2026-08-06 11:01:10,893 │ - │ - │ - │ __main__ │ INFO │ starting MCP server on http://127.0.0.1:9876/mcp
+2026-08-06 11:01:10,924 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ StreamableHTTP session manager started
+2026-08-06 11:01:19,640 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ Created new transport with session ID: 3941bc2ebcaf474d98ce3f5f72ea8574
+2026-08-06 11:01:20,760 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type CallToolRequest
+2026-08-06 11:01:21,328 │ - │ - │ - │ business.services.weather_service │ WARNING │ qweather fetch failed, fallback to open-meteo: Client error '404 ' for url 'https://p32k5pxvta.re.qweatherapi.com/v2/city/lookup?location=%E8%8B%8F%E5%B7%9E%E5%B8%82%E8%99%8E%E4%B8%98%E5%8C%BA&key=c8782081dd774607af74e2f8aeae6330'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+2026-08-06 11:01:21,343 │ - │ - │ - │ business.services.location_service │ INFO │ regions loaded: 3366 entries from regions.json
+2026-08-06 11:01:23,529 │ - │ - │ - │ business.services.weather_service │ WARNING │ qweather fetch failed, fallback to open-meteo: Client error '404 ' for url 'https://p32k5pxvta.re.qweatherapi.com/v2/city/lookup?location=%E8%8B%8F%E5%B7%9E%E5%B8%82%E8%99%8E%E4%B8%98%E5%8C%BA&key=c8782081dd774607af74e2f8aeae6330'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+2026-08-06 11:01:24,856 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type ListToolsRequest
+2026-08-06 11:01:27,641 │ - │ - │ - │ mcp.server.streamable_http │ INFO │ Terminating session: 3941bc2ebcaf474d98ce3f5f72ea8574
+2026-08-06 11:01:34,793 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ Created new transport with session ID: 278ea14cf32f4cad80d8ebadb617388c
+2026-08-06 11:01:36,082 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type CallToolRequest
+2026-08-06 11:01:37,114 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type CallToolRequest
+2026-08-06 11:01:42,794 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type CallToolRequest
+2026-08-06 11:01:45,908 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type CallToolRequest
+2026-08-06 11:01:47,070 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type CallToolRequest
+2026-08-06 11:01:47,076 │ - │ - │ - │ mcp.server.streamable_http │ INFO │ Terminating session: 278ea14cf32f4cad80d8ebadb617388c
+2026-08-06 11:02:39,254 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ StreamableHTTP session manager shutting down
+2026-08-06 11:02:53,123 │ - │ - │ - │ business.db │ INFO │ database connection ok: 192.168.1.14:3306/farm_manager?charset=utf8mb4
+2026-08-06 11:02:53,123 │ - │ - │ - │ __main__ │ INFO │ starting MCP server on http://127.0.0.1:9876/mcp
+2026-08-06 11:02:53,159 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ StreamableHTTP session manager started
+2026-08-06 11:03:02,750 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ Created new transport with session ID: ec5a1700e359488ebaf0698005917cbe
+2026-08-06 11:03:03,941 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type CallToolRequest
+2026-08-06 11:03:03,953 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type ListToolsRequest
+2026-08-06 11:03:04,894 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type CallToolRequest
+2026-08-06 11:03:07,564 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type CallToolRequest
+2026-08-06 11:03:10,013 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type CallToolRequest
+2026-08-06 11:03:11,270 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type CallToolRequest
+2026-08-06 11:03:11,277 │ - │ - │ - │ mcp.server.streamable_http │ INFO │ Terminating session: ec5a1700e359488ebaf0698005917cbe
+2026-08-06 11:07:16,773 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ StreamableHTTP session manager shutting down
+2026-08-06 11:08:28,598 │ - │ - │ - │ business.db │ INFO │ database connection ok: 192.168.1.14:3306/farm_manager?charset=utf8mb4
+2026-08-06 11:08:28,598 │ - │ - │ - │ __main__ │ INFO │ starting MCP server on http://127.0.0.1:9876/mcp
+2026-08-06 11:08:28,629 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ StreamableHTTP session manager started
+2026-08-06 11:10:13,068 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ Created new transport with session ID: 14251d8023234c22b89aeb06433d17bb
+2026-08-06 11:10:14,303 │ - │ - │ - │ mcp.server.streamable_http │ INFO │ Terminating session: 14251d8023234c22b89aeb06433d17bb
+2026-08-06 11:10:27,213 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ Created new transport with session ID: 040373f1d61b4f9a89c2287874167c14
+2026-08-06 11:10:28,208 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type CallToolRequest
+2026-08-06 11:10:28,232 │ - │ - │ - │ business.services.location_service │ INFO │ regions loaded: 3366 entries from regions.json
+2026-08-06 11:10:28,249 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type ListToolsRequest
+2026-08-06 11:10:29,408 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type CallToolRequest
+2026-08-06 11:10:29,864 │ - │ - │ - │ business.services.weather_service │ WARNING │ qweather fetch failed, fallback to open-meteo: Client error '404 ' for url 'https://p32k5pxvta.re.qweatherapi.com/v2/city/lookup?location=%E8%8B%8F%E5%B7%9E%E5%B8%82%E8%99%8E%E4%B8%98%E5%8C%BA&key=c8782081dd774607af74e2f8aeae6330'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+2026-08-06 11:10:31,308 │ - │ - │ - │ business.services.weather_service │ WARNING │ qweather fetch failed, fallback to open-meteo: Client error '404 ' for url 'https://p32k5pxvta.re.qweatherapi.com/v2/city/lookup?location=%E8%8B%8F%E5%B7%9E%E5%B8%82%E8%99%8E%E4%B8%98%E5%8C%BA&key=c8782081dd774607af74e2f8aeae6330'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+2026-08-06 11:10:34,100 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type CallToolRequest
+2026-08-06 11:10:34,862 │ - │ - │ - │ business.services.weather_service │ WARNING │ qweather fetch failed, fallback to open-meteo: Client error '404 ' for url 'https://p32k5pxvta.re.qweatherapi.com/v2/city/lookup?location=%E8%8B%8F%E5%B7%9E%E5%B8%82%E8%99%8E%E4%B8%98%E5%8C%BA&key=c8782081dd774607af74e2f8aeae6330'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+2026-08-06 11:10:36,384 │ - │ - │ - │ business.services.weather_service │ WARNING │ qweather fetch failed, fallback to open-meteo: Client error '404 ' for url 'https://p32k5pxvta.re.qweatherapi.com/v2/city/lookup?location=%E8%8B%8F%E5%B7%9E%E5%B8%82%E8%99%8E%E4%B8%98%E5%8C%BA&key=c8782081dd774607af74e2f8aeae6330'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+2026-08-06 11:10:39,250 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type CallToolRequest
+2026-08-06 11:10:39,785 │ - │ - │ - │ business.services.weather_service │ WARNING │ qweather fetch failed, fallback to open-meteo: Client error '404 ' for url 'https://p32k5pxvta.re.qweatherapi.com/v2/city/lookup?location=%E8%8B%8F%E5%B7%9E%E5%B8%82%E8%99%8E%E4%B8%98%E5%8C%BA&key=c8782081dd774607af74e2f8aeae6330'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+2026-08-06 11:10:41,364 │ - │ - │ - │ business.services.weather_service │ WARNING │ qweather fetch failed, fallback to open-meteo: Client error '404 ' for url 'https://p32k5pxvta.re.qweatherapi.com/v2/city/lookup?location=%E8%8B%8F%E5%B7%9E%E5%B8%82%E8%99%8E%E4%B8%98%E5%8C%BA&key=c8782081dd774607af74e2f8aeae6330'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+2026-08-06 11:10:45,057 │ - │ - │ - │ mcp.server.streamable_http │ INFO │ Terminating session: 040373f1d61b4f9a89c2287874167c14
+2026-08-06 11:14:44,854 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ Created new transport with session ID: dd7942639f5240bf85ad89dc97065267
+2026-08-06 11:14:46,145 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type CallToolRequest
+2026-08-06 11:14:46,167 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type ListToolsRequest
+2026-08-06 11:14:47,927 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type CallToolRequest
+2026-08-06 11:14:48,107 │ - │ - │ - │ business.services.weather_service │ WARNING │ qweather fetch failed, fallback to open-meteo: Client error '404 ' for url 'https://p32k5pxvta.re.qweatherapi.com/v2/city/lookup?location=%E6%B5%99%E6%B1%9F%E7%9C%81%E6%9D%AD%E5%B7%9E%E5%B8%82%E4%BD%99%E6%9D%AD%E5%8C%BA&key=c8782081dd774607af74e2f8aeae6330'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+2026-08-06 11:14:51,064 │ - │ - │ - │ mcp.server.streamable_http │ INFO │ Terminating session: dd7942639f5240bf85ad89dc97065267
+2026-08-06 11:14:59,681 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ Created new transport with session ID: 26e893aed97b4c7fbdb2857b3df677d4
+2026-08-06 11:15:01,156 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type CallToolRequest
+2026-08-06 11:15:01,925 │ - │ - │ - │ business.services.weather_service │ WARNING │ qweather fetch failed, fallback to open-meteo: Client error '404 ' for url 'https://p32k5pxvta.re.qweatherapi.com/v2/city/lookup?location=%E8%8B%8F%E5%B7%9E%E5%B8%82%E8%99%8E%E4%B8%98%E5%8C%BA&key=c8782081dd774607af74e2f8aeae6330'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+2026-08-06 11:15:03,522 │ - │ - │ - │ business.services.weather_service │ WARNING │ qweather fetch failed, fallback to open-meteo: Client error '404 ' for url 'https://p32k5pxvta.re.qweatherapi.com/v2/city/lookup?location=%E8%8B%8F%E5%B7%9E%E5%B8%82%E8%99%8E%E4%B8%98%E5%8C%BA&key=c8782081dd774607af74e2f8aeae6330'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+2026-08-06 11:15:05,627 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type ListToolsRequest
+2026-08-06 11:15:07,345 │ - │ - │ - │ mcp.server.streamable_http │ INFO │ Terminating session: 26e893aed97b4c7fbdb2857b3df677d4
+2026-08-06 11:17:10,076 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ Created new transport with session ID: 4370aae8ea3b4482a92b2d8ed37f2e7d
+2026-08-06 11:17:11,630 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type CallToolRequest
+2026-08-06 11:17:11,829 │ - │ - │ - │ business.services.weather_service │ WARNING │ qweather fetch failed, fallback to open-meteo: Client error '404 ' for url 'https://p32k5pxvta.re.qweatherapi.com/v2/city/lookup?location=%E6%98%8E%E5%A4%A9%E8%8B%8F%E5%B7%9E%E5%A4%A9%E6%B0%94&key=c8782081dd774607af74e2f8aeae6330'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+2026-08-06 11:17:13,092 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type ListToolsRequest
+2026-08-06 11:17:14,265 │ - │ - │ - │ mcp.server.streamable_http │ INFO │ Terminating session: 4370aae8ea3b4482a92b2d8ed37f2e7d
+2026-08-06 11:17:45,258 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ StreamableHTTP session manager shutting down
+2026-08-06 11:17:58,192 │ - │ - │ - │ business.db │ INFO │ database connection ok: 192.168.1.14:3306/farm_manager?charset=utf8mb4
+2026-08-06 11:17:58,193 │ - │ - │ - │ __main__ │ INFO │ starting MCP server on http://127.0.0.1:9876/mcp
+2026-08-06 11:17:58,228 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ StreamableHTTP session manager started
+2026-08-06 11:18:06,073 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ Created new transport with session ID: e90049d28b4f4d4c8d02a2408c6dce92
+2026-08-06 11:18:07,478 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type CallToolRequest
+2026-08-06 11:18:07,674 │ - │ - │ - │ business.services.weather_service │ WARNING │ qweather fetch failed, fallback to open-meteo: Client error '404 ' for url 'https://p32k5pxvta.re.qweatherapi.com/v2/city/lookup?location=%E6%98%8E%E5%A4%A9%E8%8B%8F%E5%B7%9E%E5%A4%A9%E6%B0%94&key=c8782081dd774607af74e2f8aeae6330'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+2026-08-06 11:18:07,691 │ - │ - │ - │ business.services.location_service │ INFO │ regions loaded: 3366 entries from regions.json
+2026-08-06 11:18:08,940 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type ListToolsRequest
+2026-08-06 11:18:10,416 │ - │ - │ - │ mcp.server.streamable_http │ INFO │ Terminating session: e90049d28b4f4d4c8d02a2408c6dce92
+2026-08-06 11:18:15,916 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ Created new transport with session ID: dbd6efee602841e28e86611d8c998b63
+2026-08-06 11:18:17,355 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type CallToolRequest
+2026-08-06 11:18:17,367 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type ListToolsRequest
+2026-08-06 11:18:19,164 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type CallToolRequest
+2026-08-06 11:18:19,357 │ - │ - │ - │ business.services.weather_service │ WARNING │ qweather fetch failed, fallback to open-meteo: Client error '404 ' for url 'https://p32k5pxvta.re.qweatherapi.com/v2/city/lookup?location=%E6%B5%99%E6%B1%9F%E7%9C%81%E6%9D%AD%E5%B7%9E%E5%B8%82%E4%BD%99%E6%9D%AD%E5%8C%BA&key=c8782081dd774607af74e2f8aeae6330'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+2026-08-06 11:18:22,368 │ - │ - │ - │ mcp.server.streamable_http │ INFO │ Terminating session: dbd6efee602841e28e86611d8c998b63
+2026-08-06 11:18:47,125 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ StreamableHTTP session manager shutting down
+2026-08-06 11:20:37,794 │ - │ - │ - │ business.db │ INFO │ database connection ok: 192.168.1.14:3306/farm_manager?charset=utf8mb4
+2026-08-06 11:20:37,794 │ - │ - │ - │ business.server │ INFO │ starting MCP server on http://127.0.0.1:9876/mcp
+2026-08-06 11:20:37,817 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ StreamableHTTP session manager started
+2026-08-06 11:20:49,217 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ Created new transport with session ID: 119867d52e7c47f8a506b646f75bae03
+2026-08-06 11:20:50,610 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type CallToolRequest
+2026-08-06 11:20:50,634 │ - │ - │ - │ business.services.location_service │ INFO │ regions loaded: 3366 entries from regions.json
+2026-08-06 11:20:50,648 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type ListToolsRequest
+2026-08-06 11:20:52,157 │ - │ - │ - │ mcp.server.streamable_http │ INFO │ Terminating session: 119867d52e7c47f8a506b646f75bae03
+2026-08-06 11:20:56,175 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ Created new transport with session ID: 19e31fdd7f774a55bb0870aa58a0f35b
+2026-08-06 11:20:57,597 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type CallToolRequest
+2026-08-06 11:20:57,847 │ - │ - │ - │ business.services.weather_service │ WARNING │ qweather fetch failed, fallback to open-meteo: Client error '404 ' for url 'https://p32k5pxvta.re.qweatherapi.com/v2/city/lookup?location=%E7%9D%A2%E5%AE%81%E5%A4%A9%E6%B0%94%E6%80%8E%E4%B9%88%E6%A0%B7&key=c8782081dd774607af74e2f8aeae6330'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+2026-08-06 11:20:59,659 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type ListToolsRequest
+2026-08-06 11:21:01,779 │ - │ - │ - │ mcp.server.streamable_http │ INFO │ Terminating session: 19e31fdd7f774a55bb0870aa58a0f35b
+2026-08-06 11:22:32,229 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ Created new transport with session ID: 8506ce0abecc4ec3b2bc0a6cda154461
+2026-08-06 11:22:33,214 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type CallToolRequest
+2026-08-06 11:22:33,394 │ - │ - │ - │ business.services.weather_service │ WARNING │ qweather fetch failed, fallback to open-meteo: Client error '404 ' for url 'https://p32k5pxvta.re.qweatherapi.com/v2/city/lookup?location=%E8%8B%8F%E5%B7%9E%E5%A4%A9%E6%B0%94%E5%A6%82%E4%BD%95&key=c8782081dd774607af74e2f8aeae6330'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+2026-08-06 11:22:34,906 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type ListToolsRequest
+2026-08-06 11:22:36,714 │ - │ - │ - │ mcp.server.streamable_http │ INFO │ Terminating session: 8506ce0abecc4ec3b2bc0a6cda154461
+2026-08-06 11:33:42,069 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ Created new transport with session ID: 775d07b6cf4040d8a7bc7edeb9afc6d9
+2026-08-06 11:33:44,596 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type CallToolRequest
+2026-08-06 11:33:44,617 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type ListToolsRequest
+2026-08-06 11:33:46,073 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type CallToolRequest
+2026-08-06 11:33:46,299 │ - │ - │ - │ business.services.weather_service │ WARNING │ qweather fetch failed, fallback to open-meteo: Client error '404 ' for url 'https://p32k5pxvta.re.qweatherapi.com/v2/city/lookup?location=%E6%B1%9F%E8%8B%8F%E7%9C%81%E5%BE%90%E5%B7%9E%E5%B8%82%E7%9D%A2%E5%AE%81%E5%8E%BF&key=c8782081dd774607af74e2f8aeae6330'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+2026-08-06 11:33:49,496 │ - │ - │ - │ mcp.server.streamable_http │ INFO │ Terminating session: 775d07b6cf4040d8a7bc7edeb9afc6d9
+2026-08-06 11:34:00,088 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ Created new transport with session ID: 1b5ad87f1dcd4d29a0995b713b45b791
+2026-08-06 11:34:01,339 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type CallToolRequest
+2026-08-06 11:34:01,358 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type ListToolsRequest
+2026-08-06 11:34:02,723 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type CallToolRequest
+2026-08-06 11:34:02,920 │ - │ - │ - │ business.services.weather_service │ WARNING │ qweather fetch failed, fallback to open-meteo: Client error '404 ' for url 'https://p32k5pxvta.re.qweatherapi.com/v2/city/lookup?location=%E6%B5%99%E6%B1%9F%E7%9C%81%E6%9D%AD%E5%B7%9E%E5%B8%82%E4%BD%99%E6%9D%AD%E5%8C%BA&key=c8782081dd774607af74e2f8aeae6330'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+2026-08-06 11:34:06,542 │ - │ - │ - │ mcp.server.streamable_http │ INFO │ Terminating session: 1b5ad87f1dcd4d29a0995b713b45b791
+2026-08-06 11:34:27,221 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ Created new transport with session ID: 7f2c64605e2f45cab0f4b66519571a2a
+2026-08-06 11:34:28,759 │ - │ - │ - │ mcp.server.streamable_http │ INFO │ Terminating session: 7f2c64605e2f45cab0f4b66519571a2a
+2026-08-06 11:34:41,758 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ Created new transport with session ID: da05388814814fee81d44ad71db3f046
+2026-08-06 11:34:43,246 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type CallToolRequest
+2026-08-06 11:34:43,471 │ - │ - │ - │ business.services.weather_service │ WARNING │ qweather fetch failed, fallback to open-meteo: Client error '404 ' for url 'https://p32k5pxvta.re.qweatherapi.com/v2/city/lookup?location=%E7%9D%A2%E5%AE%81%E5%A4%A9%E6%B0%94%E5%A6%82%E6%81%B6%E5%8C%96&key=c8782081dd774607af74e2f8aeae6330'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+2026-08-06 11:34:44,978 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type ListToolsRequest
+2026-08-06 11:34:46,921 │ - │ - │ - │ mcp.server.streamable_http │ INFO │ Terminating session: da05388814814fee81d44ad71db3f046
+2026-08-06 14:07:52,944 │ - │ - │ - │ business.db │ INFO │ database connection ok: 192.168.1.14:3306/farm_manager?charset=utf8mb4
+2026-08-06 14:07:52,945 │ - │ - │ - │ __main__ │ INFO │ starting MCP server on http://127.0.0.1:9876/mcp
+2026-08-06 14:07:52,991 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ StreamableHTTP session manager started
+2026-08-06 14:07:52,992 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ StreamableHTTP session manager shutting down
+2026-08-06 14:08:15,443 │ - │ - │ - │ business.db │ INFO │ database connection ok: 192.168.1.14:3306/farm_manager?charset=utf8mb4
+2026-08-06 14:08:15,444 │ - │ - │ - │ __main__ │ INFO │ starting MCP server on http://127.0.0.1:9876/mcp
+2026-08-06 14:08:15,469 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ StreamableHTTP session manager started
+2026-08-06 14:08:46,069 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ Created new transport with session ID: 34b39af9c95a438492069d6f3262e18c
+2026-08-06 14:08:48,289 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type CallToolRequest
+2026-08-06 14:08:48,312 │ - │ - │ - │ business.services.location_service │ INFO │ regions loaded: 3366 entries from regions.json
+2026-08-06 14:08:48,598 │ - │ - │ - │ mcp.server.lowlevel.server │ INFO │ Processing request of type ListToolsRequest
+2026-08-06 14:08:50,681 │ - │ - │ - │ mcp.server.streamable_http │ INFO │ Terminating session: 34b39af9c95a438492069d6f3262e18c
+2026-08-06 14:09:25,808 │ - │ - │ - │ business.db │ INFO │ database connection ok: 192.168.1.14:3306/farm_manager?charset=utf8mb4
+2026-08-06 14:09:25,808 │ - │ - │ - │ business.server │ INFO │ starting MCP server on http://127.0.0.1:9876/mcp
+2026-08-06 14:09:25,863 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ StreamableHTTP session manager started
+2026-08-06 14:09:25,863 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ StreamableHTTP session manager shutting down
+2026-08-06 14:09:37,625 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ Created new transport with session ID: 1e03753c7e2a4c1e90faea354499ef29
+2026-08-06 14:09:40,066 │ - │ - │ - │ mcp.server.streamable_http │ INFO │ Terminating session: 1e03753c7e2a4c1e90faea354499ef29
+2026-08-06 14:10:33,994 │ - │ - │ - │ business.db │ INFO │ database connection ok: 192.168.1.14:3306/farm_manager?charset=utf8mb4
+2026-08-06 14:10:33,994 │ - │ - │ - │ business.server │ INFO │ starting MCP server on http://127.0.0.1:9876/mcp
+2026-08-06 14:10:34,021 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ StreamableHTTP session manager started
+2026-08-06 14:10:40,908 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ Created new transport with session ID: abdb0a3d76a94981affefd3a4c1ba235
+2026-08-06 14:10:42,845 │ - │ - │ - │ mcp.server.streamable_http │ INFO │ Terminating session: abdb0a3d76a94981affefd3a4c1ba235
+2026-08-06 14:10:52,572 │ - │ - │ - │ mcp.server.streamable_http_manager │ INFO │ Created new transport with session ID: 535f774cf96346a0a1bee33cefa4bbf8
+2026-08-06 14:10:56,104 │ - │ - │ - │ mcp.server.streamable_http │ INFO │ Terminating session: 535f774cf96346a0a1bee33cefa4bbf8

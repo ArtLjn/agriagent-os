@@ -1,0 +1,12 @@
+[project]
+name = "farm-manager-v2"
+version = "0.1.0"
+description = "farm-manager v2: business + agent split via MCP"
+requires-python = ">=3.11"
+
+[tool.uv.workspace]
+members = ["business", "agent"]
+
+# 子项目各自有独立 pyproject.toml，共享此 workspace 依赖解析。
+# 装依赖：在 v2/ 下 `uv sync` 会装齐所有子项目。
+# 单独跑：`uv run --package farm-manager-business python -m business.server`

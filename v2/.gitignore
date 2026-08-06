@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+
+# Runtime data
+business/data/*.json
+!business/data/seed.json
+agent/data/memory.json
+agent/data/conversations/
+
+# Env
+.env
+.env.local
+
+# 配置（含真实密钥，不入库；各自项目独立的 config.yaml）
+config.yaml
+business/config.yaml
+agent/config.yaml
+
+# OS
+.DS_Store

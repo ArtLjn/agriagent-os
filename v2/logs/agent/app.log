@@ -1,0 +1,657 @@
+2026-08-06 10:45:14,140 │ - │ - │ - │ agent.infra.chat_store │ INFO │ mongodb connection ok: 192.168.1.14:27017/farm_manager?authSource=admin collection=conversationMessages existing_messages=10
+2026-08-06 10:45:14,146 │ - │ - │ - │ agent.infra.trace.collector │ INFO │ trace system started (batch=20, interval=5s)
+2026-08-06 10:45:30,612 │ b14bf18e │ test-log2 │ 8184380c1c06 │ agent.skills.loader │ INFO │ loaded skill: manage_farm_logs (mcp, read)
+2026-08-06 10:45:30,613 │ b14bf18e │ test-log2 │ 8184380c1c06 │ agent.skills.loader │ INFO │ loaded skill: get_farm_status (mcp, read)
+2026-08-06 10:45:30,614 │ b14bf18e │ test-log2 │ 8184380c1c06 │ agent.skills.loader │ INFO │ loaded skill: web_search (local, read)
+2026-08-06 10:45:30,614 │ b14bf18e │ test-log2 │ 8184380c1c06 │ agent.skills.loader │ INFO │ loaded skill: calculate_arithmetic (local, read)
+2026-08-06 10:45:30,615 │ b14bf18e │ test-log2 │ 8184380c1c06 │ agent.skills.loader │ INFO │ loaded skill: get_weather (mcp, read)
+2026-08-06 10:45:30,615 │ b14bf18e │ test-log2 │ 8184380c1c06 │ agent.core.react │ INFO │ loaded 5 skills: ['manage_farm_logs(mcp,read)', 'get_farm_status(mcp,read)', 'web_search(local,read)', 'calculate_arithmetic(local,read)', 'get_weather(mcp,read)']
+2026-08-06 10:45:30,615 │ b14bf18e │ test-log2 │ 8184380c1c06 │ agent.prompts │ INFO │ prompt loaded: system (401 chars)
+2026-08-06 10:45:30,615 │ b14bf18e │ test-log2 │ 8184380c1c06 │ agent.infra.mcp_client │ INFO │ connecting to business MCP server: http://127.0.0.1:9876/mcp
+2026-08-06 10:45:30,724 │ b14bf18e │ test-log2 │ 8184380c1c06 │ mcp.client.streamable_http │ INFO │ Received session ID: 7908ea3efc2b4d8392aff48028139f7c
+2026-08-06 10:45:30,724 │ b14bf18e │ test-log2 │ 8184380c1c06 │ mcp.client.streamable_http │ INFO │ Negotiated protocol version: 2025-11-25
+2026-08-06 10:45:30,726 │ b14bf18e │ test-log2 │ 8184380c1c06 │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=2 tools=5
+2026-08-06 10:45:32,262 │ b14bf18e │ test-log2 │ 8184380c1c06 │ mcp.client.streamable_http │ INFO │ GET stream disconnected, reconnecting in 1000ms...
+2026-08-06 10:45:59,238 │ - │ - │ - │ agent.infra.trace.collector │ INFO │ trace system stopped, remaining data flushed
+2026-08-06 10:46:00,556 │ - │ - │ - │ agent.infra.chat_store │ INFO │ mongodb connection ok: 192.168.1.14:27017/farm_manager?authSource=admin collection=conversationMessages existing_messages=12
+2026-08-06 10:46:00,563 │ - │ - │ - │ agent.infra.trace.collector │ INFO │ trace system started (batch=20, interval=5s)
+2026-08-06 10:46:07,734 │ - │ - │ - │ agent.infra.trace.collector │ INFO │ trace system stopped, remaining data flushed
+2026-08-06 10:46:08,827 │ - │ - │ - │ agent.infra.chat_store │ INFO │ mongodb connection ok: 192.168.1.14:27017/farm_manager?authSource=admin collection=conversationMessages existing_messages=12
+2026-08-06 10:46:08,832 │ - │ - │ - │ agent.infra.trace.collector │ INFO │ trace system started (batch=20, interval=5s)
+2026-08-06 10:46:34,935 │ 0e44dc8f │ test-logevent │ a0c761e9aeea │ agent.skills.loader │ INFO │ loaded skill: manage_farm_logs (mcp, read)
+2026-08-06 10:46:34,936 │ 0e44dc8f │ test-logevent │ a0c761e9aeea │ agent.skills.loader │ INFO │ loaded skill: get_farm_status (mcp, read)
+2026-08-06 10:46:34,937 │ 0e44dc8f │ test-logevent │ a0c761e9aeea │ agent.skills.loader │ INFO │ loaded skill: web_search (local, read)
+2026-08-06 10:46:34,937 │ 0e44dc8f │ test-logevent │ a0c761e9aeea │ agent.skills.loader │ INFO │ loaded skill: calculate_arithmetic (local, read)
+2026-08-06 10:46:34,938 │ 0e44dc8f │ test-logevent │ a0c761e9aeea │ agent.skills.loader │ INFO │ loaded skill: get_weather (mcp, read)
+2026-08-06 10:46:34,938 │ 0e44dc8f │ test-logevent │ a0c761e9aeea │ agent.core.react │ INFO │ loaded 5 skills: ['manage_farm_logs(mcp,read)', 'get_farm_status(mcp,read)', 'web_search(local,read)', 'calculate_arithmetic(local,read)', 'get_weather(mcp,read)']
+2026-08-06 10:46:34,938 │ 0e44dc8f │ test-logevent │ a0c761e9aeea │ agent.prompts │ INFO │ prompt loaded: system (401 chars)
+2026-08-06 10:46:34,938 │ 0e44dc8f │ test-logevent │ a0c761e9aeea │ agent.infra.mcp_client │ INFO │ connecting to business MCP server: http://127.0.0.1:9876/mcp
+2026-08-06 10:46:35,054 │ 0e44dc8f │ test-logevent │ a0c761e9aeea │ mcp.client.streamable_http │ INFO │ Received session ID: c3ddf239666b425e99b4d55b3b40bf98
+2026-08-06 10:46:35,054 │ 0e44dc8f │ test-logevent │ a0c761e9aeea │ mcp.client.streamable_http │ INFO │ Negotiated protocol version: 2025-11-25
+2026-08-06 10:46:35,054 │ 0e44dc8f │ test-logevent │ a0c761e9aeea │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=2 tools=5
+2026-08-06 10:46:36,603 │ 0e44dc8f │ test-logevent │ a0c761e9aeea │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1548 model=qwen3.6-flash tool_calls=0
+2026-08-06 10:46:36,612 │ 0e44dc8f │ test-logevent │ a0c761e9aeea │ mcp.client.streamable_http │ INFO │ GET stream disconnected, reconnecting in 1000ms...
+2026-08-06 10:47:15,033 │ - │ - │ - │ agent.infra.trace.collector │ INFO │ trace system stopped, remaining data flushed
+2026-08-06 10:47:16,220 │ - │ - │ - │ agent.infra.chat_store │ INFO │ mongodb connection ok: 192.168.1.14:27017/farm_manager?authSource=admin collection=conversationMessages existing_messages=14
+2026-08-06 10:47:16,227 │ - │ - │ - │ agent.infra.trace.collector │ INFO │ trace system started (batch=20, interval=5s)
+2026-08-06 10:47:21,884 │ - │ - │ - │ agent.infra.trace.collector │ INFO │ trace system stopped, remaining data flushed
+2026-08-06 10:47:22,863 │ - │ - │ - │ agent.infra.chat_store │ INFO │ mongodb connection ok: 192.168.1.14:27017/farm_manager?authSource=admin collection=conversationMessages existing_messages=14
+2026-08-06 10:47:22,868 │ - │ - │ - │ agent.infra.trace.collector │ INFO │ trace system started (batch=20, interval=5s)
+2026-08-06 10:47:40,338 │ - │ - │ - │ agent.infra.trace.collector │ INFO │ trace system stopped, remaining data flushed
+2026-08-06 10:47:41,406 │ - │ - │ - │ agent.infra.chat_store │ INFO │ mongodb connection ok: 192.168.1.14:27017/farm_manager?authSource=admin collection=conversationMessages existing_messages=14
+2026-08-06 10:47:41,412 │ - │ - │ - │ agent.infra.trace.collector │ INFO │ trace system started (batch=20, interval=5s)
+2026-08-06 10:57:12,560 │ - │ - │ - │ agent.infra.chat_store │ INFO │ mongodb connection ok: 192.168.1.14:27017/farm_manager?authSource=admin collection=conversationMessages existing_messages=14
+2026-08-06 10:57:12,566 │ - │ - │ - │ agent.infra.trace.collector │ INFO │ trace system started (batch=20, interval=5s)
+2026-08-06 10:58:35,274 │ 17e1943b │ test-search-cities │ 6f04f5ed077d │ agent.skills.loader │ INFO │ loaded skill: search_cities (mcp, read)
+2026-08-06 10:58:35,275 │ 17e1943b │ test-search-cities │ 6f04f5ed077d │ agent.skills.loader │ INFO │ loaded skill: manage_farm_logs (mcp, read)
+2026-08-06 10:58:35,276 │ 17e1943b │ test-search-cities │ 6f04f5ed077d │ agent.skills.loader │ INFO │ loaded skill: get_farm_status (mcp, read)
+2026-08-06 10:58:35,277 │ 17e1943b │ test-search-cities │ 6f04f5ed077d │ agent.skills.loader │ INFO │ loaded skill: web_search (local, read)
+2026-08-06 10:58:35,277 │ 17e1943b │ test-search-cities │ 6f04f5ed077d │ agent.skills.loader │ INFO │ loaded skill: calculate_arithmetic (local, read)
+2026-08-06 10:58:35,279 │ 17e1943b │ test-search-cities │ 6f04f5ed077d │ agent.skills.loader │ INFO │ loaded skill: get_weather (mcp, read)
+2026-08-06 10:58:35,279 │ 17e1943b │ test-search-cities │ 6f04f5ed077d │ agent.core.react │ INFO │ loaded 6 skills: ['search_cities(mcp,read)', 'manage_farm_logs(mcp,read)', 'get_farm_status(mcp,read)', 'web_search(local,read)', 'calculate_arithmetic(local,read)', 'get_weather(mcp,read)']
+2026-08-06 10:58:35,279 │ 17e1943b │ test-search-cities │ 6f04f5ed077d │ agent.prompts │ INFO │ prompt loaded: system (401 chars)
+2026-08-06 10:58:35,279 │ 17e1943b │ test-search-cities │ 6f04f5ed077d │ agent.infra.mcp_client │ INFO │ connecting to business MCP server: http://127.0.0.1:9876/mcp
+2026-08-06 10:58:38,414 │ 17e1943b │ test-search-cities │ 6f04f5ed077d │ agent.core.react │ ERROR │ run_turn pipeline crashed
+Traceback (most recent call last):
+  File "/Users/ljn/Documents/demo/explore/v2/agent/core/react.py", line 77, in run_turn
+    async with BusinessClient() as business:
+  File "/Users/ljn/Documents/demo/explore/v2/agent/infra/mcp_client.py", line 45, in __aenter__
+    await self._client.__aenter__()
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/fastmcp/client/client.py", line 535, in __aenter__
+    return await self._connect()
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/fastmcp/client/client.py", line 621, in _connect
+    raise exception
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/fastmcp/client/client.py", line 702, in _session_runner
+    await stack.enter_async_context(self._context_manager())
+  File "/Users/ljn/.pyenv/versions/3.11.5/lib/python3.11/contextlib.py", line 638, in enter_async_context
+    result = await _enter(cm)
+             ^^^^^^^^^^^^^^^^
+  File "/Users/ljn/.pyenv/versions/3.11.5/lib/python3.11/contextlib.py", line 204, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/fastmcp/client/client.py", line 468, in _context_manager
+    with catch(get_catch_handlers()):
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/exceptiongroup/_catch.py", line 39, in __exit__
+    raise unhandled from exc.__cause__
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/exceptiongroup/_catch.py", line 65, in handle_exception
+    result = handler(matched)
+             ^^^^^^^^^^^^^^^^
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/fastmcp/utilities/exceptions.py", line 29, in _exception_handler
+    raise leaf
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/anyio/_core/_tasks.py", line 275, in _run_coro
+    retval = await self._coro
+             ^^^^^^^^^^^^^^^^
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/mcp/client/streamable_http.py", line 565, in handle_request_async
+    await self._handle_post_request(ctx)
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/mcp/client/streamable_http.py", line 358, in _handle_post_request
+    response.raise_for_status()
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/httpx/_models.py", line 829, in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+httpx.HTTPStatusError: Server error '502 Bad Gateway' for url 'http://127.0.0.1:9876/mcp'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/502
+2026-08-06 10:59:26,316 │ 918fdc22 │ test-search-cities2 │ d666e934170f │ agent.skills.loader │ INFO │ loaded skill: search_cities (mcp, read)
+2026-08-06 10:59:26,316 │ 918fdc22 │ test-search-cities2 │ d666e934170f │ agent.skills.loader │ INFO │ loaded skill: manage_farm_logs (mcp, read)
+2026-08-06 10:59:26,316 │ 918fdc22 │ test-search-cities2 │ d666e934170f │ agent.skills.loader │ INFO │ loaded skill: get_farm_status (mcp, read)
+2026-08-06 10:59:26,316 │ 918fdc22 │ test-search-cities2 │ d666e934170f │ agent.skills.loader │ INFO │ loaded skill: web_search (local, read)
+2026-08-06 10:59:26,316 │ 918fdc22 │ test-search-cities2 │ d666e934170f │ agent.skills.loader │ INFO │ loaded skill: calculate_arithmetic (local, read)
+2026-08-06 10:59:26,316 │ 918fdc22 │ test-search-cities2 │ d666e934170f │ agent.skills.loader │ INFO │ loaded skill: get_weather (mcp, read)
+2026-08-06 10:59:26,317 │ 918fdc22 │ test-search-cities2 │ d666e934170f │ agent.core.react │ INFO │ loaded 6 skills: ['search_cities(mcp,read)', 'manage_farm_logs(mcp,read)', 'get_farm_status(mcp,read)', 'web_search(local,read)', 'calculate_arithmetic(local,read)', 'get_weather(mcp,read)']
+2026-08-06 10:59:26,317 │ 918fdc22 │ test-search-cities2 │ d666e934170f │ agent.infra.mcp_client │ INFO │ connecting to business MCP server: http://127.0.0.1:9876/mcp
+2026-08-06 10:59:29,973 │ 918fdc22 │ test-search-cities2 │ d666e934170f │ agent.core.react │ ERROR │ run_turn pipeline crashed
+Traceback (most recent call last):
+  File "/Users/ljn/Documents/demo/explore/v2/agent/core/react.py", line 77, in run_turn
+    async with BusinessClient() as business:
+  File "/Users/ljn/Documents/demo/explore/v2/agent/infra/mcp_client.py", line 45, in __aenter__
+    await self._client.__aenter__()
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/fastmcp/client/client.py", line 535, in __aenter__
+    return await self._connect()
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/fastmcp/client/client.py", line 621, in _connect
+    raise exception
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/fastmcp/client/client.py", line 702, in _session_runner
+    await stack.enter_async_context(self._context_manager())
+  File "/Users/ljn/.pyenv/versions/3.11.5/lib/python3.11/contextlib.py", line 638, in enter_async_context
+    result = await _enter(cm)
+             ^^^^^^^^^^^^^^^^
+  File "/Users/ljn/.pyenv/versions/3.11.5/lib/python3.11/contextlib.py", line 204, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/fastmcp/client/client.py", line 468, in _context_manager
+    with catch(get_catch_handlers()):
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/exceptiongroup/_catch.py", line 39, in __exit__
+    raise unhandled from exc.__cause__
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/exceptiongroup/_catch.py", line 65, in handle_exception
+    result = handler(matched)
+             ^^^^^^^^^^^^^^^^
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/fastmcp/utilities/exceptions.py", line 29, in _exception_handler
+    raise leaf
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/anyio/_core/_tasks.py", line 275, in _run_coro
+    retval = await self._coro
+             ^^^^^^^^^^^^^^^^
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/mcp/client/streamable_http.py", line 565, in handle_request_async
+    await self._handle_post_request(ctx)
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/mcp/client/streamable_http.py", line 358, in _handle_post_request
+    response.raise_for_status()
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/httpx/_models.py", line 829, in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+httpx.HTTPStatusError: Server error '502 Bad Gateway' for url 'http://127.0.0.1:9876/mcp'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/502
+2026-08-06 11:01:19,621 │ faa70ef7 │ test-search-cities3 │ e6346252ef63 │ agent.skills.loader │ INFO │ loaded skill: search_cities (mcp, read)
+2026-08-06 11:01:19,622 │ faa70ef7 │ test-search-cities3 │ e6346252ef63 │ agent.skills.loader │ INFO │ loaded skill: manage_farm_logs (mcp, read)
+2026-08-06 11:01:19,622 │ faa70ef7 │ test-search-cities3 │ e6346252ef63 │ agent.skills.loader │ INFO │ loaded skill: get_farm_status (mcp, read)
+2026-08-06 11:01:19,622 │ faa70ef7 │ test-search-cities3 │ e6346252ef63 │ agent.skills.loader │ INFO │ loaded skill: web_search (local, read)
+2026-08-06 11:01:19,622 │ faa70ef7 │ test-search-cities3 │ e6346252ef63 │ agent.skills.loader │ INFO │ loaded skill: calculate_arithmetic (local, read)
+2026-08-06 11:01:19,622 │ faa70ef7 │ test-search-cities3 │ e6346252ef63 │ agent.skills.loader │ INFO │ loaded skill: get_weather (mcp, read)
+2026-08-06 11:01:19,622 │ faa70ef7 │ test-search-cities3 │ e6346252ef63 │ agent.core.react │ INFO │ loaded 6 skills: ['search_cities(mcp,read)', 'manage_farm_logs(mcp,read)', 'get_farm_status(mcp,read)', 'web_search(local,read)', 'calculate_arithmetic(local,read)', 'get_weather(mcp,read)']
+2026-08-06 11:01:19,623 │ faa70ef7 │ test-search-cities3 │ e6346252ef63 │ agent.infra.mcp_client │ INFO │ connecting to business MCP server: http://127.0.0.1:9876/mcp
+2026-08-06 11:01:19,643 │ faa70ef7 │ test-search-cities3 │ e6346252ef63 │ mcp.client.streamable_http │ INFO │ Received session ID: 3941bc2ebcaf474d98ce3f5f72ea8574
+2026-08-06 11:01:19,643 │ faa70ef7 │ test-search-cities3 │ e6346252ef63 │ mcp.client.streamable_http │ INFO │ Negotiated protocol version: 2025-11-25
+2026-08-06 11:01:19,644 │ faa70ef7 │ test-search-cities3 │ e6346252ef63 │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=2 tools=6
+2026-08-06 11:01:20,755 │ faa70ef7 │ test-search-cities3 │ e6346252ef63 │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1110 model=qwen3.6-flash tool_calls=1
+2026-08-06 11:01:20,755 │ faa70ef7 │ test-search-cities3 │ e6346252ef63 │ agent.infra.mcp_client │ INFO │ calling business tool: get_weather args={}
+2026-08-06 11:01:24,860 │ faa70ef7 │ test-search-cities3 │ e6346252ef63 │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=4 tools=6
+2026-08-06 11:01:27,637 │ faa70ef7 │ test-search-cities3 │ e6346252ef63 │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=2776 model=qwen3.6-flash tool_calls=0
+2026-08-06 11:01:27,642 │ faa70ef7 │ test-search-cities3 │ e6346252ef63 │ mcp.client.streamable_http │ INFO │ GET stream disconnected, reconnecting in 1000ms...
+2026-08-06 11:01:34,778 │ 34429880 │ test-yuhang │ acf5dd43eb88 │ agent.skills.loader │ INFO │ loaded skill: search_cities (mcp, read)
+2026-08-06 11:01:34,778 │ 34429880 │ test-yuhang │ acf5dd43eb88 │ agent.skills.loader │ INFO │ loaded skill: manage_farm_logs (mcp, read)
+2026-08-06 11:01:34,778 │ 34429880 │ test-yuhang │ acf5dd43eb88 │ agent.skills.loader │ INFO │ loaded skill: get_farm_status (mcp, read)
+2026-08-06 11:01:34,778 │ 34429880 │ test-yuhang │ acf5dd43eb88 │ agent.skills.loader │ INFO │ loaded skill: web_search (local, read)
+2026-08-06 11:01:34,778 │ 34429880 │ test-yuhang │ acf5dd43eb88 │ agent.skills.loader │ INFO │ loaded skill: calculate_arithmetic (local, read)
+2026-08-06 11:01:34,778 │ 34429880 │ test-yuhang │ acf5dd43eb88 │ agent.skills.loader │ INFO │ loaded skill: get_weather (mcp, read)
+2026-08-06 11:01:34,778 │ 34429880 │ test-yuhang │ acf5dd43eb88 │ agent.core.react │ INFO │ loaded 6 skills: ['search_cities(mcp,read)', 'manage_farm_logs(mcp,read)', 'get_farm_status(mcp,read)', 'web_search(local,read)', 'calculate_arithmetic(local,read)', 'get_weather(mcp,read)']
+2026-08-06 11:01:34,778 │ 34429880 │ test-yuhang │ acf5dd43eb88 │ agent.infra.mcp_client │ INFO │ connecting to business MCP server: http://127.0.0.1:9876/mcp
+2026-08-06 11:01:34,794 │ 34429880 │ test-yuhang │ acf5dd43eb88 │ mcp.client.streamable_http │ INFO │ Received session ID: 278ea14cf32f4cad80d8ebadb617388c
+2026-08-06 11:01:34,794 │ 34429880 │ test-yuhang │ acf5dd43eb88 │ mcp.client.streamable_http │ INFO │ Negotiated protocol version: 2025-11-25
+2026-08-06 11:01:34,795 │ 34429880 │ test-yuhang │ acf5dd43eb88 │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=2 tools=6
+2026-08-06 11:01:36,075 │ 34429880 │ test-yuhang │ acf5dd43eb88 │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1279 model=qwen3.6-flash tool_calls=1
+2026-08-06 11:01:36,075 │ 34429880 │ test-yuhang │ acf5dd43eb88 │ agent.infra.mcp_client │ INFO │ calling business tool: search_cities args={}
+2026-08-06 11:01:36,089 │ 34429880 │ test-yuhang │ acf5dd43eb88 │ agent.core.react │ ERROR │ skill execution failed: search_cities
+Traceback (most recent call last):
+  File "/Users/ljn/Documents/demo/explore/v2/agent/core/react.py", line 209, in run_turn
+    result_obj = await skill.execute(args, skill_ctx)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ljn/Documents/demo/explore/v2/agent/skills/location/scripts/main.py", line 55, in execute
+    result = await ctx.business_client.call_tool(self.mcp_tool, params or {})
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ljn/Documents/demo/explore/v2/agent/infra/mcp_client.py", line 78, in call_tool
+    result = await self._client.call_tool(name, arguments)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/fastmcp/client/mixins/tools.py", line 312, in call_tool
+    return await self._parse_call_tool_result(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/fastmcp/client/mixins/tools.py", line 201, in _parse_call_tool_result
+    return await _parse_call_tool_result(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/fastmcp/client/mixins/tools.py", line 426, in _parse_call_tool_result
+    raise ToolError(msg)
+fastmcp.exceptions.ToolError: 1 validation error for call[search_cities]
+keyword
+  Missing required argument [type=missing_argument, input_value={}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.13/v/missing_argument
+2026-08-06 11:01:36,092 │ 34429880 │ test-yuhang │ acf5dd43eb88 │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=4 tools=6
+2026-08-06 11:01:37,107 │ 34429880 │ test-yuhang │ acf5dd43eb88 │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1014 model=qwen3.6-flash tool_calls=1
+2026-08-06 11:01:37,108 │ 34429880 │ test-yuhang │ acf5dd43eb88 │ agent.infra.mcp_client │ INFO │ calling business tool: search_cities args={}
+2026-08-06 11:01:37,119 │ 34429880 │ test-yuhang │ acf5dd43eb88 │ agent.core.react │ ERROR │ skill execution failed: search_cities
+Traceback (most recent call last):
+  File "/Users/ljn/Documents/demo/explore/v2/agent/core/react.py", line 209, in run_turn
+    result_obj = await skill.execute(args, skill_ctx)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ljn/Documents/demo/explore/v2/agent/skills/location/scripts/main.py", line 55, in execute
+    result = await ctx.business_client.call_tool(self.mcp_tool, params or {})
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ljn/Documents/demo/explore/v2/agent/infra/mcp_client.py", line 78, in call_tool
+    result = await self._client.call_tool(name, arguments)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/fastmcp/client/mixins/tools.py", line 312, in call_tool
+    return await self._parse_call_tool_result(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/fastmcp/client/mixins/tools.py", line 201, in _parse_call_tool_result
+    return await _parse_call_tool_result(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/fastmcp/client/mixins/tools.py", line 426, in _parse_call_tool_result
+    raise ToolError(msg)
+fastmcp.exceptions.ToolError: 1 validation error for call[search_cities]
+keyword
+  Missing required argument [type=missing_argument, input_value={}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.13/v/missing_argument
+2026-08-06 11:01:37,120 │ 34429880 │ test-yuhang │ acf5dd43eb88 │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=6 tools=6
+2026-08-06 11:01:42,790 │ 34429880 │ test-yuhang │ acf5dd43eb88 │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=5669 model=qwen3.6-flash tool_calls=1
+2026-08-06 11:01:42,790 │ 34429880 │ test-yuhang │ acf5dd43eb88 │ agent.infra.mcp_client │ INFO │ calling business tool: search_cities args={}
+2026-08-06 11:01:42,798 │ 34429880 │ test-yuhang │ acf5dd43eb88 │ agent.core.react │ ERROR │ skill execution failed: search_cities
+Traceback (most recent call last):
+  File "/Users/ljn/Documents/demo/explore/v2/agent/core/react.py", line 209, in run_turn
+    result_obj = await skill.execute(args, skill_ctx)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ljn/Documents/demo/explore/v2/agent/skills/location/scripts/main.py", line 55, in execute
+    result = await ctx.business_client.call_tool(self.mcp_tool, params or {})
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ljn/Documents/demo/explore/v2/agent/infra/mcp_client.py", line 78, in call_tool
+    result = await self._client.call_tool(name, arguments)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/fastmcp/client/mixins/tools.py", line 312, in call_tool
+    return await self._parse_call_tool_result(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/fastmcp/client/mixins/tools.py", line 201, in _parse_call_tool_result
+    return await _parse_call_tool_result(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/fastmcp/client/mixins/tools.py", line 426, in _parse_call_tool_result
+    raise ToolError(msg)
+fastmcp.exceptions.ToolError: 1 validation error for call[search_cities]
+keyword
+  Missing required argument [type=missing_argument, input_value={}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.13/v/missing_argument
+2026-08-06 11:01:42,799 │ 34429880 │ test-yuhang │ acf5dd43eb88 │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=8 tools=6
+2026-08-06 11:01:45,904 │ 34429880 │ test-yuhang │ acf5dd43eb88 │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=3104 model=qwen3.6-flash tool_calls=1
+2026-08-06 11:01:45,904 │ 34429880 │ test-yuhang │ acf5dd43eb88 │ agent.infra.mcp_client │ INFO │ calling business tool: search_cities args={}
+2026-08-06 11:01:45,911 │ 34429880 │ test-yuhang │ acf5dd43eb88 │ agent.core.react │ ERROR │ skill execution failed: search_cities
+Traceback (most recent call last):
+  File "/Users/ljn/Documents/demo/explore/v2/agent/core/react.py", line 209, in run_turn
+    result_obj = await skill.execute(args, skill_ctx)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ljn/Documents/demo/explore/v2/agent/skills/location/scripts/main.py", line 55, in execute
+    result = await ctx.business_client.call_tool(self.mcp_tool, params or {})
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ljn/Documents/demo/explore/v2/agent/infra/mcp_client.py", line 78, in call_tool
+    result = await self._client.call_tool(name, arguments)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/fastmcp/client/mixins/tools.py", line 312, in call_tool
+    return await self._parse_call_tool_result(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/fastmcp/client/mixins/tools.py", line 201, in _parse_call_tool_result
+    return await _parse_call_tool_result(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/fastmcp/client/mixins/tools.py", line 426, in _parse_call_tool_result
+    raise ToolError(msg)
+fastmcp.exceptions.ToolError: 1 validation error for call[search_cities]
+keyword
+  Missing required argument [type=missing_argument, input_value={}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.13/v/missing_argument
+2026-08-06 11:01:45,912 │ 34429880 │ test-yuhang │ acf5dd43eb88 │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=10 tools=6
+2026-08-06 11:01:47,066 │ 34429880 │ test-yuhang │ acf5dd43eb88 │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1154 model=qwen3.6-flash tool_calls=1
+2026-08-06 11:01:47,066 │ 34429880 │ test-yuhang │ acf5dd43eb88 │ agent.infra.mcp_client │ INFO │ calling business tool: search_cities args={}
+2026-08-06 11:01:47,072 │ 34429880 │ test-yuhang │ acf5dd43eb88 │ agent.core.react │ ERROR │ skill execution failed: search_cities
+Traceback (most recent call last):
+  File "/Users/ljn/Documents/demo/explore/v2/agent/core/react.py", line 209, in run_turn
+    result_obj = await skill.execute(args, skill_ctx)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ljn/Documents/demo/explore/v2/agent/skills/location/scripts/main.py", line 55, in execute
+    result = await ctx.business_client.call_tool(self.mcp_tool, params or {})
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ljn/Documents/demo/explore/v2/agent/infra/mcp_client.py", line 78, in call_tool
+    result = await self._client.call_tool(name, arguments)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/fastmcp/client/mixins/tools.py", line 312, in call_tool
+    return await self._parse_call_tool_result(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/fastmcp/client/mixins/tools.py", line 201, in _parse_call_tool_result
+    return await _parse_call_tool_result(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ljn/Documents/demo/explore/v2/.venv/lib/python3.11/site-packages/fastmcp/client/mixins/tools.py", line 426, in _parse_call_tool_result
+    raise ToolError(msg)
+fastmcp.exceptions.ToolError: 1 validation error for call[search_cities]
+keyword
+  Missing required argument [type=missing_argument, input_value={}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.13/v/missing_argument
+2026-08-06 11:01:47,076 │ 34429880 │ test-yuhang │ acf5dd43eb88 │ mcp.client.streamable_http │ INFO │ GET stream disconnected, reconnecting in 1000ms...
+2026-08-06 11:02:39,407 │ - │ - │ - │ agent.infra.trace.collector │ INFO │ trace system stopped, remaining data flushed
+2026-08-06 11:02:55,400 │ - │ - │ - │ agent.infra.chat_store │ INFO │ mongodb connection ok: 192.168.1.14:27017/farm_manager?authSource=admin collection=conversationMessages existing_messages=19
+2026-08-06 11:02:55,404 │ - │ - │ - │ agent.infra.trace.collector │ INFO │ trace system started (batch=20, interval=5s)
+2026-08-06 11:03:02,644 │ e0d2826c │ test-yuhang2 │ 70b0c5aef682 │ agent.skills.loader │ INFO │ loaded skill: search_cities (mcp, read)
+2026-08-06 11:03:02,645 │ e0d2826c │ test-yuhang2 │ 70b0c5aef682 │ agent.skills.loader │ INFO │ loaded skill: manage_farm_logs (mcp, read)
+2026-08-06 11:03:02,646 │ e0d2826c │ test-yuhang2 │ 70b0c5aef682 │ agent.skills.loader │ INFO │ loaded skill: get_farm_status (mcp, read)
+2026-08-06 11:03:02,647 │ e0d2826c │ test-yuhang2 │ 70b0c5aef682 │ agent.skills.loader │ INFO │ loaded skill: web_search (local, read)
+2026-08-06 11:03:02,648 │ e0d2826c │ test-yuhang2 │ 70b0c5aef682 │ agent.skills.loader │ INFO │ loaded skill: calculate_arithmetic (local, read)
+2026-08-06 11:03:02,648 │ e0d2826c │ test-yuhang2 │ 70b0c5aef682 │ agent.skills.loader │ INFO │ loaded skill: get_weather (mcp, read)
+2026-08-06 11:03:02,648 │ e0d2826c │ test-yuhang2 │ 70b0c5aef682 │ agent.core.react │ INFO │ loaded 6 skills: ['search_cities(mcp,read)', 'manage_farm_logs(mcp,read)', 'get_farm_status(mcp,read)', 'web_search(local,read)', 'calculate_arithmetic(local,read)', 'get_weather(mcp,read)']
+2026-08-06 11:03:02,649 │ e0d2826c │ test-yuhang2 │ 70b0c5aef682 │ agent.prompts │ INFO │ prompt loaded: system (401 chars)
+2026-08-06 11:03:02,649 │ e0d2826c │ test-yuhang2 │ 70b0c5aef682 │ agent.infra.mcp_client │ INFO │ connecting to business MCP server: http://127.0.0.1:9876/mcp
+2026-08-06 11:03:02,752 │ e0d2826c │ test-yuhang2 │ 70b0c5aef682 │ mcp.client.streamable_http │ INFO │ Received session ID: ec5a1700e359488ebaf0698005917cbe
+2026-08-06 11:03:02,753 │ e0d2826c │ test-yuhang2 │ 70b0c5aef682 │ mcp.client.streamable_http │ INFO │ Negotiated protocol version: 2025-11-25
+2026-08-06 11:03:02,753 │ e0d2826c │ test-yuhang2 │ 70b0c5aef682 │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=2 tools=6
+2026-08-06 11:03:03,936 │ e0d2826c │ test-yuhang2 │ 70b0c5aef682 │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1182 model=qwen3.6-flash tool_calls=1
+2026-08-06 11:03:03,937 │ e0d2826c │ test-yuhang2 │ 70b0c5aef682 │ agent.infra.mcp_client │ INFO │ calling business tool: search_cities args={}
+2026-08-06 11:03:03,957 │ e0d2826c │ test-yuhang2 │ 70b0c5aef682 │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=4 tools=6
+2026-08-06 11:03:04,888 │ e0d2826c │ test-yuhang2 │ 70b0c5aef682 │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=930 model=qwen3.6-flash tool_calls=1
+2026-08-06 11:03:04,889 │ e0d2826c │ test-yuhang2 │ 70b0c5aef682 │ agent.infra.mcp_client │ INFO │ calling business tool: search_cities args={}
+2026-08-06 11:03:04,898 │ e0d2826c │ test-yuhang2 │ 70b0c5aef682 │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=6 tools=6
+2026-08-06 11:03:07,555 │ e0d2826c │ test-yuhang2 │ 70b0c5aef682 │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=2657 model=qwen3.6-flash tool_calls=1
+2026-08-06 11:03:07,556 │ e0d2826c │ test-yuhang2 │ 70b0c5aef682 │ agent.infra.mcp_client │ INFO │ calling business tool: search_cities args={}
+2026-08-06 11:03:07,570 │ e0d2826c │ test-yuhang2 │ 70b0c5aef682 │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=8 tools=6
+2026-08-06 11:03:10,008 │ e0d2826c │ test-yuhang2 │ 70b0c5aef682 │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=2437 model=qwen3.6-flash tool_calls=1
+2026-08-06 11:03:10,009 │ e0d2826c │ test-yuhang2 │ 70b0c5aef682 │ agent.infra.mcp_client │ INFO │ calling business tool: search_cities args={}
+2026-08-06 11:03:10,016 │ e0d2826c │ test-yuhang2 │ 70b0c5aef682 │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=10 tools=6
+2026-08-06 11:03:11,266 │ e0d2826c │ test-yuhang2 │ 70b0c5aef682 │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1249 model=qwen3.6-flash tool_calls=1
+2026-08-06 11:03:11,266 │ e0d2826c │ test-yuhang2 │ 70b0c5aef682 │ agent.infra.mcp_client │ INFO │ calling business tool: search_cities args={}
+2026-08-06 11:03:11,278 │ e0d2826c │ test-yuhang2 │ 70b0c5aef682 │ mcp.client.streamable_http │ INFO │ GET stream disconnected, reconnecting in 1000ms...
+2026-08-06 11:07:17,039 │ - │ - │ - │ agent.infra.trace.collector │ INFO │ trace system stopped, remaining data flushed
+2026-08-06 11:10:01,523 │ - │ - │ - │ agent.infra.chat_store │ INFO │ mongodb connection ok: 192.168.1.14:27017/farm_manager?authSource=admin collection=conversationMessages existing_messages=20
+2026-08-06 11:10:01,529 │ - │ - │ - │ agent.infra.trace.collector │ INFO │ trace system started (batch=20, interval=5s)
+2026-08-06 11:10:12,965 │ 9e102402 │ test-skill-list │ 5626ce1e1266 │ agent.skills.loader │ INFO │ loaded skill: search_cities (mcp, read)
+2026-08-06 11:10:12,966 │ 9e102402 │ test-skill-list │ 5626ce1e1266 │ agent.skills.loader │ INFO │ loaded skill: manage_farm_logs (mcp, read)
+2026-08-06 11:10:12,966 │ 9e102402 │ test-skill-list │ 5626ce1e1266 │ agent.skills.loader │ INFO │ loaded skill: get_farm_status (mcp, read)
+2026-08-06 11:10:12,967 │ 9e102402 │ test-skill-list │ 5626ce1e1266 │ agent.skills.loader │ INFO │ loaded skill: web_search (local, read)
+2026-08-06 11:10:12,968 │ 9e102402 │ test-skill-list │ 5626ce1e1266 │ agent.skills.loader │ INFO │ loaded skill: calculate_arithmetic (local, read)
+2026-08-06 11:10:12,969 │ 9e102402 │ test-skill-list │ 5626ce1e1266 │ agent.skills.loader │ INFO │ loaded skill: get_weather (mcp, read)
+2026-08-06 11:10:12,969 │ 9e102402 │ test-skill-list │ 5626ce1e1266 │ agent.core.react │ INFO │ loaded 6 skills: ['search_cities(mcp,read)', 'manage_farm_logs(mcp,read)', 'get_farm_status(mcp,read)', 'web_search(local,read)', 'calculate_arithmetic(local,read)', 'get_weather(mcp,read)']
+2026-08-06 11:10:12,969 │ 9e102402 │ test-skill-list │ 5626ce1e1266 │ agent.prompts │ INFO │ prompt loaded: system (401 chars)
+2026-08-06 11:10:12,969 │ 9e102402 │ test-skill-list │ 5626ce1e1266 │ agent.infra.mcp_client │ INFO │ connecting to business MCP server: http://127.0.0.1:9876/mcp
+2026-08-06 11:10:13,070 │ 9e102402 │ test-skill-list │ 5626ce1e1266 │ mcp.client.streamable_http │ INFO │ Received session ID: 14251d8023234c22b89aeb06433d17bb
+2026-08-06 11:10:13,070 │ 9e102402 │ test-skill-list │ 5626ce1e1266 │ mcp.client.streamable_http │ INFO │ Negotiated protocol version: 2025-11-25
+2026-08-06 11:10:13,070 │ 9e102402 │ test-skill-list │ 5626ce1e1266 │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=2 tools=6
+2026-08-06 11:10:14,299 │ 9e102402 │ test-skill-list │ 5626ce1e1266 │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1228 model=qwen3.6-flash tool_calls=0
+2026-08-06 11:10:14,305 │ 9e102402 │ test-skill-list │ 5626ce1e1266 │ mcp.client.streamable_http │ INFO │ GET stream disconnected, reconnecting in 1000ms...
+2026-08-06 11:10:27,195 │ 166918cd │ test-yuhang3 │ a73591acc63a │ agent.skills.loader │ INFO │ loaded skill: search_cities (mcp, read)
+2026-08-06 11:10:27,195 │ 166918cd │ test-yuhang3 │ a73591acc63a │ agent.skills.loader │ INFO │ loaded skill: manage_farm_logs (mcp, read)
+2026-08-06 11:10:27,195 │ 166918cd │ test-yuhang3 │ a73591acc63a │ agent.skills.loader │ INFO │ loaded skill: get_farm_status (mcp, read)
+2026-08-06 11:10:27,195 │ 166918cd │ test-yuhang3 │ a73591acc63a │ agent.skills.loader │ INFO │ loaded skill: web_search (local, read)
+2026-08-06 11:10:27,195 │ 166918cd │ test-yuhang3 │ a73591acc63a │ agent.skills.loader │ INFO │ loaded skill: calculate_arithmetic (local, read)
+2026-08-06 11:10:27,196 │ 166918cd │ test-yuhang3 │ a73591acc63a │ agent.skills.loader │ INFO │ loaded skill: get_weather (mcp, read)
+2026-08-06 11:10:27,196 │ 166918cd │ test-yuhang3 │ a73591acc63a │ agent.core.react │ INFO │ loaded 6 skills: ['search_cities(mcp,read)', 'manage_farm_logs(mcp,read)', 'get_farm_status(mcp,read)', 'web_search(local,read)', 'calculate_arithmetic(local,read)', 'get_weather(mcp,read)']
+2026-08-06 11:10:27,196 │ 166918cd │ test-yuhang3 │ a73591acc63a │ agent.infra.mcp_client │ INFO │ connecting to business MCP server: http://127.0.0.1:9876/mcp
+2026-08-06 11:10:27,217 │ 166918cd │ test-yuhang3 │ a73591acc63a │ mcp.client.streamable_http │ INFO │ Received session ID: 040373f1d61b4f9a89c2287874167c14
+2026-08-06 11:10:27,217 │ 166918cd │ test-yuhang3 │ a73591acc63a │ mcp.client.streamable_http │ INFO │ Negotiated protocol version: 2025-11-25
+2026-08-06 11:10:27,218 │ 166918cd │ test-yuhang3 │ a73591acc63a │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=2 tools=6
+2026-08-06 11:10:28,200 │ 166918cd │ test-yuhang3 │ a73591acc63a │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=982 model=qwen3.6-flash tool_calls=1
+2026-08-06 11:10:28,200 │ 166918cd │ test-yuhang3 │ a73591acc63a │ agent.infra.mcp_client │ INFO │ calling business tool: search_cities args={'keyword': '明天余杭天气怎么样'}
+2026-08-06 11:10:28,252 │ 166918cd │ test-yuhang3 │ a73591acc63a │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=4 tools=6
+2026-08-06 11:10:29,402 │ 166918cd │ test-yuhang3 │ a73591acc63a │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1149 model=qwen3.6-flash tool_calls=1
+2026-08-06 11:10:29,402 │ 166918cd │ test-yuhang3 │ a73591acc63a │ agent.infra.mcp_client │ INFO │ calling business tool: get_weather args={}
+2026-08-06 11:10:32,939 │ 166918cd │ test-yuhang3 │ a73591acc63a │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=6 tools=6
+2026-08-06 11:10:34,091 │ 166918cd │ test-yuhang3 │ a73591acc63a │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1151 model=qwen3.6-flash tool_calls=1
+2026-08-06 11:10:34,091 │ 166918cd │ test-yuhang3 │ a73591acc63a │ agent.infra.mcp_client │ INFO │ calling business tool: get_weather args={}
+2026-08-06 11:10:37,852 │ 166918cd │ test-yuhang3 │ a73591acc63a │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=8 tools=6
+2026-08-06 11:10:39,243 │ 166918cd │ test-yuhang3 │ a73591acc63a │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1390 model=qwen3.6-flash tool_calls=1
+2026-08-06 11:10:39,243 │ 166918cd │ test-yuhang3 │ a73591acc63a │ agent.infra.mcp_client │ INFO │ calling business tool: get_weather args={}
+2026-08-06 11:10:42,970 │ 166918cd │ test-yuhang3 │ a73591acc63a │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=10 tools=6
+2026-08-06 11:10:45,054 │ 166918cd │ test-yuhang3 │ a73591acc63a │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=2084 model=qwen3.6-flash tool_calls=0
+2026-08-06 11:10:45,058 │ 166918cd │ test-yuhang3 │ a73591acc63a │ mcp.client.streamable_http │ INFO │ GET stream disconnected, reconnecting in 1000ms...
+2026-08-06 11:12:21,942 │ - │ - │ - │ agent.infra.trace.collector │ INFO │ trace system stopped, remaining data flushed
+2026-08-06 11:14:37,394 │ - │ - │ - │ agent.infra.chat_store │ INFO │ mongodb connection ok: 192.168.1.14:27017/farm_manager?authSource=admin collection=conversationMessages existing_messages=24
+2026-08-06 11:14:37,401 │ - │ - │ - │ agent.infra.trace.collector │ INFO │ trace system started (batch=20, interval=5s)
+2026-08-06 11:14:44,737 │ a3fb63c4 │ test-yuhang-final │ d768648d231c │ agent.skills.loader │ INFO │ loaded skill: search_cities (mcp, read)
+2026-08-06 11:14:44,738 │ a3fb63c4 │ test-yuhang-final │ d768648d231c │ agent.skills.loader │ INFO │ loaded skill: manage_farm_logs (mcp, read)
+2026-08-06 11:14:44,738 │ a3fb63c4 │ test-yuhang-final │ d768648d231c │ agent.skills.loader │ INFO │ loaded skill: get_farm_status (mcp, read)
+2026-08-06 11:14:44,739 │ a3fb63c4 │ test-yuhang-final │ d768648d231c │ agent.skills.loader │ INFO │ loaded skill: web_search (local, read)
+2026-08-06 11:14:44,740 │ a3fb63c4 │ test-yuhang-final │ d768648d231c │ agent.skills.loader │ INFO │ loaded skill: calculate_arithmetic (local, read)
+2026-08-06 11:14:44,742 │ a3fb63c4 │ test-yuhang-final │ d768648d231c │ agent.skills.loader │ INFO │ loaded skill: get_weather (mcp, read)
+2026-08-06 11:14:44,742 │ a3fb63c4 │ test-yuhang-final │ d768648d231c │ agent.core.react │ INFO │ loaded 6 skills: ['search_cities(mcp,read)', 'manage_farm_logs(mcp,read)', 'get_farm_status(mcp,read)', 'web_search(local,read)', 'calculate_arithmetic(local,read)', 'get_weather(mcp,read)']
+2026-08-06 11:14:44,742 │ a3fb63c4 │ test-yuhang-final │ d768648d231c │ agent.prompts │ INFO │ prompt loaded: system (401 chars)
+2026-08-06 11:14:44,742 │ a3fb63c4 │ test-yuhang-final │ d768648d231c │ agent.infra.mcp_client │ INFO │ connecting to business MCP server: http://127.0.0.1:9876/mcp
+2026-08-06 11:14:44,856 │ a3fb63c4 │ test-yuhang-final │ d768648d231c │ mcp.client.streamable_http │ INFO │ Received session ID: dd7942639f5240bf85ad89dc97065267
+2026-08-06 11:14:44,856 │ a3fb63c4 │ test-yuhang-final │ d768648d231c │ mcp.client.streamable_http │ INFO │ Negotiated protocol version: 2025-11-25
+2026-08-06 11:14:44,856 │ a3fb63c4 │ test-yuhang-final │ d768648d231c │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=2 tools=6
+2026-08-06 11:14:46,138 │ a3fb63c4 │ test-yuhang-final │ d768648d231c │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1281 model=qwen3.6-flash tool_calls=1
+2026-08-06 11:14:46,139 │ a3fb63c4 │ test-yuhang-final │ d768648d231c │ agent.infra.mcp_client │ INFO │ calling business tool: search_cities args={'keyword': '明天余杭天气怎么样'}
+2026-08-06 11:14:46,170 │ a3fb63c4 │ test-yuhang-final │ d768648d231c │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=4 tools=6
+2026-08-06 11:14:47,923 │ a3fb63c4 │ test-yuhang-final │ d768648d231c │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1752 model=qwen3.6-flash tool_calls=1
+2026-08-06 11:14:47,923 │ a3fb63c4 │ test-yuhang-final │ d768648d231c │ agent.infra.mcp_client │ INFO │ calling business tool: get_weather args={'location': '浙江省杭州市余杭区'}
+2026-08-06 11:14:49,410 │ a3fb63c4 │ test-yuhang-final │ d768648d231c │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=6 tools=6
+2026-08-06 11:14:51,060 │ a3fb63c4 │ test-yuhang-final │ d768648d231c │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1649 model=qwen3.6-flash tool_calls=0
+2026-08-06 11:14:51,066 │ a3fb63c4 │ test-yuhang-final │ d768648d231c │ mcp.client.streamable_http │ INFO │ GET stream disconnected, reconnecting in 1000ms...
+2026-08-06 11:14:59,668 │ 4547800a │ test-suzhou │ 681054f43341 │ agent.skills.loader │ INFO │ loaded skill: search_cities (mcp, read)
+2026-08-06 11:14:59,668 │ 4547800a │ test-suzhou │ 681054f43341 │ agent.skills.loader │ INFO │ loaded skill: manage_farm_logs (mcp, read)
+2026-08-06 11:14:59,668 │ 4547800a │ test-suzhou │ 681054f43341 │ agent.skills.loader │ INFO │ loaded skill: get_farm_status (mcp, read)
+2026-08-06 11:14:59,668 │ 4547800a │ test-suzhou │ 681054f43341 │ agent.skills.loader │ INFO │ loaded skill: web_search (local, read)
+2026-08-06 11:14:59,668 │ 4547800a │ test-suzhou │ 681054f43341 │ agent.skills.loader │ INFO │ loaded skill: calculate_arithmetic (local, read)
+2026-08-06 11:14:59,668 │ 4547800a │ test-suzhou │ 681054f43341 │ agent.skills.loader │ INFO │ loaded skill: get_weather (mcp, read)
+2026-08-06 11:14:59,668 │ 4547800a │ test-suzhou │ 681054f43341 │ agent.core.react │ INFO │ loaded 6 skills: ['search_cities(mcp,read)', 'manage_farm_logs(mcp,read)', 'get_farm_status(mcp,read)', 'web_search(local,read)', 'calculate_arithmetic(local,read)', 'get_weather(mcp,read)']
+2026-08-06 11:14:59,669 │ 4547800a │ test-suzhou │ 681054f43341 │ agent.infra.mcp_client │ INFO │ connecting to business MCP server: http://127.0.0.1:9876/mcp
+2026-08-06 11:14:59,683 │ 4547800a │ test-suzhou │ 681054f43341 │ mcp.client.streamable_http │ INFO │ Received session ID: 26e893aed97b4c7fbdb2857b3df677d4
+2026-08-06 11:14:59,683 │ 4547800a │ test-suzhou │ 681054f43341 │ mcp.client.streamable_http │ INFO │ Negotiated protocol version: 2025-11-25
+2026-08-06 11:14:59,683 │ 4547800a │ test-suzhou │ 681054f43341 │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=2 tools=6
+2026-08-06 11:15:01,152 │ 4547800a │ test-suzhou │ 681054f43341 │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1468 model=qwen3.6-flash tool_calls=1
+2026-08-06 11:15:01,152 │ 4547800a │ test-suzhou │ 681054f43341 │ agent.infra.mcp_client │ INFO │ calling business tool: get_weather args={}
+2026-08-06 11:15:05,630 │ 4547800a │ test-suzhou │ 681054f43341 │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=4 tools=6
+2026-08-06 11:15:07,342 │ 4547800a │ test-suzhou │ 681054f43341 │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1712 model=qwen3.6-flash tool_calls=0
+2026-08-06 11:15:07,346 │ 4547800a │ test-suzhou │ 681054f43341 │ mcp.client.streamable_http │ INFO │ GET stream disconnected, reconnecting in 1000ms...
+2026-08-06 11:16:51,197 │ - │ - │ - │ agent.infra.trace.collector │ INFO │ trace system stopped, remaining data flushed
+2026-08-06 11:16:58,433 │ - │ - │ - │ agent.infra.chat_store │ INFO │ mongodb connection ok: 192.168.1.14:27017/farm_manager?authSource=admin collection=conversationMessages existing_messages=28
+2026-08-06 11:16:58,441 │ - │ - │ - │ agent.infra.trace.collector │ INFO │ trace system started (batch=20, interval=5s)
+2026-08-06 11:17:09,942 │ 91482b2f │ test-suzhou2 │ edfcbec85a62 │ agent.skills.loader │ INFO │ loaded skill: search_cities (mcp, read)
+2026-08-06 11:17:09,943 │ 91482b2f │ test-suzhou2 │ edfcbec85a62 │ agent.skills.loader │ INFO │ loaded skill: manage_farm_logs (mcp, read)
+2026-08-06 11:17:09,944 │ 91482b2f │ test-suzhou2 │ edfcbec85a62 │ agent.skills.loader │ INFO │ loaded skill: get_farm_status (mcp, read)
+2026-08-06 11:17:09,945 │ 91482b2f │ test-suzhou2 │ edfcbec85a62 │ agent.skills.loader │ INFO │ loaded skill: web_search (local, read)
+2026-08-06 11:17:09,946 │ 91482b2f │ test-suzhou2 │ edfcbec85a62 │ agent.skills.loader │ INFO │ loaded skill: calculate_arithmetic (local, read)
+2026-08-06 11:17:09,947 │ 91482b2f │ test-suzhou2 │ edfcbec85a62 │ agent.skills.loader │ INFO │ loaded skill: get_weather (mcp, read)
+2026-08-06 11:17:09,948 │ 91482b2f │ test-suzhou2 │ edfcbec85a62 │ agent.core.react │ INFO │ loaded 6 skills: ['search_cities(mcp,read)', 'manage_farm_logs(mcp,read)', 'get_farm_status(mcp,read)', 'web_search(local,read)', 'calculate_arithmetic(local,read)', 'get_weather(mcp,read)']
+2026-08-06 11:17:09,948 │ 91482b2f │ test-suzhou2 │ edfcbec85a62 │ agent.prompts │ INFO │ prompt loaded: system (401 chars)
+2026-08-06 11:17:09,948 │ 91482b2f │ test-suzhou2 │ edfcbec85a62 │ agent.infra.mcp_client │ INFO │ connecting to business MCP server: http://127.0.0.1:9876/mcp
+2026-08-06 11:17:10,077 │ 91482b2f │ test-suzhou2 │ edfcbec85a62 │ mcp.client.streamable_http │ INFO │ Received session ID: 4370aae8ea3b4482a92b2d8ed37f2e7d
+2026-08-06 11:17:10,078 │ 91482b2f │ test-suzhou2 │ edfcbec85a62 │ mcp.client.streamable_http │ INFO │ Negotiated protocol version: 2025-11-25
+2026-08-06 11:17:10,079 │ 91482b2f │ test-suzhou2 │ edfcbec85a62 │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=2 tools=6
+2026-08-06 11:17:11,619 │ 91482b2f │ test-suzhou2 │ edfcbec85a62 │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1540 model=qwen3.6-flash tool_calls=1
+2026-08-06 11:17:11,620 │ 91482b2f │ test-suzhou2 │ edfcbec85a62 │ agent.infra.mcp_client │ INFO │ calling business tool: get_weather args={'location': '明天苏州天气'}
+2026-08-06 11:17:13,098 │ 91482b2f │ test-suzhou2 │ edfcbec85a62 │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=4 tools=6
+2026-08-06 11:17:14,262 │ 91482b2f │ test-suzhou2 │ edfcbec85a62 │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1164 model=qwen3.6-flash tool_calls=0
+2026-08-06 11:17:14,266 │ 91482b2f │ test-suzhou2 │ edfcbec85a62 │ mcp.client.streamable_http │ INFO │ GET stream disconnected, reconnecting in 1000ms...
+2026-08-06 11:18:06,056 │ bdf9a9b5 │ test-suzhou3 │ 8331c94ba5eb │ agent.skills.loader │ INFO │ loaded skill: search_cities (mcp, read)
+2026-08-06 11:18:06,057 │ bdf9a9b5 │ test-suzhou3 │ 8331c94ba5eb │ agent.skills.loader │ INFO │ loaded skill: manage_farm_logs (mcp, read)
+2026-08-06 11:18:06,057 │ bdf9a9b5 │ test-suzhou3 │ 8331c94ba5eb │ agent.skills.loader │ INFO │ loaded skill: get_farm_status (mcp, read)
+2026-08-06 11:18:06,057 │ bdf9a9b5 │ test-suzhou3 │ 8331c94ba5eb │ agent.skills.loader │ INFO │ loaded skill: web_search (local, read)
+2026-08-06 11:18:06,057 │ bdf9a9b5 │ test-suzhou3 │ 8331c94ba5eb │ agent.skills.loader │ INFO │ loaded skill: calculate_arithmetic (local, read)
+2026-08-06 11:18:06,057 │ bdf9a9b5 │ test-suzhou3 │ 8331c94ba5eb │ agent.skills.loader │ INFO │ loaded skill: get_weather (mcp, read)
+2026-08-06 11:18:06,057 │ bdf9a9b5 │ test-suzhou3 │ 8331c94ba5eb │ agent.core.react │ INFO │ loaded 6 skills: ['search_cities(mcp,read)', 'manage_farm_logs(mcp,read)', 'get_farm_status(mcp,read)', 'web_search(local,read)', 'calculate_arithmetic(local,read)', 'get_weather(mcp,read)']
+2026-08-06 11:18:06,058 │ bdf9a9b5 │ test-suzhou3 │ 8331c94ba5eb │ agent.infra.mcp_client │ INFO │ connecting to business MCP server: http://127.0.0.1:9876/mcp
+2026-08-06 11:18:06,074 │ bdf9a9b5 │ test-suzhou3 │ 8331c94ba5eb │ mcp.client.streamable_http │ INFO │ Received session ID: e90049d28b4f4d4c8d02a2408c6dce92
+2026-08-06 11:18:06,075 │ bdf9a9b5 │ test-suzhou3 │ 8331c94ba5eb │ mcp.client.streamable_http │ INFO │ Negotiated protocol version: 2025-11-25
+2026-08-06 11:18:06,076 │ bdf9a9b5 │ test-suzhou3 │ 8331c94ba5eb │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=2 tools=6
+2026-08-06 11:18:07,470 │ bdf9a9b5 │ test-suzhou3 │ 8331c94ba5eb │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1394 model=qwen3.6-flash tool_calls=1
+2026-08-06 11:18:07,470 │ bdf9a9b5 │ test-suzhou3 │ 8331c94ba5eb │ agent.infra.mcp_client │ INFO │ calling business tool: get_weather args={'location': '明天苏州天气'}
+2026-08-06 11:18:08,944 │ bdf9a9b5 │ test-suzhou3 │ 8331c94ba5eb │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=4 tools=6
+2026-08-06 11:18:10,412 │ bdf9a9b5 │ test-suzhou3 │ 8331c94ba5eb │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1467 model=qwen3.6-flash tool_calls=0
+2026-08-06 11:18:10,417 │ bdf9a9b5 │ test-suzhou3 │ 8331c94ba5eb │ mcp.client.streamable_http │ INFO │ GET stream disconnected, reconnecting in 1000ms...
+2026-08-06 11:18:15,903 │ 3eb9992f │ test-yuhang4 │ 640ed56b0082 │ agent.skills.loader │ INFO │ loaded skill: search_cities (mcp, read)
+2026-08-06 11:18:15,903 │ 3eb9992f │ test-yuhang4 │ 640ed56b0082 │ agent.skills.loader │ INFO │ loaded skill: manage_farm_logs (mcp, read)
+2026-08-06 11:18:15,903 │ 3eb9992f │ test-yuhang4 │ 640ed56b0082 │ agent.skills.loader │ INFO │ loaded skill: get_farm_status (mcp, read)
+2026-08-06 11:18:15,904 │ 3eb9992f │ test-yuhang4 │ 640ed56b0082 │ agent.skills.loader │ INFO │ loaded skill: web_search (local, read)
+2026-08-06 11:18:15,904 │ 3eb9992f │ test-yuhang4 │ 640ed56b0082 │ agent.skills.loader │ INFO │ loaded skill: calculate_arithmetic (local, read)
+2026-08-06 11:18:15,904 │ 3eb9992f │ test-yuhang4 │ 640ed56b0082 │ agent.skills.loader │ INFO │ loaded skill: get_weather (mcp, read)
+2026-08-06 11:18:15,904 │ 3eb9992f │ test-yuhang4 │ 640ed56b0082 │ agent.core.react │ INFO │ loaded 6 skills: ['search_cities(mcp,read)', 'manage_farm_logs(mcp,read)', 'get_farm_status(mcp,read)', 'web_search(local,read)', 'calculate_arithmetic(local,read)', 'get_weather(mcp,read)']
+2026-08-06 11:18:15,904 │ 3eb9992f │ test-yuhang4 │ 640ed56b0082 │ agent.infra.mcp_client │ INFO │ connecting to business MCP server: http://127.0.0.1:9876/mcp
+2026-08-06 11:18:15,917 │ 3eb9992f │ test-yuhang4 │ 640ed56b0082 │ mcp.client.streamable_http │ INFO │ Received session ID: dbd6efee602841e28e86611d8c998b63
+2026-08-06 11:18:15,918 │ 3eb9992f │ test-yuhang4 │ 640ed56b0082 │ mcp.client.streamable_http │ INFO │ Negotiated protocol version: 2025-11-25
+2026-08-06 11:18:15,918 │ 3eb9992f │ test-yuhang4 │ 640ed56b0082 │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=2 tools=6
+2026-08-06 11:18:17,352 │ 3eb9992f │ test-yuhang4 │ 640ed56b0082 │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1434 model=qwen3.6-flash tool_calls=1
+2026-08-06 11:18:17,353 │ 3eb9992f │ test-yuhang4 │ 640ed56b0082 │ agent.infra.mcp_client │ INFO │ calling business tool: search_cities args={'keyword': '明天余杭天气怎么样'}
+2026-08-06 11:18:17,369 │ 3eb9992f │ test-yuhang4 │ 640ed56b0082 │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=4 tools=6
+2026-08-06 11:18:19,153 │ 3eb9992f │ test-yuhang4 │ 640ed56b0082 │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1784 model=qwen3.6-flash tool_calls=1
+2026-08-06 11:18:19,154 │ 3eb9992f │ test-yuhang4 │ 640ed56b0082 │ agent.infra.mcp_client │ INFO │ calling business tool: get_weather args={'location': '浙江省杭州市余杭区'}
+2026-08-06 11:18:21,111 │ 3eb9992f │ test-yuhang4 │ 640ed56b0082 │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=6 tools=6
+2026-08-06 11:18:22,366 │ 3eb9992f │ test-yuhang4 │ 640ed56b0082 │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1254 model=qwen3.6-flash tool_calls=0
+2026-08-06 11:18:22,369 │ 3eb9992f │ test-yuhang4 │ 640ed56b0082 │ mcp.client.streamable_http │ INFO │ GET stream disconnected, reconnecting in 1000ms...
+2026-08-06 11:18:47,067 │ - │ - │ - │ agent.infra.trace.collector │ INFO │ trace system stopped, remaining data flushed
+2026-08-06 11:20:21,421 │ - │ - │ - │ __main__ │ INFO │ starting agent on http://127.0.0.1:8000
+2026-08-06 11:20:21,565 │ - │ - │ - │ agent.infra.chat_store │ INFO │ mongodb connection ok: 192.168.1.14:27017/farm_manager?authSource=admin collection=conversationMessages existing_messages=34
+2026-08-06 11:20:21,571 │ - │ - │ - │ agent.infra.trace.collector │ INFO │ trace system started (batch=20, interval=5s)
+2026-08-06 11:20:41,875 │ - │ - │ - │ agent.infra.trace.collector │ INFO │ trace system stopped, remaining data flushed
+2026-08-06 11:20:43,702 │ - │ - │ - │ __main__ │ INFO │ starting agent on http://127.0.0.1:8000
+2026-08-06 11:20:43,920 │ - │ - │ - │ agent.infra.chat_store │ INFO │ mongodb connection ok: 192.168.1.14:27017/farm_manager?authSource=admin collection=conversationMessages existing_messages=34
+2026-08-06 11:20:44,059 │ - │ - │ - │ agent.infra.trace.collector │ INFO │ trace system started (batch=20, interval=5s)
+2026-08-06 11:20:49,085 │ ad544b9e │ default │ be15f6d37132 │ agent.skills.loader │ INFO │ loaded skill: search_cities (mcp, read)
+2026-08-06 11:20:49,088 │ ad544b9e │ default │ be15f6d37132 │ agent.skills.loader │ INFO │ loaded skill: manage_farm_logs (mcp, read)
+2026-08-06 11:20:49,090 │ ad544b9e │ default │ be15f6d37132 │ agent.skills.loader │ INFO │ loaded skill: get_farm_status (mcp, read)
+2026-08-06 11:20:49,093 │ ad544b9e │ default │ be15f6d37132 │ agent.skills.loader │ INFO │ loaded skill: web_search (local, read)
+2026-08-06 11:20:49,095 │ ad544b9e │ default │ be15f6d37132 │ agent.skills.loader │ INFO │ loaded skill: calculate_arithmetic (local, read)
+2026-08-06 11:20:49,096 │ ad544b9e │ default │ be15f6d37132 │ agent.skills.loader │ INFO │ loaded skill: get_weather (mcp, read)
+2026-08-06 11:20:49,096 │ ad544b9e │ default │ be15f6d37132 │ agent.core.react │ INFO │ loaded 6 skills: ['search_cities(mcp,read)', 'manage_farm_logs(mcp,read)', 'get_farm_status(mcp,read)', 'web_search(local,read)', 'calculate_arithmetic(local,read)', 'get_weather(mcp,read)']
+2026-08-06 11:20:49,097 │ ad544b9e │ default │ be15f6d37132 │ agent.prompts │ INFO │ prompt loaded: system (401 chars)
+2026-08-06 11:20:49,097 │ ad544b9e │ default │ be15f6d37132 │ agent.infra.mcp_client │ INFO │ connecting to business MCP server: http://127.0.0.1:9876/mcp
+2026-08-06 11:20:49,219 │ ad544b9e │ default │ be15f6d37132 │ mcp.client.streamable_http │ INFO │ Received session ID: 119867d52e7c47f8a506b646f75bae03
+2026-08-06 11:20:49,219 │ ad544b9e │ default │ be15f6d37132 │ mcp.client.streamable_http │ INFO │ Negotiated protocol version: 2025-11-25
+2026-08-06 11:20:49,219 │ ad544b9e │ default │ be15f6d37132 │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=2 tools=6
+2026-08-06 11:20:50,595 │ ad544b9e │ default │ be15f6d37132 │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1374 model=qwen3.6-flash tool_calls=1
+2026-08-06 11:20:50,596 │ ad544b9e │ default │ be15f6d37132 │ agent.infra.mcp_client │ INFO │ calling business tool: search_cities args={'keyword': '睢宁坐标是'}
+2026-08-06 11:20:50,650 │ ad544b9e │ default │ be15f6d37132 │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=4 tools=6
+2026-08-06 11:20:52,149 │ ad544b9e │ default │ be15f6d37132 │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1498 model=qwen3.6-flash tool_calls=0
+2026-08-06 11:20:52,160 │ ad544b9e │ default │ be15f6d37132 │ mcp.client.streamable_http │ INFO │ GET stream disconnected, reconnecting in 1000ms...
+2026-08-06 11:20:56,143 │ 78d771c5 │ default │ d7c7c61a82ae │ agent.skills.loader │ INFO │ loaded skill: search_cities (mcp, read)
+2026-08-06 11:20:56,143 │ 78d771c5 │ default │ d7c7c61a82ae │ agent.skills.loader │ INFO │ loaded skill: manage_farm_logs (mcp, read)
+2026-08-06 11:20:56,143 │ 78d771c5 │ default │ d7c7c61a82ae │ agent.skills.loader │ INFO │ loaded skill: get_farm_status (mcp, read)
+2026-08-06 11:20:56,143 │ 78d771c5 │ default │ d7c7c61a82ae │ agent.skills.loader │ INFO │ loaded skill: web_search (local, read)
+2026-08-06 11:20:56,144 │ 78d771c5 │ default │ d7c7c61a82ae │ agent.skills.loader │ INFO │ loaded skill: calculate_arithmetic (local, read)
+2026-08-06 11:20:56,144 │ 78d771c5 │ default │ d7c7c61a82ae │ agent.skills.loader │ INFO │ loaded skill: get_weather (mcp, read)
+2026-08-06 11:20:56,144 │ 78d771c5 │ default │ d7c7c61a82ae │ agent.core.react │ INFO │ loaded 6 skills: ['search_cities(mcp,read)', 'manage_farm_logs(mcp,read)', 'get_farm_status(mcp,read)', 'web_search(local,read)', 'calculate_arithmetic(local,read)', 'get_weather(mcp,read)']
+2026-08-06 11:20:56,144 │ 78d771c5 │ default │ d7c7c61a82ae │ agent.infra.mcp_client │ INFO │ connecting to business MCP server: http://127.0.0.1:9876/mcp
+2026-08-06 11:20:56,177 │ 78d771c5 │ default │ d7c7c61a82ae │ mcp.client.streamable_http │ INFO │ Received session ID: 19e31fdd7f774a55bb0870aa58a0f35b
+2026-08-06 11:20:56,178 │ 78d771c5 │ default │ d7c7c61a82ae │ mcp.client.streamable_http │ INFO │ Negotiated protocol version: 2025-11-25
+2026-08-06 11:20:56,178 │ 78d771c5 │ default │ d7c7c61a82ae │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=5 tools=6
+2026-08-06 11:20:57,587 │ 78d771c5 │ default │ d7c7c61a82ae │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1408 model=qwen3.6-flash tool_calls=1
+2026-08-06 11:20:57,587 │ 78d771c5 │ default │ d7c7c61a82ae │ agent.infra.mcp_client │ INFO │ calling business tool: get_weather args={'location': '睢宁天气怎么样'}
+2026-08-06 11:20:59,663 │ 78d771c5 │ default │ d7c7c61a82ae │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=7 tools=6
+2026-08-06 11:21:01,774 │ 78d771c5 │ default │ d7c7c61a82ae │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=2110 model=qwen3.6-flash tool_calls=0
+2026-08-06 11:21:01,781 │ 78d771c5 │ default │ d7c7c61a82ae │ mcp.client.streamable_http │ INFO │ GET stream disconnected, reconnecting in 1000ms...
+2026-08-06 11:22:32,195 │ 9c89c63b │ default │ ff4fea7a2aa1 │ agent.skills.loader │ INFO │ loaded skill: search_cities (mcp, read)
+2026-08-06 11:22:32,196 │ 9c89c63b │ default │ ff4fea7a2aa1 │ agent.skills.loader │ INFO │ loaded skill: manage_farm_logs (mcp, read)
+2026-08-06 11:22:32,196 │ 9c89c63b │ default │ ff4fea7a2aa1 │ agent.skills.loader │ INFO │ loaded skill: get_farm_status (mcp, read)
+2026-08-06 11:22:32,196 │ 9c89c63b │ default │ ff4fea7a2aa1 │ agent.skills.loader │ INFO │ loaded skill: web_search (local, read)
+2026-08-06 11:22:32,196 │ 9c89c63b │ default │ ff4fea7a2aa1 │ agent.skills.loader │ INFO │ loaded skill: calculate_arithmetic (local, read)
+2026-08-06 11:22:32,196 │ 9c89c63b │ default │ ff4fea7a2aa1 │ agent.skills.loader │ INFO │ loaded skill: get_weather (mcp, read)
+2026-08-06 11:22:32,196 │ 9c89c63b │ default │ ff4fea7a2aa1 │ agent.core.react │ INFO │ loaded 6 skills: ['search_cities(mcp,read)', 'manage_farm_logs(mcp,read)', 'get_farm_status(mcp,read)', 'web_search(local,read)', 'calculate_arithmetic(local,read)', 'get_weather(mcp,read)']
+2026-08-06 11:22:32,196 │ 9c89c63b │ default │ ff4fea7a2aa1 │ agent.infra.mcp_client │ INFO │ connecting to business MCP server: http://127.0.0.1:9876/mcp
+2026-08-06 11:22:32,232 │ 9c89c63b │ default │ ff4fea7a2aa1 │ mcp.client.streamable_http │ INFO │ Received session ID: 8506ce0abecc4ec3b2bc0a6cda154461
+2026-08-06 11:22:32,234 │ 9c89c63b │ default │ ff4fea7a2aa1 │ mcp.client.streamable_http │ INFO │ Negotiated protocol version: 2025-11-25
+2026-08-06 11:22:32,235 │ 9c89c63b │ default │ ff4fea7a2aa1 │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=8 tools=6
+2026-08-06 11:22:33,207 │ 9c89c63b │ default │ ff4fea7a2aa1 │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=972 model=qwen3.6-flash tool_calls=1
+2026-08-06 11:22:33,208 │ 9c89c63b │ default │ ff4fea7a2aa1 │ agent.infra.mcp_client │ INFO │ calling business tool: get_weather args={'location': '苏州天气如何'}
+2026-08-06 11:22:34,910 │ 9c89c63b │ default │ ff4fea7a2aa1 │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=10 tools=6
+2026-08-06 11:22:36,706 │ 9c89c63b │ default │ ff4fea7a2aa1 │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1795 model=qwen3.6-flash tool_calls=0
+2026-08-06 11:22:36,717 │ 9c89c63b │ default │ ff4fea7a2aa1 │ mcp.client.streamable_http │ INFO │ GET stream disconnected, reconnecting in 1000ms...
+2026-08-06 11:33:06,737 │ - │ - │ - │ agent.infra.chat_store │ INFO │ mongodb connection ok: 192.168.1.14:27017/farm_manager?authSource=admin collection=conversationMessages existing_messages=40
+2026-08-06 11:33:06,746 │ - │ - │ - │ agent.infra.trace.collector │ INFO │ trace system started (batch=20, interval=5s)
+2026-08-06 11:33:06,747 │ - │ - │ - │ agent.infra.trace.collector │ INFO │ trace system stopped, remaining data flushed
+2026-08-06 11:33:28,132 │ - │ - │ - │ agent.infra.chat_store │ INFO │ mongodb connection ok: 192.168.1.14:27017/farm_manager?authSource=admin collection=conversationMessages existing_messages=40
+2026-08-06 11:33:28,137 │ - │ - │ - │ agent.infra.trace.collector │ INFO │ trace system started (batch=20, interval=5s)
+2026-08-06 11:33:41,940 │ 54206d6d │ test-suning │ 30b6c5542129 │ agent.skills.loader │ INFO │ loaded skill: search_cities (mcp, read)
+2026-08-06 11:33:41,941 │ 54206d6d │ test-suning │ 30b6c5542129 │ agent.skills.loader │ INFO │ loaded skill: manage_farm_logs (mcp, read)
+2026-08-06 11:33:41,941 │ 54206d6d │ test-suning │ 30b6c5542129 │ agent.skills.loader │ INFO │ loaded skill: get_farm_status (mcp, read)
+2026-08-06 11:33:41,942 │ 54206d6d │ test-suning │ 30b6c5542129 │ agent.skills.loader │ INFO │ loaded skill: web_search (local, read)
+2026-08-06 11:33:41,943 │ 54206d6d │ test-suning │ 30b6c5542129 │ agent.skills.loader │ INFO │ loaded skill: calculate_arithmetic (local, read)
+2026-08-06 11:33:41,944 │ 54206d6d │ test-suning │ 30b6c5542129 │ agent.skills.loader │ INFO │ loaded skill: get_weather (mcp, read)
+2026-08-06 11:33:41,944 │ 54206d6d │ test-suning │ 30b6c5542129 │ agent.core.react │ INFO │ loaded 6 skills: ['search_cities(mcp,read)', 'manage_farm_logs(mcp,read)', 'get_farm_status(mcp,read)', 'web_search(local,read)', 'calculate_arithmetic(local,read)', 'get_weather(mcp,read)']
+2026-08-06 11:33:41,945 │ 54206d6d │ test-suning │ 30b6c5542129 │ agent.prompts │ INFO │ prompt loaded: system (401 chars)
+2026-08-06 11:33:41,945 │ 54206d6d │ test-suning │ 30b6c5542129 │ agent.infra.mcp_client │ INFO │ connecting to business MCP server: http://127.0.0.1:9876/mcp
+2026-08-06 11:33:42,071 │ 54206d6d │ test-suning │ 30b6c5542129 │ mcp.client.streamable_http │ INFO │ Received session ID: 775d07b6cf4040d8a7bc7edeb9afc6d9
+2026-08-06 11:33:42,072 │ 54206d6d │ test-suning │ 30b6c5542129 │ mcp.client.streamable_http │ INFO │ Negotiated protocol version: 2025-11-25
+2026-08-06 11:33:42,073 │ 54206d6d │ test-suning │ 30b6c5542129 │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=2 tools=6
+2026-08-06 11:33:44,585 │ 54206d6d │ test-suning │ 30b6c5542129 │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=2512 model=qwen3.6-flash tool_calls=1
+2026-08-06 11:33:44,587 │ 54206d6d │ test-suning │ 30b6c5542129 │ agent.infra.mcp_client │ INFO │ calling business tool: search_cities args={'keyword': '睢宁天气怎么样'}
+2026-08-06 11:33:44,621 │ 54206d6d │ test-suning │ 30b6c5542129 │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=4 tools=6
+2026-08-06 11:33:46,064 │ 54206d6d │ test-suning │ 30b6c5542129 │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1442 model=qwen3.6-flash tool_calls=1
+2026-08-06 11:33:46,065 │ 54206d6d │ test-suning │ 30b6c5542129 │ agent.infra.mcp_client │ INFO │ calling business tool: get_weather args={'location': '江苏省徐州市睢宁县'}
+2026-08-06 11:33:47,859 │ 54206d6d │ test-suning │ 30b6c5542129 │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=6 tools=6
+2026-08-06 11:33:49,492 │ 54206d6d │ test-suning │ 30b6c5542129 │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1633 model=qwen3.6-flash tool_calls=0
+2026-08-06 11:33:49,497 │ 54206d6d │ test-suning │ 30b6c5542129 │ mcp.client.streamable_http │ INFO │ GET stream disconnected, reconnecting in 1000ms...
+2026-08-06 11:34:00,070 │ bf437c4f │ test-yuhang5 │ 80333db8787b │ agent.skills.loader │ INFO │ loaded skill: search_cities (mcp, read)
+2026-08-06 11:34:00,070 │ bf437c4f │ test-yuhang5 │ 80333db8787b │ agent.skills.loader │ INFO │ loaded skill: manage_farm_logs (mcp, read)
+2026-08-06 11:34:00,070 │ bf437c4f │ test-yuhang5 │ 80333db8787b │ agent.skills.loader │ INFO │ loaded skill: get_farm_status (mcp, read)
+2026-08-06 11:34:00,070 │ bf437c4f │ test-yuhang5 │ 80333db8787b │ agent.skills.loader │ INFO │ loaded skill: web_search (local, read)
+2026-08-06 11:34:00,070 │ bf437c4f │ test-yuhang5 │ 80333db8787b │ agent.skills.loader │ INFO │ loaded skill: calculate_arithmetic (local, read)
+2026-08-06 11:34:00,071 │ bf437c4f │ test-yuhang5 │ 80333db8787b │ agent.skills.loader │ INFO │ loaded skill: get_weather (mcp, read)
+2026-08-06 11:34:00,071 │ bf437c4f │ test-yuhang5 │ 80333db8787b │ agent.core.react │ INFO │ loaded 6 skills: ['search_cities(mcp,read)', 'manage_farm_logs(mcp,read)', 'get_farm_status(mcp,read)', 'web_search(local,read)', 'calculate_arithmetic(local,read)', 'get_weather(mcp,read)']
+2026-08-06 11:34:00,071 │ bf437c4f │ test-yuhang5 │ 80333db8787b │ agent.infra.mcp_client │ INFO │ connecting to business MCP server: http://127.0.0.1:9876/mcp
+2026-08-06 11:34:00,090 │ bf437c4f │ test-yuhang5 │ 80333db8787b │ mcp.client.streamable_http │ INFO │ Received session ID: 1b5ad87f1dcd4d29a0995b713b45b791
+2026-08-06 11:34:00,090 │ bf437c4f │ test-yuhang5 │ 80333db8787b │ mcp.client.streamable_http │ INFO │ Negotiated protocol version: 2025-11-25
+2026-08-06 11:34:00,091 │ bf437c4f │ test-yuhang5 │ 80333db8787b │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=2 tools=6
+2026-08-06 11:34:01,328 │ bf437c4f │ test-yuhang5 │ 80333db8787b │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1237 model=qwen3.6-flash tool_calls=1
+2026-08-06 11:34:01,328 │ bf437c4f │ test-yuhang5 │ 80333db8787b │ agent.infra.mcp_client │ INFO │ calling business tool: search_cities args={'keyword': '明天余杭天气怎么样'}
+2026-08-06 11:34:01,362 │ bf437c4f │ test-yuhang5 │ 80333db8787b │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=4 tools=6
+2026-08-06 11:34:02,715 │ bf437c4f │ test-yuhang5 │ 80333db8787b │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1352 model=qwen3.6-flash tool_calls=1
+2026-08-06 11:34:02,715 │ bf437c4f │ test-yuhang5 │ 80333db8787b │ agent.infra.mcp_client │ INFO │ calling business tool: get_weather args={'location': '浙江省杭州市余杭区'}
+2026-08-06 11:34:04,224 │ bf437c4f │ test-yuhang5 │ 80333db8787b │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=6 tools=6
+2026-08-06 11:34:06,536 │ bf437c4f │ test-yuhang5 │ 80333db8787b │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=2311 model=qwen3.6-flash tool_calls=0
+2026-08-06 11:34:06,545 │ bf437c4f │ test-yuhang5 │ 80333db8787b │ mcp.client.streamable_http │ INFO │ GET stream disconnected, reconnecting in 1000ms...
+2026-08-06 11:34:27,185 │ 423293a1 │ default │ f571b2922ba1 │ agent.skills.loader │ INFO │ loaded skill: search_cities (mcp, read)
+2026-08-06 11:34:27,186 │ 423293a1 │ default │ f571b2922ba1 │ agent.skills.loader │ INFO │ loaded skill: manage_farm_logs (mcp, read)
+2026-08-06 11:34:27,186 │ 423293a1 │ default │ f571b2922ba1 │ agent.skills.loader │ INFO │ loaded skill: get_farm_status (mcp, read)
+2026-08-06 11:34:27,187 │ 423293a1 │ default │ f571b2922ba1 │ agent.skills.loader │ INFO │ loaded skill: web_search (local, read)
+2026-08-06 11:34:27,187 │ 423293a1 │ default │ f571b2922ba1 │ agent.skills.loader │ INFO │ loaded skill: calculate_arithmetic (local, read)
+2026-08-06 11:34:27,187 │ 423293a1 │ default │ f571b2922ba1 │ agent.skills.loader │ INFO │ loaded skill: get_weather (mcp, read)
+2026-08-06 11:34:27,187 │ 423293a1 │ default │ f571b2922ba1 │ agent.core.react │ INFO │ loaded 6 skills: ['search_cities(mcp,read)', 'manage_farm_logs(mcp,read)', 'get_farm_status(mcp,read)', 'web_search(local,read)', 'calculate_arithmetic(local,read)', 'get_weather(mcp,read)']
+2026-08-06 11:34:27,188 │ 423293a1 │ default │ f571b2922ba1 │ agent.infra.mcp_client │ INFO │ connecting to business MCP server: http://127.0.0.1:9876/mcp
+2026-08-06 11:34:27,224 │ 423293a1 │ default │ f571b2922ba1 │ mcp.client.streamable_http │ INFO │ Received session ID: 7f2c64605e2f45cab0f4b66519571a2a
+2026-08-06 11:34:27,224 │ 423293a1 │ default │ f571b2922ba1 │ mcp.client.streamable_http │ INFO │ Negotiated protocol version: 2025-11-25
+2026-08-06 11:34:27,225 │ 423293a1 │ default │ f571b2922ba1 │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=11 tools=6
+2026-08-06 11:34:28,756 │ 423293a1 │ default │ f571b2922ba1 │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1530 model=qwen3.6-flash tool_calls=0
+2026-08-06 11:34:28,760 │ 423293a1 │ default │ f571b2922ba1 │ mcp.client.streamable_http │ INFO │ GET stream disconnected, reconnecting in 1000ms...
+2026-08-06 11:34:41,726 │ 67b450b5 │ default │ c1c16153022b │ agent.skills.loader │ INFO │ loaded skill: search_cities (mcp, read)
+2026-08-06 11:34:41,727 │ 67b450b5 │ default │ c1c16153022b │ agent.skills.loader │ INFO │ loaded skill: manage_farm_logs (mcp, read)
+2026-08-06 11:34:41,727 │ 67b450b5 │ default │ c1c16153022b │ agent.skills.loader │ INFO │ loaded skill: get_farm_status (mcp, read)
+2026-08-06 11:34:41,727 │ 67b450b5 │ default │ c1c16153022b │ agent.skills.loader │ INFO │ loaded skill: web_search (local, read)
+2026-08-06 11:34:41,727 │ 67b450b5 │ default │ c1c16153022b │ agent.skills.loader │ INFO │ loaded skill: calculate_arithmetic (local, read)
+2026-08-06 11:34:41,728 │ 67b450b5 │ default │ c1c16153022b │ agent.skills.loader │ INFO │ loaded skill: get_weather (mcp, read)
+2026-08-06 11:34:41,728 │ 67b450b5 │ default │ c1c16153022b │ agent.core.react │ INFO │ loaded 6 skills: ['search_cities(mcp,read)', 'manage_farm_logs(mcp,read)', 'get_farm_status(mcp,read)', 'web_search(local,read)', 'calculate_arithmetic(local,read)', 'get_weather(mcp,read)']
+2026-08-06 11:34:41,728 │ 67b450b5 │ default │ c1c16153022b │ agent.infra.mcp_client │ INFO │ connecting to business MCP server: http://127.0.0.1:9876/mcp
+2026-08-06 11:34:41,760 │ 67b450b5 │ default │ c1c16153022b │ mcp.client.streamable_http │ INFO │ Received session ID: da05388814814fee81d44ad71db3f046
+2026-08-06 11:34:41,760 │ 67b450b5 │ default │ c1c16153022b │ mcp.client.streamable_http │ INFO │ Negotiated protocol version: 2025-11-25
+2026-08-06 11:34:41,761 │ 67b450b5 │ default │ c1c16153022b │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=12 tools=6
+2026-08-06 11:34:43,235 │ 67b450b5 │ default │ c1c16153022b │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1473 model=qwen3.6-flash tool_calls=1
+2026-08-06 11:34:43,235 │ 67b450b5 │ default │ c1c16153022b │ agent.infra.mcp_client │ INFO │ calling business tool: get_weather args={'location': '睢宁天气如恶化'}
+2026-08-06 11:34:44,983 │ 67b450b5 │ default │ c1c16153022b │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=14 tools=6
+2026-08-06 11:34:46,919 │ 67b450b5 │ default │ c1c16153022b │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1936 model=qwen3.6-flash tool_calls=0
+2026-08-06 11:34:46,922 │ 67b450b5 │ default │ c1c16153022b │ mcp.client.streamable_http │ INFO │ GET stream disconnected, reconnecting in 1000ms...
+2026-08-06 14:08:30,037 │ - │ - │ - │ agent.infra.chat_store │ INFO │ mongodb connection ok: 192.168.1.14:27017/farm_manager?authSource=admin collection=conversationMessages existing_messages=48
+2026-08-06 14:08:30,043 │ - │ - │ - │ agent.infra.trace.collector │ INFO │ trace system started (batch=20, interval=5s)
+2026-08-06 14:08:45,950 │ 7170a191 │ test-sz-qweather │ b1cb0ca8e45e │ agent.skills.loader │ INFO │ loaded skill: search_cities (mcp, read)
+2026-08-06 14:08:45,951 │ 7170a191 │ test-sz-qweather │ b1cb0ca8e45e │ agent.skills.loader │ INFO │ loaded skill: manage_farm_logs (mcp, read)
+2026-08-06 14:08:45,951 │ 7170a191 │ test-sz-qweather │ b1cb0ca8e45e │ agent.skills.loader │ INFO │ loaded skill: get_farm_status (mcp, read)
+2026-08-06 14:08:45,952 │ 7170a191 │ test-sz-qweather │ b1cb0ca8e45e │ agent.skills.loader │ INFO │ loaded skill: web_search (local, read)
+2026-08-06 14:08:45,953 │ 7170a191 │ test-sz-qweather │ b1cb0ca8e45e │ agent.skills.loader │ INFO │ loaded skill: calculate_arithmetic (local, read)
+2026-08-06 14:08:45,953 │ 7170a191 │ test-sz-qweather │ b1cb0ca8e45e │ agent.skills.loader │ INFO │ loaded skill: get_weather (mcp, read)
+2026-08-06 14:08:45,953 │ 7170a191 │ test-sz-qweather │ b1cb0ca8e45e │ agent.core.react │ INFO │ loaded 6 skills: ['search_cities(mcp,read)', 'manage_farm_logs(mcp,read)', 'get_farm_status(mcp,read)', 'web_search(local,read)', 'calculate_arithmetic(local,read)', 'get_weather(mcp,read)']
+2026-08-06 14:08:45,954 │ 7170a191 │ test-sz-qweather │ b1cb0ca8e45e │ agent.prompts │ INFO │ prompt loaded: system (401 chars)
+2026-08-06 14:08:45,954 │ 7170a191 │ test-sz-qweather │ b1cb0ca8e45e │ agent.infra.mcp_client │ INFO │ connecting to business MCP server: http://127.0.0.1:9876/mcp
+2026-08-06 14:08:46,072 │ 7170a191 │ test-sz-qweather │ b1cb0ca8e45e │ mcp.client.streamable_http │ INFO │ Received session ID: 34b39af9c95a438492069d6f3262e18c
+2026-08-06 14:08:46,072 │ 7170a191 │ test-sz-qweather │ b1cb0ca8e45e │ mcp.client.streamable_http │ INFO │ Negotiated protocol version: 2025-11-25
+2026-08-06 14:08:46,073 │ 7170a191 │ test-sz-qweather │ b1cb0ca8e45e │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=2 tools=6
+2026-08-06 14:08:48,282 │ 7170a191 │ test-sz-qweather │ b1cb0ca8e45e │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=2208 model=qwen3.6-flash tool_calls=1
+2026-08-06 14:08:48,282 │ 7170a191 │ test-sz-qweather │ b1cb0ca8e45e │ agent.infra.mcp_client │ INFO │ calling business tool: get_weather args={'location': '苏州天气怎么样'}
+2026-08-06 14:08:48,601 │ 7170a191 │ test-sz-qweather │ b1cb0ca8e45e │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=4 tools=6
+2026-08-06 14:08:50,675 │ 7170a191 │ test-sz-qweather │ b1cb0ca8e45e │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=2074 model=qwen3.6-flash tool_calls=0
+2026-08-06 14:08:50,684 │ 7170a191 │ test-sz-qweather │ b1cb0ca8e45e │ mcp.client.streamable_http │ INFO │ GET stream disconnected, reconnecting in 1000ms...
+2026-08-06 14:09:37,585 │ b4abc5fc │ default │ 1fce2c9bc10b │ agent.skills.loader │ INFO │ loaded skill: search_cities (mcp, read)
+2026-08-06 14:09:37,587 │ b4abc5fc │ default │ 1fce2c9bc10b │ agent.skills.loader │ INFO │ loaded skill: manage_farm_logs (mcp, read)
+2026-08-06 14:09:37,587 │ b4abc5fc │ default │ 1fce2c9bc10b │ agent.skills.loader │ INFO │ loaded skill: get_farm_status (mcp, read)
+2026-08-06 14:09:37,588 │ b4abc5fc │ default │ 1fce2c9bc10b │ agent.skills.loader │ INFO │ loaded skill: web_search (local, read)
+2026-08-06 14:09:37,588 │ b4abc5fc │ default │ 1fce2c9bc10b │ agent.skills.loader │ INFO │ loaded skill: calculate_arithmetic (local, read)
+2026-08-06 14:09:37,589 │ b4abc5fc │ default │ 1fce2c9bc10b │ agent.skills.loader │ INFO │ loaded skill: get_weather (mcp, read)
+2026-08-06 14:09:37,589 │ b4abc5fc │ default │ 1fce2c9bc10b │ agent.core.react │ INFO │ loaded 6 skills: ['search_cities(mcp,read)', 'manage_farm_logs(mcp,read)', 'get_farm_status(mcp,read)', 'web_search(local,read)', 'calculate_arithmetic(local,read)', 'get_weather(mcp,read)']
+2026-08-06 14:09:37,590 │ b4abc5fc │ default │ 1fce2c9bc10b │ agent.infra.mcp_client │ INFO │ connecting to business MCP server: http://127.0.0.1:9876/mcp
+2026-08-06 14:09:37,628 │ b4abc5fc │ default │ 1fce2c9bc10b │ mcp.client.streamable_http │ INFO │ Received session ID: 1e03753c7e2a4c1e90faea354499ef29
+2026-08-06 14:09:37,628 │ b4abc5fc │ default │ 1fce2c9bc10b │ mcp.client.streamable_http │ INFO │ Negotiated protocol version: 2025-11-25
+2026-08-06 14:09:37,629 │ b4abc5fc │ default │ 1fce2c9bc10b │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=15 tools=6
+2026-08-06 14:09:40,056 │ b4abc5fc │ default │ 1fce2c9bc10b │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=2427 model=qwen3.6-flash tool_calls=0
+2026-08-06 14:09:40,069 │ b4abc5fc │ default │ 1fce2c9bc10b │ mcp.client.streamable_http │ INFO │ GET stream disconnected, reconnecting in 1000ms...
+2026-08-06 14:10:30,669 │ - │ - │ - │ __main__ │ INFO │ starting agent on http://127.0.0.1:8000
+2026-08-06 14:10:30,870 │ - │ - │ - │ agent.infra.chat_store │ INFO │ mongodb connection ok: 192.168.1.14:27017/farm_manager?authSource=admin collection=conversationMessages existing_messages=52
+2026-08-06 14:10:30,876 │ - │ - │ - │ agent.infra.trace.collector │ INFO │ trace system started (batch=20, interval=5s)
+2026-08-06 14:10:40,767 │ 08c1a092 │ default │ f936d335b3a2 │ agent.skills.loader │ INFO │ loaded skill: search_cities (mcp, read)
+2026-08-06 14:10:40,769 │ 08c1a092 │ default │ f936d335b3a2 │ agent.skills.loader │ INFO │ loaded skill: manage_farm_logs (mcp, read)
+2026-08-06 14:10:40,771 │ 08c1a092 │ default │ f936d335b3a2 │ agent.skills.loader │ INFO │ loaded skill: get_farm_status (mcp, read)
+2026-08-06 14:10:40,774 │ 08c1a092 │ default │ f936d335b3a2 │ agent.skills.loader │ INFO │ loaded skill: web_search (local, read)
+2026-08-06 14:10:40,776 │ 08c1a092 │ default │ f936d335b3a2 │ agent.skills.loader │ INFO │ loaded skill: calculate_arithmetic (local, read)
+2026-08-06 14:10:40,778 │ 08c1a092 │ default │ f936d335b3a2 │ agent.skills.loader │ INFO │ loaded skill: get_weather (mcp, read)
+2026-08-06 14:10:40,778 │ 08c1a092 │ default │ f936d335b3a2 │ agent.core.react │ INFO │ loaded 6 skills: ['search_cities(mcp,read)', 'manage_farm_logs(mcp,read)', 'get_farm_status(mcp,read)', 'web_search(local,read)', 'calculate_arithmetic(local,read)', 'get_weather(mcp,read)']
+2026-08-06 14:10:40,779 │ 08c1a092 │ default │ f936d335b3a2 │ agent.prompts │ INFO │ prompt loaded: system (401 chars)
+2026-08-06 14:10:40,779 │ 08c1a092 │ default │ f936d335b3a2 │ agent.infra.mcp_client │ INFO │ connecting to business MCP server: http://127.0.0.1:9876/mcp
+2026-08-06 14:10:40,910 │ 08c1a092 │ default │ f936d335b3a2 │ mcp.client.streamable_http │ INFO │ Received session ID: abdb0a3d76a94981affefd3a4c1ba235
+2026-08-06 14:10:40,911 │ 08c1a092 │ default │ f936d335b3a2 │ mcp.client.streamable_http │ INFO │ Negotiated protocol version: 2025-11-25
+2026-08-06 14:10:40,911 │ 08c1a092 │ default │ f936d335b3a2 │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=16 tools=6
+2026-08-06 14:10:42,841 │ 08c1a092 │ default │ f936d335b3a2 │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=1929 model=qwen3.6-flash tool_calls=0
+2026-08-06 14:10:42,846 │ 08c1a092 │ default │ f936d335b3a2 │ mcp.client.streamable_http │ INFO │ GET stream disconnected, reconnecting in 1000ms...
+2026-08-06 14:10:52,552 │ 99381cc2 │ default │ a53498d48ead │ agent.skills.loader │ INFO │ loaded skill: search_cities (mcp, read)
+2026-08-06 14:10:52,553 │ 99381cc2 │ default │ a53498d48ead │ agent.skills.loader │ INFO │ loaded skill: manage_farm_logs (mcp, read)
+2026-08-06 14:10:52,553 │ 99381cc2 │ default │ a53498d48ead │ agent.skills.loader │ INFO │ loaded skill: get_farm_status (mcp, read)
+2026-08-06 14:10:52,553 │ 99381cc2 │ default │ a53498d48ead │ agent.skills.loader │ INFO │ loaded skill: web_search (local, read)
+2026-08-06 14:10:52,553 │ 99381cc2 │ default │ a53498d48ead │ agent.skills.loader │ INFO │ loaded skill: calculate_arithmetic (local, read)
+2026-08-06 14:10:52,553 │ 99381cc2 │ default │ a53498d48ead │ agent.skills.loader │ INFO │ loaded skill: get_weather (mcp, read)
+2026-08-06 14:10:52,553 │ 99381cc2 │ default │ a53498d48ead │ agent.core.react │ INFO │ loaded 6 skills: ['search_cities(mcp,read)', 'manage_farm_logs(mcp,read)', 'get_farm_status(mcp,read)', 'web_search(local,read)', 'calculate_arithmetic(local,read)', 'get_weather(mcp,read)']
+2026-08-06 14:10:52,553 │ 99381cc2 │ default │ a53498d48ead │ agent.infra.mcp_client │ INFO │ connecting to business MCP server: http://127.0.0.1:9876/mcp
+2026-08-06 14:10:52,573 │ 99381cc2 │ default │ a53498d48ead │ mcp.client.streamable_http │ INFO │ Received session ID: 535f774cf96346a0a1bee33cefa4bbf8
+2026-08-06 14:10:52,573 │ 99381cc2 │ default │ a53498d48ead │ mcp.client.streamable_http │ INFO │ Negotiated protocol version: 2025-11-25
+2026-08-06 14:10:52,574 │ 99381cc2 │ default │ a53498d48ead │ agent.infra.llm │ INFO │ LLM stream: model=qwen3.6-flash messages=17 tools=6
+2026-08-06 14:10:56,096 │ 99381cc2 │ default │ a53498d48ead │ agent.core.react │ INFO │ event=llm_call status=success duration_ms=3521 model=qwen3.6-flash tool_calls=0
+2026-08-06 14:10:56,108 │ 99381cc2 │ default │ a53498d48ead │ mcp.client.streamable_http │ INFO │ GET stream disconnected, reconnecting in 1000ms...
+2026-08-06 15:04:50,910 │ - │ - │ - │ __main__ │ INFO │ starting agent on http://127.0.0.1:8000
+2026-08-06 15:04:51,097 │ - │ - │ - │ agent.infra.chat_store │ INFO │ mongodb connection ok: 192.168.1.14:27017/farm_manager?authSource=admin collection=conversationMessages existing_messages=56
+2026-08-06 15:04:51,106 │ - │ - │ - │ agent.infra.trace.collector │ INFO │ trace system started (batch=20, interval=5s)

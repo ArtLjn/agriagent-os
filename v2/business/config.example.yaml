@@ -1,0 +1,23 @@
+# Business MCP Server 配置模板（不含真实密钥）。
+# 复制为 config.yaml 后填入真实值。
+
+server:
+  host: "127.0.0.1"
+  port: 9876
+  mcp_path: "/mcp"
+
+database:
+  url: "mysql+pymysql://USER:PASSWORD@HOST:3306/farm_manager?charset=utf8mb4"
+  pool_size: 5
+  max_overflow: 10
+  pool_recycle: 1800
+  echo: false
+
+secrets:
+  qweather_api_key: ""
+  searchhub_base_url: ""
+  searchhub_api_key: ""
+
+weather:
+  latitude: 34.26
+  longitude: 117.18
