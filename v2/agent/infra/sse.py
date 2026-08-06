@@ -29,13 +29,14 @@ def sse_event(event_type: str, data: dict[str, Any] | None = None) -> str:
 
 
 # Convenience constructors.
-def meta(turn_id: str, conversation_id: str, user_input: str) -> dict:
+def meta(turn_id: str, conversation_id: str, user_input: str, request_id: str = "") -> dict:
     return {
         "type": "meta",
         "data": {
             "turn_id": turn_id,
             "conversation_id": conversation_id,
             "user_input": user_input,
+            "request_id": request_id,
         },
     }
 

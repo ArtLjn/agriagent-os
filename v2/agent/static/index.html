@@ -9,6 +9,7 @@
     --bg: #0f1115;
     --surface: #171a21;
     --surface-2: #1e222b;
+    --surface-3: #252a35;
     --border: #2a2f3a;
     --text: #e4e6eb;
     --text-dim: #8b90a0;
@@ -29,6 +30,8 @@
     --radius-sm: 8px;
     --shadow: 0 4px 24px rgba(0,0,0,0.3);
     --transition: 150ms ease;
+    --sidebar-w: 280px;
+    --trace-w: 420px;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -43,47 +46,193 @@
     flex-direction: column;
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
+    overflow: hidden;
   }
 
-  header {
+  /* ─── App Layout ─────────────────────────────────────────── */
+
+  .app {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ─── Left Sidebar ──────────────────────────────────────── */
+
+  .sidebar {
+    width: var(--sidebar-w);
     background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+
+  .sidebar-header {
+    padding: 14px 16px;
     border-bottom: 1px solid var(--border);
-    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+
+  .sidebar-header h2 {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+  }
+
+  .btn-icon {
+    background: var(--surface-2);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition);
+  }
+  .btn-icon:hover {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+  }
+
+  .conv-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+  }
+  .conv-list::-webkit-scrollbar { width: 4px; }
+  .conv-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .conv-item {
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    margin-bottom: 4px;
+    border: 1px solid transparent;
+    transition: all var(--transition);
+  }
+  .conv-item:hover {
+    background: var(--surface-2);
+    border-color: var(--border);
+  }
+  .conv-item.active {
+    background: var(--info-bg);
+    border-color: rgba(96, 165, 250, 0.3);
+  }
+
+  .conv-item-id {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .conv-item-preview {
+    font-size: 12px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .conv-item-meta {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .conv-badge {
+    background: var(--surface-3);
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-size: 10px;
+  }
+
+  .conv-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  .conv-more {
+    padding: 8px;
+    text-align: center;
+    border-top: 1px solid var(--border);
     flex-shrink: 0;
   }
-  header h1 {
-    font-size: 15px;
-    font-weight: 600;
-    letter-spacing: -0.01em;
+  .conv-more button {
+    background: transparent;
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all var(--transition);
+  }
+  .conv-more button:hover {
+    color: var(--text);
+    background: var(--surface-2);
+  }
+
+  /* ─── Main Chat Area ────────────────────────────────────── */
+
+  .chat-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .chat-header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+
+  .chat-header-left {
     display: flex;
     align-items: center;
     gap: 10px;
   }
-  header h1 .dot {
+
+  .chat-title {
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .chat-title .dot {
     width: 8px;
     height: 8px;
     border-radius: 50%;
     background: var(--success);
     box-shadow: 0 0 8px var(--success);
   }
-  header .actions { display: flex; gap: 8px; }
-  header button {
-    background: var(--surface-2);
-    color: var(--text-dim);
-    border: 1px solid var(--border);
-    padding: 6px 14px;
-    border-radius: var(--radius-sm);
-    font-size: 12px;
-    cursor: pointer;
-    transition: all var(--transition);
-    min-height: 32px;
-  }
-  header button:hover {
-    background: var(--border);
-    color: var(--text);
+
+  .chat-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 
   .turn-status {
@@ -94,18 +243,354 @@
     gap: 6px;
   }
 
-  main {
+  .btn {
+    background: var(--surface-2);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    padding: 6px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all var(--transition);
+    min-height: 32px;
+  }
+  .btn:hover {
+    background: var(--border);
+    color: var(--text);
+  }
+  .btn.active {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+  }
+  .btn-primary {
+    background: var(--primary);
+    color: #fff;
+    border: none;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--primary-hover);
+  }
+
+  .chat-main {
     flex: 1;
     overflow-y: auto;
-    padding: 24px 20px;
+    padding: 20px;
     scroll-behavior: smooth;
   }
-  main::-webkit-scrollbar { width: 6px; }
-  main::-webkit-scrollbar-track { background: transparent; }
-  main::-webkit-scrollbar-thumb {
-    background: var(--border);
-    border-radius: 3px;
+  .chat-main::-webkit-scrollbar { width: 6px; }
+  .chat-main::-webkit-scrollbar-track { background: transparent; }
+  .chat-main::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .chat-empty {
+    text-align: center;
+    padding: 80px 40px;
+    color: var(--text-muted);
   }
+  .chat-empty h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+  .chat-empty p {
+    font-size: 14px;
+  }
+
+  .chat-input-bar {
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  .chat-input-bar input {
+    flex: 1;
+    padding: 11px 16px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 14px;
+    outline: none;
+    color: var(--text);
+    transition: border-color var(--transition);
+  }
+  .chat-input-bar input::placeholder { color: var(--text-muted); }
+  .chat-input-bar input:focus { border-color: var(--primary); }
+  .chat-input-bar button {
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    padding: 0 24px;
+    border-radius: var(--radius);
+    font-size: 14px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all var(--transition);
+    min-height: 44px;
+  }
+  .chat-input-bar button:hover:not(:disabled) {
+    background: var(--primary-hover);
+    transform: translateY(-1px);
+  }
+  .chat-input-bar button:disabled {
+    background: var(--surface-2);
+    color: var(--text-muted);
+    cursor: not-allowed;
+  }
+
+  /* ─── Trace Panel (Right Drawer) ────────────────────────── */
+
+  .trace-panel {
+    width: 0;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    overflow: hidden;
+    transition: width var(--transition);
+  }
+  .trace-panel.open {
+    width: var(--trace-w);
+  }
+
+  .trace-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .trace-header h3 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-dim);
+  }
+  .trace-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .trace-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .trace-tab {
+    flex: 1;
+    padding: 10px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all var(--transition);
+  }
+  .trace-tab.active {
+    color: var(--text);
+    border-bottom-color: var(--primary);
+  }
+
+  .trace-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+  }
+  .trace-body::-webkit-scrollbar { width: 4px; }
+  .trace-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .trace-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  .trace-request-item {
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    margin-bottom: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    transition: all var(--transition);
+  }
+  .trace-request-item:hover {
+    border-color: var(--text-muted);
+  }
+  .trace-request-item.active {
+    border-color: var(--primary);
+    background: var(--info-bg);
+  }
+
+  .trace-req-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+  }
+  .trace-req-id {
+    font-family: "SF Mono", Menlo, monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .trace-req-status {
+    font-size: 10px;
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-weight: 600;
+  }
+  .trace-req-status.success { background: var(--success-bg); color: var(--success); }
+  .trace-req-status.failed { background: var(--danger-bg); color: var(--danger); }
+  .trace-req-status.blocked { background: var(--warning-bg); color: var(--warning); }
+
+  .trace-req-meta {
+    display: flex;
+    gap: 12px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  /* Trace Detail View */
+  .trace-detail-header {
+    padding: 12px;
+    background: var(--surface-2);
+    border-radius: var(--radius-sm);
+    margin-bottom: 12px;
+    border: 1px solid var(--border);
+  }
+  .trace-detail-header h4 {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 8px;
+    font-family: "SF Mono", Menlo, monospace;
+    word-break: break-all;
+  }
+  .trace-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    font-size: 11px;
+  }
+  .trace-summary-grid .label { color: var(--text-muted); }
+  .trace-summary-grid .value { color: var(--text); font-weight: 600; }
+
+  .trace-node {
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 4px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: all var(--transition);
+    background: var(--surface-2);
+  }
+  .trace-node:hover {
+    border-color: var(--text-muted);
+  }
+  .trace-node.has-error {
+    border-color: rgba(248, 113, 113, 0.35);
+    background: var(--danger-bg);
+  }
+  .trace-node.selected {
+    border-color: var(--primary);
+    background: var(--info-bg);
+  }
+
+  .trace-node-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+  }
+  .trace-node-step {
+    background: var(--surface-3);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-family: "SF Mono", Menlo, monospace;
+    font-size: 10px;
+    color: var(--text-muted);
+    min-width: 20px;
+    text-align: center;
+  }
+  .trace-node-name {
+    flex: 1;
+    color: var(--text);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .trace-node-type {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 10px;
+    background: var(--surface-3);
+    color: var(--text-muted);
+    font-family: "SF Mono", Menlo, monospace;
+  }
+  .trace-node-dur {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-family: "SF Mono", Menlo, monospace;
+    min-width: 40px;
+    text-align: right;
+  }
+
+  .trace-node-detail {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .trace-node-detail .detail-label {
+    color: var(--text-muted);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+  .trace-node-detail pre {
+    background: rgba(0,0,0,0.3);
+    padding: 8px 10px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 11px;
+    font-family: "SF Mono", Menlo, monospace;
+    line-height: 1.5;
+    color: var(--text);
+    max-height: 200px;
+  }
+
+  .trace-breakdown-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    margin-bottom: 4px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+  }
+  .trace-breakdown-item .type {
+    font-family: "SF Mono", Menlo, monospace;
+    color: var(--text);
+    font-weight: 500;
+  }
+  .trace-breakdown-item .stats {
+    display: flex;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  /* ─── Event Cards (existing) ────────────────────────────── */
 
   .event {
     background: var(--surface);
@@ -113,7 +598,7 @@
     padding: 14px 18px;
     margin-bottom: 10px;
     border: 1px solid var(--border);
-    max-width: 85%;
+    max-width: 100%;
     animation: fadeSlide 0.25s ease-out;
     transition: border-color var(--transition);
   }
@@ -195,7 +680,7 @@
     color: var(--text);
     font-size: 15px;
     padding: 18px 22px;
-    max-width: 85%;
+    max-width: 100%;
     animation: fadeSlide 0.3s ease-out;
   }
   .event-final_answer .label {
@@ -256,9 +741,7 @@
     align-items: center;
     gap: 6px;
   }
-  .event .label .icon {
-    font-size: 12px;
-  }
+  .event .label .icon { font-size: 12px; }
 
   .event pre {
     background: rgba(0,0,0,0.3);
@@ -272,12 +755,8 @@
     color: var(--text);
   }
 
-  .json-block {
-    margin-top: 8px;
-  }
-  .json-block > pre {
-    margin-top: 0;
-  }
+  .json-block { margin-top: 8px; }
+  .json-block > pre { margin-top: 0; }
   .json-block > details > summary {
     display: flex;
     align-items: center;
@@ -293,9 +772,7 @@
     transition: background var(--transition);
     list-style: none;
   }
-  .json-block > details > summary::-webkit-details-marker {
-    display: none;
-  }
+  .json-block > details > summary::-webkit-details-marker { display: none; }
   .json-block > details > summary:hover {
     background: rgba(255,255,255,0.08);
     color: var(--text);
@@ -306,20 +783,10 @@
     font-size: 10px;
     color: var(--text-muted);
   }
-  .json-block > details[open] > summary .chev {
-    transform: rotate(90deg);
-  }
-  .json-block > details > summary .json-label {
-    font-weight: 600;
-    color: var(--text);
-  }
-  .json-block > details > summary .json-meta {
-    color: var(--text-muted);
-    font-size: 11px;
-  }
-  .json-block > details > pre {
-    margin-top: 6px;
-  }
+  .json-block > details[open] > summary .chev { transform: rotate(90deg); }
+  .json-block > details > summary .json-label { font-weight: 600; color: var(--text); }
+  .json-block > details > summary .json-meta { color: var(--text-muted); font-size: 11px; }
+  .json-block > details > pre { margin-top: 6px; }
 
   .approval-buttons {
     margin-top: 14px;
@@ -336,70 +803,14 @@
     transition: all var(--transition);
     min-height: 36px;
   }
-  .btn-approve {
-    background: var(--success);
-    color: #064e3b;
-  }
-  .btn-approve:hover:not(:disabled) {
-    background: #10b981;
-    transform: translateY(-1px);
-  }
-  .btn-reject {
-    background: var(--danger);
-    color: #450a0a;
-  }
-  .btn-reject:hover:not(:disabled) {
-    background: #ef4444;
-    transform: translateY(-1px);
-  }
+  .btn-approve { background: var(--success); color: #064e3b; }
+  .btn-approve:hover:not(:disabled) { background: #10b981; transform: translateY(-1px); }
+  .btn-reject { background: var(--danger); color: #450a0a; }
+  .btn-reject:hover:not(:disabled) { background: #ef4444; transform: translateY(-1px); }
   .approval-buttons button:disabled {
     opacity: 0.4;
     cursor: not-allowed;
     transform: none;
-  }
-
-  footer {
-    background: var(--surface);
-    border-top: 1px solid var(--border);
-    padding: 14px 20px;
-    display: flex;
-    gap: 10px;
-    flex-shrink: 0;
-  }
-  footer input {
-    flex: 1;
-    padding: 11px 16px;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    font-size: 14px;
-    outline: none;
-    color: var(--text);
-    transition: border-color var(--transition);
-  }
-  footer input::placeholder { color: var(--text-muted); }
-  footer input:focus { border-color: var(--primary); }
-
-  footer button {
-    background: var(--primary);
-    color: #fff;
-    border: none;
-    padding: 0 24px;
-    border-radius: var(--radius);
-    font-size: 14px;
-    cursor: pointer;
-    font-weight: 600;
-    transition: all var(--transition);
-    min-height: 44px;
-  }
-  footer button:hover:not(:disabled) {
-    background: var(--primary-hover);
-    transform: translateY(-1px);
-  }
-  footer button:disabled {
-    background: var(--surface-2);
-    color: var(--text-muted);
-    cursor: not-allowed;
   }
 
   .spinner {
@@ -438,96 +849,388 @@
 
   .hidden { display: none !important; }
 
-  @media (max-width: 640px) {
+  @media (max-width: 768px) {
+    .sidebar { width: 60px; }
+    .sidebar .conv-item-preview,
+    .sidebar .conv-item-meta,
+    .sidebar-header h2 { display: none; }
+    .trace-panel.open { width: 100%; position: absolute; right: 0; top: 0; bottom: 0; z-index: 10; }
     .event { max-width: 100%; }
-    header h1 { font-size: 14px; }
-    main { padding: 16px 12px; }
-    footer { padding: 12px; }
   }
 </style>
 </head>
 <body>
-<header>
-  <h1><span class="dot"></span> farm-manager agent</h1>
-  <div class="turn-status" id="turn-status"></div>
-  <div class="actions">
-    <button onclick="resetConversation()">重置会话</button>
-  </div>
-</header>
+<div class="app">
+  <!-- ─── Left Sidebar: Conversation List ──────────────────── -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <h2>对话列表</h2>
+      <button class="btn-icon" id="new-conv-btn" title="新建对话" onclick="newConversation()">+</button>
+    </div>
+    <div class="conv-list" id="conv-list">
+      <div class="conv-empty">
+        <div style="font-size:32px;margin-bottom:10px">💬</div>
+        暂无对话
+      </div>
+    </div>
+    <div class="conv-more" id="conv-more" style="display:none">
+      <button onclick="loadMoreConversations()">加载更多</button>
+    </div>
+  </aside>
 
-<main id="events"></main>
+  <!-- ─── Center: Chat ────────────────────────────────────── -->
+  <section class="chat-area">
+    <div class="chat-header">
+      <div class="chat-header-left">
+        <div class="chat-title">
+          <span class="dot"></span>
+          <span id="current-conv-title">选择一个对话</span>
+        </div>
+        <div class="turn-status" id="turn-status"></div>
+      </div>
+      <div class="chat-header-actions">
+        <button class="btn" id="trace-toggle-btn" onclick="toggleTrace()" title="切换 Trace 面板">🔍 Trace</button>
+        <button class="btn" onclick="resetConversation()" title="重置当前对话">🗑 重置</button>
+      </div>
+    </div>
 
-<footer>
-  <input id="msg-input" type="text" placeholder="问点什么…（Enter 发送）"
-         onkeydown="if(event.key==='Enter') sendMessage()" autocomplete="off">
-  <button id="send-btn" onclick="sendMessage()">发送</button>
-</footer>
+    <div class="chat-main" id="chat-main">
+      <div class="chat-empty" id="chat-empty">
+        <h3>开始对话</h3>
+        <p>从左侧选择一个对话，或点击 + 创建新对话。</p>
+      </div>
+    </div>
+
+    <div class="chat-input-bar">
+      <input id="msg-input" type="text" placeholder="问点什么…（Enter 发送）"
+             onkeydown="if(event.key==='Enter') sendMessage()" autocomplete="off">
+      <button id="send-btn" onclick="sendMessage()">发送</button>
+    </div>
+  </section>
+
+  <!-- ─── Right Drawer: Trace Panel ───────────────────────── -->
+  <aside class="trace-panel" id="trace-panel">
+    <div class="trace-header">
+      <h3>🔍 Trace</h3>
+      <div class="trace-header-actions">
+        <button class="btn-icon" onclick="refreshTrace()" title="刷新">↻</button>
+        <button class="btn-icon" onclick="toggleTrace()" title="关闭">✕</button>
+      </div>
+    </div>
+    <div class="trace-tabs">
+      <button class="trace-tab active" data-tab="requests" onclick="switchTraceTab('requests')">请求列表</button>
+      <button class="trace-tab" data-tab="detail" onclick="switchTraceTab('detail')">详情</button>
+    </div>
+    <div class="trace-body" id="trace-body">
+      <div class="trace-empty">选择对话后查看 Trace</div>
+    </div>
+  </aside>
+</div>
 
 <script>
-const eventsEl = document.getElementById('events');
+// ═══════════════════════════════════════════════════════════
+// State
+// ═══════════════════════════════════════════════════════════
+const state = {
+  currentConvId: null,
+  convList: [],
+  convCursor: null,
+  convHasMore: false,
+  pendingNewConvId: null,
+  tracePanelOpen: false,
+  traceTab: 'requests',
+  traceRequests: [],
+  traceCursor: null,
+  traceHasMore: false,
+  selectedRequestId: null,
+  traceNodes: [],
+  traceSummary: null,
+  lastRequestId: null,
+};
+
+// ═══════════════════════════════════════════════════════════
+// DOM refs
+// ═══════════════════════════════════════════════════════════
+const convListEl = document.getElementById('conv-list');
+const convMoreEl = document.getElementById('conv-more');
+const convTitleEl = document.getElementById('current-conv-title');
+const chatMainEl = document.getElementById('chat-main');
+const chatEmptyEl = document.getElementById('chat-empty');
 const inputEl = document.getElementById('msg-input');
 const sendBtn = document.getElementById('send-btn');
 const turnStatusEl = document.getElementById('turn-status');
+const tracePanelEl = document.getElementById('trace-panel');
+const traceBodyEl = document.getElementById('trace-body');
+const traceTabEls = document.querySelectorAll('.trace-tab');
 
-let busy = false;
-let streamingEl = null;
-let streamingContent = '';
-
+// ═══════════════════════════════════════════════════════════
+// Icons
+// ═══════════════════════════════════════════════════════════
 const ICONS = {
   meta: '●', thought: '💭', plan: '📋', action: '⚡',
   observation: '📊', approval_required: '⚠️', approval_result: '✅',
   final_answer: '💬', error: '⛔', done: '✓'
 };
 
+// ═══════════════════════════════════════════════════════════
+// Utility
+// ═══════════════════════════════════════════════════════════
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+function escapeAttr(s) { return escapeHtml(s); }
+
 function setBusy(state) {
-  busy = state;
-  sendBtn.disabled = state;
-  inputEl.disabled = state;
   if (state) {
+    sendBtn.disabled = true;
+    inputEl.disabled = true;
     turnStatusEl.innerHTML = '<span class="spinner"></span>处理中';
   } else {
+    sendBtn.disabled = false;
+    inputEl.disabled = false;
     turnStatusEl.textContent = '';
+    inputEl.focus();
   }
 }
 
-function autoScroll() {
-  eventsEl.scrollTop = eventsEl.scrollHeight;
+function autoScroll(el) {
+  el.scrollTop = el.scrollHeight;
 }
 
-const JSON_COLLAPSE_THRESHOLD = 200;
+// ═══════════════════════════════════════════════════════════
+// Conversation List
+// ═══════════════════════════════════════════════════════════
+async function loadConversations() {
+  try {
+    const url = state.convCursor
+      ? `/conversations?limit=20&cursor=${encodeURIComponent(state.convCursor)}`
+      : `/conversations?limit=20`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    state.convList = state.convCursor
+      ? [...state.convList, ...data.items]
+      : data.items;
+    state.convCursor = data.next_cursor;
+    state.convHasMore = data.has_more;
+    renderConvList();
+  } catch (e) {
+    console.error('loadConversations failed:', e);
+    convListEl.innerHTML = '<div class="conv-empty">Failed to load conversations</div>';
+  }
+}
+
+function renderConvList() {
+  if (!state.convList.length && !state.pendingNewConvId) {
+    convListEl.innerHTML = '<div class="conv-empty"><div style="font-size:32px;margin-bottom:10px">💬</div>暂无对话</div>';
+    convMoreEl.style.display = 'none';
+    return;
+  }
+  let items = state.convList;
+  if (state.pendingNewConvId && !items.find(c => c.conversation_id === state.pendingNewConvId)) {
+    items = [{
+      conversation_id: state.pendingNewConvId,
+      last_message: '（新对话）',
+      last_role: '',
+      last_at: new Date().toISOString(),
+      message_count: 0,
+      _pending: true,
+    }, ...items];
+  }
+  convListEl.innerHTML = items.map(c => `
+    <div class="conv-item ${c.conversation_id === state.currentConvId ? 'active' : ''}"
+         onclick="selectConversation('${escapeAttr(c.conversation_id)}')">
+      <div class="conv-item-id">${escapeHtml(c.conversation_id)}</div>
+      <div class="conv-item-preview">${escapeHtml(c.last_message || '暂无消息')}</div>
+      <div class="conv-item-meta">
+        <span>${escapeHtml(c.last_role === 'user' ? '你' : c.last_role === 'assistant' ? '助手' : '')}</span>
+        <span class="conv-badge">${c.message_count || 0} 条</span>
+      </div>
+    </div>
+  `).join('');
+  convMoreEl.style.display = state.convHasMore ? 'block' : 'none';
+}
+
+function loadMoreConversations() {
+  loadConversations();
+}
+
+async function selectConversation(convId) {
+  state.currentConvId = convId;
+  convTitleEl.textContent = convId;
+  renderConvList();
+  await loadConversationMessages(convId);
+  if (state.tracePanelOpen) {
+    loadTraceRequests(convId);
+  }
+}
+
+function newConversation() {
+  const id = 'conv-' + Date.now().toString(36);
+  state.currentConvId = id;
+  state.pendingNewConvId = id;
+  convTitleEl.textContent = '新对话';
+  renderConvList();
+  chatMainEl.innerHTML = '';
+  const emptyDiv = document.createElement('div');
+  emptyDiv.className = 'chat-empty';
+  emptyDiv.innerHTML = '<h3>新对话</h3><p>开始输入下方发送消息。</p>';
+  chatMainEl.appendChild(emptyDiv);
+  inputEl.focus();
+}
+
+async function loadConversationMessages(convId) {
+  try {
+    const resp = await fetch(`/conversations/${encodeURIComponent(convId)}?limit=100`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    renderMessages(data.items || []);
+  } catch (e) {
+    console.error('loadConversationMessages failed:', e);
+    chatMainEl.innerHTML = '';
+    const errDiv = document.createElement('div');
+    errDiv.className = 'chat-empty';
+    errDiv.innerHTML = '<h3>加载错误</h3><p>无法加载对话记录。</p>';
+    chatMainEl.appendChild(errDiv);
+  }
+}
+
+function renderMessages(messages) {
+  chatMainEl.innerHTML = '';
+  if (!messages.length) {
+    chatMainEl.appendChild(createChatEmpty());
+    return;
+  }
+  for (const msg of messages) {
+    const el = createMessageBubble(msg);
+    chatMainEl.appendChild(el);
+  }
+}
+
+function createChatEmpty() {
+  const div = document.createElement('div');
+  div.className = 'chat-empty';
+  div.innerHTML = '<h3>暂无消息</h3><p>开始发送消息吧。</p>';
+  return div;
+}
+
+function createMessageBubble(msg) {
+  const el = document.createElement('div');
+  el.className = 'event event-final_answer';
+  if (msg.role === 'user') {
+    el.style.background = 'linear-gradient(135deg, rgba(167,139,250,0.12), rgba(79,140,255,0.08))';
+    el.style.borderColor = 'rgba(167,139,250,0.25)';
+  }
+  const label = document.createElement('div');
+  label.className = 'label';
+  const icon = msg.role === 'user' ? '👤' : '💬';
+  const roleName = msg.role === 'user' ? '你' : '助手';
+  label.innerHTML = `<span class="icon">${icon}</span>${roleName}`;
+  el.appendChild(label);
+  const body = document.createElement('div');
+  body.className = 'assistant-text';
+  body.textContent = msg.content;
+  el.appendChild(body);
+  return el;
+}
+
+// ═══════════════════════════════════════════════════════════
+// Chat (SSE streaming)
+// ═══════════════════════════════════════════════════════════
+let busy = false;
+let streamingEl = null;
+let streamingContent = '';
+
+function startStreaming() {
+  const el = document.createElement('div');
+  el.className = 'event event-final_answer';
+  const label = document.createElement('div');
+  label.className = 'label';
+  label.innerHTML = `<span class="icon">${ICONS.final_answer}</span>assistant`;
+  el.appendChild(label);
+  const body = document.createElement('div');
+  body.className = 'assistant-text';
+  body.innerHTML = '<span class="cursor"></span>';
+  el.appendChild(body);
+  chatMainEl.appendChild(el);
+  autoScroll(chatMainEl);
+  streamingEl = body;
+  streamingContent = '';
+}
+
+function appendStreamDelta(delta) {
+  if (!streamingEl) return;
+  streamingContent += delta;
+  streamingEl.innerHTML = escapeHtml(streamingContent).replace(/\n/g, '<br>') + '<span class="cursor"></span>';
+  autoScroll(chatMainEl);
+}
+
+function finalizeStreaming(text) {
+  if (streamingEl) {
+    streamingEl.innerHTML = escapeHtml(text).replace(/\n/g, '<br>');
+    streamingEl = null;
+    streamingContent = '';
+    autoScroll(chatMainEl);
+  }
+}
+
+function createFinalAnswerBubble(text) {
+  const el = document.createElement('div');
+  el.className = 'event event-final_answer';
+  const label = document.createElement('div');
+  label.className = 'label';
+  label.innerHTML = `<span class="icon">${ICONS.final_answer}</span>assistant`;
+  el.appendChild(label);
+  const body = document.createElement('div');
+  body.className = 'assistant-text';
+  el.textContent = '';
+  el.appendChild(body);
+  chatMainEl.appendChild(el);
+  autoScroll(chatMainEl);
+  streamingEl = body;
+  streamingContent = '';
+  const fullText = text;
+  let i = 0;
+  function typeNext() {
+    if (i >= fullText.length) {
+      streamingEl.innerHTML = escapeHtml(fullText).replace(/\n/g, '<br>');
+      streamingEl = null;
+      return;
+    }
+    const chars = Math.min(2, fullText.length - i);
+    i += chars;
+    streamingContent = fullText.slice(0, i);
+    streamingEl.innerHTML = escapeHtml(streamingContent).replace(/\n/g, '<br>') + '<span class="cursor"></span>';
+    autoScroll(chatMainEl);
+    setTimeout(typeNext, 20);
+  }
+  typeNext();
+}
 
 function createCollapsibleJson(label, jsonStr) {
   const escaped = escapeHtml(jsonStr);
   const lineCount = jsonStr.split('\n').length;
-  const isLong = jsonStr.length > JSON_COLLAPSE_THRESHOLD || lineCount > 5;
+  const isLong = jsonStr.length > 200 || lineCount > 5;
   if (!isLong) {
     return `<div class="json-block"><pre>${escaped}</pre></div>`;
   }
-  const summary = `${label} · ${lineCount} 行 · ${jsonStr.length} 字符`;
   return `<div class="json-block"><details><summary><span class="chev">▶</span><span class="json-label">${escapeHtml(label)}</span><span class="json-meta">· ${lineCount} 行 · ${jsonStr.length} 字符</span></summary><pre>${escaped}</pre></details></div>`;
 }
 
 function appendEvent(type, data) {
-  if (type === 'final_answer_start') {
-    startStreaming();
-    return;
-  }
-  if (type === 'final_answer_delta') {
-    appendStreamDelta(data.delta);
-    return;
-  }
+  if (type === 'final_answer_start') { startStreaming(); return; }
+  if (type === 'final_answer_delta') { appendStreamDelta(data.delta); return; }
   if (type === 'final_answer') {
-    if (streamingEl) {
-      finalizeStreaming(data.text);
-    } else {
-      createFinalAnswerBubble(data.text);
-    }
+    if (streamingEl) { finalizeStreaming(data.text); }
+    else { createFinalAnswerBubble(data.text); }
     return;
   }
 
   const el = document.createElement('div');
   el.className = 'event event-' + type;
-
   const label = document.createElement('div');
   label.className = 'label';
   label.textContent = type.replace(/_/g, ' ');
@@ -538,7 +1241,7 @@ function appendEvent(type, data) {
   switch (type) {
     case 'meta':
       el.classList.add('event-meta');
-      el.innerHTML = `<span class="turn-badge">turn: ${escapeHtml(data.turn_id)}</span> conv: ${escapeHtml(data.conversation_id)}`;
+      el.innerHTML = `<span class="turn-badge">turn: ${escapeHtml(data.turn_id)}</span> conv: ${escapeHtml(data.conversation_id)}${data.request_id ? ' · <span style="color:var(--info);cursor:pointer;text-decoration:underline" onclick="jumpToTrace(\'' + escapeAttr(data.request_id) + '\')">req: ' + escapeHtml(data.request_id) + '</span>' : ''}`;
       break;
     case 'thought':
       body.className = 'thought-content';
@@ -587,138 +1290,58 @@ function appendEvent(type, data) {
       break;
     case 'done':
       el.classList.add('event-done');
-      el.textContent = `turn 结束 · 状态：${data.status}`;
+      el.textContent = `✓ 对话完成 · 状态：${data.status === 'completed' ? '成功' : data.status === 'failed' ? '失败' : data.status}`;
+      // 对话完成后自动刷新 trace 和对话列表
+      if (state.tracePanelOpen) {
+        loadTraceRequests(state.currentConvId);
+      }
+      loadConversations();
       break;
     default:
       body.textContent = JSON.stringify(data);
       el.appendChild(body);
   }
-
-  if (type !== 'meta' && type !== 'done') {
-    eventsEl.appendChild(el);
-  } else {
-    eventsEl.appendChild(el);
-  }
-  autoScroll();
-}
-
-function startStreaming() {
-  const el = document.createElement('div');
-  el.className = 'event event-final_answer';
-
-  const label = document.createElement('div');
-  label.className = 'label';
-  label.innerHTML = `<span class="icon">${ICONS.final_answer}</span>assistant`;
-  el.appendChild(label);
-
-  const body = document.createElement('div');
-  body.className = 'assistant-text';
-  body.innerHTML = '<span class="cursor"></span>';
   el.appendChild(body);
-
-  eventsEl.appendChild(el);
-  autoScroll();
-
-  streamingEl = body;
-  streamingContent = '';
+  autoScroll(chatMainEl);
 }
-
-function appendStreamDelta(delta) {
-  if (!streamingEl) return;
-  streamingContent += delta;
-  streamingEl.innerHTML = escapeHtml(streamingContent).replace(/\n/g, '<br>') + '<span class="cursor"></span>';
-  autoScroll();
-}
-
-function finalizeStreaming(text) {
-  if (streamingEl) {
-    streamingEl.innerHTML = escapeHtml(text).replace(/\n/g, '<br>');
-    streamingEl = null;
-    streamingContent = '';
-    autoScroll();
-  } else {
-    createFinalAnswerBubble(text);
-  }
-}
-
-function createFinalAnswerBubble(text) {
-  const el = document.createElement('div');
-  el.className = 'event event-final_answer';
-
-  const label = document.createElement('div');
-  label.className = 'label';
-  label.innerHTML = `<span class="icon">${ICONS.final_answer}</span>assistant`;
-  el.appendChild(label);
-
-  const body = document.createElement('div');
-  body.className = 'assistant-text';
-  body.textContent = '';
-  el.appendChild(body);
-
-  eventsEl.appendChild(el);
-  autoScroll();
-
-  streamingEl = body;
-  streamingContent = '';
-
-  const fullText = text;
-  let i = 0;
-  function typeNext() {
-    if (i >= fullText.length) {
-      streamingEl.innerHTML = escapeHtml(fullText).replace(/\n/g, '<br>');
-      streamingEl = null;
-      return;
-    }
-    const chars = Math.min(2, fullText.length - i);
-    i += chars;
-    streamingContent = fullText.slice(0, i);
-    streamingEl.innerHTML = escapeHtml(streamingContent).replace(/\n/g, '<br>') + '<span class="cursor"></span>';
-    autoScroll();
-    setTimeout(typeNext, 20);
-  }
-  typeNext();
-}
-
-function escapeHtml(s) {
-  if (s == null) return '';
-  return String(s).replace(/[&<>"']/g, c => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-  }[c]));
-}
-function escapeAttr(s) { return escapeHtml(s); }
 
 async function sendMessage() {
   const msg = inputEl.value.trim();
   if (!msg || busy) return;
+  if (!state.currentConvId) {
+    newConversation();
+  }
   inputEl.value = '';
   setBusy(true);
 
+  // Show user message
   const userEvent = document.createElement('div');
   userEvent.className = 'event event-final_answer';
   userEvent.style.background = 'linear-gradient(135deg, rgba(167,139,250,0.12), rgba(79,140,255,0.08))';
   userEvent.style.borderColor = 'rgba(167,139,250,0.25)';
   const label = document.createElement('div');
   label.className = 'label';
-  label.innerHTML = '<span class="icon">👤</span>you';
+  label.innerHTML = '<span class="icon">👤</span>你';
   userEvent.appendChild(label);
   const body = document.createElement('div');
   body.className = 'assistant-text';
   body.textContent = msg;
   userEvent.appendChild(body);
-  eventsEl.appendChild(userEvent);
-  autoScroll();
+  chatMainEl.appendChild(userEvent);
+  autoScroll(chatMainEl);
 
   try {
     const resp = await fetch('/chat', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({message: msg, conversation_id: 'default'}),
+      body: JSON.stringify({message: msg, conversation_id: state.currentConvId}),
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    let capturedRequestId = null;
 
     while (true) {
       const {done, value} = await reader.read();
@@ -736,11 +1359,20 @@ async function sendMessage() {
         if (!data) continue;
         try {
           const parsed = JSON.parse(data);
+          if (type === 'meta' && parsed.request_id) {
+            capturedRequestId = parsed.request_id;
+            state.lastRequestId = parsed.request_id;
+          }
           appendEvent(type, parsed);
         } catch (e) {
           appendEvent('error', {code: 'parse', message: data});
         }
       }
+    }
+
+    // After chat completes, clear pending new conversation flag and refresh
+    if (state.pendingNewConvId) {
+      state.pendingNewConvId = null;
     }
   } catch (e) {
     appendEvent('error', {code: 'network', message: e.message});
@@ -750,7 +1382,10 @@ async function sendMessage() {
       streamingEl = null;
     }
     setBusy(false);
-    inputEl.focus();
+    // Reload conversation messages to show persisted history
+    if (state.currentConvId) {
+      await loadConversationMessages(state.currentConvId);
+    }
   }
 }
 
@@ -784,19 +1419,246 @@ async function approveTurn(turnId, btnEl, decision) {
 }
 
 async function resetConversation() {
+  if (!state.currentConvId) return;
   if (!confirm('确认清空当前会话记忆？')) return;
   await fetch('/reset', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({conversation_id: 'default'}),
+    body: JSON.stringify({conversation_id: state.currentConvId}),
   });
-  eventsEl.innerHTML = '';
+  chatMainEl.innerHTML = '';
   streamingEl = null;
   streamingContent = '';
-  appendEvent('meta', {turn_id: '-', conversation_id: 'default', user_input: '(会话已重置)'});
+  state.pendingNewConvId = null;
+  state.selectedRequestId = null;
+  const emptyDiv = document.createElement('div');
+  emptyDiv.className = 'chat-empty';
+  emptyDiv.innerHTML = '<h3>对话已重置</h3><p>开始新的对话。</p>';
+  chatMainEl.appendChild(emptyDiv);
+  if (state.tracePanelOpen) {
+    loadTraceRequests(state.currentConvId);
+  }
+  loadConversations();
 }
 
-inputEl.focus();
+// ═══════════════════════════════════════════════════════════
+// Trace Panel
+// ═══════════════════════════════════════════════════════════
+function toggleTrace() {
+  state.tracePanelOpen = !state.tracePanelOpen;
+  tracePanelEl.classList.toggle('open', state.tracePanelOpen);
+  document.getElementById('trace-toggle-btn').classList.toggle('active', state.tracePanelOpen);
+  if (state.tracePanelOpen) {
+    loadTraceRequests(state.currentConvId);
+  }
+}
+
+function refreshTrace() {
+  if (state.currentConvId) {
+    loadTraceRequests(state.currentConvId);
+  }
+}
+
+function switchTraceTab(tab) {
+  state.traceTab = tab;
+  traceTabEls.forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  renderTraceBody();
+}
+
+async function loadTraceRequests(convId) {
+  if (!convId) {
+    traceBodyEl.innerHTML = '<div class="trace-empty">请先选择对话</div>';
+    return;
+  }
+  try {
+    traceBodyEl.innerHTML = '<div class="trace-empty">加载中...</div>';
+    const url = `/traces?conversation_id=${encodeURIComponent(convId)}&limit=20`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    state.traceRequests = data.items || [];
+    state.traceCursor = data.next_cursor;
+    state.traceHasMore = data.has_more;
+    state.traceTab = 'requests';
+    traceTabEls.forEach(t => t.classList.toggle('active', t.dataset.tab === 'requests'));
+    renderTraceBody();
+  } catch (e) {
+    console.error('loadTraceRequests failed:', e);
+    traceBodyEl.innerHTML = '<div class="trace-empty">加载失败</div>';
+  }
+}
+
+function renderTraceBody() {
+  if (state.traceTab === 'requests') {
+    renderTraceRequests();
+  } else {
+    renderTraceDetail();
+  }
+}
+
+function renderTraceRequests() {
+  if (!state.traceRequests.length) {
+    traceBodyEl.innerHTML = '<div class="trace-empty">暂无 Trace 记录<br>发送消息后自动生成</div>';
+    return;
+  }
+  traceBodyEl.innerHTML = state.traceRequests.map(r => {
+    const isLatest = r.request_id === state.lastRequestId;
+    return `
+    <div class="trace-request-item ${isLatest ? 'active' : ''}" onclick="selectTraceRequest('${escapeAttr(r.request_id)}')">
+      <div class="trace-req-header">
+        <span class="trace-req-id">${escapeHtml(r.request_id)}${isLatest ? ' ← 最新' : ''}</span>
+        <span class="trace-req-status ${escapeAttr(r.status)}">${escapeHtml(r.status === 'success' ? '成功' : r.status === 'failed' ? '失败' : r.status === 'blocked' ? '阻断' : r.status)}</span>
+      </div>
+      <div class="trace-req-meta">
+        <span>${r.node_count || 0} 节点</span>
+        <span>${r.total_duration_ms || 0}ms</span>
+        ${r.error_count ? `<span style="color:var(--danger)">${r.error_count} 错误</span>` : ''}
+      </div>
+      ${r.metrics && r.metrics.llm_calls ? `<div class="trace-req-meta"><span>LLM: ${r.metrics.llm_calls}次</span><span>Tokens: ${r.metrics.total_tokens || 0}</span></div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function selectTraceRequest(requestId) {
+  state.selectedRequestId = requestId;
+  state.traceTab = 'detail';
+  traceTabEls.forEach(t => t.classList.toggle('active', t.dataset.tab === 'detail'));
+  traceBodyEl.innerHTML = '<div class="trace-empty">Loading...</div>';
+
+  try {
+    const [nodesResp, summaryResp] = await Promise.all([
+      fetch(`/traces/${encodeURIComponent(requestId)}`),
+      fetch(`/traces/${encodeURIComponent(requestId)}/summary`),
+    ]);
+    if (!nodesResp.ok) throw new Error(`HTTP ${nodesResp.status}`);
+    const nodesData = await nodesResp.json();
+    state.traceNodes = nodesData.nodes || [];
+
+    if (summaryResp.ok) {
+      state.traceSummary = await summaryResp.json();
+    } else {
+      state.traceSummary = null;
+    }
+    renderTraceDetail();
+  } catch (e) {
+    console.error('selectTraceRequest failed:', e);
+    traceBodyEl.innerHTML = '<div class="trace-empty">Failed to load trace detail</div>';
+  }
+}
+
+function renderTraceDetail() {
+  if (!state.selectedRequestId) {
+    traceBodyEl.innerHTML = '<div class="trace-empty">从列表选择一个请求查看详情</div>';
+    return;
+  }
+
+  let html = '';
+
+  // Summary section
+  if (state.traceSummary) {
+    const s = state.traceSummary;
+    const statusClass = s.status === 'success' ? '' : s.status;
+    html += `
+      <div class="trace-detail-header">
+        <h4>${escapeHtml(s.request_id || state.selectedRequestId)}</h4>
+        <div class="trace-summary-grid">
+          <div><span class="label">状态</span> <span class="value" style="color:${s.status === 'success' ? 'var(--success)' : 'var(--danger)'}">${escapeHtml(s.status === 'success' ? '成功' : s.status === 'failed' ? '失败' : s.status === 'blocked' ? '阻断' : s.status)}</span></div>
+          <div><span class="label">节点数</span> <span class="value">${s.node_count || 0}</span></div>
+          <div><span class="label">耗时</span> <span class="value">${s.total_duration_ms || 0}ms</span></div>
+          <div><span class="label">错误</span> <span class="value" style="color:${s.error_count ? 'var(--danger)' : ''}">${s.error_count || 0}</span></div>
+          <div><span class="label">开始</span> <span class="value" style="font-size:10px">${escapeHtml(s.started_at || '')}</span></div>
+          <div><span class="label">Turn</span> <span class="value" style="font-size:10px">${escapeHtml(s.turn_id || '')}</span></div>
+        </div>`;
+    if (s.root_error) {
+      html += `<div style="margin-top:8px;padding:8px;background:var(--danger-bg);border-radius:6px;border:1px solid rgba(248,113,113,0.3)">`;
+      html += `<div style="color:var(--danger);font-size:11px;font-weight:600;margin-bottom:4px">错误详情</div>`;
+      html += `<div style="font-size:11px"><b>${escapeHtml(s.root_error.code || '')}</b>: ${escapeHtml(s.root_error.message || '')}</div>`;
+      html += `</div>`;
+    }
+    if (s.metrics) {
+      html += `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">`;
+      html += `<div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">性能指标</div>`;
+      html += `<div class="trace-summary-grid">`;
+      html += `<div><span class="label">LLM 调用</span> <span class="value">${s.metrics.llm_calls || 0}</span></div>`;
+      html += `<div><span class="label">工具调用</span> <span class="value">${s.metrics.tool_calls || 0}</span></div>`;
+      html += `<div><span class="label">Prompt tokens</span> <span class="value">${s.metrics.prompt_tokens || 0}</span></div>`;
+      html += `<div><span class="label">总 tokens</span> <span class="value">${s.metrics.total_tokens || 0}</span></div>`;
+      html += `</div></div>`;
+    }
+    if (s.node_breakdown && s.node_breakdown.length) {
+      html += `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">`;
+      html += `<div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">按类型分组</div>`;
+      for (const b of s.node_breakdown) {
+        html += `<div class="trace-breakdown-item">
+          <span class="type">${escapeHtml(b.node_type)}</span>
+          <span class="stats">
+            <span>${b.count}×</span>
+            <span>${b.duration_ms_total}ms</span>
+            ${b.error_count ? `<span style="color:var(--danger)">${b.error_count} err</span>` : ''}
+          </span>
+        </div>`;
+      }
+      html += `</div>`;
+    }
+    html += `</div>`;
+  }
+
+  // Node list
+  if (state.traceNodes.length) {
+    html += `<div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">追踪节点</div>`;
+    html += state.traceNodes.map(n => {
+      const isErr = n.status && n.status !== 'success';
+      return `
+        <div class="trace-node ${isErr ? 'has-error' : ''}" onclick="toggleTraceNode(this, '${escapeAttr(n.node_type)}', ${n.step_index || 0})">
+          <div class="trace-node-row">
+            <span class="trace-node-step">#${n.step_index || 0}</span>
+            <span class="trace-node-name">${escapeHtml(n.node_name)}</span>
+            <span class="trace-node-type">${escapeHtml(n.node_type)}</span>
+            <span class="trace-node-dur">${n.duration_ms || 0}ms</span>
+          </div>
+          <div class="trace-node-detail hidden">
+            ${n.input_data ? `<div><div class="detail-label">输入</div><pre>${escapeHtml(typeof n.input_data === 'string' ? n.input_data : JSON.stringify(n.input_data, null, 2))}</pre></div>` : ''}
+            ${n.output_data ? `<div style="margin-top:8px"><div class="detail-label">输出</div><pre>${escapeHtml(typeof n.output_data === 'string' ? n.output_data : JSON.stringify(n.output_data, null, 2))}</pre></div>` : ''}
+            ${n.error_message ? `<div style="margin-top:8px;color:var(--danger)"><div class="detail-label">错误</div><pre>${escapeHtml(n.error_message)}</pre></div>` : ''}
+            ${n.token_usage ? `<div style="margin-top:8px"><div class="detail-label">Token 用量</div><pre>${escapeHtml(JSON.stringify(n.token_usage, null, 2))}</pre></div>` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+  } else {
+    html += '<div class="trace-empty">暂无追踪节点数据</div>';
+  }
+
+  traceBodyEl.innerHTML = html;
+}
+
+function toggleTraceNode(el, nodeType, stepIndex) {
+  const detail = el.querySelector('.trace-node-detail');
+  if (detail) {
+    detail.classList.toggle('hidden');
+    el.classList.toggle('selected');
+  }
+}
+
+function jumpToTrace(requestId) {
+  state.lastRequestId = requestId;
+  toggleTrace();
+  selectTraceRequest(requestId);
+}
+
+// ═══════════════════════════════════════════════════════════
+// Init
+// ═══════════════════════════════════════════════════════════
+async function init() {
+  try {
+    await loadConversations();
+  } catch (e) {
+    console.error('Failed to load conversations:', e);
+  }
+  inputEl.focus();
+}
+
+init();
 </script>
 </body>
 </html>

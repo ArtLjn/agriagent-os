@@ -125,7 +125,7 @@ def _metrics(nodes: list[dict[str, Any]]) -> dict[str, Any]:
         if node_type in {"llm", "llm_call"}:
             metrics["llm_calls"] += 1
             metrics["llm_duration_ms"] += duration
-        elif node_type in {"tool", "skill_call"}:
+        elif node_type in {"tool", "tool_call", "skill_call"}:
             metrics["tool_calls"] += 1
             metrics["skill_calls"] += 1
             metrics["tool_duration_ms"] += duration

@@ -42,7 +42,7 @@ from agent.infra import sse
 from agent.infra.llm import chat_stream, MODEL
 from agent.infra.logging import log_event
 from agent.infra.mcp_client import BusinessClient
-from agent.infra.trace import trace_llm_call, trace_tool_call
+from agent.infra.trace import get_trace, increment_step, trace_llm_call, trace_tool_call
 from agent.skills import loader as skill_loader
 from agent.skills.context import SkillContext
 
@@ -58,7 +58,10 @@ async def run_turn(
     """Execute one user turn. Yields SSE events as they happen."""
     turn.memory_snapshot = memory.snapshot(turn.conversation_id)
 
-    yield sse.meta(turn.turn_id, turn.conversation_id, turn.user_input)
+    yield sse.meta(
+        turn.turn_id, turn.conversation_id, turn.user_input,
+        request_id=(get_trace().request_id if get_trace() else ""),
+    )
 
     skills = skill_loader.load_all()
     tools_schema = skill_loader.to_openai_tools(skills)
@@ -79,6 +82,7 @@ async def run_turn(
 
             while turn.status == "running" and turn.step_count < turn.max_steps:
                 turn.step_count += 1
+                increment_step()
 
                 # ── 流式 LLM 调用 ───────────────────────────────
                 _llm_start = time.time()
