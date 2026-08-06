@@ -1,0 +1,161 @@
+{
+  "tables": [
+    {
+      "table": "trace_records",
+      "strategy": "delete",
+      "mysql_count": 42,
+      "mongo_count": 751,
+      "backend": "dual",
+      "verify_status": "missing_or_failed",
+      "compensation_backlog": 0,
+      "blocked_reasons": [
+        {
+          "code": "MYSQL_CLEANUP_BACKEND_NOT_MONGO",
+          "backend": "dual"
+        },
+        {
+          "code": "MYSQL_CLEANUP_VERIFY_REQUIRED"
+        }
+      ],
+      "status": "blocked"
+    },
+    {
+      "table": "agent_case_drafts",
+      "strategy": "delete",
+      "mysql_count": 0,
+      "mongo_count": 0,
+      "backend": "dual",
+      "verify_status": "missing_or_failed",
+      "compensation_backlog": 0,
+      "blocked_reasons": [
+        {
+          "code": "MYSQL_CLEANUP_BACKEND_NOT_MONGO",
+          "backend": "dual"
+        },
+        {
+          "code": "MYSQL_CLEANUP_VERIFY_REQUIRED"
+        }
+      ],
+      "status": "blocked"
+    },
+    {
+      "table": "agent_repair_packs",
+      "strategy": "delete",
+      "mysql_count": 4,
+      "mongo_count": 3,
+      "backend": "dual",
+      "verify_status": "missing_or_failed",
+      "compensation_backlog": 0,
+      "blocked_reasons": [
+        {
+          "code": "MYSQL_CLEANUP_BACKEND_NOT_MONGO",
+          "backend": "dual"
+        },
+        {
+          "code": "MYSQL_CLEANUP_VERIFY_REQUIRED"
+        }
+      ],
+      "status": "blocked"
+    },
+    {
+      "table": "agent_review_issue_chains",
+      "strategy": "delete",
+      "mysql_count": 8,
+      "mongo_count": 8,
+      "backend": "dual",
+      "verify_status": "missing_or_failed",
+      "compensation_backlog": 1,
+      "blocked_reasons": [
+        {
+          "code": "MYSQL_CLEANUP_BACKEND_NOT_MONGO",
+          "backend": "dual"
+        },
+        {
+          "code": "MYSQL_CLEANUP_VERIFY_REQUIRED"
+        },
+        {
+          "code": "MYSQL_CLEANUP_COMPENSATION_BACKLOG",
+          "count": 1
+        }
+      ],
+      "status": "blocked"
+    },
+    {
+      "table": "agent_data_flywheel_prelabels",
+      "strategy": "delete",
+      "mysql_count": 45,
+      "mongo_count": 45,
+      "backend": "dual",
+      "verify_status": "missing_or_failed",
+      "compensation_backlog": 0,
+      "blocked_reasons": [
+        {
+          "code": "MYSQL_CLEANUP_BACKEND_NOT_MONGO",
+          "backend": "dual"
+        },
+        {
+          "code": "MYSQL_CLEANUP_VERIFY_REQUIRED"
+        }
+      ],
+      "status": "blocked"
+    },
+    {
+      "table": "conversation_messages",
+      "strategy": "slim",
+      "mysql_count": 316,
+      "mongo_count": 308,
+      "backend": "mysql",
+      "verify_status": "missing_or_failed",
+      "compensation_backlog": 0,
+      "blocked_reasons": [
+        {
+          "code": "MYSQL_CLEANUP_BACKEND_NOT_MONGO",
+          "backend": "mysql"
+        },
+        {
+          "code": "MYSQL_CLEANUP_VERIFY_REQUIRED"
+        }
+      ],
+      "status": "blocked"
+    },
+    {
+      "table": "agent_records",
+      "strategy": "delete",
+      "mysql_count": 227,
+      "mongo_count": 221,
+      "backend": "mysql",
+      "verify_status": "missing_or_failed",
+      "compensation_backlog": 0,
+      "blocked_reasons": [
+        {
+          "code": "MYSQL_CLEANUP_BACKEND_NOT_MONGO",
+          "backend": "mysql"
+        },
+        {
+          "code": "MYSQL_CLEANUP_VERIFY_REQUIRED"
+        }
+      ],
+      "status": "blocked"
+    },
+    {
+      "table": "guardrails_logs",
+      "strategy": "delete",
+      "mysql_count": 0,
+      "mongo_count": 0,
+      "backend": "mysql",
+      "verify_status": "missing_or_failed",
+      "compensation_backlog": 0,
+      "blocked_reasons": [
+        {
+          "code": "MYSQL_CLEANUP_BACKEND_NOT_MONGO",
+          "backend": "mysql"
+        },
+        {
+          "code": "MYSQL_CLEANUP_VERIFY_REQUIRED"
+        }
+      ],
+      "status": "blocked"
+    }
+  ],
+  "generated_at": "2026-07-06T14:45:47.559035"
+}

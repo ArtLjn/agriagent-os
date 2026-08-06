@@ -1,0 +1,8 @@
+{
+  "table": "agent_records",
+  "row_count": 227,
+  "backup_file": "var/mongodb-cleanup/backups/manual-dev-cleanup/agent_records-20260706144841.jsonl",
+  "sha256": "62ff3f23491aa61cc64081ce0489c966b2838ef48fd464a57b83ceef00b691c8",
+  "created_at": "2026-07-06T14:48:41.552783",
+  "format": "jsonl"
+}

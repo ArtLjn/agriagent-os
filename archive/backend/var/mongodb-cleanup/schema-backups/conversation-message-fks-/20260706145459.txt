@@ -1,0 +1,3 @@
+('agent_turns', 'agent_turns_ibfk_3', ['user_message_id'], ['id'])
+('agent_turns', 'agent_turns_ibfk_4', ['assistant_message_id'], ['id'])
+('feedback_records', 'feedback_records_ibfk_1', ['conversation_message_id'], ['id'])

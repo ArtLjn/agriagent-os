@@ -1,0 +1,13 @@
+{
+  "table": "guardrails_logs",
+  "mode": "dry-run",
+  "strategy": "delete",
+  "planned_count": 0,
+  "affected_count": 0,
+  "batch_size": 500,
+  "batches": 0,
+  "backup_sha256": null,
+  "stopped_on_error": false,
+  "errors": [],
+  "generated_at": "2026-07-06T14:36:46.279545"
+}

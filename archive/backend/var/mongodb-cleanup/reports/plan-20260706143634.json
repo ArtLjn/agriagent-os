@@ -1,0 +1,21 @@
+{
+  "tables": [
+    {
+      "table": "guardrails_logs",
+      "strategy": "delete",
+      "mysql_count": 0,
+      "mongo_count": 0,
+      "backend": "mysql",
+      "verify_status": "passed",
+      "compensation_backlog": 0,
+      "blocked_reasons": [
+        {
+          "code": "MYSQL_CLEANUP_BACKEND_NOT_MONGO",
+          "backend": "mysql"
+        }
+      ],
+      "status": "blocked"
+    }
+  ],
+  "generated_at": "2026-07-06T14:36:34.892671"
+}

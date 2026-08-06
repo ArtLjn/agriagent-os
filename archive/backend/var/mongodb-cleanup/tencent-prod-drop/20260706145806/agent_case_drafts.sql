@@ -1,0 +1,21 @@
+CREATE TABLE `agent_case_drafts` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `farm_id` int NOT NULL,
+  `draft_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `source_sample_id` varchar(160) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `target_type` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'draft',
+  `case_json` json NOT NULL,
+  `created_by` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` datetime NOT NULL,
+  `updated_at` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `ix_agent_case_drafts_draft_id` (`draft_id`),
+  KEY `ix_agent_case_drafts_farm_id` (`farm_id`),
+  KEY `ix_agent_case_drafts_source_sample_id` (`source_sample_id`),
+  KEY `ix_agent_case_drafts_target_type` (`target_type`),
+  KEY `ix_agent_case_drafts_status` (`status`),
+  KEY `ix_agent_case_drafts_created_by` (`created_by`),
+  KEY `ix_agent_case_drafts_created_at` (`created_at`),
+  CONSTRAINT `agent_case_drafts_ibfk_1` FOREIGN KEY (`farm_id`) REFERENCES `farms` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci

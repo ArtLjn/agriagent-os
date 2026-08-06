@@ -1,0 +1,8 @@
+{
+  "table": "trace_records",
+  "row_count": 42,
+  "backup_file": "var/mongodb-cleanup/backups/manual-dev-cleanup/trace_records-20260706144833.jsonl",
+  "sha256": "2c508e3d78792b1ce9d20cad000e0b57f335b45eacc9462313b666154a540bc0",
+  "created_at": "2026-07-06T14:48:33.958906",
+  "format": "jsonl"
+}

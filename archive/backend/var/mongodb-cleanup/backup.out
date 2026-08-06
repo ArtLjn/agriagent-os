@@ -1,0 +1,9 @@
+{
+  "table": "guardrails_logs",
+  "row_count": 0,
+  "backup_file": "var/mongodb-cleanup/backups/guardrails_logs-20260706143645.jsonl",
+  "metadata_file": "var/mongodb-cleanup/backups/guardrails_logs-20260706143645.metadata.json",
+  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "cleanup_confirm_token": "CLEANUP:guardrails_logs:e3b0c44298fc",
+  "rollback_confirm_token": "ROLLBACK:guardrails_logs:e3b0c44298fc"
+}

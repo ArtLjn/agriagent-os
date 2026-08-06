@@ -1,0 +1,8 @@
+{
+  "table": "agent_review_issue_chains",
+  "row_count": 8,
+  "backup_file": "var/mongodb-cleanup/backups/manual-dev-cleanup/agent_review_issue_chains-20260706144837.jsonl",
+  "sha256": "eafbbe5d28259674056a2e50cd050406bec242e8c10dff1631fd761344542444",
+  "created_at": "2026-07-06T14:48:37.800545",
+  "format": "jsonl"
+}

@@ -1,0 +1,8 @@
+{
+  "table": "conversation_messages",
+  "row_count": 316,
+  "backup_file": "var/mongodb-cleanup/backups/manual-dev-cleanup/conversation_messages-20260706144839.jsonl",
+  "sha256": "8c062c795492a803f7bbb009df2d6d14acdde9b11797e13990b40a4298662534",
+  "created_at": "2026-07-06T14:48:40.287506",
+  "format": "jsonl"
+}

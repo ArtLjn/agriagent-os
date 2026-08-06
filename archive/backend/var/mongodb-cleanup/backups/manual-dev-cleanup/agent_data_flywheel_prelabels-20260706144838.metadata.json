@@ -1,0 +1,8 @@
+{
+  "table": "agent_data_flywheel_prelabels",
+  "row_count": 45,
+  "backup_file": "var/mongodb-cleanup/backups/manual-dev-cleanup/agent_data_flywheel_prelabels-20260706144838.jsonl",
+  "sha256": "9b338a3e74abdb9fd60f9cbb1c3aa69ff193487e37cb54df2b2f60130e086270",
+  "created_at": "2026-07-06T14:48:39.095331",
+  "format": "jsonl"
+}

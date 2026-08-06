@@ -1,0 +1,9 @@
+{
+  "table": "guardrails_logs",
+  "mode": "dry-run",
+  "scanned": 0,
+  "inserted": 0,
+  "skipped_existing": 0,
+  "backup_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "generated_at": "2026-07-06T14:36:46.712093"
+}
