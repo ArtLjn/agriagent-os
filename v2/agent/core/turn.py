@@ -33,6 +33,11 @@ class Turn:
     # Input.
     user_input: str = ""
 
+    # Identity（从 JWT 解析，用于 MCP 调用时注入 X-Farm-Id / X-User-Id / X-Agent-Token）。
+    user_id: str = ""
+    farm_id: int = 1
+    agent_token: str = ""
+
     # Accumulated LLM messages (system + user + assistant + tool).
     messages: list[dict[str, Any]] = field(default_factory=list)
 

@@ -8,19 +8,22 @@ Streamable HTTP. Provides:
 
 Designed to be invoked from agent react loop. The connection is
 session-scoped (one client per ReAct turn) to avoid shared state issues.
+
+身份注入：构造时传入 headers（X-Farm-Id / X-User-Id / X-Agent-Token），
+business MCP tools 通过 get_http_request() 读取这些 headers 做农场隔离。
 """
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 from fastmcp import Client
+from fastmcp.client.transports.http import StreamableHttpTransport
 
 logger = logging.getLogger(__name__)
 
 # Business server URL — configurable via env for docker / remote setups.
-import os
-
 BUSINESS_MCP_URL = os.environ.get(
     "BUSINESS_MCP_URL", "http://127.0.0.1:9876/mcp"
 )
@@ -30,18 +33,30 @@ class BusinessClient:
     """Thin wrapper around fastmcp.Client for the business server.
 
     Use as async context manager:
-        async with BusinessClient() as client:
+        async with BusinessClient(headers={"X-Farm-Id": "1"}) as client:
             tools = await client.list_tools()
             result = await client.call_tool("get_farm_status", {})
+
+    Args:
+        url: MCP server endpoint.
+        headers: 身份 headers，注入到每个 MCP HTTP 请求。
+                 业务侧通过 get_http_request().headers 读取。
     """
 
-    def __init__(self, url: str = BUSINESS_MCP_URL) -> None:
+    def __init__(
+        self,
+        url: str = BUSINESS_MCP_URL,
+        *,
+        headers: dict[str, str] | None = None,
+    ) -> None:
         self.url = url
+        self._headers = headers or {}
         self._client: Client | None = None
 
     async def __aenter__(self) -> "BusinessClient":
         logger.info("connecting to business MCP server: %s", self.url)
-        self._client = Client(self.url)
+        transport = StreamableHttpTransport(self.url, headers=self._headers)
+        self._client = Client(transport)
         await self._client.__aenter__()
         return self
 

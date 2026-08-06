@@ -77,8 +77,19 @@ async def run_turn(
     )
 
     try:
-        async with BusinessClient() as business:
-            skill_ctx = SkillContext(business_client=business, turn=turn)
+        identity_headers = {
+            "X-Farm-Id": str(turn.farm_id),
+            "X-User-Id": turn.user_id,
+            "X-Agent-Token": turn.agent_token,
+        }
+        async with BusinessClient(headers=identity_headers) as business:
+            skill_ctx = SkillContext(
+                business_client=business,
+                turn=turn,
+                user_id=turn.user_id,
+                farm_id=turn.farm_id,
+                agent_token=turn.agent_token,
+            )
 
             while turn.status == "running" and turn.step_count < turn.max_steps:
                 turn.step_count += 1

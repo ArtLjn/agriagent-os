@@ -53,11 +53,33 @@ class WeatherCfg:
 
 
 @dataclass
+class AuthCfg:
+    """认证配置（JWT、bcrypt、Agent Service Token）。"""
+
+    jwt_secret: str = ""
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 60 * 24 * 7  # 7 天
+    bcrypt_rounds: int = 12
+    agent_service_token: str = ""
+
+
+@dataclass
+class TokenQuotaCfg:
+    """Token 配额默认值（用户未自定义时使用）。"""
+
+    monthly_limit: int = 1_000_000
+    weekly_limit: int = 250_000
+    over_quota_action: str = "block"
+
+
+@dataclass
 class Settings:
     database: DatabaseCfg = field(default_factory=DatabaseCfg)
     mongodb: MongoCfg = field(default_factory=MongoCfg)
     secrets: SecretsCfg = field(default_factory=SecretsCfg)
     weather: WeatherCfg = field(default_factory=WeatherCfg)
+    auth: AuthCfg = field(default_factory=AuthCfg)
+    token_quota: TokenQuotaCfg = field(default_factory=TokenQuotaCfg)
     default_farm_id: int = 1
 
 
@@ -73,6 +95,8 @@ def _build_settings() -> Settings:
     mongo_raw = raw.get("mongodb", {}) or {}
     secrets_raw = raw.get("secrets", {}) or {}
     weather_raw = raw.get("weather", {}) or {}
+    auth_raw = raw.get("auth", {}) or {}
+    quota_raw = raw.get("token_quota", {}) or {}
 
     settings = Settings(
         database=DatabaseCfg(
@@ -103,6 +127,18 @@ def _build_settings() -> Settings:
             latitude=float(weather_raw.get("latitude", 34.26)),
             longitude=float(weather_raw.get("longitude", 117.18)),
         ),
+        auth=AuthCfg(
+            jwt_secret=auth_raw.get("jwt_secret", ""),
+            jwt_algorithm=auth_raw.get("jwt_algorithm", "HS256"),
+            jwt_expire_minutes=int(auth_raw.get("jwt_expire_minutes", 60 * 24 * 7)),
+            bcrypt_rounds=int(auth_raw.get("bcrypt_rounds", 12)),
+            agent_service_token=auth_raw.get("agent_service_token", ""),
+        ),
+        token_quota=TokenQuotaCfg(
+            monthly_limit=int(quota_raw.get("monthly_limit", 1_000_000)),
+            weekly_limit=int(quota_raw.get("weekly_limit", 250_000)),
+            over_quota_action=quota_raw.get("over_quota_action", "block"),
+        ),
         default_farm_id=int(raw.get("default_farm_id", 1)),
     )
 
@@ -117,6 +153,10 @@ def _build_settings() -> Settings:
         settings.secrets.searchhub_base_url = env
     if env := os.getenv("SEARCHHUB_API_KEY"):
         settings.secrets.searchhub_api_key = env
+    if env := os.getenv("JWT_SECRET"):
+        settings.auth.jwt_secret = env
+    if env := os.getenv("AGENT_SERVICE_TOKEN"):
+        settings.auth.agent_service_token = env
     if env := os.getenv("DEFAULT_FARM_ID"):
         settings.default_farm_id = int(env)
     return settings

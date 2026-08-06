@@ -34,9 +34,20 @@ class BusinessMcpCfg:
 
 
 @dataclass
+class AuthCfg:
+    """认证配置（与 business 共享 JWT secret，用于解析前端传入的 Bearer token）。"""
+
+    jwt_secret: str = ""
+    jwt_algorithm: str = "HS256"
+    agent_service_token: str = ""
+
+
+@dataclass
 class Settings:
     mongodb: MongoCfg = field(default_factory=MongoCfg)
     business_mcp: BusinessMcpCfg = field(default_factory=BusinessMcpCfg)
+    auth: AuthCfg = field(default_factory=AuthCfg)
+    default_farm_id: int = 1
 
 
 def _load_yaml() -> dict:
@@ -49,6 +60,7 @@ def _build_settings() -> Settings:
     raw = _load_yaml()
     mongo_raw = raw.get("mongodb", {}) or {}
     mcp_raw = raw.get("business_mcp", {}) or {}
+    auth_raw = raw.get("auth", {}) or {}
     settings = Settings(
         mongodb=MongoCfg(
             enabled=bool(mongo_raw.get("enabled", False)),
@@ -63,11 +75,23 @@ def _build_settings() -> Settings:
             collections=dict(mongo_raw.get("collections", {}) or {}),
         ),
         business_mcp=BusinessMcpCfg(url=mcp_raw.get("url", "http://127.0.0.1:9876/mcp")),
+        auth=AuthCfg(
+            jwt_secret=auth_raw.get("jwt_secret", ""),
+            jwt_algorithm=auth_raw.get("jwt_algorithm", "HS256"),
+            agent_service_token=auth_raw.get("agent_service_token", ""),
+        ),
+        default_farm_id=int(raw.get("default_farm_id", 1)),
     )
     if env := os.getenv("MONGODB__URI"):
         settings.mongodb.uri = env
     if env := os.getenv("BUSINESS_MCP__URL"):
         settings.business_mcp.url = env
+    if env := os.getenv("JWT_SECRET"):
+        settings.auth.jwt_secret = env
+    if env := os.getenv("AGENT_SERVICE_TOKEN"):
+        settings.auth.agent_service_token = env
+    if env := os.getenv("DEFAULT_FARM_ID"):
+        settings.default_farm_id = int(env)
     return settings
 
 

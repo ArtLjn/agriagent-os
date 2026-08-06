@@ -1,8 +1,9 @@
 """SkillContext — 传递给 skill.execute() 的运行时上下文。
 
 包含：
-  - business_client: 已连接的 BusinessClient（async with 内）
+  - business_client: 已连接的 BusinessClient（async with 内，已注入身份 headers）
   - turn: 当前 Turn 对象
+  - user_id / farm_id / agent_token: 从 JWT 解析的身份信息，skill 可直接读取
 """
 from __future__ import annotations
 
@@ -20,3 +21,6 @@ class SkillContext:
 
     business_client: "BusinessClient"
     turn: "Turn"
+    user_id: str = ""
+    farm_id: int = 1
+    agent_token: str = ""

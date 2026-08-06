@@ -2,9 +2,15 @@
 
 Maps to archive/backend/app/skills/farm-status skill: business logic now
 lives in business/services/farm_service.py, exposed as MCP tool here.
+
+身份注入：agent 通过 BusinessClient headers 传入 X-Farm-Id，
+本工具从 HTTP 请求头读取后传给 service 层做农场隔离。
 """
+from __future__ import annotations
+
 from business.mcp_app import mcp
 from business.services import farm_service
+from business.tools._headers import get_farm_id_from_headers
 
 
 @mcp.tool
@@ -19,4 +25,5 @@ def get_farm_status() -> dict:
       - "农场整体情况"
       - "当前茬口状态"
     """
-    return farm_service.build_summary()
+    farm_id = get_farm_id_from_headers()
+    return farm_service.build_summary(farm_id)

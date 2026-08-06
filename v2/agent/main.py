@@ -35,11 +35,12 @@ _PARENT = str(Path(__file__).resolve().parent.parent)
 if _PARENT not in sys.path:
     sys.path.insert(0, _PARENT)
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from agent.config import settings
 from agent.core import memory
 from agent.core.react import run_turn
 from agent.core.turn import Turn
@@ -99,6 +100,36 @@ class ResetRequest(BaseModel):
     conversation_id: str = "default"
 
 
+# ─── JWT 身份解析 ────────────────────────────────────────────────────
+
+
+def _parse_identity(authorization: str | None) -> dict:
+    """从 Authorization: Bearer <jwt> 解析 user_id / farm_id。
+
+    无 JWT 或解析失败时返回默认值（farm_id=1），保证开发模式可用。
+    生产环境应配置 auth.jwt_secret 并由前端传入 Bearer token。
+    """
+    default = {"user_id": "", "farm_id": settings.default_farm_id or 1, "agent_token": settings.auth.agent_service_token}
+    if not authorization or not authorization.startswith("Bearer "):
+        return default
+    token = authorization[7:]
+    secret = settings.auth.jwt_secret
+    if not secret:
+        logger.debug("jwt_secret not configured, using default identity")
+        return default
+    try:
+        import jwt
+        payload = jwt.decode(token, secret, algorithms=[settings.auth.jwt_algorithm])
+        return {
+            "user_id": payload.get("sub", ""),
+            "farm_id": payload.get("farm_id", default["farm_id"]),
+            "agent_token": settings.auth.agent_service_token,
+        }
+    except Exception as exc:
+        logger.warning("JWT parse failed, using default identity: %s", exc)
+        return default
+
+
 # ─── Approval waiter ────────────────────────────────────────────────
 
 
@@ -124,11 +155,20 @@ def health() -> dict:
 
 
 @app.post("/chat")
-async def chat(req: ChatRequest) -> StreamingResponse:
+async def chat(
+    req: ChatRequest,
+    authorization: str | None = Header(default=None),
+) -> StreamingResponse:
     """Start a ReAct turn and stream events back as SSE."""
-    # Auto-generate conversation_id if user sent "default" and wants fresh.
     conv_id = req.conversation_id or "default"
-    turn = Turn(conversation_id=conv_id, user_input=req.message)
+    identity = _parse_identity(authorization)
+    turn = Turn(
+        conversation_id=conv_id,
+        user_input=req.message,
+        user_id=identity["user_id"],
+        farm_id=identity["farm_id"],
+        agent_token=identity["agent_token"],
+    )
     _active_turns[turn.turn_id] = turn
 
     # 落库 user message（不阻塞 stream；失败 infra 内部已降级 warning）

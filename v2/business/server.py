@@ -15,6 +15,13 @@ from fastmcp import FastMCP
 
 # Import tool registration side-effects (each module decorates @mcp.tool).
 from business.tools import farm, location, logs, weather  # noqa: F401
+from business.tools import (  # noqa: F401
+    cost,
+    crop_cycle,
+    debt,
+    work_orders,
+    workers,
+)
 from business.db import check_connection
 from business.mcp_app import mcp
 
