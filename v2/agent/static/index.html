@@ -235,6 +235,22 @@
     gap: 8px;
   }
 
+  .user-select {
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 6px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    outline: none;
+    transition: border-color var(--transition);
+    max-width: 160px;
+  }
+  .user-select:hover { border-color: var(--text-muted); }
+  .user-select:focus { border-color: var(--primary); }
+  .user-select option { background: var(--surface); color: var(--text); }
+
   .turn-status {
     font-size: 13px;
     color: var(--text-dim);
@@ -713,6 +729,42 @@
     color: var(--danger);
   }
 
+  .event-context_usage,
+  .event-context_compressing,
+  .event-context_compressed {
+    background: transparent;
+    border: none;
+    padding: 4px 18px;
+    max-width: 100%;
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+
+  .event-doom_loop_warning {
+    background: var(--danger-bg);
+    border-color: rgba(248, 113, 113, 0.4);
+    color: var(--danger);
+  }
+
+  .event-verification_warning {
+    background: var(--warning-bg);
+    border-color: rgba(251, 191, 36, 0.35);
+  }
+
+  .event-plan_created {
+    background: var(--purple-bg);
+    border-color: rgba(167, 139, 250, 0.35);
+  }
+
+  .event-plan_step_done {
+    background: transparent;
+    border: 1px dashed var(--border);
+    padding: 6px 14px;
+    max-width: 100%;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
   .event-done {
     background: transparent;
     border: none;
@@ -847,6 +899,113 @@
     word-wrap: break-word;
   }
 
+  /* ─── Markdown Styles ─────────────────────────────────── */
+  .markdown-body {
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--text);
+    word-wrap: break-word;
+  }
+  .markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4 {
+    margin-top: 16px;
+    margin-bottom: 10px;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+  .markdown-body h1 { font-size: 1.4em; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+  .markdown-body h2 { font-size: 1.3em; }
+  .markdown-body h3 { font-size: 1.2em; }
+  .markdown-body p { margin: 8px 0; }
+  .markdown-body ul, .markdown-body ol { padding-left: 24px; margin: 8px 0; }
+  .markdown-body li { margin-bottom: 4px; }
+  .markdown-body strong { color: var(--text); font-weight: 600; }
+  .markdown-body em { color: var(--text-dim); }
+  .markdown-body code {
+    background: rgba(255,255,255,0.08);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: "SF Mono", Menlo, monospace;
+    font-size: 0.9em;
+  }
+  .markdown-body pre {
+    background: rgba(0,0,0,0.4);
+    padding: 12px;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin: 10px 0;
+    font-family: "SF Mono", Menlo, monospace;
+    font-size: 0.85em;
+    line-height: 1.5;
+  }
+  .markdown-body pre code {
+    background: transparent;
+    padding: 0;
+    font-size: inherit;
+  }
+  .markdown-body blockquote {
+    border-left: 3px solid var(--primary);
+    padding-left: 14px;
+    margin: 10px 0;
+    color: var(--text-dim);
+    font-style: italic;
+  }
+  .markdown-body a {
+    color: var(--primary);
+    text-decoration: none;
+  }
+  .markdown-body a:hover { text-decoration: underline; }
+  .markdown-body table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 12px 0;
+    font-size: 0.9em;
+  }
+  .markdown-body th, .markdown-body td {
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    text-align: left;
+  }
+  .markdown-body th {
+    background: var(--surface-2);
+    font-weight: 600;
+  }
+  .markdown-body img { max-width: 100%; border-radius: 8px; }
+  .markdown-body hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 16px 0;
+  }
+
+  /* ─── Copy Button ────────────────────────────────────── */
+  .copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s, background 0.2s;
+    z-index: 10;
+  }
+  .event:hover .copy-btn { opacity: 1; }
+  .copy-btn:hover {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+  }
+  .copy-btn.copied {
+    background: var(--success);
+    color: #064e3b;
+    border-color: var(--success);
+    opacity: 1;
+  }
+  .event { position: relative; }
+
   .hidden { display: none !important; }
 
   @media (max-width: 768px) {
@@ -889,7 +1048,11 @@
         <div class="turn-status" id="turn-status"></div>
       </div>
       <div class="chat-header-actions">
+        <select id="user-select" class="user-select" onchange="selectUser(this.value)" title="切换用户（不同用户看到不同农场数据）">
+          <option value="">默认用户</option>
+        </select>
         <button class="btn" id="trace-toggle-btn" onclick="toggleTrace()" title="切换 Trace 面板">🔍 Trace</button>
+        <button class="btn" onclick="copySessionJson()" title="复制整个会话 JSON（含所有轮次和 skill 调用事件）">📋 复制会话</button>
         <button class="btn" onclick="resetConversation()" title="重置当前对话">🗑 重置</button>
       </div>
     </div>
@@ -927,6 +1090,7 @@
   </aside>
 </div>
 
+<script src="/static/marked.min.js"></script>
 <script>
 // ═══════════════════════════════════════════════════════════
 // State
@@ -946,6 +1110,12 @@ const state = {
   traceNodes: [],
   traceSummary: null,
   lastRequestId: null,
+  currentTurnEvents: [], // 存储当前轮次(turn)的所有事件，用于复制 JSON
+  currentTurnUserInput: '', // 存储当前轮次的用户输入
+  allTurns: [], // 存储整个会话的所有轮次，用于复制整个 session
+  currentUserToken: '', // 当前选中用户的 JWT token（空=默认用户）
+  currentUserInfo: null, // {user_id, nickname, phone, role, farm_id}
+  devUsers: [], // /dev-users 返回的用户列表
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -967,9 +1137,11 @@ const traceTabEls = document.querySelectorAll('.trace-tab');
 // Icons
 // ═══════════════════════════════════════════════════════════
 const ICONS = {
-  meta: '●', thought: '💭', plan: '📋', action: '⚡',
-  observation: '📊', approval_required: '⚠️', approval_result: '✅',
-  final_answer: '💬', error: '⛔', done: '✓'
+  meta: '●', thought: '💭', plan: '📋', plan_created: '📋', plan_step_done: '▸',
+  action: '⚡', observation: '📊', approval_required: '⚠️', approval_result: '✅',
+  final_answer: '💬', error: '⛔', done: '✓',
+  context_usage: '📊', context_compressing: '🗜️', context_compressed: '🗜️',
+  doom_loop_warning: '⛔', verification_warning: '⚠️',
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -1023,6 +1195,42 @@ async function loadConversations() {
   }
 }
 
+async function loadDevUsers() {
+  try {
+    const resp = await fetch('/dev-users');
+    if (!resp.ok) return;
+    const data = await resp.json();
+    state.devUsers = data.users || [];
+    const sel = document.getElementById('user-select');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">默认用户 (farm_id=1)</option>';
+    state.devUsers.forEach(u => {
+      const opt = document.createElement('option');
+      opt.value = u.user_id;
+      opt.textContent = `${u.nickname} (farm:${u.farm_id}, ${u.role})`;
+      sel.appendChild(opt);
+    });
+  } catch (e) {
+    console.warn('loadDevUsers failed:', e);
+  }
+}
+
+function selectUser(userId) {
+  if (!userId) {
+    state.currentUserToken = '';
+    state.currentUserInfo = null;
+    convTitleEl.textContent = state.currentConvId || '选择一个对话';
+    return;
+  }
+  const user = state.devUsers.find(u => u.user_id === userId);
+  if (user) {
+    state.currentUserToken = user.token;
+    state.currentUserInfo = user;
+    convTitleEl.textContent = `${state.currentConvId || '新对话'} · ${user.nickname}`;
+    console.log(`已切换用户: ${user.nickname} (farm_id=${user.farm_id})`);
+  }
+}
+
 function renderConvList() {
   if (!state.convList.length && !state.pendingNewConvId) {
     convListEl.innerHTML = '<div class="conv-empty"><div style="font-size:32px;margin-bottom:10px">💬</div>暂无对话</div>';
@@ -1060,6 +1268,7 @@ function loadMoreConversations() {
 
 async function selectConversation(convId) {
   state.currentConvId = convId;
+  state.allTurns = []; // 切换会话时清空
   convTitleEl.textContent = convId;
   renderConvList();
   await loadConversationMessages(convId);
@@ -1072,6 +1281,7 @@ function newConversation() {
   const id = 'conv-' + Date.now().toString(36);
   state.currentConvId = id;
   state.pendingNewConvId = id;
+  state.allTurns = []; // 新会话清空
   convTitleEl.textContent = '新对话';
   renderConvList();
   chatMainEl.innerHTML = '';
@@ -1130,9 +1340,38 @@ function createMessageBubble(msg) {
   const roleName = msg.role === 'user' ? '你' : '助手';
   label.innerHTML = `<span class="icon">${icon}</span>${roleName}`;
   el.appendChild(label);
+
+  // 助手消息用 Markdown 渲染 + 添加复制按钮
+  if (msg.role !== 'user') {
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'copy-btn';
+    copyBtn.textContent = '复制 JSON';
+    copyBtn.onclick = (e) => {
+      e.stopPropagation();
+      const jsonToCopy = {
+        role: 'assistant',
+        content: msg.content,
+        events: msg.events || [],
+      };
+      navigator.clipboard.writeText(JSON.stringify(jsonToCopy, null, 2)).then(() => {
+        copyBtn.textContent = '已复制 ✓';
+        copyBtn.classList.add('copied');
+        setTimeout(() => {
+          copyBtn.textContent = '复制 JSON';
+          copyBtn.classList.remove('copied');
+        }, 2000);
+      }).catch(() => alert('复制失败'));
+    };
+    el.appendChild(copyBtn);
+  }
+
   const body = document.createElement('div');
-  body.className = 'assistant-text';
-  body.textContent = msg.content;
+  body.className = msg.role === 'user' ? 'assistant-text' : 'assistant-text markdown-body';
+  if (msg.role === 'user') {
+    body.textContent = msg.content;
+  } else {
+    body.innerHTML = renderMarkdown(msg.content || '');
+  }
   el.appendChild(body);
   return el;
 }
@@ -1147,12 +1386,23 @@ let streamingContent = '';
 function startStreaming() {
   const el = document.createElement('div');
   el.className = 'event event-final_answer';
+  
+  // 添加复制按钮
+  const copyBtn = document.createElement('button');
+  copyBtn.className = 'copy-btn';
+  copyBtn.textContent = '复制 JSON';
+  copyBtn.onclick = (e) => {
+    e.stopPropagation();
+    copyCurrentTurnJson(copyBtn);
+  };
+  el.appendChild(copyBtn);
+
   const label = document.createElement('div');
   label.className = 'label';
   label.innerHTML = `<span class="icon">${ICONS.final_answer}</span>assistant`;
   el.appendChild(label);
   const body = document.createElement('div');
-  body.className = 'assistant-text';
+  body.className = 'assistant-text markdown-body';
   body.innerHTML = '<span class="cursor"></span>';
   el.appendChild(body);
   chatMainEl.appendChild(el);
@@ -1161,33 +1411,152 @@ function startStreaming() {
   streamingContent = '';
 }
 
+function renderMarkdown(text) {
+  if (typeof marked !== 'undefined') {
+    try {
+      return marked.parse(text);
+    } catch (e) {
+      console.warn('marked parse failed:', e);
+    }
+  }
+  return escapeHtml(text).replace(/\n/g, '<br>');
+}
+
 function appendStreamDelta(delta) {
   if (!streamingEl) return;
   streamingContent += delta;
+  // 流式过程中用纯文本渲染（避免不完整 Markdown 导致渲染异常），最终完成时再渲染 Markdown
   streamingEl.innerHTML = escapeHtml(streamingContent).replace(/\n/g, '<br>') + '<span class="cursor"></span>';
   autoScroll(chatMainEl);
 }
 
 function finalizeStreaming(text) {
   if (streamingEl) {
-    streamingEl.innerHTML = escapeHtml(text).replace(/\n/g, '<br>');
+    streamingEl.innerHTML = renderMarkdown(text);
     streamingEl = null;
     streamingContent = '';
     autoScroll(chatMainEl);
   }
 }
 
+function copyCurrentTurnJson(btnEl) {
+  // 构建要复制的 JSON 对象
+  const jsonToCopy = {
+    user_input: state.currentTurnUserInput,
+    events: state.currentTurnEvents,
+  };
+  const jsonStr = JSON.stringify(jsonToCopy, null, 2);
+
+  navigator.clipboard.writeText(jsonStr).then(() => {
+    const originalText = btnEl.textContent;
+    btnEl.textContent = '已复制 ✓';
+    btnEl.classList.add('copied');
+    setTimeout(() => {
+      btnEl.textContent = originalText;
+      btnEl.classList.remove('copied');
+    }, 2000);
+  }).catch(err => {
+    console.error('复制失败:', err);
+    alert('复制失败，请手动复制');
+  });
+}
+
+async function copySessionJson() {
+  const btn = document.querySelector('button[onclick="copySessionJson()"]');
+  const originalText = btn ? btn.textContent : '';
+
+  let sessionData;
+
+  // 优先用 allTurns（当前会话中实时收集的事件，含 skill 调用详情）
+  if (state.allTurns && state.allTurns.length > 0) {
+    sessionData = {
+      conversation_id: state.currentConvId,
+      total_turns: state.allTurns.length,
+      turns: state.allTurns,
+    };
+  } else if (state.currentConvId) {
+    // fallback：从 API 加载历史消息（可能不含事件详情）
+    try {
+      const resp = await fetch(`/conversations/${encodeURIComponent(state.currentConvId)}?limit=500`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      sessionData = {
+        conversation_id: state.currentConvId,
+        total_messages: (data.items || []).length,
+        messages: data.items || [],
+        note: '从 API 加载的历史消息（可能缺少 SSE 事件详情）',
+      };
+    } catch (e) {
+      alert('复制失败：无法加载会话数据 - ' + e.message);
+      return;
+    }
+  } else {
+    alert('没有选中的会话');
+    return;
+  }
+
+  const jsonStr = JSON.stringify(sessionData, null, 2);
+
+  // 优先用 Clipboard API，失败时 fallback 到 execCommand
+  function fallbackCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+
+  function showSuccess() {
+    if (btn) {
+      btn.textContent = '已复制 ✓';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = originalText;
+        btn.classList.remove('copied');
+      }, 2000);
+    }
+    const count = sessionData.turns ? sessionData.turns.length : (sessionData.total_messages || 0);
+    console.log(`已复制会话 JSON: ${jsonStr.length} 字符, ${count} 轮/条`);
+  }
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(jsonStr).then(showSuccess).catch(err => {
+      console.warn('Clipboard API 失败，使用 fallback:', err);
+      fallbackCopy(jsonStr);
+      showSuccess();
+    });
+  } else {
+    fallbackCopy(jsonStr);
+    showSuccess();
+  }
+}
+
 function createFinalAnswerBubble(text) {
   const el = document.createElement('div');
   el.className = 'event event-final_answer';
+  
+  // 添加复制按钮
+  const copyBtn = document.createElement('button');
+  copyBtn.className = 'copy-btn';
+  copyBtn.textContent = '复制 JSON';
+  copyBtn.onclick = (e) => {
+    e.stopPropagation();
+    copyCurrentTurnJson(copyBtn);
+  };
+  el.appendChild(copyBtn);
+
   const label = document.createElement('div');
   label.className = 'label';
   label.innerHTML = `<span class="icon">${ICONS.final_answer}</span>assistant`;
   el.appendChild(label);
+  
   const body = document.createElement('div');
-  body.className = 'assistant-text';
-  el.textContent = '';
+  body.className = 'assistant-text markdown-body';
   el.appendChild(body);
+  
   chatMainEl.appendChild(el);
   autoScroll(chatMainEl);
   streamingEl = body;
@@ -1195,15 +1564,26 @@ function createFinalAnswerBubble(text) {
   const fullText = text;
   let i = 0;
   function typeNext() {
+    // streaming 结束（sendMessage finally 已把 streamingEl 置 null）时，
+    // 挂起的定时器回调直接返回，避免对 null 设置 innerHTML
+    if (!streamingEl) return;
     if (i >= fullText.length) {
-      streamingEl.innerHTML = escapeHtml(fullText).replace(/\n/g, '<br>');
+      if (typeof marked !== 'undefined') {
+        streamingEl.innerHTML = marked.parse(fullText);
+      } else {
+        streamingEl.innerHTML = escapeHtml(fullText).replace(/\n/g, '<br>');
+      }
       streamingEl = null;
       return;
     }
     const chars = Math.min(2, fullText.length - i);
     i += chars;
     streamingContent = fullText.slice(0, i);
-    streamingEl.innerHTML = escapeHtml(streamingContent).replace(/\n/g, '<br>') + '<span class="cursor"></span>';
+    if (typeof marked !== 'undefined') {
+      streamingEl.innerHTML = marked.parse(streamingContent + '<span class="cursor"></span>');
+    } else {
+      streamingEl.innerHTML = escapeHtml(streamingContent).replace(/\n/g, '<br>') + '<span class="cursor"></span>';
+    }
     autoScroll(chatMainEl);
     setTimeout(typeNext, 20);
   }
@@ -1220,10 +1600,43 @@ function createCollapsibleJson(label, jsonStr) {
   return `<div class="json-block"><details><summary><span class="chev">▶</span><span class="json-label">${escapeHtml(label)}</span><span class="json-meta">· ${lineCount} 行 · ${jsonStr.length} 字符</span></summary><pre>${escaped}</pre></details></div>`;
 }
 
+function renderContextUsageBar(data) {
+  const percent = Math.min(data.percent, 100);
+  const level = data.level || 'green';
+  const colors = {
+    green: 'var(--success)',
+    yellow: 'var(--warning)',
+    orange: '#fb923c',
+    red: 'var(--danger)',
+  };
+  const color = colors[level] || colors.green;
+  const usedK = (data.used / 1000).toFixed(1);
+  const totalK = (data.total / 1000).toFixed(0);
+  return `<div style="display:flex;align-items:center;gap:8px;font-size:11px">
+    <span style="color:var(--text-muted)">ctx</span>
+    <div style="flex:1;height:4px;background:var(--surface-2);border-radius:2px;overflow:hidden;max-width:200px">
+      <div style="width:${percent}%;height:100%;background:${color};transition:width 0.3s"></div>
+    </div>
+    <span style="color:${color};font-family:monospace;font-weight:600">${percent}%</span>
+    <span style="color:var(--text-muted);font-family:monospace">${usedK}K / ${totalK}K</span>
+    ${data.step ? `<span style="color:var(--text-muted)">· step ${data.step}</span>` : ''}
+  </div>`;
+}
+
 function appendEvent(type, data) {
+  // 收集事件用于复制 JSON
+  if (type === 'meta') {
+    // 新一轮对话开始时，清空之前的事件
+    state.currentTurnEvents = [{ type, data: JSON.parse(JSON.stringify(data)) }];
+  } else if (type !== 'done' && type !== 'final_answer_start' && type !== 'final_answer_delta') {
+    state.currentTurnEvents.push({ type, data: JSON.parse(JSON.stringify(data)) });
+  }
+
   if (type === 'final_answer_start') { startStreaming(); return; }
   if (type === 'final_answer_delta') { appendStreamDelta(data.delta); return; }
   if (type === 'final_answer') {
+    // 将最终答案也存入事件列表
+    state.currentTurnEvents.push({ type, data: JSON.parse(JSON.stringify(data)) });
     if (streamingEl) { finalizeStreaming(data.text); }
     else { createFinalAnswerBubble(data.text); }
     return;
@@ -1284,6 +1697,39 @@ function appendEvent(type, data) {
         (data.reason ? ` — ${escapeHtml(data.reason)}` : '');
       el.appendChild(body);
       break;
+    case 'context_usage':
+      el.classList.add('event-meta');
+      body.innerHTML = renderContextUsageBar(data);
+      el.appendChild(body);
+      break;
+    case 'context_compressing':
+      body.innerHTML = `<b style="color:var(--warning)">⚠ 上下文压缩</b> · 触发：${escapeHtml(data.trigger)} · 占用 ${data.before_percent}%`;
+      el.appendChild(body);
+      break;
+    case 'context_compressed':
+      body.innerHTML = `<b style="color:var(--success)">✓ 压缩完成</b> · 占用降至 ${data.after_percent}%` +
+        (data.summary_preview ? `<div style="opacity:0.7;margin-top:6px;font-size:12px">摘要：${escapeHtml(data.summary_preview)}...</div>` : '');
+      el.appendChild(body);
+      break;
+    case 'doom_loop_warning':
+      body.innerHTML = `<b style="color:var(--danger)">⛔ 死循环检测</b> · ${escapeHtml(data.message)}`;
+      el.appendChild(body);
+      break;
+    case 'verification_warning':
+      body.innerHTML = `<b style="color:var(--warning)">⚠ 检查警告</b>` +
+        `<ul style="margin-top:6px;padding-left:20px">${data.issues.map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul>`;
+      el.appendChild(body);
+      break;
+    case 'plan_created':
+      body.innerHTML = `<div><b style="color:var(--purple)">📋 计划</b> · ${escapeHtml(data.goal)} · ${data.step_count} 步</div>` +
+        `<ol style="margin-top:8px;padding-left:24px">${data.steps.map(s => `<li><b>${escapeHtml(s.skill)}</b> — ${escapeHtml(s.description || '')}</li>`).join('')}</ol>`;
+      el.appendChild(body);
+      break;
+    case 'plan_step_done':
+      body.innerHTML = `<b>步骤 ${data.step_index + 1}</b> · <span style="font-family:monospace;color:var(--info)">${escapeHtml(data.skill)}</span> · ` +
+        `<span style="color:${data.status === 'done' ? 'var(--success)' : 'var(--danger)'}">${escapeHtml(data.status)}</span>`;
+      el.appendChild(body);
+      break;
     case 'error':
       body.innerHTML = `<b>${escapeHtml(data.code || 'error')}</b>: ${escapeHtml(data.message)}`;
       el.appendChild(body);
@@ -1291,6 +1737,12 @@ function appendEvent(type, data) {
     case 'done':
       el.classList.add('event-done');
       el.textContent = `✓ 对话完成 · 状态：${data.status === 'completed' ? '成功' : data.status === 'failed' ? '失败' : data.status}`;
+      // 保存当前轮次到 allTurns（用于复制整个 session）
+      state.allTurns.push({
+        user_input: state.currentTurnUserInput,
+        events: [...state.currentTurnEvents],
+        status: data.status,
+      });
       // 对话完成后自动刷新 trace 和对话列表
       if (state.tracePanelOpen) {
         loadTraceRequests(state.currentConvId);
@@ -1302,6 +1754,7 @@ function appendEvent(type, data) {
       el.appendChild(body);
   }
   el.appendChild(body);
+  chatMainEl.appendChild(el);
   autoScroll(chatMainEl);
 }
 
@@ -1313,6 +1766,9 @@ async function sendMessage() {
   }
   inputEl.value = '';
   setBusy(true);
+
+  // 保存用户输入用于复制 JSON
+  state.currentTurnUserInput = msg;
 
   // Show user message
   const userEvent = document.createElement('div');
@@ -1331,9 +1787,13 @@ async function sendMessage() {
   autoScroll(chatMainEl);
 
   try {
+    const headers = {'Content-Type': 'application/json'};
+    if (state.currentUserToken) {
+      headers['Authorization'] = 'Bearer ' + state.currentUserToken;
+    }
     const resp = await fetch('/chat', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: headers,
       body: JSON.stringify({message: msg, conversation_id: state.currentConvId}),
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -1357,6 +1817,7 @@ async function sendMessage() {
           else if (line.startsWith('data: ')) data += line.slice(6);
         }
         if (!data) continue;
+        console.log('[SSE] event:', type, 'at', new Date().toLocaleTimeString());
         try {
           const parsed = JSON.parse(data);
           if (type === 'meta' && parsed.request_id) {
@@ -1378,7 +1839,8 @@ async function sendMessage() {
     appendEvent('error', {code: 'network', message: e.message});
   } finally {
     if (streamingEl) {
-      streamingEl.innerHTML = escapeHtml(streamingContent).replace(/\n/g, '<br>');
+      // SSE 流中断时用 Markdown 渲染已有内容（而不是纯文本）
+      streamingEl.innerHTML = renderMarkdown(streamingContent);
       streamingEl = null;
     }
     setBusy(false);
@@ -1652,6 +2114,7 @@ function jumpToTrace(requestId) {
 async function init() {
   try {
     await loadConversations();
+    loadDevUsers(); // 非阻塞，后台加载用户列表
   } catch (e) {
     console.error('Failed to load conversations:', e);
   }
