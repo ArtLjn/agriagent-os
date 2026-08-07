@@ -3,6 +3,7 @@
 让 LLM 在调 get_weather 前能主动查询支持的城市列表和坐标，
 解决"LLM 不知道 regions.json 支持哪些城市"的盲点。
 """
+
 from __future__ import annotations
 
 from typing import Any

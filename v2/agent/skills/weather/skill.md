@@ -1,4 +1,5 @@
 ---
+schema_version: 1
 name: get_weather
 kind: mcp
 mcp_tool: business.get_weather
@@ -9,6 +10,7 @@ triggers:
   - 下雨
   - 温度
   - 预报
+operations: {}
 parameters:
   type: object
   properties:

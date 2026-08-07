@@ -5,6 +5,7 @@
   - turn: 当前 Turn 对象
   - user_id / farm_id / agent_token: 从 JWT 解析的身份信息，skill 可直接读取
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

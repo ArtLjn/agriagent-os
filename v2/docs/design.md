@@ -51,28 +51,18 @@ skills/<skill-name>/
 
 ### 3.1 skill.md 格式
 
-```markdown
----
-name: <skill_name>                    # snake_case 唯一标识
-kind: mcp | local                    # mcp=调业务, local=本地执行
-mcp_tool: business.<tool_name>       # kind=mcp 时填写，指向 business MCP tool
-risk_level: read | write_confirm | write_high   # HITL 风险等级
-description: <一句话描述>
-triggers:                            # 触发关键词（仅作文档参考，LLM 自主决策）
-  - 关键词1
-  - 关键词2
-parameters:                          # OpenAI tool schema
-  type: object
-  properties:
-    param1:
-      type: string
-      description: 参数说明
-  required: [param1]
----
+`skill.md` 的完整 YAML 规范见
+[`v2/docs/spec/2026-08-07-skill-md-yaml-standard.md`](spec/2026-08-07-skill-md-yaml-standard.md)。
+front matter 顶层字段固定为 `schema_version`、`name`、`kind`、`mcp_tool`、
+`risk_level`、`description`、`triggers`、`operations`、`parameters`。
 
-# <skill_name>
+聚合 MCP 的每个 operation 必须声明独立 `tool_name`。Agent 对模型暴露单一动作工具，
+并在调用 Business MCP 时自动注入内部 operation。禁止向模型或用户暴露 operation，
+也禁止继续维护 `operation_hints`、`field_hints`、正则 extractor 等业务词库。
+运行时校验命令：
 
-<详细说明，给 LLM 看的"何时使用/不要使用/参数推断/示例">
+```bash
+PYTHONDONTWRITEBYTECODE=1 python v2/scripts/validate_skill_metadata.py
 ```
 
 ### 3.2 scripts/main.py 格式

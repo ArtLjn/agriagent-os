@@ -7,6 +7,7 @@ Provider 优先级（参考 archive/backend/app/skills/web_search/scripts/main.p
 两种 provider 返回统一结构：
     {"query": str, "count": int, "results": [{"title", "url", "snippet"}, ...]}
 """
+
 from __future__ import annotations
 
 import logging
@@ -74,9 +75,7 @@ async def _searchhub_search(
         headers["X-API-Key"] = api_key
 
     async with httpx.AsyncClient(timeout=_REQUEST_TIMEOUT) as client:
-        resp = await client.post(
-            f"{base_url}/search", json=payload, headers=headers
-        )
+        resp = await client.post(f"{base_url}/search", json=payload, headers=headers)
         resp.raise_for_status()
         return resp.json()
 
@@ -90,24 +89,30 @@ def _format_searchhub(data: dict[str, Any], query: str) -> dict[str, Any]:
         url = item.get("url") or item.get("link") or ""
         snippet = item.get("content") or item.get("snippet") or ""
         if title and url:
-            results.append({
-                "title": _strip_html(title),
-                "url": url,
-                "snippet": _strip_html(snippet)[:300],
-            })
+            results.append(
+                {
+                    "title": _strip_html(title),
+                    "url": url,
+                    "snippet": _strip_html(snippet)[:300],
+                }
+            )
 
     answers = data.get("answers") or []
     if answers and not results:
         # 无 results 但有 answer，把 answer 包装成单条
-        first = answers[0] if isinstance(answers[0], str) else (
-            answers[0].get("answer") or answers[0].get("content") or ""
+        first = (
+            answers[0]
+            if isinstance(answers[0], str)
+            else (answers[0].get("answer") or answers[0].get("content") or "")
         )
         if first:
-            results.append({
-                "title": f"SearchHub Answer: {query}",
-                "url": "",
-                "snippet": str(first)[:500],
-            })
+            results.append(
+                {
+                    "title": f"SearchHub Answer: {query}",
+                    "url": "",
+                    "snippet": str(first)[:500],
+                }
+            )
 
     return {
         "query": query,
@@ -242,11 +247,13 @@ class WebSearchSkill(Skill):
             return SkillResult(error=f"搜索异常: {exc}")
 
         if not data["results"]:
-            return SkillResult(data={
-                "query": query,
-                "count": 0,
-                "message": f"未找到关于「{query}」的结果",
-            })
+            return SkillResult(
+                data={
+                    "query": query,
+                    "count": 0,
+                    "message": f"未找到关于「{query}」的结果",
+                }
+            )
 
         return SkillResult(data=data)
 

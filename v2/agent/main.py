@@ -113,10 +113,8 @@ def _parse_identity(authorization: str | None) -> dict:
     if not authorization or not authorization.startswith("Bearer "):
         return default
     token = authorization[7:]
-    secret = settings.auth.jwt_secret
-    if not secret:
-        logger.debug("jwt_secret not configured, using default identity")
-        return default
+    # jwt_secret 未配置时用 dev 默认值（与 /dev-users 接口一致）
+    secret = settings.auth.jwt_secret or "dev-secret-key"
     try:
         import jwt
         payload = jwt.decode(token, secret, algorithms=[settings.auth.jwt_algorithm])
@@ -146,12 +144,75 @@ async def _approval_waiter(turn_id: str) -> tuple[bool, str]:
 
 @app.get("/")
 def index() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html")
+    return FileResponse(
+        STATIC_DIR / "index.html",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
 
 
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "pending_approvals": len(_pending_approvals)}
+
+
+@app.get("/dev-users")
+def dev_users() -> dict:
+    """开发环境：返回数据库中的用户列表 + JWT token，供前端切换用户。
+
+    每个用户包含：user_id, nickname, phone, role, farm_id, token
+    token 是签发的 JWT，前端用 Authorization: Bearer <token> 调用 /chat。
+    """
+    import time
+    from business.db import session_scope
+    from business.models import User, Farm
+
+    # JWT secret：优先用配置，未配置则用 dev 默认值
+    secret = settings.auth.jwt_secret or "dev-secret-key"
+    algorithm = settings.auth.jwt_algorithm or "HS256"
+
+    try:
+        import jwt as pyjwt
+    except ImportError:
+        raise HTTPException(500, "PyJWT not installed")
+
+    try:
+        with session_scope() as db:
+            rows = (
+                db.query(User, Farm)
+                .outerjoin(Farm, Farm.user_id == User.id)
+                .filter(User.status == "active")
+                .order_by(User.created_at)
+                .limit(50)
+                .all()
+            )
+
+            users = []
+            now = int(time.time())
+            exp = now + 30 * 86400  # 30 天有效期
+
+            for user, farm in rows:
+                farm_id = farm.id if farm else (settings.default_farm_id or 1)
+                payload = {
+                    "sub": user.id,
+                    "farm_id": farm_id,
+                    "nickname": user.nickname,
+                    "role": user.role,
+                    "exp": exp,
+                }
+                token = pyjwt.encode(payload, secret, algorithm=algorithm)
+                users.append({
+                    "user_id": user.id,
+                    "nickname": user.nickname,
+                    "phone": user.phone,
+                    "role": user.role,
+                    "farm_id": farm_id,
+                    "token": token,
+                })
+
+            return {"users": users, "total": len(users)}
+    except Exception as exc:
+        logger.warning("dev-users query failed: %s", exc)
+        raise HTTPException(500, f"Failed to list users: {exc}")
 
 
 @app.post("/chat")

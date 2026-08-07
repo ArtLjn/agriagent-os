@@ -1,4 +1,5 @@
 ---
+schema_version: 1
 name: get_farm_status
 kind: mcp
 mcp_tool: business.get_farm_status
@@ -8,6 +9,7 @@ triggers:
   - 农场状态
   - 整体情况
   - 当前茬口
+operations: {}
 parameters:
   type: object
   properties: {}

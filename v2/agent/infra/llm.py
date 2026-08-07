@@ -6,9 +6,15 @@ Loads providers.json (OpenAI-compatible format) and exposes:
 
 Uses openai SDK. The 'local' provider points to a self-hosted endpoint.
 Model is configurable via env; defaults to qwen3.6-flash.
+
+重试策略：
+  - chat()（同步）：遇到网络错误重试最多 MAX_RETRIES 次
+  - chat_stream()（流式）：只在「还没 yield 任何内容」时重试；
+    已经开始流式输出后失败不重试（重试会导致内容重复，前端无法处理）
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -21,6 +27,10 @@ from openai import AsyncOpenAI, OpenAI
 logger = logging.getLogger(__name__)
 
 _PROVIDERS_FILE = Path(__file__).resolve().parent.parent.parent / "providers.json"
+
+# 网络重试配置
+MAX_RETRIES = 2
+RETRY_DELAY_SECONDS = 1.0
 
 
 def _load_provider() -> tuple[str, str, str]:
@@ -52,12 +62,90 @@ _sync_client = OpenAI(base_url=BASE_URL, api_key=API_KEY, timeout=60.0)
 _async_client = AsyncOpenAI(base_url=BASE_URL, api_key=API_KEY, timeout=60.0)
 
 
+def _is_retryable(exc: Exception) -> bool:
+    """判断异常是否值得重试（网络/服务端临时问题）。"""
+    # httpcore.RemoteProtocolError, httpx.NetworkError, ConnectionError 等
+    exc_name = type(exc).__name__
+    retryable_names = {
+        "RemoteProtocolError",
+        "ConnectError",
+        "NetworkError",
+        "ReadError",
+        "ReadTimeout",
+        "ConnectTimeout",
+        "PoolTimeout",
+        "ConnectionResetError",
+        "ConnectionError",
+        "ChunkedEncodingError",
+    }
+    if exc_name in retryable_names:
+        return True
+    # APITimeoutError / APIConnectionError（openai SDK）
+    if "timeout" in exc_name.lower() or "connection" in exc_name.lower():
+        return True
+    return False
+
+
+def _required_tool_args(tool_name: str, tools: list[dict[str, Any]] | None) -> list[str]:
+    """返回工具 schema 声明的必填参数，用于识别流式响应丢参。"""
+    for tool in tools or []:
+        function = tool.get("function") or {}
+        if function.get("name") != tool_name:
+            continue
+        schema = function.get("parameters") or {}
+        required = schema.get("required") or []
+        return required if isinstance(required, list) else []
+    return []
+
+
+async def _repair_empty_stream_tool_calls(
+    messages: list[dict[str, Any]],
+    tools: list[dict[str, Any]] | None,
+    tool_calls: list[dict[str, Any]],
+    temperature: float,
+) -> list[dict[str, Any]]:
+    """用非流式响应修复兼容网关丢失的工具参数增量。"""
+    if not any(
+        not call.get("arguments")
+        and _required_tool_args(call.get("name", ""), tools)
+        for call in tool_calls
+    ):
+        return tool_calls
+
+    logger.warning("stream tool arguments empty; retrying once with non-stream response")
+    kwargs: dict[str, Any] = {
+        "model": MODEL,
+        "messages": messages,
+        "temperature": temperature,
+    }
+    if tools:
+        kwargs["tools"] = tools
+        kwargs["tool_choice"] = "auto"
+    response = await _async_client.chat.completions.create(**kwargs)
+    message = response.choices[0].message
+    repaired: list[dict[str, Any]] = []
+    for call in message.tool_calls or []:
+        args_raw = call.function.arguments or "{}"
+        try:
+            args = json.loads(args_raw)
+        except json.JSONDecodeError:
+            logger.warning("malformed repaired tool args: %s", args_raw)
+            args = {"_raw": args_raw}
+        repaired.append(
+            {"id": call.id, "name": call.function.name, "arguments": args}
+        )
+    return repaired or tool_calls
+
+
 def chat(
     messages: list[dict[str, Any]],
     tools: list[dict[str, Any]] | None = None,
     temperature: float = 0.3,
 ) -> dict[str, Any]:
-    """Synchronous chat call. Returns {content, tool_calls}."""
+    """Synchronous chat call. Returns {content, tool_calls}.
+
+    遇到可重试异常时最多重试 MAX_RETRIES 次。
+    """
     logger.info("LLM call: model=%s messages=%d tools=%d",
                 MODEL, len(messages), len(tools or []))
     kwargs: dict[str, Any] = {
@@ -69,28 +157,45 @@ def chat(
         kwargs["tools"] = tools
         kwargs["tool_choice"] = "auto"
 
-    resp = _sync_client.chat.completions.create(**kwargs)
-    choice = resp.choices[0]
-    msg = choice.message
-    tool_calls: list[dict[str, Any]] = []
-    if msg.tool_calls:
-        for tc in msg.tool_calls:
-            args_raw = tc.function.arguments or "{}"
-            try:
-                args = json.loads(args_raw)
-            except json.JSONDecodeError:
-                logger.warning("malformed tool args: %s", args_raw)
-                args = {"_raw": args_raw}
-            tool_calls.append({
-                "id": tc.id,
-                "name": tc.function.name,
-                "arguments": args,
-            })
-    return {
-        "content": msg.content or "",
-        "tool_calls": tool_calls,
-        "finish_reason": choice.finish_reason,
-    }
+    last_exc: Exception | None = None
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            resp = _sync_client.chat.completions.create(**kwargs)
+            choice = resp.choices[0]
+            msg = choice.message
+            tool_calls: list[dict[str, Any]] = []
+            if msg.tool_calls:
+                for tc in msg.tool_calls:
+                    args_raw = tc.function.arguments or "{}"
+                    try:
+                        args = json.loads(args_raw)
+                    except json.JSONDecodeError:
+                        logger.warning("malformed tool args: %s", args_raw)
+                        args = {"_raw": args_raw}
+                    tool_calls.append({
+                        "id": tc.id,
+                        "name": tc.function.name,
+                        "arguments": args,
+                    })
+            return {
+                "content": msg.content or "",
+                "tool_calls": tool_calls,
+                "finish_reason": choice.finish_reason,
+            }
+        except Exception as exc:
+            last_exc = exc
+            if attempt < MAX_RETRIES and _is_retryable(exc):
+                logger.warning(
+                    "LLM call attempt %d failed (retryable: %s), retry in %ss",
+                    attempt + 1, type(exc).__name__, RETRY_DELAY_SECONDS,
+                )
+                import time
+                time.sleep(RETRY_DELAY_SECONDS)
+                continue
+            raise
+
+    # 理论上不会走到这里
+    raise last_exc  # type: ignore[misc]
 
 
 async def chat_stream(
@@ -105,6 +210,9 @@ async def chat_stream(
       - {"type": "tool_call", "name": "...", "arguments_delta": "...", "index": int}
       - {"type": "done", "content": full_text, "tool_calls": [...]}
       - {"type": "error", "message": "..."}
+
+    重试策略：只在「还没 yield 任何内容」时重试。一旦开始 yield，
+    说明 LLM 已经在生成，中断后重试会导致内容重复，前端无法处理。
     """
     logger.info("LLM stream: model=%s messages=%d tools=%d",
                 MODEL, len(messages), len(tools or []))
@@ -118,58 +226,94 @@ async def chat_stream(
         kwargs["tools"] = tools
         kwargs["tool_choice"] = "auto"
 
-    full_content = ""
-    tool_calls_map: dict[int, dict[str, Any]] = {}
+    last_exc: Exception | None = None
 
-    try:
-        stream = await _async_client.chat.completions.create(**kwargs)
-        async for chunk in stream:
-            delta = chunk.choices[0].delta
+    for attempt in range(MAX_RETRIES + 1):
+        full_content = ""
+        tool_calls_map: dict[int, dict[str, Any]] = {}
+        has_yielded = False  # 本轮是否已经 yield 过内容
 
-            if delta.content:
-                full_content += delta.content
-                yield {"type": "text", "delta": delta.content}
+        try:
+            stream = await _async_client.chat.completions.create(**kwargs)
+            async for chunk in stream:
+                delta = chunk.choices[0].delta
 
-            if delta.tool_calls:
-                for tc_delta in delta.tool_calls:
-                    idx = tc_delta.index
-                    if idx not in tool_calls_map:
-                        tool_calls_map[idx] = {
-                            "id": tc_delta.id or "",
-                            "name": tc_delta.function.name or "",
-                            "arguments_raw": "",
+                if delta.content:
+                    full_content += delta.content
+                    yield {"type": "text", "delta": delta.content}
+                    has_yielded = True
+
+                if delta.tool_calls:
+                    for tc_delta in delta.tool_calls:
+                        idx = tc_delta.index
+                        if idx not in tool_calls_map:
+                            tool_calls_map[idx] = {
+                                "id": tc_delta.id or "",
+                                "name": tc_delta.function.name or "",
+                                "arguments_raw": "",
+                            }
+                        tc = tool_calls_map[idx]
+                        if tc_delta.function.name:
+                            tc["name"] = tc_delta.function.name
+                        if tc_delta.function.arguments:
+                            tc["arguments_raw"] += tc_delta.function.arguments
+                        yield {
+                            "type": "tool_call",
+                            "name": tc["name"],
+                            "arguments_delta": tc_delta.function.arguments or "",
+                            "index": idx,
                         }
-                    tc = tool_calls_map[idx]
-                    if tc_delta.function.name:
-                        tc["name"] = tc_delta.function.name
-                    if tc_delta.function.arguments:
-                        tc["arguments_raw"] += tc_delta.function.arguments
-                    yield {
-                        "type": "tool_call",
-                        "name": tc["name"],
-                        "arguments_delta": tc_delta.function.arguments or "",
-                        "index": idx,
-                    }
+                        has_yielded = True
 
-        tool_calls: list[dict[str, Any]] = []
-        for idx in sorted(tool_calls_map.keys()):
-            tc = tool_calls_map[idx]
-            try:
-                args = json.loads(tc["arguments_raw"] or "{}")
-            except json.JSONDecodeError:
-                args = {"_raw": tc["arguments_raw"]}
-            tool_calls.append({
-                "id": tc["id"],
-                "name": tc["name"],
-                "arguments": args,
-            })
+            tool_calls: list[dict[str, Any]] = []
+            for idx in sorted(tool_calls_map.keys()):
+                tc = tool_calls_map[idx]
+                try:
+                    args = json.loads(tc["arguments_raw"] or "{}")
+                except json.JSONDecodeError:
+                    args = {"_raw": tc["arguments_raw"]}
+                tool_calls.append({
+                    "id": tc["id"],
+                    "name": tc["name"],
+                    "arguments": args,
+                })
 
-        yield {
-            "type": "done",
-            "content": full_content,
-            "tool_calls": tool_calls,
-        }
+            tool_calls = await _repair_empty_stream_tool_calls(
+                messages, tools, tool_calls, temperature
+            )
 
-    except Exception as exc:
-        logger.exception("LLM stream failed")
-        yield {"type": "error", "message": str(exc)}
+            yield {
+                "type": "done",
+                "content": full_content,
+                "tool_calls": tool_calls,
+            }
+            return  # 成功完成，退出重试循环
+
+        except Exception as exc:
+            last_exc = exc
+            # 已经 yield 过内容 → 不能重试（会导致前端内容重复）
+            if has_yielded:
+                logger.exception("LLM stream failed mid-stream (no retry, already yielded)")
+                yield {
+                    "type": "error",
+                    "message": f"网络中断（{type(exc).__name__}），请重新发送消息重试",
+                }
+                return
+
+            # 还没 yield 任何内容 → 可以重试
+            if attempt < MAX_RETRIES and _is_retryable(exc):
+                logger.warning(
+                    "LLM stream attempt %d failed (retryable: %s), retry in %ss",
+                    attempt + 1, type(exc).__name__, RETRY_DELAY_SECONDS,
+                )
+                await asyncio.sleep(RETRY_DELAY_SECONDS)
+                continue
+
+            # 不可重试或重试次数用完
+            logger.exception("LLM stream failed (no more retries)")
+            yield {"type": "error", "message": str(exc)}
+            return
+
+    # 理论上不会走到这里
+    if last_exc:
+        yield {"type": "error", "message": str(last_exc)}

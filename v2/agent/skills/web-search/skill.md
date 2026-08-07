@@ -1,6 +1,8 @@
 ---
+schema_version: 1
 name: web_search
 kind: local
+mcp_tool: null
 risk_level: read
 description: 搜索互联网获取最新信息。用于查找农资价格、新品种介绍、病虫害防治等外部信息。
 triggers:
@@ -8,6 +10,7 @@ triggers:
   - 查一下
   - 最新价格
   - 怎么防治
+operations: {}
 parameters:
   type: object
   properties:

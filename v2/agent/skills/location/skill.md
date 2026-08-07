@@ -1,4 +1,5 @@
 ---
+schema_version: 1
 name: search_cities
 kind: mcp
 mcp_tool: business.search_cities
@@ -9,6 +10,7 @@ triggers:
   - 坐标
   - 查城市
   - 哪些城市
+operations: {}
 parameters:
   type: object
   properties:

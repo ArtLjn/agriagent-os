@@ -8,6 +8,12 @@ Inputs:
   - turn.business_tools (from BusinessClient.list_tools())
 
 Outputs feed into agent.llm.chat(messages, tools).
+
+Context Engineering 分层（参考 _example/core/context.py）：
+- STATIC_SYSTEM_PROMPT：身份 + 能力 + 安全 + 标准（不变 → 命中 prompt cache）
+  通过 prompts/system.md 加载，build_system_prompt() 只注入 memory_block / now
+- 动态部分：history + user_input + system_reminder（每轮变化）
+- system_reminder：在 step_count >= 2 时注入，对抗长会话指令衰减
 """
 from __future__ import annotations
 
@@ -53,6 +59,37 @@ def build_initial_messages(
         messages.append(m)
     messages.append({"role": "user", "content": user_input})
     return messages
+
+
+def system_reminder(step_count: int) -> str:
+    """对抗长会话指令衰减。
+
+    在 step_count >= 2 时返回 reminder 文本，react.py 会作为单独 system 消息注入。
+    前 2 步不需要（指令还新鲜）。
+
+    参考 _example/core/context.py:system_reminder。
+    """
+    if step_count < 2:
+        return ""
+    return (
+        f"<system-reminder>"
+        f"已思考 {step_count + 1} 步。提醒：参数齐全才行动；observation 必须基于它继续推理并 verify；"
+        "不要重复同一 skill 同一参数；多步任务用 make_plan 一次性规划；无法继续时立即 final_answer。"
+        "</system-reminder>"
+    )
+
+
+def append_reminder(messages: list[dict[str, Any]], step_count: int) -> list[dict[str, Any]]:
+    """如果 step_count 触发 reminder，追加一条 system 消息到 messages 末尾。
+
+    返回新的 messages 列表（不修改原列表，避免污染 turn.messages）。
+    """
+    reminder = system_reminder(step_count)
+    if not reminder:
+        return messages
+    # 不直接 append 到 turn.messages，而是返回临时副本
+    # 这样 turn.messages 保持纯净，下一轮 LLM 调用时再追加
+    return messages + [{"role": "system", "content": reminder}]
 
 
 def mcp_tools_to_openai(business_tools: list[dict[str, Any]]) -> list[dict[str, Any]]:

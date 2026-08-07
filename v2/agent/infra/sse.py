@@ -12,7 +12,14 @@ Event types emitted to the Web UI:
   - final_answer_delta  : incremental token of final answer
   - final_answer : assistant's final reply complete (text)
   - error         : pipeline failure (message)
-  - done         : turn finished (status)
+  - done          : turn finished (status)
+  - context_usage : token usage info (used, total, percent, level)
+  - context_compressing : triggered when token usage hits hard threshold
+  - context_compressed  : after summarizer finished compressing
+  - doom_loop_warning   : detected repeated call pattern
+  - verification_warning : pre_completion_checklist found issues
+  - plan_created  : planner created a multi-step plan
+  - plan_step_done : one step of plan finished
 
 All events are JSON-serializable dicts. main.py converts to SSE wire format.
 """
@@ -47,6 +54,25 @@ def thought(content: str) -> dict:
 
 def plan(steps: list[str]) -> dict:
     return {"type": "plan", "data": {"steps": steps}}
+
+
+def plan_created(goal: str, steps: list[dict]) -> dict:
+    return {
+        "type": "plan_created",
+        "data": {"goal": goal, "step_count": len(steps), "steps": steps},
+    }
+
+
+def plan_step_done(step_index: int, skill: str, status: str, result: Any = None) -> dict:
+    return {
+        "type": "plan_step_done",
+        "data": {
+            "step_index": step_index,
+            "skill": skill,
+            "status": status,
+            "result": result,
+        },
+    }
 
 
 def action(tool_name: str, arguments: dict, rationale: str = "") -> dict:
@@ -115,3 +141,44 @@ def error_event(message: str, code: str = "internal") -> dict:
 
 def done(status: str, turn_id: str) -> dict:
     return {"type": "done", "data": {"status": status, "turn_id": turn_id}}
+
+
+def context_usage(used: int, total: int, percent: int, level: str, step: int = 0) -> dict:
+    return {
+        "type": "context_usage",
+        "data": {
+            "used": used,
+            "total": total,
+            "percent": percent,
+            "level": level,
+            "step": step,
+        },
+    }
+
+
+def context_compressing(trigger: str, before_percent: int) -> dict:
+    return {
+        "type": "context_compressing",
+        "data": {"trigger": trigger, "before_percent": before_percent},
+    }
+
+
+def context_compressed(after_percent: int, summary_preview: str = "") -> dict:
+    return {
+        "type": "context_compressed",
+        "data": {"after_percent": after_percent, "summary_preview": summary_preview},
+    }
+
+
+def doom_loop_warning(message: str, step: int = 0) -> dict:
+    return {
+        "type": "doom_loop_warning",
+        "data": {"message": message, "step": step},
+    }
+
+
+def verification_warning(issues: list[str], step: int = 0) -> dict:
+    return {
+        "type": "verification_warning",
+        "data": {"issues": issues, "step": step},
+    }

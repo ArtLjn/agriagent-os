@@ -2,6 +2,7 @@
 
 参考 archive/backend/app/skills/calculate-arithmetic/scripts/main.py 的安全子集设计。
 """
+
 from __future__ import annotations
 
 import ast
@@ -33,9 +34,7 @@ class ArithmeticExpressionError(ValueError):
 def _validate_ast(node: ast.AST) -> None:
     """递归校验 AST 节点都在白名单内。"""
     if not isinstance(node, _ALLOWED_NODES):
-        raise ArithmeticExpressionError(
-            f"不支持的语法: {type(node).__name__}"
-        )
+        raise ArithmeticExpressionError(f"不支持的语法: {type(node).__name__}")
     for child in ast.iter_child_nodes(node):
         _validate_ast(child)
 

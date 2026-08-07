@@ -1,6 +1,8 @@
 ---
+schema_version: 1
 name: calculate_arithmetic
 kind: local
+mcp_tool: null
 risk_level: read
 description: 确定性算术运算。涉及总价、单价、面积、数量、比例等数学计算必须用此工具，不要让 AI 心算。
 triggers:
@@ -9,6 +11,7 @@ triggers:
   - 总价
   - 单价
   - 面积乘以
+operations: {}
 parameters:
   type: object
   properties:

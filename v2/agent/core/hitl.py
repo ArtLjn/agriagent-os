@@ -45,16 +45,18 @@ def gate(
     arguments: dict[str, Any],
     tool_call_id: str,
     rationale: str = "",
+    risk: RiskLevel | None = None,
 ) -> Turn:
     """Set up HITL gate on a turn.
 
     If tool is read-only, returns turn unchanged (caller proceeds to invoke).
     If write*, sets turn.pending_approval and status=awaiting_approval.
 
-    rationale should explain why the agent wants to call this tool
-    (extracted from LLM's preceding thought).
+    risk 由调用方通过 dynamic_risk_level() 预计算传入。
+    如果未传入，回退到从 tool_description 解析 [RISK: ...] 标记。
     """
-    risk = classify(tool_description)
+    if risk is None:
+        risk = classify(tool_description)
     if not needs_approval(risk):
         return turn  # no gate needed
 
