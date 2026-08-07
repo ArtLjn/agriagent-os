@@ -6,7 +6,11 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
+from urllib.error import HTTPError, URLError
+from urllib.parse import quote, urlencode
+from urllib.request import Request, urlopen
 from collections import Counter
 from dataclasses import dataclass, asdict
 from datetime import datetime
@@ -59,7 +63,7 @@ class TraceNode:
 @dataclass
 class TurnItem:
     source: str
-    id: int | None
+    id: int | str | None
     request_id: str | None
     session_id: str | None
     status: str | None
@@ -126,8 +130,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--project", default=".", help="项目根目录，默认当前目录")
     parser.add_argument("--request-id", help="完整 request_id 或前缀")
     parser.add_argument("--session-id", help="session_id")
-    parser.add_argument("--turn-id", type=int, help="agent_turns.id")
+    parser.add_argument("--turn-id", help="旧版 agent_turns.id 或 v2 Agent 的字符串 turn_id")
     parser.add_argument("--farm-id", type=int, help="可选 farm_id 过滤")
+    parser.add_argument(
+        "--v2",
+        action="store_true",
+        help="按 v2 Agent 的 HTTP/Mongo trace 接口查询",
+    )
+    parser.add_argument(
+        "--v2-base-url",
+        default=os.getenv("V2_AGENT_BASE_URL", "http://127.0.0.1:8000"),
+        help="v2 Agent 地址，默认 http://127.0.0.1:8000",
+    )
     parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT, help="会话最近轮数")
     parser.add_argument(
         "--include-payload", action="store_true", help="展示输入输出摘要"
@@ -151,6 +165,9 @@ async def build_report(project: Path, args: argparse.Namespace) -> ChainReport:
                 "先从日志或前端请求中复制 request_id；只有短 ID 时也可以按前缀查询。"
             ],
         )
+
+    if should_use_v2(project, args):
+        return await build_v2_report(args)
 
     backend = project / "backend"
     sys.path.insert(0, str(backend if backend.exists() else project))
@@ -189,6 +206,212 @@ async def build_report(project: Path, args: argparse.Namespace) -> ChainReport:
         errors=errors,
         suggestions=suggestions,
     )
+
+
+def should_use_v2(project: Path, args: argparse.Namespace) -> bool:
+    """识别 v2 请求，避免用 archive/backend 的旧表模型误查。"""
+    if args.v2:
+        return True
+    return (project / "v2" / "agent" / "main.py").exists() and (
+        args.turn_id is not None and not str(args.turn_id).isdigit()
+    )
+
+
+async def build_v2_report(args: argparse.Namespace) -> ChainReport:
+    """通过 v2 Agent 只读接口分析 request_id/turn_id 和 Mongo trace。"""
+    base_url = args.v2_base_url.rstrip("/")
+    try:
+        listing = await asyncio.to_thread(
+            v2_get_json,
+            f"{base_url}/traces?{urlencode({'limit': max(args.limit, 20)})}",
+        )
+        items = listing.get("items") or []
+        target = next(
+            (
+                item
+                for item in items
+                if args.turn_id is not None
+                and str(item.get("turn_id")) == str(args.turn_id)
+            ),
+            None,
+        )
+        if target is None and args.request_id:
+            target = next(
+                (
+                    item
+                    for item in items
+                    if str(item.get("request_id", "")).startswith(args.request_id)
+                ),
+                None,
+            )
+        if target is None:
+            return ChainReport(
+                target=target_dict(args),
+                status=EvidenceStatus("not_applicable(v2)", "missing(v2)", "not_available(v2)"),
+                resolved={},
+                turns=[],
+                trace_nodes=[],
+                messages=[],
+                events=[],
+                errors=["v2 未找到匹配的 request_id/turn_id"],
+                suggestions=[
+                    "确认目标是 v2 Agent 的 turn_id 还是 request_id，并确认当前 --v2-base-url 指向同一服务。"
+                ],
+            )
+
+        request_id = str(target.get("request_id"))
+        nodes_data = await asyncio.to_thread(
+            v2_get_json,
+            f"{base_url}/traces/{quote(request_id, safe='')}?limit=200",
+        )
+        nodes = [node_from_v2(args, request_id, target, item) for item in nodes_data.get("nodes", [])]
+        conversation_id = str(target.get("conversation_id") or "")
+        messages_data = {}
+        if conversation_id:
+            messages_data = await asyncio.to_thread(
+                v2_get_json,
+                f"{base_url}/conversations/{quote(conversation_id, safe='')}?limit=100",
+            )
+        messages = [message_from_v2(target, item) for item in messages_data.get("items", [])]
+        turns = [
+            TurnItem(
+                source="v2",
+                id=target.get("turn_id"),
+                request_id=request_id,
+                session_id=conversation_id,
+                status=target.get("status"),
+                latency_ms=target.get("total_duration_ms"),
+                tool_calls_count=target.get("metrics", {}).get("tool_calls"),
+                token_total=target.get("metrics", {}).get("total_tokens"),
+                input_preview=next(
+                    (item.content for item in reversed(messages) if item.role == "user"),
+                    None,
+                ),
+                reply_preview=next(
+                    (
+                        item.content
+                        for item in reversed(messages)
+                        if item.role == "assistant"
+                    ),
+                    None,
+                ),
+                event_file=None,
+                event_seq_start=None,
+                event_seq_end=None,
+            )
+        ]
+        errors = collect_errors(nodes, [])
+        suggestions = build_v2_suggestions(target, nodes, messages)
+        return ChainReport(
+            target={**target_dict(args), "resolved_request_id": request_id, "v2_base_url": base_url},
+            status=EvidenceStatus("not_applicable(v2)", "ok(v2_api_mongo)", "not_available(v2)"),
+            resolved={
+                "request_ids": [request_id],
+                "session_ids": [conversation_id] if conversation_id else [],
+                "farm_ids": [],
+                "turn_ids": [str(target.get("turn_id"))],
+            },
+            turns=turns,
+            trace_nodes=nodes,
+            messages=messages,
+            events=[],
+            errors=errors,
+            suggestions=suggestions,
+        )
+    except Exception as exc:
+        return ChainReport(
+            target=target_dict(args),
+            status=EvidenceStatus("not_applicable(v2)", "error(v2_api)", "not_available(v2)"),
+            resolved={},
+            turns=[],
+            trace_nodes=[],
+            messages=[],
+            events=[],
+            errors=[f"v2 trace 查询失败: {preview(str(exc))}"],
+            suggestions=["确认 v2 Agent 正在运行，并检查 /health 与 /traces 接口。"],
+        )
+
+
+def v2_get_json(url: str) -> dict[str, Any]:
+    request = Request(url, headers={"Accept": "application/json"})
+    try:
+        with urlopen(request, timeout=15) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (HTTPError, URLError, TimeoutError) as exc:
+        raise RuntimeError(f"HTTP 请求失败: {type(exc).__name__}") from exc
+    if not isinstance(payload, dict):
+        raise RuntimeError("v2 响应不是 JSON 对象")
+    return payload
+
+
+def node_from_v2(
+    args: argparse.Namespace,
+    request_id: str,
+    target: dict[str, Any],
+    doc: dict[str, Any],
+) -> TraceNode:
+    token_usage = doc.get("token_usage")
+    return TraceNode(
+        source="v2-mongo",
+        storage_id=None,
+        request_id=request_id,
+        session_id=target.get("conversation_id"),
+        farm_id=None,
+        conversation_message_id=None,
+        round_index=doc.get("step_index"),
+        node_type=str(doc.get("node_type") or ""),
+        node_name=str(doc.get("node_name") or ""),
+        status=doc.get("status"),
+        duration_ms=doc.get("duration_ms"),
+        token_total=token_total(token_usage),
+        error_message=doc.get("error_message"),
+        input_data=redact(doc.get("input_data")),
+        output_data=redact(doc.get("output_data")),
+        started_at=doc.get("start_time"),
+        sort_key=sort_key(request_id, doc.get("step_index"), doc.get("start_time"), None),
+    )
+
+
+def message_from_v2(target: dict[str, Any], doc: dict[str, Any]) -> MessageItem:
+    return MessageItem(
+        source="v2-mongo",
+        storage_id=None,
+        role=doc.get("role"),
+        content=doc.get("content"),
+        created_at=doc.get("created_at"),
+        turn_id=None,
+        session_id=target.get("conversation_id"),
+        farm_id=None,
+        meta=None,
+        event_file=None,
+        event_seq_range=None,
+    )
+
+
+def build_v2_suggestions(
+    target: dict[str, Any], nodes: list[TraceNode], messages: list[MessageItem]
+) -> list[str]:
+    suggestions: list[str] = []
+    llm_nodes = [node for node in nodes if node.node_type == "llm_call"]
+    tool_nodes = [node for node in nodes if node.node_type == "tool_call"]
+    last_llm = max(llm_nodes, key=lambda node: node.round_index or 0, default=None)
+    last_tool_step = max((node.round_index or 0 for node in tool_nodes), default=0)
+    if last_llm and isinstance(last_llm.output_data, dict):
+        if last_llm.output_data.get("tool_calls_count", 0) and (
+            last_llm.round_index or 0
+        ) > last_tool_step:
+            suggestions.append(
+                "最后一次 LLM 声明仍有 tool_call，但没有对应 tool_call trace；优先检查缺参分支、max_steps 截断或 make_plan 未记录。"
+            )
+    if messages and messages[-1].role == "user":
+        suggestions.append(
+            "会话以当前 user 消息结束，没有对应 assistant 最终消息；当前 v2 trace 状态把未完成链路误判为 success。"
+        )
+    if any((node.duration_ms or 0) > 5000 for node in nodes):
+        suggestions.append("存在超过 5s 的慢节点：本轮主要耗时集中在 LLM，需检查 provider 响应和重复工具规划。")
+    if not suggestions:
+        suggestions.append("v2 trace 未显示明显错误，可继续核对最终回复与用户意图。")
+    return suggestions
 
 
 def query_mysql(args: argparse.Namespace) -> tuple[dict[str, list[Any]], str]:
@@ -641,10 +864,16 @@ def format_markdown(report: ChainReport, *, include_payload: bool) -> str:
     lines.append(f"- Mongo: {report.status.mongo}")
     lines.append(f"- JSONL events: {report.status.events}")
     lines.append(
-        f"- trace_nodes: mysql={count_source(report.trace_nodes, 'mysql')} mongo={count_source(report.trace_nodes, 'mongo')}"
+        "- trace_nodes: "
+        f"mysql={count_source(report.trace_nodes, 'mysql')} "
+        f"mongo={count_source(report.trace_nodes, 'mongo')} "
+        f"v2={count_source(report.trace_nodes, 'v2-mongo')}"
     )
     lines.append(
-        f"- messages: mysql={count_source(report.messages, 'mysql')} mongo={count_source(report.messages, 'mongo')}"
+        "- messages: "
+        f"mysql={count_source(report.messages, 'mysql')} "
+        f"mongo={count_source(report.messages, 'mongo')} "
+        f"v2={count_source(report.messages, 'v2-mongo')}"
     )
     lines.extend(format_turns(report.turns))
     lines.extend(format_nodes(report.trace_nodes, include_payload=include_payload))
@@ -696,7 +925,11 @@ def format_nodes(nodes: list[TraceNode], *, include_payload: bool) -> list[str]:
 def format_hotspots(nodes: list[TraceNode]) -> list[str]:
     slow = sorted(nodes, key=lambda item: item.duration_ms or 0, reverse=True)[:3]
     counts = Counter(f"{item.node_type}.{item.node_name}" for item in nodes)
-    skills = [item.node_name for item in nodes if item.node_type == "skill_call"]
+    skills = [
+        item.node_name
+        for item in nodes
+        if item.node_type in {"skill_call", "tool_call"}
+    ]
     return [
         "",
         "耗时热点:",
@@ -1077,7 +1310,7 @@ def build_resolved_scope(
     )
     turn_ids = sorted(
         {
-            int(value)
+            str(value)
             for value in [
                 *(turn.id for turn in turns),
                 *(message.turn_id for message in messages),

@@ -12,11 +12,21 @@ description: Use when debugging farm-manager Agent request chains, trace evidenc
 ## 快速流程
 
 1. 先确认用户给的是 `request_id`、`session_id`、`turn_id`，还是一段报错日志。短 ID（如 `0744f155`）先按 request_id 前缀查。
-2. 在项目根目录运行脚本：
+2. 在项目根目录运行脚本。旧版 archive/backend 链路仍使用：
 
 ```bash
 backend/.venv/bin/python .codex/skills/trace-chain-debugger/scripts/analyze_trace_chain.py --project . --request-id 0744f155
 ```
+
+v2 Agent 使用字符串 `turn_id`，并把 trace 存在 MongoDB 的 `traceRecords`；使用 v2 兼容模式：
+
+```bash
+python .codex/skills/trace-chain-debugger/scripts/analyze_trace_chain.py \
+  --project . --v2 --turn-id a93fdbf47d7a
+```
+
+脚本会先通过 v2 `/traces` 列表把 `turn_id` 解析为真正的 `request_id`，再读取 trace 节点和会话消息。
+不要把 v2 的 `turn_id` 当成旧版 MySQL `agent_turns.id`。
 
 3. 如果项目有多个开发环境，必须让脚本使用与后端进程一致的配置环境。优先确认 `FARM_MANAGER_ENV` 或 `APP_ENV` 是 `dev` 还是 `prod`；必要时用 `DATABASE__URL`、`MONGODB__URI`、`MONGODB__DATABASE` 等环境变量临时覆盖，但不要把密码或完整连接串输出给用户。
 4. 需要看 trace 输入输出摘要时加 `--include-payload`。需要会话最近多轮时用 `--session-id <id> --limit 10`。
@@ -40,8 +50,9 @@ FARM_MANAGER_ENV=prod backend/.venv/bin/python .codex/skills/trace-chain-debugge
 
 - 单次请求：`--request-id <完整或前缀>`。
 - 会话链路：`--session-id <session_id> --limit 5`。
-- 精确 turn：`--turn-id <agent_turns.id>`。
+- 精确 turn：`--turn-id <agent_turns.id 或 v2 字符串 turn_id>`。
 - 输出机器可读结果：加 `--json`。
+- v2 服务地址：加 `--v2-base-url <url>`，默认 `http://127.0.0.1:8000`。
 - 只想快速定位候选：短 request_id 前缀即可，脚本会列出匹配候选。
 
 ## 调试判断
