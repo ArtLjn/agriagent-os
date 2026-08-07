@@ -1,0 +1,140 @@
+# Farm Manager 生产环境配置模板。
+#
+# 使用：
+#   cp config.prod.yaml.example config.prod.yaml
+#   export FARM_MANAGER_ENV=prod
+#
+# 本文件只提供生产配置结构和安全占位符，不放真实密码、Token 或 API Key。
+# 真实值请通过环境变量或被 .gitignore 忽略的 config.prod.yaml 注入。
+
+server:
+  host: "0.0.0.0"
+  port: 8099
+
+project_name: "Farm Manager API"
+
+database:
+  url: "mysql+pymysql://USER:PASSWORD@DB_HOST:3306/farm_manager?charset=utf8mb4"
+
+mongodb:
+  enabled: true
+  uri: "mongodb://USER:PASSWORD@MONGO_HOST:27017/?authSource=admin"
+  database: "farm_manager"
+  tls: true
+  connect_timeout_ms: 2000
+  server_selection_timeout_ms: 2000
+  max_pool_size: 20
+
+rag_service:
+  enabled: false
+  url: ""
+  timeout_seconds: 10.0
+  retry: 1
+  fallback_enabled: true
+  api_key: ""
+  default_collection: "agri_knowledge"
+  default_mode: "hybrid"
+  top_k: 5
+  use_hyde: false
+
+skill_vector_store:
+  enabled: false
+  provider: "quillrag"
+  url: ""
+  api_key: ""
+  collection: "farm_manager_skill_routes_v1"
+  mode: "hybrid"
+  top_k: 8
+  timeout_seconds: 10.0
+  sync_timeout_seconds: 30.0
+  retry: 0
+  use_hyde: false
+  create_collection_on_startup: true
+  sync_on_startup: true
+  sync_delete_stale: false
+
+router:
+  legacy_recall_mode: false
+
+agent:
+  strict_farm_id: true
+
+pending_plan:
+  concurrency_safety: true
+
+storage:
+  trace: "mongo"
+  case_drafts: "mongo"
+  repair_packs: "mongo"
+  review_issue_chains: "mongo"
+  prelabels: "mongo"
+  conversation_messages: "mongo"
+  agent_records: "mongo"
+  guardrails_logs: "mongo"
+
+ai:
+  model: "qwen3.6-35b-a3b"
+  api_key: ""
+  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  enable_thinking: false
+  parallel_tool_calls: true
+  failover_max_retries: 3
+  enable_session_summary: true
+  session_summary_message_threshold: 12
+  session_summary_debounce_minutes: 30
+  session_summary_max_tokens: 500
+
+auth:
+  jwt_secret: "CHANGE_ME_TO_A_RANDOM_SECRET"
+  jwt_algorithm: "HS256"
+  jwt_expire_minutes: 10080
+  admin_phone: ""
+  admin_password: ""
+
+secrets:
+  qweather_api_key: ""
+  qweather_appid: ""
+  qweather_appsecret: ""
+  dashscope_api_key: ""
+  langsearch_api_key: ""
+  searchhub_base_url: ""
+  searchhub_api_key: ""
+
+weather:
+  latitude: 34.26
+  longitude: 117.18
+
+rate_limiting:
+  global_requests_per_minute: 30
+  agent_requests_per_minute: 10
+
+circuit_breaker:
+  failure_threshold: 3
+  recovery_timeout: 30
+  retry_max: 3
+  retry_backoff_base: 2.0
+
+trace:
+  batch_size: 20
+  flush_interval: 5.0
+  max_queue: 1000
+  trace_ttl_days: 7
+  token_stats_ttl_days: 90
+
+reflection:
+  enabled: true
+  pre_write_plan: true
+  pre_execution: true
+  post_tool_result: true
+  fallback_guard: true
+
+token_quota:
+  monthly_limit: 200000
+  weekly_limit: 50000
+  over_quota_action: "reject"
+
+app:
+  apk_download_url: ""
+
+data_flywheel:
+  llm_prelabel_enabled: false
