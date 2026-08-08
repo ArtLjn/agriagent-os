@@ -138,6 +138,27 @@ async def test_missing_business_information_never_calls_mcp():
     assert "operation" not in result.error
 
 
+@pytest.mark.asyncio
+async def test_weather_without_explicit_location_uses_farm_default():
+    calls = []
+
+    class Business:
+        async def call_tool(self, name, arguments):
+            calls.append((name, arguments))
+            return {"location": "虎丘区"}
+
+    skill = _loaded("get_weather")
+    ctx = SimpleNamespace(
+        turn=SimpleNamespace(user_input="查询天气如何", events=[]),
+        business_client=Business(),
+    )
+
+    result = await skill.execute({}, ctx)
+
+    assert result.ok
+    assert calls == [("get_weather", {})]
+
+
 @pytest.mark.parametrize(
     ("skill_name", "expected_risk"),
     [

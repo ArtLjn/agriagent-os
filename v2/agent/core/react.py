@@ -452,6 +452,8 @@ async def run_turn(
 
 def _persist_memory(turn: Turn) -> None:
     non_system = [m for m in turn.messages if m.get("role") != "system"]
+    if turn.final_answer:
+        non_system.append({"role": "assistant", "content": turn.final_answer})
     memory.save_messages(turn.conversation_id, non_system)
 
 

@@ -1,7 +1,7 @@
 """weather skill — 自定义 execute（location 兜底）。
 
 元数据（name/description/parameters_schema）由 skill.md 定义。
-本文件只保留自定义逻辑：LLM 不传 location 时从历史/用户输入兜底。
+本文件只保留自定义逻辑：LLM 不传 location 时复用本轮已解析的位置。
 """
 
 from __future__ import annotations
@@ -16,13 +16,12 @@ class WeatherSkill(Skill):
     """自定义 execute：location 兜底解析。"""
 
     async def execute(self, params: dict[str, Any], ctx: SkillContext) -> SkillResult:
-        # 兜底：LLM 偶尔不传 location（qwen3.6-flash 工具调用质量问题）。
+        # 未指定地点时保留空参数，让 Business 按农场默认位置查询。
+        # 用户原话不是地点，不能把“查询天气如何”直接传给天气服务。
         if not params.get("location"):
             resolved = _resolve_location_from_history(ctx.turn)
             if resolved:
                 params = {**params, "location": resolved}
-            elif ctx.turn.user_input:
-                params = {**params, "location": ctx.turn.user_input}
         if params:
             _patch_action_args(ctx.turn, self.name, params)
         result = await ctx.business_client.call_tool(self.mcp_tool, params)
