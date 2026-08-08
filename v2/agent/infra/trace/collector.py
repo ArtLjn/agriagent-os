@@ -125,8 +125,8 @@ def record(
         "step_index": get_step_index(),
         "node_type": node_type,
         "node_name": node_name,
-        "input_data": _truncate(input_data) if input_data else None,
-        "output_data": _truncate(output_data) if output_data else None,
+        "input_data": _truncate(input_data) if input_data is not None else None,
+        "output_data": _truncate(output_data) if output_data is not None else None,
         "start_time": datetime.fromtimestamp(start_time),
         "end_time": datetime.fromtimestamp(end_time),
         "duration_ms": duration_ms,
@@ -278,4 +278,20 @@ def trace_tool_call(
         output_data=result,
         duration_ms=duration_ms,
         error_message=error,
+    )
+
+
+def trace_turn_outcome(status: str, error: str | None = None) -> None:
+    """记录 turn 最终状态，避免异常路径在请求摘要中伪装成 success。"""
+    failed = bool(error) or status == "failed"
+    record(
+        node_type="turn",
+        node_name="outcome",
+        input_data={"status": status},
+        output_data={
+            "status": status,
+            "error": {"code": error or status} if failed else None,
+        },
+        error_message=error,
+        status="error" if failed else "success",
     )

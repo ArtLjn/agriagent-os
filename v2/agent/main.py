@@ -53,7 +53,14 @@ from agent.infra.chat_store import (
 )
 from agent.infra.logging import get_logger, setup_logging
 from agent.infra.sse import sse_event
-from agent.infra.trace import init_trace, clear_trace, start_trace_system, stop_trace_system, flush_now
+from agent.infra.trace import (
+    init_trace,
+    clear_trace,
+    start_trace_system,
+    stop_trace_system,
+    flush_now,
+    trace_turn_outcome,
+)
 from agent.infra.trace.store import list_traces, get_trace_nodes, get_trace_summary
 
 setup_logging(app_name="agent")
@@ -256,6 +263,7 @@ async def chat(
         finally:
             _active_turns.pop(turn.turn_id, None)
             _pending_approvals.pop(turn.turn_id, None)
+            trace_turn_outcome(turn.status, turn.error)
             # 立即 flush trace 数据，确保前端加载时立即可见
             await flush_now()
             clear_trace()

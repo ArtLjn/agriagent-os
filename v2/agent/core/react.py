@@ -43,7 +43,12 @@ from agent.infra import sse
 from agent.infra.llm import chat_stream, MODEL
 from agent.infra.logging import log_event
 from agent.infra.mcp_client import BusinessClient
-from agent.infra.trace import get_trace, increment_step, trace_llm_call, trace_tool_call
+from agent.infra.trace import (
+    get_trace,
+    increment_step,
+    trace_llm_call,
+    trace_tool_call,
+)
 from agent.skills import loader as skill_loader
 from agent.skills.context import SkillContext
 
@@ -174,6 +179,15 @@ async def run_turn(
                         response={
                             "content_length": len(full_content),
                             "tool_calls_count": len(tool_calls_result),
+                            "tool_calls": [
+                                {
+                                    "name": call.get("name"),
+                                    "argument_keys": sorted(
+                                        (call.get("arguments") or {}).keys()
+                                    ),
+                                }
+                                for call in tool_calls_result
+                            ],
                         },
                         duration_ms=_llm_ms,
                     )
@@ -191,6 +205,10 @@ async def run_turn(
                     ev = sse.error_event(str(exc), "llm_call_failed")
                     turn.emit("error", ev["data"])
                     yield ev
+                    for fallback_event in _fallback_answer_events(
+                        turn, "模型暂时没有完成本轮分析"
+                    ):
+                        yield fallback_event
                     break
 
                 # 有 tool_calls → 文本是思考过程，发给 thought 事件
@@ -281,6 +299,7 @@ async def run_turn(
                     if missing:
                         result = _missing_params_result(skill, missing)
                         message = result["message"]
+                        trace_tool_call(tool_name, args, result, error=message)
                         ev = sse.observation(tool_name, None, error=message)
                         turn.emit("observation", ev["data"])
                         yield ev
@@ -411,6 +430,10 @@ async def run_turn(
             if turn.status == "running":
                 turn.status = "failed"
                 turn.error = "max_steps_reached"
+                for fallback_event in _fallback_answer_events(
+                    turn, "本轮分析查询范围较大，系统已先整理已获取的信息"
+                ):
+                    yield fallback_event
                 ev = sse.error_event(
                     "达到最大步数限制，请缩小问题范围或重试", "max_steps"
                 )
@@ -424,6 +447,8 @@ async def run_turn(
         ev = sse.error_event(str(exc), "pipeline_crash")
         turn.emit("error", ev["data"])
         yield ev
+        for fallback_event in _fallback_answer_events(turn, "系统暂时没有完成本轮分析"):
+            yield fallback_event
 
     _persist_memory(turn)
 
@@ -433,6 +458,63 @@ async def run_turn(
 def _persist_memory(turn: Turn) -> None:
     non_system = [m for m in turn.messages if m.get("role") != "system"]
     memory.save_messages(turn.conversation_id, non_system)
+
+
+def _fallback_answer_events(turn: Turn, reason: str) -> list[dict]:
+    """在异常或步数耗尽时输出已完成查询，避免前端收到空白回答。"""
+    answer = _build_fallback_answer(turn, reason)
+    turn.final_answer = answer
+    return [sse.final_answer_start(), sse.final_answer(answer)]
+
+
+def _build_fallback_answer(turn: Turn, reason: str) -> str:
+    """从已完成的只读观察结果生成确定性降级答复，不再次调用模型。"""
+    observations: dict[str, dict] = {}
+    for event in turn.events:
+        if event.get("type") != "observation":
+            continue
+        data = event.get("data") or {}
+        result = data.get("result")
+        if isinstance(result, dict) and not data.get("error"):
+            observations[data.get("tool_name", "")] = result
+
+    lines = ["我先根据已经查到的信息给你一个基础概览："]
+    farm = observations.get("get_farm_status")
+    if farm:
+        location = farm.get("location") or farm.get("address")
+        if location:
+            lines.append(f"- 农场位置：{location}")
+        cycles = farm.get("active_cycles")
+        if isinstance(cycles, list):
+            lines.append(f"- 当前活跃种植茬口：{len(cycles)} 个")
+        workers = farm.get("workers_summary")
+        if isinstance(workers, dict):
+            active = workers.get("active", workers.get("active_count"))
+            total = workers.get("total", workers.get("total_count"))
+            if active is not None or total is not None:
+                lines.append(f"- 工人：在职 {active or 0} 人，共 {total or active or 0} 人")
+        costs = farm.get("cost_summary")
+        if isinstance(costs, dict):
+            amount = costs.get("month_total", costs.get("total"))
+            if amount is not None:
+                lines.append(f"- 近期成本：{amount}")
+
+    labels = {
+        "query_cost_records": "收支记录",
+        "query_debts": "赊账记录",
+        "query_workers": "工人档案",
+    }
+    for tool_name, label in labels.items():
+        result = observations.get(tool_name)
+        if isinstance(result, dict):
+            records = result.get("records") or result.get("items")
+            if isinstance(records, list):
+                lines.append(f"- 已查到{label}：{len(records)} 条")
+
+    if len(lines) == 1:
+        lines.append("- 暂未获得可用的业务数据。")
+    lines.append(f"{reason}，请稍后重试；如果你只想看农场概况，我可以直接按概况、位置和当前经营状态回答。")
+    return "\n".join(lines)
 
 
 def _find_latest_action_data(turn: Turn, tool_name: str) -> dict | None:
