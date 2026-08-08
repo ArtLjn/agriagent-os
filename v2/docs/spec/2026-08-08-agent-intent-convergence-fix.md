@@ -4,7 +4,7 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 状态 | proposed |
+| 状态 | implemented |
 | 日期 | 2026-08-08 |
 | 范围 | `v2/agent` 的请求理解、工具绑定、ReAct 循环、Trace 与回归测试 |
 | 关联问题 | 用户询问“你分析一下我的基本信息”后无任何信息反馈 |
@@ -120,182 +120,41 @@ flowchart TD
     N --> O[执行写工具]
 ```
 
-## 7. 目标协议
+## 7. 最小实现决策
 
-### 7.1 TaskScope
+初版方案中的 `TaskScope`、额外意图分类、工具预算和多套 trace 字段会引入新的控制层。对当前已定位的根因而言，它们不是必要条件，因此不实施。
 
-每个 turn 在第一次工具调用前必须生成并保存一个结构化任务范围。字段保持最小化：
-
-```json
-{
-  "mode": "single_read",
-  "goal": "回答当前农场的基本概况",
-  "required_capabilities": ["farm_overview"],
-  "allowed_tools": ["get_farm_status"],
-  "max_tool_calls": 1,
-  "answer_sufficient_after": ["get_farm_status"]
-}
-```
-
-字段含义：
-
-| 字段 | 说明 |
-| --- | --- |
-| `mode` | `single_read`、`multi_read`、`write`、`clarify` |
-| `goal` | 面向用户的任务目标，不使用内部 operation 表达 |
-| `required_capabilities` | 能力类型，不绑定大量自然语言词库 |
-| `allowed_tools` | 本 turn Runtime 实际允许执行的工具 |
-| `max_tool_calls` | 当前任务级工具调用预算 |
-| `answer_sufficient_after` | 哪些成功结果可以触发强制收敛 |
-
-### 7.2 Skill 能力元数据
-
-在现有 Skill 标准上只增加任务边界所需的最小字段，不改变现有单动作工具命名：
+本次只增加一个可复用的 Skill 元数据：
 
 ```yaml
-capability:
-  tags: [farm_overview]
-  answer_sufficient_for: [farm_overview]
-  default_tool_budget: 1
+finalize_after_success: true
 ```
 
-示例：
+其含义是：这个 Skill 的成功结果已经构成一个完整回答的事实来源。Runtime 在写入 observation 后，下一次模型调用不再传入 tools；模型只能基于已有结果生成最终文本。
 
-```yaml
-name: get_farm_status
-kind: mcp
-risk_level: read
-description: 查询当前农场概况，包括位置、活跃茬口、近期农事、天气和汇总信息。
-capability:
-  tags: [farm_overview]
-  answer_sufficient_for: [farm_overview]
-  default_tool_budget: 1
-```
+`get_farm_status` 是首个使用该字段的 Skill，因为它已经返回农场名称、位置、活跃茬口、近期农事、天气、人员和收支汇总。该字段不依赖用户关键词，不改变写操作确认，也不影响未标记的多步任务。
 
-这些字段是运行时边界，不是关键词触发器。没有 `capability` 元数据的旧 Skill 继续按现有通用流程运行，但不能被标记为某类任务的强制收敛工具。
+## 8. 代码边界
 
-### 7.3 工具绑定规则
+- `v2/agent/skills/farm-status/skill.md`：声明概览结果足够回答。
+- `v2/agent/skills/base.py`：读取一个布尔元数据属性。
+- `v2/agent/core/react.py`：成功执行该 Skill 后清空下一轮 tools schema。
+- `v2/agent/prompts/system.md`：删除针对“基本信息”的额外 Prompt 规则。
+- `tests/test_v2_react_fallback.py`：验证第二次模型调用没有 tools，且最终只执行一次概览查询。
 
-- `single_read`：只向 LLM 暴露 `allowed_tools`，禁止把全量 Skill schema 带入本轮。
-- `multi_read`：只暴露任务范围内的只读工具，并按 `max_tool_calls` 计数。
-- `write`：仍然走现有 HITL，不因任务范围机制绕过确认。
-- `clarify`：不调用工具，直接自然语言追问。
-- LLM 返回不在 `allowed_tools` 内的工具调用时，Runtime 不执行；记录 `tool_out_of_scope`，并要求模型直接回答或追问，不重新扩大候选工具集合。
+不新增 Router、Planner、TaskScope、关键词词库、上下文结构或数据库表。
 
-### 7.4 强制收敛规则
+## 9. 异常处理边界
 
-当满足以下条件时，Runtime 必须进入最终回答阶段：
+`_build_fallback_answer` 已删除。模型或服务真实失败时，仍按原有 `error` 事件和 trace 状态报告；不能把部分 observation 拼成貌似完整的业务结论。
 
-1. 工具调用成功。
-2. 工具属于 `answer_sufficient_after`。
-3. 当前任务是 `single_read`，或已达到任务声明的最小信息集合。
+## 10. 验收标准
 
-最终回答阶段调用 LLM 时使用 `tool_choice=none` 或不传 tools，避免模型在“准备回答”阶段再次发起工具调用。
-
-这条规则比 system prompt 更高优先级，是本次修复的核心。
-
-### 7.5 预算与终止状态
-
-每个 turn 必须区分以下计数：
-
-- `step_count`：LLM/ReAct 总步骤，用于防止无限循环。
-- `tool_call_count`：实际执行的工具次数。
-- `out_of_scope_count`：越界工具调用次数。
-- `missing_param_count`：缺参调用次数。
-
-任务预算耗尽时，必须先记录终止原因，再进入最终回答或澄清，不允许只发 `error` 后结束。
-
-## 8. 代码改造边界
-
-### 8.1 `v2/agent/core/turn.py`
-
-增加 `task_scope` 和任务级计数，不改变 Turn 作为单一状态源的定位。
-
-### 8.2 `v2/agent/core/context.py`
-
-增加任务范围的结构化上下文渲染；不在这里实现业务关键词分类，不直接访问数据库。
-
-### 8.3 `v2/agent/core/react.py`
-
-- 在第一次 LLM 工具决策前初始化 TaskScope。
-- 根据 TaskScope 过滤 tools schema。
-- 执行前校验工具是否在 `allowed_tools` 内。
-- 成功命中 `answer_sufficient_after` 后强制最终回答。
-- 任务预算耗尽时走统一终止处理。
-- 保留 `_build_fallback_answer`，但只处理异常兜底，不参与正常任务判断。
-
-### 8.4 `v2/agent/skills/loader.py`
-
-加载并校验 `capability` 元数据；缺失或非法元数据必须在启动检查中报告，不在运行时静默猜测。
-
-### 8.5 `v2/agent/infra/trace/collector.py`
-
-新增或补齐以下 trace 信息：
-
-- `task_scope`
-- `allowed_tools`
-- `max_tool_calls`
-- `tool_call_count`
-- `termination_reason`
-- `answer_sufficient_after`
-- 越界工具名与拒绝原因
-
-禁止记录完整用户敏感数据和完整工具参数；参数只保留字段名或脱敏摘要。
-
-## 9. 测试要求
-
-### 9.1 正向收敛
-
-| 输入 | 预期 |
+| 场景 | 预期 |
 | --- | --- |
-| 你分析一下我的基本信息 | 只调用 `get_farm_status`，然后 final_answer |
-| 看看我的农场概况 | 同上 |
-| 我现在农场什么情况 | 同上 |
+| 基本信息、农场概况 | 首次选择 `get_farm_status` 后，下一轮没有 tools，输出 final_answer |
+| 其他未标记只读 Skill | 保持原 ReAct 行为，不被提前终止 |
+| 写操作 | 保持 HITL 确认流程 |
+| 概览工具执行失败 | 不伪造总结，输出明确 error 并保留失败 trace |
 
-### 9.2 不应过度收敛
-
-| 输入 | 预期 |
-| --- | --- |
-| 分析我的财务和工人情况 | 允许多只读工具，但有明确预算 |
-| 查一下最近农活和天气 | 允许对应的两个只读能力 |
-| 新来一个工人 | 进入创建工人确认流程，不直接执行 |
-
-### 9.3 越界和异常
-
-- single_read 任务中模型请求 `query_cost_records`：不执行，记录 `tool_out_of_scope`。
-- 工具返回 error：输出明确错误，不伪造已完成。
-- LLM 连续返回工具调用：任务预算到达后必须有 `final_answer` 或自然语言澄清。
-- LLM 流式异常：保留降级答复，但 trace 必须标记失败。
-- 会话历史包含旧的多领域上下文：当前新任务必须重新建立 TaskScope。
-
-### 9.4 验收指标
-
-对概览类回归集统计：
-
-- `single_read_tool_calls == 1` 的比例为 100%。
-- `out_of_scope_tool_executed == 0`。
-- `final_answer_emitted == 100%`。
-- `assistant_message_persisted == 100%`。
-- `max_steps_reached` 为 0；若发生，必须可解释且不能静默。
-
-## 10. 实施顺序
-
-1. 先实现 TaskScope 数据结构、trace 字段和回归夹具。
-2. 给 `get_farm_status` 增加 `farm_overview` 能力元数据。
-3. 实现单动作任务的工具过滤和任务预算。
-4. 实现成功工具结果后的强制无工具 finalization。
-5. 实现越界工具调用拒绝和统一终止状态。
-6. 将同一机制扩展到天气、最近农事、财务概览等明确的只读入口。
-7. 最后评估是否需要引入 `multi_read` 任务范围；不提前为所有业务设计复杂规划器。
-
-## 11. 完成标准
-
-只有同时满足以下条件，才算根因修复完成：
-
-- 不依赖 `_build_fallback_answer`，概览请求正常完成并主动收敛。
-- Runtime 能阻止概览任务执行越界工具。
-- 工具结果满足任务目标后不会继续无边界查询。
-- Trace 能解释任务范围、工具选择、预算和终止原因。
-- 正向、负向、异常和多轮上下文测试全部通过。
-
-仅仅看到用户收到一条降级文本，或仅仅修改 system prompt，不得标记为完成。
+只有正常路径不再扩展查询、且测试证明最终回答轮没有工具可调用，才算本问题修复完成。

@@ -18,6 +18,7 @@ name: manage_crop_cycle
 kind: mcp
 mcp_tool: business.manage_crop_cycle
 risk_level: mixed
+finalize_after_success: false
 description: 管理种植茬口。
 triggers: [茬口, 种植]
 operations:
@@ -58,6 +59,7 @@ parameters:
 ## 字段约束
 
 - `name`、`mcp_tool` 表示内部 Business 适配关系，不作为模型工具名。
+- `finalize_after_success` 默认为 `false`；仅当一次成功调用的结果已经足以回答该 Skill 的典型用户请求时设为 `true`。Runtime 会在下一轮撤掉 tools，只生成最终回答。
 - `operations.<op>.tool_name` 是模型实际调用的稳定工具名，使用 snake_case。
 - 每个模型工具只代表一个动作，不再要求模型填写 `operation`。
 - `description` 使用用户业务语言，不写 MCP、内部枚举或代码流程。

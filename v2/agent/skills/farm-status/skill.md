@@ -4,6 +4,7 @@ name: get_farm_status
 kind: mcp
 mcp_tool: business.get_farm_status
 risk_level: read
+finalize_after_success: true
 description: 查询农场当前整体状态：活跃茬口、最近农事、今日天气。
 triggers:
   - 农场状态
@@ -25,7 +26,7 @@ parameters:
 ## 何时使用
 
 用户问"农场怎么样"、"整体情况"、"当前状态"等概览类问题时使用。
-通常作为多步推理的第一步，收集上下文后再深入具体细节。
+查询结果已包含概览回答需要的汇总信息，成功后应直接组织回答，不再自动扩展其他专项查询。
 
 ## 不要使用
 

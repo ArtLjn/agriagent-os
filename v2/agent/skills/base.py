@@ -58,6 +58,11 @@ class Skill:
     def risk_level(self) -> str:
         return self._meta.get("risk_level", "read")
 
+    @property
+    def finalize_after_success(self) -> bool:
+        """成功执行后是否应立即进入无工具最终回答。"""
+        return self._meta.get("finalize_after_success") is True
+
     def dynamic_risk_level(self, params: dict[str, Any]) -> str:
         """根据实际参数返回风险等级。
 

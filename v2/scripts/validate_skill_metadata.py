@@ -17,6 +17,7 @@ TOP_LEVEL_FIELDS = {
     "kind",
     "mcp_tool",
     "risk_level",
+    "finalize_after_success",
     "description",
     "triggers",
     "operations",
@@ -60,6 +61,10 @@ def validate_metadata(meta: dict[str, Any], source: str = "skill.md") -> list[st
         errors.append(f"{source}: kind=local 时 mcp_tool 必须为 null")
     if meta.get("risk_level") not in RISK_LEVELS:
         errors.append(f"{source}: risk_level 必须是 {sorted(RISK_LEVELS)} 之一")
+    if "finalize_after_success" in meta and not isinstance(
+        meta["finalize_after_success"], bool
+    ):
+        errors.append(f"{source}: finalize_after_success 必须是布尔值")
     if not isinstance(meta.get("description"), str) or not meta.get("description", "").strip():
         errors.append(f"{source}: description 不能为空")
     if not _is_string_list(meta.get("triggers")):
