@@ -9,6 +9,7 @@ CRUD on farm_logs + farm_log_workers，沿用 archive 表结构。
   - 保留 v2 的 _resolve_worker_ids 自动建档逻辑（archive 是严格校验，v2 允许 agent 直接传工人名字）
   - 接受 operation_type 过滤参数
 """
+
 from __future__ import annotations
 
 import logging
@@ -16,7 +17,7 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import Session, selectinload
 
 from business.db import DEFAULT_FARM_ID, session_scope
 from business.models import CropCycle, FarmLog, FarmLogWorker, Worker
@@ -34,9 +35,7 @@ def _parse_date(value: str | None) -> date:
         return date.today()
 
 
-def _resolve_worker_ids(
-    db, farm_id: int, worker_names: list[str]
-) -> list[int]:
+def _resolve_worker_ids(db, farm_id: int, worker_names: list[str]) -> list[int]:
     """worker_names → worker_ids（farm_id 范围内）。
 
     - 名字匹配的 worker 直接用；不存在则自动建档（status=active）。
@@ -75,6 +74,9 @@ def query_logs(
     cycle_id: int | None = None,
     operation_type: str | None = None,
     days: int = 7,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    offset: int = 0,
     limit: int = 20,
 ) -> dict:
     """Return recent logs, optionally filtered by cycle and within N days.
@@ -88,7 +90,7 @@ def query_logs(
     """
     if farm_id is None:
         farm_id = DEFAULT_FARM_ID
-    cutoff = date.today() - timedelta(days=max(1, days))
+    cutoff = start_date or (date.today() - timedelta(days=max(1, days)))
     with session_scope() as db:
         stmt = (
             select(FarmLog)
@@ -100,8 +102,11 @@ def query_logs(
                 FarmLog.operation_date >= cutoff,
             )
             .order_by(FarmLog.operation_date.desc(), FarmLog.id.desc())
+            .offset(max(0, offset))
             .limit(max(1, min(limit, 100)))
         )
+        if end_date is not None:
+            stmt = stmt.where(FarmLog.operation_date <= end_date)
         if cycle_id is not None:
             stmt = stmt.where(FarmLog.cycle_id == int(cycle_id))
         if operation_type:
@@ -109,7 +114,7 @@ def query_logs(
         logs = db.scalars(stmt).unique().all()
         return {
             "count": len(logs),
-            "logs": [_log_to_dict(l) for l in logs],
+            "logs": [_log_to_dict(log) for log in logs],
             "filter": {
                 "farm_id": farm_id,
                 "cycle_id": cycle_id,
@@ -125,6 +130,8 @@ def count_logs(
     farm_id: int | None = None,
     cycle_id: int | None = None,
     operation_type: str | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
 ) -> int:
     """获取农事日志总数，支持按 cycle_id 和 operation_type 筛选。"""
     if farm_id is None:
@@ -135,7 +142,21 @@ def count_logs(
             query = query.filter(FarmLog.cycle_id == cycle_id)
         if operation_type:
             query = query.filter(FarmLog.operation_type == operation_type)
+        if start_date is not None:
+            query = query.filter(FarmLog.operation_date >= start_date)
+        if end_date is not None:
+            query = query.filter(FarmLog.operation_date <= end_date)
         return query.count()
+
+
+def get_log(db: Session, *, farm_id: int, log_id: int) -> dict | None:
+    """按农场与日志 ID 查询单条农事日志。"""
+    log = (
+        db.query(FarmLog)
+        .filter(FarmLog.id == log_id, FarmLog.farm_id == farm_id)
+        .first()
+    )
+    return _log_to_dict(log) if log else None
 
 
 def create_log(
@@ -254,9 +275,7 @@ def update_log(
         return _log_to_dict(log)
 
 
-def delete_log(
-    *, farm_id: int | None = None, log_id: int
-) -> dict:
+def delete_log(*, farm_id: int | None = None, log_id: int) -> dict:
     """Remove a log entry by id (cascade deletes farm_log_workers).
 
     Args:

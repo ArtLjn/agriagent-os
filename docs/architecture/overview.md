@@ -9,6 +9,8 @@ status: active
 
 当前后端是 FastAPI + SQLAlchemy + Skill 工具调用体系。入口已迁移到 `app/bootstrap/`，业务能力按领域目录收敛到 `domains/`，Agent 平台由 `application/`、`agent/`、`skills/`、`prompt/`、`context/`、`memory/` 和 `platforms/*` 共同承载。旧技术层入口已下线，不再保留兼容空壳。
 
+v2 的 Business 子服务独立运行在 `v2/business/`，使用 MySQL 持久化，并在 `:9876` 同时提供 `/api/v2` REST 与 `/mcp` Streamable HTTP。启动时必须通过 `JWT_SECRET` 注入非空高强度密钥；Agent 的本地 MCP 客户端对 loopback 地址绕过环境代理，远程地址仍按运行环境使用代理配置。
+
 ```text
 backend/app/
 ├── bootstrap/       # 应用工厂、路由注册、中间件、异常、lifespan

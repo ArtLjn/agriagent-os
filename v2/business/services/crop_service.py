@@ -15,11 +15,13 @@
   - CropTemplate.stages → CropTemplate.growth_stages（v2 模型关系名）
   - find_exact_duplicate 为内部辅助，仍返回 ORM（import_system_template 需要 .id）
 """
+
 from __future__ import annotations
 
 import re
 from collections import Counter
 from dataclasses import dataclass
+from collections.abc import Mapping
 from typing import Any, Iterable
 
 from sqlalchemy.orm import Session
@@ -64,9 +66,7 @@ def _crop_template_to_dict(template: CropTemplate) -> dict[str, Any]:
         "name": template.name,
         "variety": template.variety,
         "category": template.category,
-        "created_at": template.created_at.isoformat()
-        if template.created_at
-        else None,
+        "created_at": template.created_at.isoformat() if template.created_at else None,
         "stages": [_growth_stage_to_dict(s) for s in template.growth_stages],
     }
 
@@ -83,6 +83,12 @@ def _normalize_key_tasks(key_tasks: str | None) -> str | None:
 
 
 def _stage_compare_value(stage: Any) -> tuple[str, int, str | None]:
+    if isinstance(stage, Mapping):
+        return (
+            str(stage["name"]),
+            int(stage["duration_days"]),
+            _normalize_key_tasks(stage.get("key_tasks")),
+        )
     return (
         getattr(stage, "name"),
         getattr(stage, "duration_days"),
@@ -120,10 +126,7 @@ def find_exact_duplicate(
 
     expected_stages = _normalize_stages_for_compare(stages)
     for candidate in query.all():
-        if (
-            _normalize_stages_for_compare(candidate.growth_stages)
-            == expected_stages
-        ):
+        if _normalize_stages_for_compare(candidate.growth_stages) == expected_stages:
             return candidate
     return None
 
@@ -308,17 +311,13 @@ def list_system_templates(
     return [_crop_template_to_dict(t) for t in query.all()]
 
 
-def get_system_template(
-    db: Session, template_id: int
-) -> dict[str, Any] | None:
+def get_system_template(db: Session, template_id: int) -> dict[str, Any] | None:
     """根据 ID 获取系统模板。"""
     template = _load_system_template_orm(db, template_id)
     return _crop_template_to_dict(template) if template else None
 
 
-def _load_system_template_orm(
-    db: Session, template_id: int
-) -> CropTemplate | None:
+def _load_system_template_orm(db: Session, template_id: int) -> CropTemplate | None:
     """按 ID 加载系统模板 ORM（farm_id 为空）。"""
     return _system_template_query(db, template_id).first()
 
@@ -462,9 +461,7 @@ def update_system_crop_template(
     return _crop_template_to_dict(template)
 
 
-def count_farm_template_imports(
-    db: Session, name: str, variety: str | None
-) -> int:
+def count_farm_template_imports(db: Session, name: str, variety: str | None) -> int:
     """统计农场副本中同名同品种的模板数量，用于删除前置检查。"""
     query = db.query(CropTemplate).filter(
         CropTemplate.farm_id.is_not(None),

@@ -18,6 +18,14 @@ secrets:
   searchhub_base_url: ""
   searchhub_api_key: ""
 
+# 生产环境必须通过 JWT_SECRET 注入，不要使用空值或提交真实密钥。
+auth:
+  jwt_secret: ""
+  jwt_algorithm: "HS256"
+  jwt_expire_minutes: 10080
+  bcrypt_rounds: 12
+  agent_service_token: ""
+
 weather:
   latitude: 34.26
   longitude: 117.18

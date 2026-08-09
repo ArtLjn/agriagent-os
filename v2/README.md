@@ -1,6 +1,6 @@
 # farm-manager v2
 
-最简 Harness Engineering 实现：业务和 Agent 拆成两个独立项目，通过 MCP（Streamable HTTP）通信。
+Harness Engineering 实现：业务和 Agent 拆成两个独立项目。Business 在同一端口提供 MySQL-backed REST API 和 MCP（Streamable HTTP），Agent 通过 MCP 调用业务能力。
 
 ## 目录结构
 
@@ -9,10 +9,11 @@ v2/
 ├── pyproject.toml          # uv workspace
 ├── providers.json          # LLM provider 配置（OpenAI 兼容）
 ├── business/               # MCP Server 子项目
-│   ├── server.py           # FastMCP 实例入口
+│   ├── server.py           # FastAPI + FastMCP 双协议入口
+│   ├── api/                # REST API（/api/v2）
 │   ├── tools/              # MCP tool 定义（每个 domain 一个文件）
-│   ├── services/           # 业务逻辑（操作 data/ JSON）
-│   └── data/               # JSON 文件持久化
+│   ├── services/           # 业务逻辑
+│   └── scripts/            # 本地验收脚本
 └── agent/                  # MCP Client 子项目
     ├── main.py             # FastAPI + /chat SSE + /approve
     ├── react.py            # ReAct loop 核心（Turn 贯穿）
@@ -28,7 +29,7 @@ v2/
 
 1. **Vertical Slice + Capability Pin** — pipeline 是主叙事，每个节点对应一个文件
 2. **Turn 贯穿** — 所有节点接收同一个 `Turn` 对象，`(Turn) -> Turn` 纯函数
-3. **最简实现优先** — 单文件 < 200 行，JSON 持久化，零额外依赖
+3. **协议兼容优先** — REST 与 MCP 共用同一进程和业务服务，保留 Agent 的 `/mcp` 连接入口
 
 ## 与旧 backend 的关系
 
@@ -40,6 +41,10 @@ v2/
 cd v2
 uv sync                                  # 装齐所有依赖
 
+# Business 必须配置 MySQL 和 JWT 密钥（JWT_SECRET 至少 32 字节）
+export DATABASE__URL='mysql+pymysql://USER:PASSWORD@HOST:3306/farm_manager?charset=utf8mb4'
+export JWT_SECRET='请替换为随机的高强度密钥'
+
 # Terminal 1：启动 business（MCP Server）
 uv run --package farm-manager-business python -m business.server
 
@@ -48,6 +53,16 @@ uv run --package farm-manager-agent python -m agent.main
 
 # 浏览器打开 http://127.0.0.1:8000
 ```
+
+Business REST 基础路径是 `http://127.0.0.1:9876/api/v2`，MCP 地址保持为 `http://127.0.0.1:9876/mcp`。启动 Business 后，可以使用只读批量验收脚本：
+
+```bash
+BUSINESS_PHONE='+8613800000000' \
+BUSINESS_PASSWORD='your-password' \
+bash v2/business/scripts/test_rest_api.sh
+```
+
+已有 JWT 时可直接设置 `BUSINESS_TOKEN`，脚本不会输出令牌或密码。
 
 ## 阅读路线
 

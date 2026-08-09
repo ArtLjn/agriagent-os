@@ -11,6 +11,7 @@ JWT payload 标准：
 签发时绑定 farm_id，便于 business 中间件直接从 JWT 拿到隔离维度，
 无需额外查表。farm_id 由 auth_service.register/login 注入。
 """
+
 from __future__ import annotations
 
 import uuid
@@ -50,6 +51,8 @@ def create_access_token(
         JWT token 字符串
     """
     cfg = settings.auth
+    if not cfg.jwt_secret:
+        raise RuntimeError("JWT_SECRET 未配置，无法签发认证令牌")
     now = datetime.now(timezone.utc)
     expire = now + timedelta(
         minutes=expires_minutes
@@ -75,6 +78,8 @@ def create_access_token(
 def decode_access_token(token: str) -> dict:
     """验证 access token，失败时抛出明确异常。"""
     cfg = settings.auth
+    if not cfg.jwt_secret:
+        raise RuntimeError("JWT_SECRET 未配置，无法校验认证令牌")
     try:
         payload = jwt.decode(token, cfg.jwt_secret, algorithms=[cfg.jwt_algorithm])
     except jwt.ExpiredSignatureError as exc:

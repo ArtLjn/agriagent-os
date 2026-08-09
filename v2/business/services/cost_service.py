@@ -12,6 +12,7 @@
   - 保留 invalidate_farm_context 调用与 archive 的业务"为什么"注释
   - _find_category 在本模块内实现（不导入 cost_category_service，避免循环依赖）
 """
+
 from __future__ import annotations
 
 from datetime import date, datetime
@@ -123,12 +124,8 @@ def _record_to_dict(record: CostRecord) -> dict[str, Any]:
         else None,
         "unsettled_amount": float(record.unsettled_amount),
         "settlement_status": record.settlement_status,
-        "record_date": record.record_date.isoformat()
-        if record.record_date
-        else None,
-        "recorded_at": record.recorded_at.isoformat()
-        if record.recorded_at
-        else None,
+        "record_date": record.record_date.isoformat() if record.record_date else None,
+        "recorded_at": record.recorded_at.isoformat() if record.recorded_at else None,
         "note": record.note,
         "record_subtype": record.record_subtype,
         "counterparty": record.counterparty,
@@ -137,9 +134,7 @@ def _record_to_dict(record: CostRecord) -> dict[str, Any]:
         "parent_record_id": record.parent_record_id,
         "source_type": record.source_type,
         "source_id": record.source_id,
-        "created_at": record.created_at.isoformat()
-        if record.created_at
-        else None,
+        "created_at": record.created_at.isoformat() if record.created_at else None,
     }
 
 
@@ -255,6 +250,7 @@ def get_records(
     *,
     farm_id: int,
     cycle_id: int | None = None,
+    record_type: str | None = None,
     category: str | None = None,
     source_type: str | None = None,
     source_id: int | None = None,
@@ -283,6 +279,8 @@ def get_records(
     )
     if cycle_id is not None:
         query = query.filter(CostRecord.cycle_id == cycle_id)
+    if record_type is not None:
+        query = query.filter(CostRecord.record_type == record_type)
     if category is not None:
         query = query.filter(CostRecord.category == category)
     if source_type is not None:
@@ -313,6 +311,7 @@ def count_records(
     *,
     farm_id: int,
     cycle_id: int | None = None,
+    record_type: str | None = None,
     category: str | None = None,
     source_type: str | None = None,
     source_id: int | None = None,
@@ -337,6 +336,8 @@ def count_records(
     )
     if cycle_id is not None:
         query = query.filter(CostRecord.cycle_id == cycle_id)
+    if record_type is not None:
+        query = query.filter(CostRecord.record_type == record_type)
     if category is not None:
         query = query.filter(CostRecord.category == category)
     if source_type is not None:

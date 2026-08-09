@@ -15,6 +15,7 @@
     FarmLog/CostRecord/阶段 的逻辑
   - CropTemplate.stages → CropTemplate.growth_stages（v2 模型关系名）
 """
+
 from __future__ import annotations
 
 from datetime import date, timedelta
@@ -150,35 +151,35 @@ def create_crop_cycle(
 
 
 def get_crop_cycles(
-    db: Session, farm_id: int, skip: int = 0, limit: int = 100
+    db: Session,
+    farm_id: int,
+    skip: int = 0,
+    limit: int = 100,
+    status: str | None = None,
 ) -> list[dict[str, Any]]:
     """获取指定农场的茬口列表（分页）。"""
-    cycles = (
-        db.query(CropCycle)
-        .filter(CropCycle.farm_id == farm_id)
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
+    query = db.query(CropCycle).filter(CropCycle.farm_id == farm_id)
+    if status is not None:
+        query = query.filter(CropCycle.status == status)
+    cycles = query.offset(skip).limit(limit).all()
     return [_crop_cycle_to_dict(c) for c in cycles]
 
 
-def count_crop_cycles(db: Session, farm_id: int) -> int:
+def count_crop_cycles(db: Session, farm_id: int, status: str | None = None) -> int:
     """获取指定农场的茬口总数。"""
-    return db.query(CropCycle).filter(CropCycle.farm_id == farm_id).count()
+    query = db.query(CropCycle).filter(CropCycle.farm_id == farm_id)
+    if status is not None:
+        query = query.filter(CropCycle.status == status)
+    return query.count()
 
 
-def get_crop_cycle(
-    db: Session, cycle_id: int, farm_id: int
-) -> dict[str, Any] | None:
+def get_crop_cycle(db: Session, cycle_id: int, farm_id: int) -> dict[str, Any] | None:
     """根据 ID 获取指定农场的单个茬口。"""
     cycle = _load_crop_cycle_orm(db, cycle_id, farm_id)
     return _crop_cycle_to_dict(cycle) if cycle else None
 
 
-def _load_crop_cycle_orm(
-    db: Session, cycle_id: int, farm_id: int
-) -> CropCycle | None:
+def _load_crop_cycle_orm(db: Session, cycle_id: int, farm_id: int) -> CropCycle | None:
     """按 ID + farm_id 加载 ORM 茬口（供 update/delete/advance 复用）。"""
     return (
         db.query(CropCycle)
@@ -243,6 +244,7 @@ def update_crop_cycle(
     total_area_mu: Decimal | None = None,
     season: str | None = None,
     batch_note: str | None = None,
+    status: str | None = None,
 ) -> dict[str, Any]:
     """更新茬口基本信息。"""
     cycle = _load_crop_cycle_orm(db, cycle_id, farm_id)
@@ -256,6 +258,8 @@ def update_crop_cycle(
     cycle.total_area_mu = total_area_mu
     cycle.season = season
     cycle.batch_note = batch_note
+    if status is not None:
+        cycle.status = status
 
     db.flush()
     invalidate_farm_context(farm_id)

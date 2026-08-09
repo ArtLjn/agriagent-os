@@ -2,7 +2,11 @@ openapi: 3.0.3
 info:
   title: AgriAgentOS API Reference
   version: 0.1.0
-  description: AgriAgentOS 后端 API 摘要，当前记录作物模板系统库相关契约。
+  description: >-
+    AgriAgentOS 后端 API 摘要，当前记录作物模板系统库相关契约。
+    v2 business 服务的 REST 基础路径为 /api/v2，MCP 地址为 /mcp；详细 v2
+    双协议接口以 v2/docs/spec/2026-08-05-api-spec.md 为准。
+  x-business-v2-base-path: /api/v2
 servers:
   - url: /api/v1
 paths:

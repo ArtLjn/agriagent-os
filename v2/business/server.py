@@ -1,15 +1,21 @@
-"""MCP Server entry point.
+"""Business HTTP + MCP server entry point.
 
 Exposes farm business capabilities as MCP tools over Streamable HTTP.
 Agent (separate process) connects via http://127.0.0.1:9876/mcp.
 
+REST API 由 FastAPI 提供，FastMCP ASGI 应用挂载在同一进程的 /mcp。
+
 Run: uv run --package farm-manager-business python -m business.server
 """
+
 import logging
 import os
 import sys
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
+
+import uvicorn
+from fastapi import FastAPI
 
 # Import tool registration side-effects (each module decorates @mcp.tool).
 from business.tools import farm, location, logs, weather  # noqa: F401
@@ -20,21 +26,17 @@ from business.tools import (  # noqa: F401
     work_orders,
     workers,
 )
+from business.api import api_router, install_exception_handlers
 from business.db import check_connection
 from business.mcp_app import mcp
 
 
 def setup_logging() -> None:
-    """初始化 business 进程的日志配置（与 agent 风格一致）。
-
-    Business 进程无 trace 上下文（contextvars 在不同进程），
-    所以日志里 request_id/conversation_id/turn_id 字段显示为 "-"。
-    """
+    """初始化 business 进程的日志配置（与 agent 风格一致）。"""
     root = logging.getLogger()
     root.handlers.clear()
     root.setLevel(logging.INFO)
 
-    # stdout（彩色，与 agent 一致）
     console_fmt = (
         "\033[90m%(asctime)s\033[0m"
         " │ \033[36m-\033[0m"
@@ -46,7 +48,6 @@ def setup_logging() -> None:
     console_handler.setFormatter(logging.Formatter(console_fmt))
     root.addHandler(console_handler)
 
-    # 文件（按天轮转）
     default_log_dir = Path(__file__).resolve().parent.parent / "logs" / "business"
     log_dir = Path(os.getenv("LOG_DIR", default_log_dir))
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -73,27 +74,33 @@ def setup_logging() -> None:
     error_handler.setLevel(logging.WARNING)
     root.addHandler(error_handler)
 
-    # 第三方库降噪
     for noisy in ("httpx", "httpcore", "urllib3", "watchfiles", "pymongo"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
+
+
+def create_app() -> FastAPI:
+    """创建同时承载 REST 与 MCP 的 ASGI 应用。"""
+    mcp_app = mcp.http_app(path="/mcp")
+    app = FastAPI(
+        title="Farm Manager Business API",
+        version="2.0.0",
+        lifespan=mcp_app.lifespan,
+    )
+    install_exception_handlers(app)
+    app.include_router(api_router)
+    # 挂在根路径可保留标准 /mcp，不触发 Starlette 对 /mcp/ 的重定向。
+    app.mount("/", mcp_app)
+    return app
 
 
 def main() -> None:
     setup_logging()
     logger = logging.getLogger(__name__)
-    # 启动前确认 MySQL 连通（失败立即崩，避免上线后才发现连接串错）。
     check_connection()
-    logger.info("starting MCP server on http://127.0.0.1:9876/mcp")
-    # Streamable HTTP transport (SSE is deprecated in MCP spec).
-    # FastMCP 新版本默认 websockets-sansio，但旧版 Uvicorn 不认识该值。
-    # MCP 这里走 HTTP transport，交给 Uvicorn 自动选择兼容实现即可。
-    mcp.run(
-        transport="http",
-        host="127.0.0.1",
-        port=9876,
-        path="/mcp",
-        uvicorn_config={"ws": "auto"},
-    )
+    logger.info("starting business server on http://127.0.0.1:9876")
+    logger.info("REST API: http://127.0.0.1:9876/api/v2")
+    logger.info("MCP endpoint: http://127.0.0.1:9876/mcp")
+    uvicorn.run(create_app(), host="127.0.0.1", port=9876, ws="auto")
 
 
 if __name__ == "__main__":
