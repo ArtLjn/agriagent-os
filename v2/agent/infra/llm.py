@@ -64,6 +64,10 @@ _async_client = AsyncOpenAI(base_url=BASE_URL, api_key=API_KEY, timeout=60.0)
 
 def _is_retryable(exc: Exception) -> bool:
     """判断异常是否值得重试（网络/服务端临时问题）。"""
+    status_code = getattr(exc, "status_code", None)
+    if isinstance(status_code, int) and (status_code == 429 or status_code >= 500):
+        return True
+
     # httpcore.RemoteProtocolError, httpx.NetworkError, ConnectionError 等
     exc_name = type(exc).__name__
     retryable_names = {
@@ -84,6 +88,15 @@ def _is_retryable(exc: Exception) -> bool:
     if "timeout" in exc_name.lower() or "connection" in exc_name.lower():
         return True
     return False
+
+
+def _stream_error_message(exc: Exception) -> str:
+    """将 Provider 故障转换为可直接展示给用户的短提示。"""
+    if _is_retryable(exc):
+        status_code = getattr(exc, "status_code", None)
+        suffix = f"（HTTP {status_code}）" if isinstance(status_code, int) else ""
+        return f"模型服务暂时不可用{suffix}，已自动重试，请稍后重新发送消息。"
+    return str(exc)
 
 
 def _required_tool_args(tool_name: str, tools: list[dict[str, Any]] | None) -> list[str]:
@@ -311,9 +324,9 @@ async def chat_stream(
 
             # 不可重试或重试次数用完
             logger.exception("LLM stream failed (no more retries)")
-            yield {"type": "error", "message": str(exc)}
+            yield {"type": "error", "message": _stream_error_message(exc)}
             return
 
     # 理论上不会走到这里
     if last_exc:
-        yield {"type": "error", "message": str(last_exc)}
+        yield {"type": "error", "message": _stream_error_message(last_exc)}
