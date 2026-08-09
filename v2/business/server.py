@@ -3,15 +3,13 @@
 Exposes farm business capabilities as MCP tools over Streamable HTTP.
 Agent (separate process) connects via http://127.0.0.1:9876/mcp.
 
-Run: python -m business.server
+Run: uv run --package farm-manager-business python -m business.server
 """
 import logging
 import os
 import sys
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
-
-from fastmcp import FastMCP
 
 # Import tool registration side-effects (each module decorates @mcp.tool).
 from business.tools import farm, location, logs, weather  # noqa: F401
@@ -87,7 +85,15 @@ def main() -> None:
     check_connection()
     logger.info("starting MCP server on http://127.0.0.1:9876/mcp")
     # Streamable HTTP transport (SSE is deprecated in MCP spec).
-    mcp.run(transport="http", host="127.0.0.1", port=9876, path="/mcp")
+    # FastMCP 新版本默认 websockets-sansio，但旧版 Uvicorn 不认识该值。
+    # MCP 这里走 HTTP transport，交给 Uvicorn 自动选择兼容实现即可。
+    mcp.run(
+        transport="http",
+        host="127.0.0.1",
+        port=9876,
+        path="/mcp",
+        uvicorn_config={"ws": "auto"},
+    )
 
 
 if __name__ == "__main__":

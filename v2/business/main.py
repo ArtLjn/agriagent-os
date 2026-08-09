@@ -1,11 +1,7 @@
 """Business MCP Server 启动入口。
 
-直接运行：
-    cd v2/business
-    python main.py
-
-或作为模块运行：
-    python -m business.server
+从 v2/ 目录运行：
+    uv run --package farm-manager-business python -m business.server
 """
 from __future__ import annotations
 
@@ -22,4 +18,3 @@ from business.server import main  # noqa: E402
 
 if __name__ == "__main__":
     main()
-
