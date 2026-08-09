@@ -1178,8 +1178,8 @@ function autoScroll(el) {
 async function loadConversations() {
   try {
     const url = state.convCursor
-      ? `/conversations?limit=20&cursor=${encodeURIComponent(state.convCursor)}`
-      : `/conversations?limit=20`;
+      ? `/api/v2/conversations?limit=20&cursor=${encodeURIComponent(state.convCursor)}`
+      : `/api/v2/conversations?limit=20`;
     const resp = await fetch(url);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
@@ -1197,7 +1197,7 @@ async function loadConversations() {
 
 async function loadDevUsers() {
   try {
-    const resp = await fetch('/dev-users');
+    const resp = await fetch('/api/v2/dev-users');
     if (!resp.ok) return;
     const data = await resp.json();
     state.devUsers = data.users || [];
@@ -1294,7 +1294,7 @@ function newConversation() {
 
 async function loadConversationMessages(convId) {
   try {
-    const resp = await fetch(`/conversations/${encodeURIComponent(convId)}?limit=100`);
+    const resp = await fetch(`/api/v2/conversations/${encodeURIComponent(convId)}?limit=100`);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
     renderMessages(data.items || []);
@@ -1477,7 +1477,7 @@ async function copySessionJson() {
   } else if (state.currentConvId) {
     // fallback：从 API 加载历史消息（可能不含事件详情）
     try {
-      const resp = await fetch(`/conversations/${encodeURIComponent(state.currentConvId)}?limit=500`);
+      const resp = await fetch(`/api/v2/conversations/${encodeURIComponent(state.currentConvId)}?limit=500`);
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const data = await resp.json();
       sessionData = {
@@ -1791,7 +1791,7 @@ async function sendMessage() {
     if (state.currentUserToken) {
       headers['Authorization'] = 'Bearer ' + state.currentUserToken;
     }
-    const resp = await fetch('/chat', {
+    const resp = await fetch('/api/v2/chat', {
       method: 'POST',
       headers: headers,
       body: JSON.stringify({message: msg, conversation_id: state.currentConvId}),
@@ -1858,7 +1858,7 @@ async function approveTurn(turnId, btnEl, decision) {
     buttons.forEach(b => { b.disabled = true; b.style.opacity = '0.5'; b.style.pointerEvents = 'none'; });
   }
   try {
-    const resp = await fetch('/approve', {
+    const resp = await fetch('/api/v2/approve', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({turn_id: turnId, decision: decision, reason: ''}),
@@ -1883,7 +1883,7 @@ async function approveTurn(turnId, btnEl, decision) {
 async function resetConversation() {
   if (!state.currentConvId) return;
   if (!confirm('确认清空当前会话记忆？')) return;
-  await fetch('/reset', {
+  await fetch('/api/v2/reset', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({conversation_id: state.currentConvId}),
@@ -1934,7 +1934,7 @@ async function loadTraceRequests(convId) {
   }
   try {
     traceBodyEl.innerHTML = '<div class="trace-empty">加载中...</div>';
-    const url = `/traces?conversation_id=${encodeURIComponent(convId)}&limit=20`;
+    const url = `/api/v2/traces?conversation_id=${encodeURIComponent(convId)}&limit=20`;
     const resp = await fetch(url);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
@@ -1989,8 +1989,8 @@ async function selectTraceRequest(requestId) {
 
   try {
     const [nodesResp, summaryResp] = await Promise.all([
-      fetch(`/traces/${encodeURIComponent(requestId)}`),
-      fetch(`/traces/${encodeURIComponent(requestId)}/summary`),
+      fetch(`/api/v2/traces/${encodeURIComponent(requestId)}`),
+      fetch(`/api/v2/traces/${encodeURIComponent(requestId)}/summary`),
     ]);
     if (!nodesResp.ok) throw new Error(`HTTP ${nodesResp.status}`);
     const nodesData = await nodesResp.json();
