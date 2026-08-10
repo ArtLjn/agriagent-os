@@ -57,15 +57,40 @@ def _strip_html(text: str) -> str:
 
 
 async def _searchhub_search(
-    query: str, top_k: int, base_url: str, api_key: str
+    query: str,
+    top_k: int,
+    base_url: str,
+    api_key: str,
+    *,
+    time_range: str | None = None,
+    enable_fetch: bool = True,
+    enable_embedding_filter: bool | None = None,
+    domain: str | None = None,
+    region: str | None = None,
+    crop: str | None = None,
 ) -> dict[str, Any]:
-    """调用 SearchHub /search 接口。"""
-    payload = {
+    """调用 SearchHub /search 接口。
+
+    time_range / domain / region / crop 等高级参数仅在传入时加入 payload，
+    让 SearchHub 启用对应增强流程。enable_embedding_filter=None 时不传，
+    由 SearchHub 运行时自动判断。
+    """
+    payload: dict[str, Any] = {
         "query": query,
         "top_k": top_k,
-        "enable_fetch": False,
-        "enable_embedding_filter": False,
+        "enable_fetch": enable_fetch,
     }
+    if time_range:
+        payload["time_range"] = time_range
+    if enable_embedding_filter is not None:
+        payload["enable_embedding_filter"] = enable_embedding_filter
+    if domain:
+        payload["domain"] = domain
+    if region:
+        payload["region"] = region
+    if crop:
+        payload["crop"] = crop
+
     headers = {
         "Accept": "application/json",
         "Content-Type": "application/json",
@@ -214,6 +239,31 @@ class WebSearchSkill(Skill):
                     "minimum": 1,
                     "maximum": 10,
                 },
+                "time_range": {
+                    "type": "string",
+                    "description": "日期筛选：day/week/month/year",
+                    "enum": ["day", "week", "month", "year"],
+                },
+                "enable_fetch": {
+                    "type": "boolean",
+                    "description": "是否抓取网页正文（默认 true，仅 SearchHub 生效）",
+                },
+                "enable_embedding_filter": {
+                    "type": "boolean",
+                    "description": "是否启用 embedding 精筛（仅 SearchHub 生效）",
+                },
+                "domain": {
+                    "type": "string",
+                    "description": "领域参数，如 agriculture",
+                },
+                "region": {
+                    "type": "string",
+                    "description": "地区参数，如 苏州",
+                },
+                "crop": {
+                    "type": "string",
+                    "description": "作物参数，如 西瓜",
+                },
             },
             "required": ["query"],
         }
@@ -223,12 +273,29 @@ class WebSearchSkill(Skill):
         if not query:
             return SkillResult(error="query 不能为空")
         top_k = max(1, min(int(params.get("top_k", 5)), 10))
+        time_range = params.get("time_range")
+        enable_fetch = params.get("enable_fetch", True)
+        enable_embedding_filter = params.get("enable_embedding_filter")
+        domain = params.get("domain")
+        region = params.get("region")
+        crop = params.get("crop")
 
         # ── Try SearchHub first ────────────────────────────────
         base_url, api_key = _searchhub_config()
         if base_url and api_key:
             try:
-                data = await _searchhub_search(query, top_k, base_url, api_key)
+                data = await _searchhub_search(
+                    query,
+                    top_k,
+                    base_url,
+                    api_key,
+                    time_range=time_range,
+                    enable_fetch=enable_fetch,
+                    enable_embedding_filter=enable_embedding_filter,
+                    domain=domain,
+                    region=region,
+                    crop=crop,
+                )
                 formatted = _format_searchhub(data, query)
                 if formatted["results"]:
                     return SkillResult(data=formatted)
