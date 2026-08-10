@@ -22,6 +22,7 @@ trace 文档结构：
     created_at: datetime,
   }
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -83,6 +84,7 @@ def _get_summary_collection():
 def _truncate(value: Any) -> Any:
     """限制 trace 数据体积。"""
     import json
+
     serialized = json.dumps(value, ensure_ascii=False, default=str)
     if len(serialized) <= _MAX_TRACE_JSON_LEN:
         return value
@@ -179,7 +181,9 @@ async def _refresh_summaries(new_items: list[dict[str, Any]]) -> None:
             return
 
         # Collect unique request_ids
-        request_ids = {item["request_id"] for item in new_items if item.get("request_id")}
+        request_ids = {
+            item["request_id"] for item in new_items if item.get("request_id")
+        }
         for request_id in request_ids:
             nodes = await rec_coll.find({"request_id": request_id}).to_list(length=500)
             summary = build_trace_request_summary(nodes)
@@ -187,6 +191,7 @@ async def _refresh_summaries(new_items: list[dict[str, Any]]) -> None:
                 continue
             # Add node_breakdown
             from agent.infra.trace.store import _build_node_breakdown
+
             summary["node_breakdown"] = _build_node_breakdown(nodes)
             doc = summary_to_mongo_doc(summary)
             await summary_coll.replace_one(
@@ -225,7 +230,9 @@ async def start_trace_system() -> None:
             pass
     _running = True
     _flush_task = asyncio.create_task(_flush_loop())
-    logger.info("trace system started (batch=%d, interval=%.0fs)", _BATCH_SIZE, _FLUSH_INTERVAL)
+    logger.info(
+        "trace system started (batch=%d, interval=%.0fs)", _BATCH_SIZE, _FLUSH_INTERVAL
+    )
 
 
 async def stop_trace_system() -> None:
@@ -278,6 +285,19 @@ def trace_tool_call(
         output_data=result,
         duration_ms=duration_ms,
         error_message=error,
+    )
+
+
+def trace_commit_state(result: dict[str, Any], *, reply_generated: bool) -> None:
+    """记录业务已提交与模型收尾状态，避免把答复失败误判为写入失败。"""
+    record(
+        node_type="commit_state",
+        node_name="write_finalization",
+        output_data={
+            "business_committed": True,
+            "reply_generated": reply_generated,
+            "result": result,
+        },
     )
 
 

@@ -23,7 +23,16 @@ TOP_LEVEL_FIELDS = {
     "operations",
     "parameters",
 }
-OPERATION_FIELDS = {"tool_name", "description", "risk_level", "parameters", "required"}
+OPERATION_FIELDS = {
+    "tool_name",
+    "description",
+    "risk_level",
+    "parameters",
+    "required",
+    "mcp_tool",
+    "inject_operation",
+    "finalize_after_success",
+}
 RISK_LEVELS = {"read", "write_confirm", "write_high", "mixed"}
 
 
@@ -39,7 +48,9 @@ def parse_front_matter(path: Path) -> dict[str, Any]:
 
 
 def _is_string_list(value: Any) -> bool:
-    return isinstance(value, list) and all(isinstance(item, str) and item for item in value)
+    return isinstance(value, list) and all(
+        isinstance(item, str) and item for item in value
+    )
 
 
 def validate_metadata(meta: dict[str, Any], source: str = "skill.md") -> list[str]:
@@ -50,7 +61,9 @@ def validate_metadata(meta: dict[str, Any], source: str = "skill.md") -> list[st
         errors.append(f"{source}: 顶层包含未知字段: {sorted(unknown)}")
     if meta.get("schema_version") != 1:
         errors.append(f"{source}: schema_version 必须为 1")
-    if not isinstance(meta.get("name"), str) or not re.fullmatch(r"[a-z][a-z0-9_]*", meta.get("name", "")):
+    if not isinstance(meta.get("name"), str) or not re.fullmatch(
+        r"[a-z][a-z0-9_]*", meta.get("name", "")
+    ):
         errors.append(f"{source}: name 必须是 snake_case")
     kind = meta.get("kind")
     if kind not in {"mcp", "local"}:
@@ -65,7 +78,10 @@ def validate_metadata(meta: dict[str, Any], source: str = "skill.md") -> list[st
         meta["finalize_after_success"], bool
     ):
         errors.append(f"{source}: finalize_after_success 必须是布尔值")
-    if not isinstance(meta.get("description"), str) or not meta.get("description", "").strip():
+    if (
+        not isinstance(meta.get("description"), str)
+        or not meta.get("description", "").strip()
+    ):
         errors.append(f"{source}: description 不能为空")
     if not _is_string_list(meta.get("triggers")):
         errors.append(f"{source}: triggers 必须是非空字符串列表")
@@ -80,12 +96,16 @@ def validate_metadata(meta: dict[str, Any], source: str = "skill.md") -> list[st
             errors.append(f"{source}: parameters.properties 必须是对象")
             properties = {}
         required = parameters.get("required", [])
-        if not isinstance(required, list) or not all(isinstance(item, str) for item in required):
+        if not isinstance(required, list) or not all(
+            isinstance(item, str) for item in required
+        ):
             errors.append(f"{source}: parameters.required 必须是字符串列表")
         else:
             missing_properties = set(required) - set(properties)
             if missing_properties:
-                errors.append(f"{source}: required 参数未定义: {sorted(missing_properties)}")
+                errors.append(
+                    f"{source}: required 参数未定义: {sorted(missing_properties)}"
+                )
 
     operations = meta.get("operations")
     if not isinstance(operations, dict):
@@ -94,10 +114,14 @@ def validate_metadata(meta: dict[str, Any], source: str = "skill.md") -> list[st
     operation_property = properties.get("operation") or {}
     allowed_operations = set(operation_property.get("enum") or [])
     if operations and not allowed_operations:
-        errors.append(f"{source}: 声明 operations 时 parameters.operation.enum 不能为空")
+        errors.append(
+            f"{source}: 声明 operations 时 parameters.operation.enum 不能为空"
+        )
     unknown_operations = set(operations) - allowed_operations
     if unknown_operations:
-        errors.append(f"{source}: operations 包含未声明的 operation: {sorted(unknown_operations)}")
+        errors.append(
+            f"{source}: operations 包含未声明的 operation: {sorted(unknown_operations)}"
+        )
     for operation, config in operations.items():
         path = f"{source}: operations.{operation}"
         if not isinstance(config, dict):
@@ -108,14 +132,20 @@ def validate_metadata(meta: dict[str, Any], source: str = "skill.md") -> list[st
             errors.append(f"{path} 包含未知字段: {sorted(unknown_fields)}")
         if config.get("risk_level") not in RISK_LEVELS - {"mixed"}:
             errors.append(f"{path}.risk_level 必须是 read/write_confirm/write_high")
+        if "mcp_tool" in config and not isinstance(config["mcp_tool"], str):
+            errors.append(f"{path}.mcp_tool 必须是字符串")
+        for boolean_field in ("inject_operation", "finalize_after_success"):
+            if boolean_field in config and not isinstance(config[boolean_field], bool):
+                errors.append(f"{path}.{boolean_field} 必须是布尔值")
         tool_name = config.get("tool_name")
         if not isinstance(tool_name, str) or not re.fullmatch(
             r"[a-z][a-z0-9_]*", tool_name
         ):
             errors.append(f"{path}.tool_name 必须是 snake_case")
-        if not isinstance(config.get("description"), str) or not config.get(
-            "description", ""
-        ).strip():
+        if (
+            not isinstance(config.get("description"), str)
+            or not config.get("description", "").strip()
+        ):
             errors.append(f"{path}.description 不能为空")
         for field_name in ("parameters", "required"):
             if not _is_string_list(config.get(field_name, [])):

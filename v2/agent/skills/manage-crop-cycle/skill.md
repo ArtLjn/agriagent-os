@@ -26,10 +26,10 @@ operations:
   detail: {tool_name: get_crop_cycle_detail, description: 查询指定茬口的作物、面积、生长阶段等详细信息。, risk_level: read, parameters: [cycle_id], required: [cycle_id]}
   create:
     tool_name: create_crop_cycle
-    description: 新建一个种植茬口。创建前如果不知道作物模板 ID，应先查询作物模板。
+    description: 新建一个种植茬口。必须绑定与目标作物一致的农场模板；系统模板需先导入。
     risk_level: write_confirm
-    parameters: [name, crop_template_id, start_date, field_name, total_area_mu, season, batch_note]
-    required: [name, crop_template_id, start_date]
+    parameters: [name, crop_name, crop_template_id, start_date, field_name, total_area_mu, season, batch_note]
+    required: [name, crop_name, crop_template_id, start_date]
   advance: {tool_name: advance_crop_cycle, description: 将指定茬口推进到下一个生长阶段。, risk_level: write_confirm, parameters: [cycle_id], required: [cycle_id]}
   update: {tool_name: update_crop_cycle, description: 修改指定茬口的名称、作物模板、日期、地块、面积或备注。, risk_level: write_confirm, parameters: [cycle_id, name, crop_template_id, start_date, field_name, total_area_mu, season, batch_note], required: [cycle_id]}
   delete: {tool_name: delete_crop_cycle, description: 删除指定种植茬口。, risk_level: write_high, parameters: [cycle_id], required: [cycle_id]}
@@ -54,6 +54,9 @@ parameters:
     name:
       type: string
       description: 茬口名称（create 必填，update 可选）
+    crop_name:
+      type: string
+      description: 目标作物名称；必须与绑定模板一致（create 必填）
     crop_template_id:
       type: integer
       description: 作物模板 ID（create 必填，update 可选）

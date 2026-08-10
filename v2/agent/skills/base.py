@@ -164,6 +164,9 @@ class McpSkill(Skill):
         if missing:
             return SkillResult(error=self.missing_params_prompt(missing))
         result = await ctx.business_client.call_tool(self.mcp_tool, enriched)
+        if isinstance(result, dict) and result.get("error"):
+            message = str(result.get("message") or result["error"])
+            return SkillResult(data=result, error=message)
         return SkillResult(data=result)
 
 
@@ -175,12 +178,26 @@ class OperationSkill(McpSkill):
         self.operation = operation
         source_config = source._meta.get("operations", {}).get(operation, {})
         self._meta = deepcopy(source._meta)
-        self._meta["name"] = source_config.get("tool_name") or f"{source.name}_{operation}"
-        self._meta["description"] = source_config.get("description") or source.description
+        self._meta["name"] = (
+            source_config.get("tool_name") or f"{source.name}_{operation}"
+        )
+        self._meta["description"] = (
+            source_config.get("description") or source.description
+        )
         self._meta["risk_level"] = source_config.get("risk_level") or source.risk_level
+        if "finalize_after_success" in source_config:
+            self._meta["finalize_after_success"] = source_config[
+                "finalize_after_success"
+            ]
         self._meta["operations"] = {}
         self.kind = source.kind
-        self.mcp_tool = source.mcp_tool
+        operation_mcp_tool = source_config.get("mcp_tool")
+        self.mcp_tool = (
+            operation_mcp_tool.rsplit(".", 1)[-1]
+            if isinstance(operation_mcp_tool, str)
+            else source.mcp_tool
+        )
+        self._inject_operation = source_config.get("inject_operation", True)
 
         source_schema = source.parameters_schema
         source_properties = source_schema.get("properties") or {}
@@ -206,16 +223,20 @@ class OperationSkill(McpSkill):
         return dict(params)
 
     def dynamic_risk_level(self, params: dict[str, Any]) -> str:
-        return (
-            self._operation_config_meta.get("risk_level")
-            or self._source.dynamic_risk_level({**params, "operation": self.operation})
-        )
+        return self._operation_config_meta.get(
+            "risk_level"
+        ) or self._source.dynamic_risk_level({**params, "operation": self.operation})
 
     async def execute(self, params: dict[str, Any], ctx: "SkillContext") -> SkillResult:
         enriched = self.enrich_params(params, ctx)
         missing = self.missing_required_params(enriched)
         if missing:
             return SkillResult(error=self.missing_params_prompt(missing))
-        call_args = {**enriched, "operation": self.operation}
+        call_args = dict(enriched)
+        if self._inject_operation:
+            call_args["operation"] = self.operation
         result = await ctx.business_client.call_tool(self.mcp_tool, call_args)
+        if isinstance(result, dict) and result.get("error"):
+            message = str(result.get("message") or result["error"])
+            return SkillResult(data=result, error=message)
         return SkillResult(data=result)

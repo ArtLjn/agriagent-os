@@ -1139,6 +1139,7 @@ const traceTabEls = document.querySelectorAll('.trace-tab');
 const ICONS = {
   meta: '●', thought: '💭', plan: '📋', plan_created: '📋', plan_step_done: '▸',
   action: '⚡', observation: '📊', approval_required: '⚠️', approval_result: '✅',
+  operation_committed: '✅', write_committed_reply_failed: '⚠️',
   final_answer: '💬', error: '⛔', done: '✓',
   context_usage: '📊', context_compressing: '🗜️', context_compressed: '🗜️',
   doom_loop_warning: '⛔', verification_warning: '⚠️',
@@ -1628,7 +1629,7 @@ function appendEvent(type, data) {
   if (type === 'meta') {
     // 新一轮对话开始时，清空之前的事件
     state.currentTurnEvents = [{ type, data: JSON.parse(JSON.stringify(data)) }];
-  } else if (type !== 'done' && type !== 'final_answer_start' && type !== 'final_answer_delta') {
+  } else if (type !== 'done' && type !== 'final_answer_start' && type !== 'final_answer_delta' && type !== 'final_answer') {
     state.currentTurnEvents.push({ type, data: JSON.parse(JSON.stringify(data)) });
   }
 
@@ -1695,6 +1696,15 @@ function appendEvent(type, data) {
     case 'approval_result':
       body.innerHTML = `<b>${data.decision === 'approved' ? '✓ 已批准' : '✗ 已拒绝'}</b>` +
         (data.reason ? ` — ${escapeHtml(data.reason)}` : '');
+      el.appendChild(body);
+      break;
+    case 'operation_committed':
+      body.innerHTML = `<b style="color:var(--success)">✓ 业务写入已提交</b>` +
+        createCollapsibleJson('提交结果', JSON.stringify(data.result, null, 2));
+      el.appendChild(body);
+      break;
+    case 'write_committed_reply_failed':
+      body.innerHTML = `<b style="color:var(--warning)">${escapeHtml(data.code)}</b>: ${escapeHtml(data.message)}`;
       el.appendChild(body);
       break;
     case 'context_usage':

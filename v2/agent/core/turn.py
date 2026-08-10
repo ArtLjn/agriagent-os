@@ -6,6 +6,7 @@ This is the single source of truth for one user message processing.
 
 See harness_study spec: docs/00-react-loop.md, docs/01-vertical-slice.md.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -14,11 +15,11 @@ from typing import Any, Literal
 
 
 TurnStatus = Literal[
-    "running",            # ReAct loop iterating
+    "running",  # ReAct loop iterating
     "awaiting_approval",  # Blocked on HITL gate
-    "completed",          # Final answer emitted
-    "rejected",           # User rejected HITL
-    "failed",             # Error
+    "completed",  # Final answer emitted
+    "rejected",  # User rejected HITL
+    "failed",  # Error
 ]
 
 
@@ -64,6 +65,8 @@ class Turn:
 
     # Output.
     final_answer: str | None = None
+    committed_result: dict[str, Any] | None = None
+    finalization_pending: bool = False
     events: list[dict[str, Any]] = field(default_factory=list)
     # events are SSE-flavored: {"type": "thought|action|observation|...",
     #                            "data": {...}, "ts": float}
@@ -77,6 +80,7 @@ class Turn:
     def emit(self, event_type: str, data: dict | None = None) -> dict:
         """Append an SSE event to this turn. Returns the event for streaming."""
         import time
+
         event = {
             "type": event_type,
             "data": data or {},
@@ -96,6 +100,8 @@ class Turn:
             "step_count": self.step_count,
             "pending_approval": self.pending_approval,
             "final_answer": self.final_answer,
+            "committed_result": self.committed_result,
+            "finalization_pending": self.finalization_pending,
             "error": self.error,
             "events_count": len(self.events),
         }

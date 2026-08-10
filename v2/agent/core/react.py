@@ -46,6 +46,7 @@ from agent.infra.mcp_client import BusinessClient
 from agent.infra.trace import (
     get_trace,
     increment_step,
+    trace_commit_state,
     trace_llm_call,
     trace_tool_call,
 )
@@ -131,7 +132,9 @@ async def run_turn(
                 agent_token=turn.agent_token,
             )
 
-            while turn.status == "running" and turn.step_count < turn.max_steps:
+            while turn.status == "running" and (
+                turn.step_count < turn.max_steps or turn.finalization_pending
+            ):
                 turn.step_count += 1
                 increment_step()
 
@@ -200,11 +203,38 @@ async def run_turn(
                         data={"model": MODEL, "tool_calls": len(tool_calls_result)},
                     )
                 except Exception as exc:
-                    turn.status = "failed"
-                    turn.error = f"llm_stream_failed: {exc}"
-                    ev = sse.error_event(str(exc), "llm_call_failed")
-                    turn.emit("error", ev["data"])
+                    if turn.committed_result is not None:
+                        message = f"写入已成功，但最终答复生成失败：{exc}"
+                        ev = sse.write_committed_reply_failed(message)
+                        turn.emit(ev["type"], ev["data"])
+                        yield ev
+                        turn.final_answer = _structured_commit_answer(
+                            turn.committed_result
+                        )
+                        turn.finalization_pending = False
+                        turn.status = "completed"
+                        yield sse.final_answer_start()
+                        yield sse.final_answer(turn.final_answer)
+                    else:
+                        turn.status = "failed"
+                        turn.error = f"llm_stream_failed: {exc}"
+                        ev = sse.error_event(str(exc), "llm_call_failed")
+                        turn.emit("error", ev["data"])
+                        yield ev
+                    break
+
+                if turn.finalization_pending and tool_calls_result:
+                    message = "写入已成功，但收尾模型仍请求调用工具；已阻止重复写入。"
+                    ev = sse.write_committed_reply_failed(message)
+                    turn.emit(ev["type"], ev["data"])
                     yield ev
+                    turn.final_answer = _structured_commit_answer(
+                        turn.committed_result or {}
+                    )
+                    turn.finalization_pending = False
+                    turn.status = "completed"
+                    yield sse.final_answer_start()
+                    yield sse.final_answer(turn.final_answer)
                     break
 
                 # 有 tool_calls → 文本是思考过程，发给 thought 事件
@@ -225,6 +255,12 @@ async def run_turn(
                         yield ev
 
                     turn.final_answer = full_content
+                    if turn.committed_result is not None:
+                        trace_commit_state(
+                            turn.committed_result,
+                            reply_generated=True,
+                        )
+                    turn.finalization_pending = False
                     turn.status = "completed"
                     yield sse.final_answer_start()
                     yield sse.final_answer(full_content)
@@ -389,7 +425,7 @@ async def run_turn(
                             rationale=action_data.get("rationale", ""),
                         )
                         if result_obj.error:
-                            result = {"error": result_obj.error}
+                            result = result_obj.data or {"error": result_obj.error}
                             ev = sse.observation(
                                 tool_name, None, error=result_obj.error
                             )
@@ -422,20 +458,41 @@ async def run_turn(
                     )
                     turn.messages.append(tool_msg)
                     if finalize_after_success:
-                        # 概览结果已足够回答，下一轮不再暴露工具，强制收敛为最终答复。
+                        committed = (
+                            result if isinstance(result, dict) else {"result": result}
+                        )
+                        turn.committed_result = committed
+                        turn.finalization_pending = True
+                        trace_commit_state(committed, reply_generated=False)
+                        committed_event = sse.operation_committed(committed)
+                        turn.emit(committed_event["type"], committed_event["data"])
+                        yield committed_event
+                        # 业务已经提交，剩余轮次只允许基于结果生成最终答复。
                         tools_schema = []
+                        break
 
                 if turn.status == "rejected":
                     break
 
             if turn.status == "running":
-                turn.status = "failed"
-                turn.error = "max_steps_reached"
-                ev = sse.error_event(
-                    "达到最大步数限制，请缩小问题范围或重试", "max_steps"
-                )
-                turn.emit("error", ev["data"])
-                yield ev
+                if turn.committed_result is not None:
+                    message = "写入已成功，但收尾轮次未生成最终答复。"
+                    ev = sse.write_committed_reply_failed(message)
+                    turn.emit(ev["type"], ev["data"])
+                    yield ev
+                    turn.final_answer = _structured_commit_answer(turn.committed_result)
+                    turn.finalization_pending = False
+                    turn.status = "completed"
+                    yield sse.final_answer_start()
+                    yield sse.final_answer(turn.final_answer)
+                else:
+                    turn.status = "failed"
+                    turn.error = "max_steps_reached"
+                    ev = sse.error_event(
+                        "达到最大步数限制，请缩小问题范围或重试", "max_steps"
+                    )
+                    turn.emit("error", ev["data"])
+                    yield ev
 
     except Exception as exc:
         logger.exception("run_turn pipeline crashed")
@@ -455,6 +512,25 @@ def _persist_memory(turn: Turn) -> None:
     if turn.final_answer:
         non_system.append({"role": "assistant", "content": turn.final_answer})
     memory.save_messages(turn.conversation_id, non_system)
+
+
+def _structured_commit_answer(result: dict) -> str:
+    """LLM 收尾失败时，只使用已提交结果生成确定性答复。"""
+    template = result.get("template") or {}
+    cycle = result.get("cycle") or {}
+    unit = result.get("planting_unit") or {}
+    replay_note = (
+        "（本次返回的是已提交请求的幂等结果）"
+        if result.get("idempotent_replay")
+        else ""
+    )
+    return (
+        "种植计划已提交成功"
+        f"{replay_note}：模板“{template.get('name', '未知')}”（ID {template.get('id', '-')}），"
+        f"茬口“{cycle.get('name', '未知')}”（ID {cycle.get('id', '-')}），"
+        f"种植单元“{unit.get('name', '未知')}”（ID {unit.get('id', '-')}，"
+        f"面积 {unit.get('area_mu', '-')} 亩）。"
+    )
 
 
 def _find_latest_action_data(turn: Turn, tool_name: str) -> dict | None:
@@ -692,8 +768,7 @@ def _missing_params_result(skill, missing: list[str]) -> dict:
     """构造只给模型看的缺失信息，禁止把内部字段名直接回复给用户。"""
     properties = skill.parameters_schema.get("properties") or {}
     details = [
-        str((properties.get(name) or {}).get("description") or name)
-        for name in missing
+        str((properties.get(name) or {}).get("description") or name) for name in missing
     ]
     return {
         "error": "missing_information",

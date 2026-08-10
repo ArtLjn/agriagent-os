@@ -33,9 +33,15 @@ def test_operation_skill_schema_does_not_expose_internal_operation():
     schema = skill.parameters_schema
 
     assert "operation" not in schema["properties"]
-    assert schema["required"] == ["name", "crop_template_id", "start_date"]
+    assert schema["required"] == [
+        "name",
+        "crop_name",
+        "crop_template_id",
+        "start_date",
+    ]
     assert set(schema["properties"]) == {
         "name",
+        "crop_name",
         "crop_template_id",
         "start_date",
         "field_name",
@@ -86,6 +92,7 @@ def test_operation_skill_description_is_user_intent_facing():
             "create",
             {
                 "name": "秋季番茄",
+                "crop_name": "番茄",
                 "crop_template_id": 1,
                 "start_date": "2026-08-07",
             },

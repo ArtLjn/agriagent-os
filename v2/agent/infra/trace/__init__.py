@@ -17,6 +17,7 @@
     # 查询接口（供 API 层使用）
     from agent.infra.trace.store import list_traces, get_trace_nodes, get_trace_summary
 """
+
 from agent.infra.trace.context import (
     TraceInfo,
     init_trace,
@@ -32,6 +33,7 @@ from agent.infra.trace.collector import (
     start_trace_system,
     stop_trace_system,
     trace_llm_call,
+    trace_commit_state,
     trace_tool_call,
     trace_turn_outcome,
 )
@@ -54,6 +56,7 @@ __all__ = [
     "start_trace_system",
     "stop_trace_system",
     "trace_llm_call",
+    "trace_commit_state",
     "trace_tool_call",
     "trace_turn_outcome",
     "build_trace_request_summary",

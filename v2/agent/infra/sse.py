@@ -8,6 +8,8 @@ Event types emitted to the Web UI:
   - observation   : tool result (data, possibly trimmed)
   - approval_required : HITL gate fired (tool_name, args, risk_level)
   - approval_result   : user approved/rejected (decision, reason)
+  - operation_committed : write operation committed with structured result
+  - write_committed_reply_failed : write succeeded but reply generation failed
   - final_answer_start : begin streaming final answer (empty)
   - final_answer_delta  : incremental token of final answer
   - final_answer : assistant's final reply complete (text)
@@ -23,6 +25,7 @@ Event types emitted to the Web UI:
 
 All events are JSON-serializable dicts. main.py converts to SSE wire format.
 """
+
 from __future__ import annotations
 
 import json
@@ -36,7 +39,9 @@ def sse_event(event_type: str, data: dict[str, Any] | None = None) -> str:
 
 
 # Convenience constructors.
-def meta(turn_id: str, conversation_id: str, user_input: str, request_id: str = "") -> dict:
+def meta(
+    turn_id: str, conversation_id: str, user_input: str, request_id: str = ""
+) -> dict:
     return {
         "type": "meta",
         "data": {
@@ -63,7 +68,9 @@ def plan_created(goal: str, steps: list[dict]) -> dict:
     }
 
 
-def plan_step_done(step_index: int, skill: str, status: str, result: Any = None) -> dict:
+def plan_step_done(
+    step_index: int, skill: str, status: str, result: Any = None
+) -> dict:
     return {
         "type": "plan_step_done",
         "data": {
@@ -123,6 +130,20 @@ def approval_result(decision: str, reason: str = "") -> dict:
     }
 
 
+def operation_committed(result: dict[str, Any]) -> dict:
+    return {"type": "operation_committed", "data": {"result": result}}
+
+
+def write_committed_reply_failed(message: str) -> dict:
+    return {
+        "type": "write_committed_reply_failed",
+        "data": {
+            "code": "write_committed_reply_failed",
+            "message": message,
+        },
+    }
+
+
 def final_answer(text: str) -> dict:
     return {"type": "final_answer", "data": {"text": text}}
 
@@ -143,7 +164,9 @@ def done(status: str, turn_id: str) -> dict:
     return {"type": "done", "data": {"status": status, "turn_id": turn_id}}
 
 
-def context_usage(used: int, total: int, percent: int, level: str, step: int = 0) -> dict:
+def context_usage(
+    used: int, total: int, percent: int, level: str, step: int = 0
+) -> dict:
     return {
         "type": "context_usage",
         "data": {
