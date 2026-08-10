@@ -26,6 +26,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from business.context_runtime import invalidate_farm_context
+from business.services import crop_service
 from business.models import (
     CostRecord,
     CropCycle,
@@ -94,6 +95,7 @@ def create_crop_cycle(
     total_area_mu: Decimal | None = None,
     season: str | None = None,
     batch_note: str | None = None,
+    expected_crop_name: str | None = None,
 ) -> dict[str, Any]:
     """创建茬口及其阶段，按模板阶段顺序推算日期。
 
@@ -109,7 +111,27 @@ def create_crop_cycle(
         .first()
     )
     if not template:
+        system_template = (
+            db.query(CropTemplate)
+            .filter(
+                CropTemplate.id == crop_template_id,
+                CropTemplate.farm_id.is_(None),
+            )
+            .first()
+        )
+        if system_template is not None:
+            raise ValueError(
+                "system_template_not_imported: "
+                f"系统模板 {crop_template_id} 必须先导入当前农场"
+            )
         raise ValueError("Crop template not found")
+    if expected_crop_name is not None and crop_service.normalize_crop_name(
+        template.name
+    ) != crop_service.normalize_crop_name(expected_crop_name):
+        raise ValueError(
+            "crop_template_mismatch: "
+            f"目标作物 {expected_crop_name!r} 与模板 {template.name!r} 不一致"
+        )
 
     db_cycle = CropCycle(
         name=name,

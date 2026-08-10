@@ -3,7 +3,7 @@
 提供：
   - 作业单 CRUD：create_work_order / list_work_orders / count_work_orders /
     get_work_order / update_work_order / settle_labor_payment
-  - 种植单元 CRUD：create_unit / list_units / update_unit / delete_unit
+  - 种植单元 CRUD：create_unit / list_units / get_unit / update_unit / delete_unit
   - 内部辅助：_validate_work_order_scope / _get_work_order_or_raise /
     _replace_work_order_units / _replace_work_order_labor_entries /
     _quantize_money / _settlement_status / _get_unit / _get_cycle
@@ -19,6 +19,7 @@
   - settle_labor_payment 里 archive 调用 read_service.list_labor_payables，
     改为函数内从 recent_operation_service 导入（避免循环导入）
 """
+
 from __future__ import annotations
 
 import logging
@@ -53,14 +54,10 @@ def _planting_unit_to_dict(unit: PlantingUnit) -> dict[str, Any]:
         "cycle_id": unit.cycle_id,
         "name": unit.name,
         "area_mu": float(unit.area_mu) if unit.area_mu is not None else None,
-        "planted_date": unit.planted_date.isoformat()
-        if unit.planted_date
-        else None,
+        "planted_date": unit.planted_date.isoformat() if unit.planted_date else None,
         "status": unit.status,
         "note": unit.note,
-        "created_at": unit.created_at.isoformat()
-        if unit.created_at
-        else None,
+        "created_at": unit.created_at.isoformat() if unit.created_at else None,
     }
 
 
@@ -169,6 +166,11 @@ def list_units(
         query = query.filter(PlantingUnit.cycle_id == cycle_id)
     units = query.order_by(PlantingUnit.id).all()
     return [_planting_unit_to_dict(u) for u in units]
+
+
+def get_unit(db: Session, unit_id: int, farm_id: int) -> dict[str, Any]:
+    """查询单个种植单元，并强制校验农场归属。"""
+    return _planting_unit_to_dict(_get_unit(db, unit_id, farm_id))
 
 
 def update_unit(
@@ -371,22 +373,16 @@ def update_work_order(
     work_order = _get_work_order_or_raise(db, work_order_id, farm_id)
 
     new_cycle_id = work_order.cycle_id if cycle_id is _UNSET else cycle_id
-    new_scope_type = (
-        work_order.scope_type if scope_type is _UNSET else scope_type
-    )
+    new_scope_type = work_order.scope_type if scope_type is _UNSET else scope_type
     if unit_ids is _UNSET:
         new_unit_ids = [link.unit_id for link in work_order.unit_links]
     else:
         new_unit_ids = unit_ids or []
     new_operation_type = (
-        work_order.operation_type
-        if operation_type is _UNSET
-        else operation_type
+        work_order.operation_type if operation_type is _UNSET else operation_type
     )
     new_operation_date = (
-        work_order.operation_date
-        if operation_date is _UNSET
-        else operation_date
+        work_order.operation_date if operation_date is _UNSET else operation_date
     )
     cycle = _validate_work_order_scope(
         db,
@@ -413,9 +409,7 @@ def update_work_order(
     if unit_ids is not _UNSET:
         _replace_work_order_units(db, work_order, new_unit_ids)
     if labor_entries is not _UNSET:
-        _replace_work_order_labor_entries(
-            db, work_order, labor_entries or [], farm_id
-        )
+        _replace_work_order_labor_entries(db, work_order, labor_entries or [], farm_id)
 
     db.flush()
     if labor_entries is not _UNSET:
@@ -571,6 +565,7 @@ __all__ = [
     "settle_labor_payment",
     "create_unit",
     "list_units",
+    "get_unit",
     "update_unit",
     "delete_unit",
 ]

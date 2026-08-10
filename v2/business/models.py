@@ -5,11 +5,13 @@
   农场域: farms
   种植域: crop_templates / growth_stages / crop_cycles / cycle_stages /
           farm_logs / farm_log_workers / workers /
-          planting_units / operation_work_orders / operation_work_order_units / labor_entries
+          planting_units / operation_work_orders / operation_work_order_units / labor_entries /
+          planting_plan_executions
   财务域: cost_categories / cost_records
 
 字段与 archive/backend/app/domains/*/models.py 保持一致，便于直接复用 archive service 代码。
 """
+
 from __future__ import annotations
 
 from sqlalchemy import (
@@ -19,6 +21,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    JSON,
     Integer,
     Numeric,
     String,
@@ -31,6 +34,7 @@ from sqlalchemy.orm import DeclarativeBase, relationship
 
 class Base(DeclarativeBase):
     """Shared declarative base."""
+
     pass
 
 
@@ -107,9 +111,7 @@ class GrowthStage(Base):
     __tablename__ = "growth_stages"
 
     id = Column(Integer, primary_key=True, index=True)
-    crop_template_id = Column(
-        Integer, ForeignKey("crop_templates.id"), nullable=False
-    )
+    crop_template_id = Column(Integer, ForeignKey("crop_templates.id"), nullable=False)
     name = Column(String(100), nullable=False)
     duration_days = Column(Integer, nullable=False)
     order_index = Column(Integer, nullable=False)
@@ -267,6 +269,35 @@ class PlantingUnit(Base):
     )
 
 
+class PlantingPlanExecution(Base):
+    """已提交种植计划的幂等记录。
+
+    只记录和业务实体一起提交成功的计划；失败事务回滚时不保留半成品记录。
+    """
+
+    __tablename__ = "planting_plan_executions"
+    __table_args__ = (
+        UniqueConstraint(
+            "farm_id",
+            "client_request_id",
+            name="uq_planting_plan_farm_request",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    farm_id = Column(Integer, ForeignKey("farms.id"), nullable=False, index=True)
+    client_request_id = Column(String(64), nullable=False)
+    request_fingerprint = Column(String(80), nullable=False)
+    approval_fingerprint = Column(String(80), nullable=False)
+    status = Column(String(20), nullable=False, default="committed")
+    crop_template_id = Column(Integer, nullable=True)
+    crop_cycle_id = Column(Integer, nullable=True)
+    planting_unit_id = Column(Integer, nullable=True)
+    result_json = Column(JSON, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())
+
+
 class OperationWorkOrder(Base):
     """农事作业单，支持批次级、种植单元级和农场级作业。"""
 
@@ -282,9 +313,7 @@ class OperationWorkOrder(Base):
     photo_urls = Column(Text, nullable=True)
     source_type = Column(String(50), nullable=True)
     source_id = Column(Integer, nullable=True)
-    labor_cost_record_id = Column(
-        Integer, ForeignKey("cost_records.id"), nullable=True
-    )
+    labor_cost_record_id = Column(Integer, ForeignKey("cost_records.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -299,9 +328,7 @@ class OperationWorkOrder(Base):
         back_populates="work_order",
         cascade="all, delete-orphan",
     )
-    labor_cost_record = relationship(
-        "CostRecord", foreign_keys=[labor_cost_record_id]
-    )
+    labor_cost_record = relationship("CostRecord", foreign_keys=[labor_cost_record_id])
 
 
 class OperationWorkOrderUnit(Base):
@@ -382,7 +409,9 @@ class CostCategory(Base):
     __tablename__ = "cost_categories"
 
     id = Column(Integer, primary_key=True, index=True)
-    farm_id = Column(Integer, ForeignKey("farms.id"), nullable=False, default=1, index=True)
+    farm_id = Column(
+        Integer, ForeignKey("farms.id"), nullable=False, default=1, index=True
+    )
     name = Column(String(50), nullable=False)
     type = Column(String(10), nullable=False)  # cost 或 income
     icon = Column(String(50), nullable=False, default="tag")

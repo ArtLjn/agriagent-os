@@ -9,6 +9,7 @@ templates/system_templates 操作。风险等级由 agent skill 根据参数动�
 身份注入：agent 通过 BusinessClient headers 传入 X-Farm-Id，
 本工具从 HTTP 请求头读取后传给 service 层做农场隔离。
 """
+
 from __future__ import annotations
 
 from datetime import date
@@ -43,6 +44,7 @@ def manage_crop_cycle(
     operation: str,
     cycle_id: int | None = None,
     name: str | None = None,
+    crop_name: str | None = None,
     crop_template_id: int | None = None,
     start_date: str | None = None,
     field_name: str | None = None,
@@ -96,6 +98,7 @@ def manage_crop_cycle(
                  "delete" | "templates" | "system_templates"
       cycle_id: 茬口 ID（detail/advance/update/delete 必填）
       name: 茬口名称（create/update 必填）
+      crop_name: 目标作物名称（Agent 创建茬口时必填，用于模板一致性校验）
       crop_template_id: 作物模板 ID（create/update 必填）
       start_date: 起始日期 YYYY-MM-DD（create/update 必填）
       field_name: 地块名称
@@ -120,9 +123,7 @@ def manage_crop_cycle(
 
     if op == "query":
         with session_scope() as db:
-            cycles = cycle_service.get_crop_cycles(
-                db, farm_id, skip=skip, limit=limit
-            )
+            cycles = cycle_service.get_crop_cycles(db, farm_id, skip=skip, limit=limit)
             return {"count": len(cycles), "cycles": cycles}
 
     if op == "detail":
@@ -140,6 +141,11 @@ def manage_crop_cycle(
     if op == "create":
         if not name:
             return {"error": "missing_name", "message": "create 操作必须提供 name"}
+        if not crop_name:
+            return {
+                "error": "missing_crop_name",
+                "message": "create 操作必须提供 crop_name",
+            }
         if crop_template_id is None:
             return {
                 "error": "missing_crop_template_id",
@@ -167,9 +173,17 @@ def manage_crop_cycle(
                     total_area_mu=area,
                     season=season,
                     batch_note=batch_note,
+                    expected_crop_name=crop_name,
                 )
         except ValueError as exc:
-            return {"error": "not_found", "message": str(exc)}
+            message = str(exc)
+            if message.startswith("crop_template_mismatch:"):
+                code = "crop_template_mismatch"
+            elif message.startswith("system_template_not_imported:"):
+                code = "system_template_not_imported"
+            else:
+                code = "not_found"
+            return {"error": code, "message": message}
 
     if op == "advance":
         if cycle_id is None:

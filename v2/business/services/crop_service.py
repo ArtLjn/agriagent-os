@@ -19,10 +19,11 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections import Counter
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from collections.abc import Mapping
-from typing import Any, Iterable
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -144,6 +145,33 @@ def find_template_by_name(
         .first()
     )
     return _crop_template_to_dict(template) if template else None
+
+
+def normalize_crop_name(value: str | None) -> str:
+    """规范化作物名称，供模板绑定校验使用。
+
+    这里只处理 Unicode 兼容字符和空白，不做同义词猜测；避免把橘子等近似
+    作物当成用户指定作物。
+    """
+    text = unicodedata.normalize("NFKC", str(value or ""))
+    return re.sub(r"\s+", "", text).strip().lower()
+
+
+def find_local_template_match(
+    db: Session,
+    *,
+    farm_id: int,
+    crop_name: str,
+    variety: str | None = None,
+) -> dict[str, Any] | None:
+    """按规范化作物名精确查找当前农场模板。"""
+    query = db.query(CropTemplate).filter(CropTemplate.farm_id == farm_id)
+    if variety is not None:
+        query = query.filter(CropTemplate.variety == variety)
+    for template in query.all():
+        if normalize_crop_name(template.name) == normalize_crop_name(crop_name):
+            return _crop_template_to_dict(template)
+    return None
 
 
 # ─────────────────────────────────────────────────────────────
@@ -325,17 +353,14 @@ def _load_system_template_orm(db: Session, template_id: int) -> CropTemplate | N
 def find_system_template_match(
     db: Session, name: str, variety: str | None
 ) -> dict[str, Any] | None:
-    """按 name 和 variety 精确匹配系统模板。"""
-    query = db.query(CropTemplate).filter(
-        CropTemplate.farm_id.is_(None),
-        CropTemplate.name == name,
-    )
-    if variety is None:
-        query = query.filter(CropTemplate.variety.is_(None))
-    else:
+    """按规范化作物名和品种精确匹配系统模板。"""
+    query = db.query(CropTemplate).filter(CropTemplate.farm_id.is_(None))
+    if variety is not None:
         query = query.filter(CropTemplate.variety == variety)
-    template = query.first()
-    return _crop_template_to_dict(template) if template else None
+    for template in query.all():
+        if normalize_crop_name(template.name) == normalize_crop_name(name):
+            return _crop_template_to_dict(template)
+    return None
 
 
 def import_system_template(
@@ -513,6 +538,8 @@ __all__ = [
     "update_crop_template",
     "delete_crop_template",
     "find_template_by_name",
+    "normalize_crop_name",
+    "find_local_template_match",
     "find_exact_duplicate",
     "list_system_templates",
     "get_system_template",
