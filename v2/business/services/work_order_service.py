@@ -491,10 +491,28 @@ def settle_labor_payment(
             )
     db.flush()
     invalidate_farm_context(farm_id)
+    # 按工人汇总
+    worker_map: dict[str, dict] = {}
+    for a in affected:
+        wn = a["worker_name"]
+        if wn not in worker_map:
+            worker_map[wn] = {
+                "worker_name": wn,
+                "settled_amount": 0.0,
+                "entry_count": 0,
+            }
+        worker_map[wn]["settled_amount"] += a["paid_amount"]
+        worker_map[wn]["entry_count"] += 1
     return {
         "paid_amount": float(_quantize_money(paid_total)),
         "total_unpaid_before": float(_quantize_money(total_unpaid)),
         "remaining_unpaid": float(_quantize_money(total_unpaid - paid_total)),
+        "settled_worker_count": len(worker_map),
+        "worker_summary": sorted(
+            worker_map.values(),
+            key=lambda w: w["settled_amount"],
+            reverse=True,
+        ),
         "affected_entries": affected,
     }
 

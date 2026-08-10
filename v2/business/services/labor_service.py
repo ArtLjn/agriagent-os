@@ -20,14 +20,16 @@
   - db.commit() 改 db.flush()（IntegrityError 恢复路径保留 db.rollback() 以清理 session 重试）
   - save_wage_entry / update_wage_entry 返回 tuple[dict, int|None]（dict 替代 ORM）
 """
+
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
 
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from business.context_runtime import invalidate_farm_context
@@ -37,6 +39,7 @@ from business.models import (
     CropCycle,
     LaborEntry,
     OperationWorkOrder,
+    Worker,
 )
 from business.services.cost_service import (
     ACTIVE_SOURCE_KEY,
@@ -75,9 +78,7 @@ def _labor_entry_to_dict(entry: LaborEntry) -> dict[str, Any]:
         "worker_name": entry.worker.name if entry.worker else None,
         "pay_type": entry.pay_type,
         "quantity": float(entry.quantity) if entry.quantity is not None else None,
-        "unit_price": float(entry.unit_price)
-        if entry.unit_price is not None
-        else None,
+        "unit_price": float(entry.unit_price) if entry.unit_price is not None else None,
         "payable_amount": float(entry.payable_amount)
         if entry.payable_amount is not None
         else None,
@@ -116,6 +117,9 @@ def build_labor_entry(
     data 字段：worker_id / worker_name / pay_type / quantity / unit_price /
     paid_amount / payable_amount（可选，缺省按 quantity*unit_price 计算）/ note /
     client_request_id。worker_id 优先；缺失时用 worker_name 自动建档。
+
+    unit_price / pay_type 未传时自动从工人档案 default_unit_price /
+    default_pay_type 回填，避免日结工工资金额为 0。
     """
     worker_id = data.get("worker_id")
     worker_name = data.get("worker_name")
@@ -133,6 +137,13 @@ def build_labor_entry(
         resolved_worker_id = worker.id
     else:
         raise ValueError("必须选择或填写工人")
+
+    # 从工人档案回填缺省的 unit_price / pay_type
+    data = dict(data)  # 不修改调用方传入的 dict
+    if data.get("unit_price") is None and worker.default_unit_price:
+        data["unit_price"] = float(worker.default_unit_price)
+    if data.get("pay_type") is None and worker.default_pay_type:
+        data["pay_type"] = worker.default_pay_type
 
     entry = LaborEntry(
         farm_id=farm_id,
@@ -319,9 +330,7 @@ def sync_labor_entry_cost_record(
     与作业单聚合账单不同，工资记录每条对应一条 CostRecord，便于按工资条目结算。
     payable 为 0 时软删除账单。
     """
-    existing = _get_single_source_cost_record(
-        db, farm_id, LABOR_ENTRY_SOURCE, entry.id
-    )
+    existing = _get_single_source_cost_record(db, farm_id, LABOR_ENTRY_SOURCE, entry.id)
     if entry.payable_amount <= 0:
         if existing:
             existing.deleted_at = datetime.now(timezone.utc)
@@ -382,9 +391,7 @@ def _get_wage_entry(db: Session, labor_entry_id: int, farm_id: int) -> LaborEntr
     return entry
 
 
-def _resolve_wage_worker(
-    db: Session, data: dict, farm_id: int
-) -> Any:
+def _resolve_wage_worker(db: Session, data: dict, farm_id: int) -> Any:
     """save 时解析工人：worker_id 优先，否则用 worker_name 自动建档。"""
     worker_id = data.get("worker_id")
     if worker_id is not None:
@@ -461,9 +468,7 @@ def _find_existing_wage_entry(
 def _get_labor_entry_cost_record_id(
     db: Session, entry: LaborEntry, farm_id: int
 ) -> int | None:
-    record = _get_single_source_cost_record(
-        db, farm_id, LABOR_ENTRY_SOURCE, entry.id
-    )
+    record = _get_single_source_cost_record(db, farm_id, LABOR_ENTRY_SOURCE, entry.id)
     return record.id if record else None
 
 
@@ -495,7 +500,9 @@ def _apply_labor_values(entry: LaborEntry, data: dict, worker_id: int) -> None:
     quantity = _to_decimal(data.get("quantity"), Decimal("1"))
     unit_price = _to_decimal(data.get("unit_price"), Decimal("0"))
     payable_raw = data.get("payable_amount")
-    payable = _to_decimal(payable_raw) if payable_raw is not None else quantity * unit_price
+    payable = (
+        _to_decimal(payable_raw) if payable_raw is not None else quantity * unit_price
+    )
     paid = _to_decimal(data.get("paid_amount"), Decimal("0"))
     unpaid = max(payable - paid, Decimal("0"))
     if paid <= 0:
@@ -591,6 +598,202 @@ def _ensure_labor_category(db: Session, farm_id: int) -> CostCategory | None:
     db.add(category)
     db.flush()
     return category
+
+
+# ── 工资查询 ──────────────────────────────────────────────
+
+
+def query_wages(
+    db: Session,
+    farm_id: int,
+    mode: str,
+    worker_name: str | None = None,
+    month: str | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
+) -> dict[str, Any]:
+    """查询工人工资汇总，三种模式。
+
+    mode="unpaid":   查所有工人未结款汇总（settlement_status IN unpaid/partial）
+    mode="monthly":  按月份查历史账单（含已结/未结），month 格式 "2026-08"
+    mode="worker":   按工人+日期范围查明细，worker_name 必填
+    """
+    if mode == "unpaid":
+        return _query_unpaid_wages(db, farm_id)
+    if mode == "monthly":
+        if not month:
+            raise ValueError("monthly 模式必须提供 month (YYYY-MM)")
+        return _query_monthly_wages(db, farm_id, month)
+    if mode == "worker":
+        if not worker_name:
+            raise ValueError("worker 模式必须提供 worker_name")
+        return _query_worker_wages(db, farm_id, worker_name, start_date, end_date)
+    raise ValueError(f"未知 query mode: {mode}，支持 unpaid/monthly/worker")
+
+
+def _query_unpaid_wages(db: Session, farm_id: int) -> dict[str, Any]:
+    """查所有工人未结款汇总。"""
+    rows = (
+        db.query(
+            LaborEntry.worker_id,
+            Worker.name.label("worker_name"),
+            func.count(LaborEntry.id).label("entry_count"),
+            func.sum(LaborEntry.payable_amount).label("total_payable"),
+            func.sum(LaborEntry.paid_amount).label("total_paid"),
+            func.sum(LaborEntry.unpaid_amount).label("total_unpaid"),
+        )
+        .join(Worker, LaborEntry.worker_id == Worker.id)
+        .filter(
+            LaborEntry.farm_id == farm_id,
+            LaborEntry.settlement_status.in_(("unpaid", "partial")),
+        )
+        .group_by(LaborEntry.worker_id, Worker.name)
+        .order_by(func.sum(LaborEntry.unpaid_amount).desc())
+        .all()
+    )
+    workers = [
+        {
+            "worker_id": r.worker_id,
+            "worker_name": r.worker_name,
+            "entry_count": int(r.entry_count or 0),
+            "total_payable": float(r.total_payable or 0),
+            "total_paid": float(r.total_paid or 0),
+            "total_unpaid": float(r.total_unpaid or 0),
+        }
+        for r in rows
+    ]
+    total_unpaid = sum(w["total_unpaid"] for w in workers)
+    return {
+        "mode": "unpaid",
+        "summary": {
+            "total_unpaid": total_unpaid,
+            "worker_count": len(workers),
+        },
+        "workers": workers,
+    }
+
+
+def _query_monthly_wages(db: Session, farm_id: int, month: str) -> dict[str, Any]:
+    """按月份查历史账单。"""
+    try:
+        year, mon = month.split("-")
+        y, m = int(year), int(mon)
+        m_start = date(y, m, 1)
+        m_end = date(y + 1, 1, 1) if m == 12 else date(y, m + 1, 1)
+    except (ValueError, IndexError):
+        raise ValueError(f"month 格式应为 YYYY-MM，收到: {month!r}")
+
+    rows = (
+        db.query(
+            LaborEntry.worker_id,
+            Worker.name.label("worker_name"),
+            func.count(LaborEntry.id).label("entry_count"),
+            func.sum(LaborEntry.payable_amount).label("total_payable"),
+            func.sum(LaborEntry.paid_amount).label("total_paid"),
+            func.sum(LaborEntry.unpaid_amount).label("total_unpaid"),
+        )
+        .join(Worker, LaborEntry.worker_id == Worker.id)
+        .join(
+            OperationWorkOrder,
+            LaborEntry.work_order_id == OperationWorkOrder.id,
+        )
+        .filter(
+            LaborEntry.farm_id == farm_id,
+            OperationWorkOrder.operation_date >= m_start,
+            OperationWorkOrder.operation_date < m_end,
+        )
+        .group_by(LaborEntry.worker_id, Worker.name)
+        .order_by(Worker.name)
+        .all()
+    )
+    workers = [
+        {
+            "worker_id": r.worker_id,
+            "worker_name": r.worker_name,
+            "entry_count": int(r.entry_count or 0),
+            "total_payable": float(r.total_payable or 0),
+            "total_paid": float(r.total_paid or 0),
+            "total_unpaid": float(r.total_unpaid or 0),
+            "status": "settled"
+            if float(r.total_unpaid or 0) == 0
+            else ("partial" if float(r.total_paid or 0) > 0 else "unpaid"),
+        }
+        for r in rows
+    ]
+    return {
+        "mode": "monthly",
+        "month": month,
+        "summary": {
+            "total_payable": sum(w["total_payable"] for w in workers),
+            "total_paid": sum(w["total_paid"] for w in workers),
+            "total_unpaid": sum(w["total_unpaid"] for w in workers),
+            "worker_count": len(workers),
+        },
+        "workers": workers,
+    }
+
+
+def _query_worker_wages(
+    db: Session,
+    farm_id: int,
+    worker_name: str,
+    start_date: date | None,
+    end_date: date | None,
+) -> dict[str, Any]:
+    """按工人+日期范围查明细。"""
+    query = (
+        db.query(LaborEntry, OperationWorkOrder)
+        .join(
+            OperationWorkOrder,
+            LaborEntry.work_order_id == OperationWorkOrder.id,
+        )
+        .join(Worker, LaborEntry.worker_id == Worker.id)
+        .filter(
+            LaborEntry.farm_id == farm_id,
+            Worker.name == worker_name,
+        )
+    )
+    if start_date:
+        query = query.filter(OperationWorkOrder.operation_date >= start_date)
+    if end_date:
+        query = query.filter(OperationWorkOrder.operation_date <= end_date)
+    rows = query.order_by(OperationWorkOrder.operation_date.desc()).all()
+
+    entries = [
+        {
+            "work_order_id": entry.work_order_id,
+            "operation_type": wo.operation_type if wo else "",
+            "operation_date": str(wo.operation_date)
+            if wo and wo.operation_date
+            else None,
+            "pay_type": entry.pay_type,
+            "quantity": float(entry.quantity) if entry.quantity else None,
+            "unit_price": float(entry.unit_price) if entry.unit_price else None,
+            "payable_amount": float(entry.payable_amount)
+            if entry.payable_amount
+            else 0,
+            "paid_amount": float(entry.paid_amount) if entry.paid_amount else 0,
+            "settlement_status": entry.settlement_status,
+        }
+        for entry, wo in rows
+    ]
+    date_range = None
+    if start_date or end_date:
+        date_range = f"{start_date or '…'} ~ {end_date or '…'}"
+    return {
+        "mode": "worker",
+        "worker_name": worker_name,
+        "date_range": date_range,
+        "summary": {
+            "entry_count": len(entries),
+            "total_payable": sum(e["payable_amount"] for e in entries),
+            "total_paid": sum(e["paid_amount"] for e in entries),
+            "total_unpaid": sum(
+                e["payable_amount"] - e["paid_amount"] for e in entries
+            ),
+        },
+        "entries": entries,
+    }
 
 
 __all__ = [
