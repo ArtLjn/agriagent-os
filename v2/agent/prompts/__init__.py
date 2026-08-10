@@ -5,12 +5,12 @@
 
 用法：
     from agent.prompts import render_system_prompt
-    prompt = render_system_prompt(memory_block=..., now=...)
+    prompt = render_system_prompt()  # 静态，无动态变量
 """
+
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -47,19 +47,13 @@ def render_prompt(name: str, **variables: Any) -> str:
     return template.format(**variables)
 
 
-def render_system_prompt(
-    memory_block: str = "",
-    now: str | None = None,
-) -> str:
-    """渲染 system prompt。
+def render_system_prompt() -> str:
+    """渲染静态 system prompt（完全可缓存，不含动态变量）。
 
-    Args:
-        memory_block: 格式化的记忆文本块
-        now: ISO 时间字符串，默认取当前时间
+    时间和记忆在 context.build_initial_messages 中注入到 user message，
+    保证 system prompt byte-for-byte 不变，最大化 prompt cache 命中率。
     """
-    if now is None:
-        now = datetime.now().isoformat(timespec="seconds")
-    return render_prompt("system", memory_block=memory_block, now=now)
+    return _load_template("system")
 
 
 def list_prompts() -> list[str]:

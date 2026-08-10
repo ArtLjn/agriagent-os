@@ -12,6 +12,7 @@ Model is configurable via env; defaults to qwen3.6-flash.
   - chat_stream()（流式）：只在「还没 yield 任何内容」时重试；
     已经开始流式输出后失败不重试（重试会导致内容重复，前端无法处理）
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -99,7 +100,9 @@ def _stream_error_message(exc: Exception) -> str:
     return str(exc)
 
 
-def _required_tool_args(tool_name: str, tools: list[dict[str, Any]] | None) -> list[str]:
+def _required_tool_args(
+    tool_name: str, tools: list[dict[str, Any]] | None
+) -> list[str]:
     """返回工具 schema 声明的必填参数，用于识别流式响应丢参。"""
     for tool in tools or []:
         function = tool.get("function") or {}
@@ -119,13 +122,14 @@ async def _repair_empty_stream_tool_calls(
 ) -> list[dict[str, Any]]:
     """用非流式响应修复兼容网关丢失的工具参数增量。"""
     if not any(
-        not call.get("arguments")
-        and _required_tool_args(call.get("name", ""), tools)
+        not call.get("arguments") and _required_tool_args(call.get("name", ""), tools)
         for call in tool_calls
     ):
         return tool_calls
 
-    logger.warning("stream tool arguments empty; retrying once with non-stream response")
+    logger.warning(
+        "stream tool arguments empty; retrying once with non-stream response"
+    )
     kwargs: dict[str, Any] = {
         "model": MODEL,
         "messages": messages,
@@ -144,10 +148,26 @@ async def _repair_empty_stream_tool_calls(
         except json.JSONDecodeError:
             logger.warning("malformed repaired tool args: %s", args_raw)
             args = {"_raw": args_raw}
-        repaired.append(
-            {"id": call.id, "name": call.function.name, "arguments": args}
-        )
+        repaired.append({"id": call.id, "name": call.function.name, "arguments": args})
     return repaired or tool_calls
+
+
+def _log_cache_metrics(usage: Any) -> None:
+    """解析 LLM usage 对象，记录 prompt cache 命中率到日志。"""
+    if usage is None:
+        return
+    total = getattr(usage, "prompt_tokens", 0) or 0
+    if total == 0:
+        return
+    details = getattr(usage, "prompt_tokens_details", None)
+    cached = getattr(details, "cached_tokens", 0) if details else 0
+    hit_rate = (cached / total * 100) if total > 0 else 0
+    logger.info(
+        "LLM cache: hit=%d/%d (%.1f%%)",
+        cached,
+        total,
+        hit_rate,
+    )
 
 
 def chat(
@@ -159,8 +179,12 @@ def chat(
 
     遇到可重试异常时最多重试 MAX_RETRIES 次。
     """
-    logger.info("LLM call: model=%s messages=%d tools=%d",
-                MODEL, len(messages), len(tools or []))
+    logger.info(
+        "LLM call: model=%s messages=%d tools=%d",
+        MODEL,
+        len(messages),
+        len(tools or []),
+    )
     kwargs: dict[str, Any] = {
         "model": MODEL,
         "messages": messages,
@@ -185,11 +209,14 @@ def chat(
                     except json.JSONDecodeError:
                         logger.warning("malformed tool args: %s", args_raw)
                         args = {"_raw": args_raw}
-                    tool_calls.append({
-                        "id": tc.id,
-                        "name": tc.function.name,
-                        "arguments": args,
-                    })
+                    tool_calls.append(
+                        {
+                            "id": tc.id,
+                            "name": tc.function.name,
+                            "arguments": args,
+                        }
+                    )
+            _log_cache_metrics(getattr(resp, "usage", None))
             return {
                 "content": msg.content or "",
                 "tool_calls": tool_calls,
@@ -200,9 +227,12 @@ def chat(
             if attempt < MAX_RETRIES and _is_retryable(exc):
                 logger.warning(
                     "LLM call attempt %d failed (retryable: %s), retry in %ss",
-                    attempt + 1, type(exc).__name__, RETRY_DELAY_SECONDS,
+                    attempt + 1,
+                    type(exc).__name__,
+                    RETRY_DELAY_SECONDS,
                 )
                 import time
+
                 time.sleep(RETRY_DELAY_SECONDS)
                 continue
             raise
@@ -227,8 +257,12 @@ async def chat_stream(
     重试策略：只在「还没 yield 任何内容」时重试。一旦开始 yield，
     说明 LLM 已经在生成，中断后重试会导致内容重复，前端无法处理。
     """
-    logger.info("LLM stream: model=%s messages=%d tools=%d",
-                MODEL, len(messages), len(tools or []))
+    logger.info(
+        "LLM stream: model=%s messages=%d tools=%d",
+        MODEL,
+        len(messages),
+        len(tools or []),
+    )
     kwargs: dict[str, Any] = {
         "model": MODEL,
         "messages": messages,
@@ -247,8 +281,15 @@ async def chat_stream(
         has_yielded = False  # 本轮是否已经 yield 过内容
 
         try:
+            # 请求 streaming usage 以收集 prompt cache 命中率
+            kwargs.setdefault("stream_options", {"include_usage": True})
             stream = await _async_client.chat.completions.create(**kwargs)
+            stream_usage: Any = None
             async for chunk in stream:
+                if getattr(chunk, "usage", None):
+                    stream_usage = chunk.usage
+                if not chunk.choices:
+                    continue
                 delta = chunk.choices[0].delta
 
                 if delta.content:
@@ -285,16 +326,19 @@ async def chat_stream(
                     args = json.loads(tc["arguments_raw"] or "{}")
                 except json.JSONDecodeError:
                     args = {"_raw": tc["arguments_raw"]}
-                tool_calls.append({
-                    "id": tc["id"],
-                    "name": tc["name"],
-                    "arguments": args,
-                })
+                tool_calls.append(
+                    {
+                        "id": tc["id"],
+                        "name": tc["name"],
+                        "arguments": args,
+                    }
+                )
 
             tool_calls = await _repair_empty_stream_tool_calls(
                 messages, tools, tool_calls, temperature
             )
 
+            _log_cache_metrics(stream_usage)
             yield {
                 "type": "done",
                 "content": full_content,
@@ -306,7 +350,9 @@ async def chat_stream(
             last_exc = exc
             # 已经 yield 过内容 → 不能重试（会导致前端内容重复）
             if has_yielded:
-                logger.exception("LLM stream failed mid-stream (no retry, already yielded)")
+                logger.exception(
+                    "LLM stream failed mid-stream (no retry, already yielded)"
+                )
                 yield {
                     "type": "error",
                     "message": f"网络中断（{type(exc).__name__}），请重新发送消息重试",
@@ -317,7 +363,9 @@ async def chat_stream(
             if attempt < MAX_RETRIES and _is_retryable(exc):
                 logger.warning(
                     "LLM stream attempt %d failed (retryable: %s), retry in %ss",
-                    attempt + 1, type(exc).__name__, RETRY_DELAY_SECONDS,
+                    attempt + 1,
+                    type(exc).__name__,
+                    RETRY_DELAY_SECONDS,
                 )
                 await asyncio.sleep(RETRY_DELAY_SECONDS)
                 continue

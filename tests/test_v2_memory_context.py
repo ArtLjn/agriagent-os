@@ -40,7 +40,7 @@ def test_persist_memory_adds_final_answer_and_excludes_tool_trace(tmp_path, monk
 
     assert memory.load_messages("current") == [
         {"role": "user", "content": "查询天气"},
-        {"role": "assistant", "content": "虎丘区今天小雨。"},
+        {"role": "assistant", "content": "[上轮工具调用: →weather=小雨]\n\n虎丘区今天小雨。"},
     ]
 
 
@@ -55,8 +55,9 @@ def test_context_keeps_current_request_as_only_user_message() -> None:
         },
     )
 
-    assert [message for message in messages if message["role"] == "user"] == [
-        {"role": "user", "content": "查询天气如何"}
-    ]
+    user_messages = [message for message in messages if message["role"] == "user"]
+    assert len(user_messages) == 1
+    assert user_messages[0]["content"].startswith("查询天气如何")
+    assert "[当前时间:" in user_messages[0]["content"]
     assert "现在几点了" in messages[-2]["content"]
     assert "不得重复回答" in messages[-2]["content"]
