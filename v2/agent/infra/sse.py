@@ -110,17 +110,22 @@ def approval_required(
     rationale: str,
     risk_level: str,
     turn_id: str,
+    summary: str = "",
+    plan: dict | None = None,
 ) -> dict:
-    return {
-        "type": "approval_required",
-        "data": {
-            "turn_id": turn_id,
-            "tool_name": tool_name,
-            "arguments": arguments,
-            "rationale": rationale,
-            "risk_level": risk_level,
-        },
+    data = {
+        "turn_id": turn_id,
+        "tool_name": tool_name,
+        "arguments": arguments,
+        "rationale": rationale,
+        "risk_level": risk_level,
     }
+    # 种植计划 prepare → commit 审批链路附加结构化计划摘要，供前端展示完整审批内容
+    if summary:
+        data["summary"] = summary
+    if plan is not None:
+        data["plan"] = plan
+    return {"type": "approval_required", "data": data}
 
 
 def approval_result(decision: str, reason: str = "") -> dict:

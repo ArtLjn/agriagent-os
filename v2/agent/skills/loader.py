@@ -150,8 +150,12 @@ def load_all() -> list[Skill]:
 
 
 def to_openai_tools(skills: list[Skill]) -> list[dict[str, Any]]:
-    """合并所有 skill 为 OpenAI tools schema。"""
-    return [s.to_openai_tool() for s in skills]
+    """合并所有 skill 为 OpenAI tools schema。
+
+    expose_to_model=false 的 skill（如 commit_planting_plan）不暴露给模型，
+    由 Runtime 在 prepare 审批通过后用原始参数自动驱动。
+    """
+    return [s.to_openai_tool() for s in skills if s.exposed]
 
 
 def find_skill(skills: list[Skill], name: str) -> Skill | None:

@@ -63,6 +63,26 @@ class Skill:
         """成功执行后是否应立即进入无工具最终回答。"""
         return self._meta.get("finalize_after_success") is True
 
+    @property
+    def exposed(self) -> bool:
+        """是否作为独立工具暴露给模型。
+
+        聚合 skill 中由 Runtime 自动驱动的后继动作（如 commit_planting_plan）
+        设 expose_to_model=false，模型看不到它，避免重建提交参数。
+        """
+        return True
+
+    @property
+    def approval_followup(self) -> dict[str, Any] | None:
+        """prepare 类只读动作返回 ready 后，Runtime 应自动驱动的后继写动作。
+
+        来自 operation 配置的 approval_followup 字段，形如：
+            {tool_name: commit_planting_plan,
+             arguments_from_result: [client_request_id, approval_fingerprint, plan]}
+        仅 OperationSkill 覆盖；普通 Skill 返回 None。
+        """
+        return None
+
     def dynamic_risk_level(self, params: dict[str, Any]) -> str:
         """根据实际参数返回风险等级。
 
@@ -221,6 +241,14 @@ class OperationSkill(McpSkill):
 
     def enrich_params(self, params: dict[str, Any], ctx) -> dict[str, Any]:
         return dict(params)
+
+    @property
+    def exposed(self) -> bool:
+        return self._operation_config_meta.get("expose_to_model", True)
+
+    @property
+    def approval_followup(self) -> dict[str, Any] | None:
+        return self._operation_config_meta.get("approval_followup")
 
     def dynamic_risk_level(self, params: dict[str, Any]) -> str:
         return self._operation_config_meta.get(

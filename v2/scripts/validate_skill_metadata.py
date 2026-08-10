@@ -32,6 +32,8 @@ OPERATION_FIELDS = {
     "mcp_tool",
     "inject_operation",
     "finalize_after_success",
+    "expose_to_model",
+    "approval_followup",
 }
 RISK_LEVELS = {"read", "write_confirm", "write_high", "mixed"}
 
@@ -134,9 +136,24 @@ def validate_metadata(meta: dict[str, Any], source: str = "skill.md") -> list[st
             errors.append(f"{path}.risk_level 必须是 read/write_confirm/write_high")
         if "mcp_tool" in config and not isinstance(config["mcp_tool"], str):
             errors.append(f"{path}.mcp_tool 必须是字符串")
-        for boolean_field in ("inject_operation", "finalize_after_success"):
+        for boolean_field in ("inject_operation", "finalize_after_success", "expose_to_model"):
             if boolean_field in config and not isinstance(config[boolean_field], bool):
                 errors.append(f"{path}.{boolean_field} 必须是布尔值")
+        followup = config.get("approval_followup")
+        if followup is not None:
+            if not isinstance(followup, dict):
+                errors.append(f"{path}.approval_followup 必须是对象")
+            else:
+                if not isinstance(followup.get("tool_name"), str) or not re.fullmatch(
+                    r"[a-z][a-z0-9_]*", followup.get("tool_name", "")
+                ):
+                    errors.append(
+                        f"{path}.approval_followup.tool_name 必须是 snake_case"
+                    )
+                if not _is_string_list(followup.get("arguments_from_result")):
+                    errors.append(
+                        f"{path}.approval_followup.arguments_from_result 必须是非空字符串列表"
+                    )
         tool_name = config.get("tool_name")
         if not isinstance(tool_name, str) or not re.fullmatch(
             r"[a-z][a-z0-9_]*", tool_name

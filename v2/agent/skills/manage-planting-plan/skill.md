@@ -15,14 +15,18 @@ operations:
     inject_operation: false
     description: 准备完整种植计划并返回审批摘要，不写入业务实体。
     risk_level: read
+    approval_followup:
+      tool_name: commit_planting_plan
+      arguments_from_result: [client_request_id, approval_fingerprint, plan]
     parameters: [crop_name, total_area_mu, field_name, field_location, field_location_confirmed, start_date, cycle_name, variety, template_strategy, template_id, system_template_id, custom_template, advisory]
     required: [crop_name, total_area_mu, field_name, start_date]
   commit:
     tool_name: commit_planting_plan
     mcp_tool: business.commit_planting_plan
     inject_operation: false
-    description: 提交用户已批准的完整种植计划；必须原样使用准备阶段返回的请求 ID、审批指纹和计划。
+    description: 提交用户已批准的完整种植计划；由 Runtime 在 prepare 审批通过后用原始参数自动调用，不暴露给模型。
     risk_level: write_confirm
+    expose_to_model: false
     finalize_after_success: true
     parameters: [client_request_id, approval_fingerprint, plan]
     required: [client_request_id, approval_fingerprint, plan]
@@ -87,4 +91,6 @@ parameters:
 # manage_planting_plan
 
 完整种植目标必须使用 `prepare_planting_plan` → 用户确认 →
-`commit_planting_plan`。提交成功后直接根据结构化结果答复，不能继续调用写工具。
+`commit_planting_plan`。模型只负责调用 `prepare_planting_plan`；
+prepare 返回 ready 后，Runtime 用原始请求 ID、审批指纹和 plan 自动驱动审批与提交，
+模型不得自行重建或改写提交参数。提交成功后直接根据结构化结果答复，不能继续调用写工具。

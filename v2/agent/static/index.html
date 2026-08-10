@@ -1681,16 +1681,7 @@ function appendEvent(type, data) {
       el.appendChild(body);
       break;
     case 'approval_required':
-      body.innerHTML = `
-        <div><b style="color:var(--warning)">需要确认</b> · 风险等级：<code style="background:var(--surface-2);padding:2px 6px;border-radius:4px">${escapeHtml(data.risk_level)}</code></div>
-        <div style="margin-top:8px;font-size:13px"><b>工具：</b><span style="font-family:monospace;color:var(--info)">${escapeHtml(data.tool_name)}</span></div>
-        <div style="margin-top:6px"><b style="font-size:13px">参数：</b></div>
-        ${createCollapsibleJson('参数', JSON.stringify(data.arguments, null, 2))}
-        ${data.rationale ? `<div style="margin-top:8px;opacity:0.8;font-size:13px">${escapeHtml(data.rationale)}</div>` : ''}
-        <div class="approval-buttons" id="approve-${escapeAttr(data.turn_id)}">
-          <button class="btn-approve" onclick="approveTurn('${escapeAttr(data.turn_id)}', this, true)">批准</button>
-          <button class="btn-reject" onclick="approveTurn('${escapeAttr(data.turn_id)}', this, false)">拒绝</button>
-        </div>`;
+      body.innerHTML = renderApprovalCard(data);
       el.appendChild(body);
       break;
     case 'approval_result':
@@ -1859,6 +1850,40 @@ async function sendMessage() {
       await loadConversationMessages(state.currentConvId);
     }
   }
+}
+
+function renderApprovalCard(data) {
+  const plan = data.plan;
+  const hasPlan = plan && typeof plan === 'object';
+  // 种植计划审批：展示模板动作、茬口、种植单元等结构化字段，而非原始 JSON
+  let planHtml = '';
+  if (hasPlan) {
+    const tplActionMap = {use_existing: '复用现有模板', import_system: '导入系统模板', create_custom: '创建自定义模板'};
+    const tpl = plan.template || {};
+    const cycle = plan.cycle || {};
+    const unit = plan.planting_unit || {};
+    const stages = Array.isArray(tpl.stages) ? tpl.stages : [];
+    planHtml = `
+      <div style="margin-top:8px;border:1px solid var(--border);border-radius:6px;padding:10px;background:var(--surface)">
+        <div style="font-size:13px;color:var(--text-2)">种植计划审批</div>
+        <div style="margin-top:6px"><b>作物：</b>${escapeHtml(plan.crop_name || '-')}${plan.variety ? `（${escapeHtml(plan.variety)}）` : ''}</div>
+        <div style="margin-top:4px"><b>模板：</b>${escapeHtml(tplActionMap[plan.template_action] || plan.template_action || '-')} · ${escapeHtml(tpl.name || '-')}${stages.length ? `（${stages.length} 个阶段：${stages.map(s => escapeHtml(s.name)).join('、')}）` : ''}</div>
+        <div style="margin-top:4px"><b>茬口：</b>${escapeHtml(cycle.name || '-')} · 开始 ${escapeHtml(cycle.start_date || '-')} · 面积 ${cycle.total_area_mu ?? '-'} 亩</div>
+        <div style="margin-top:4px"><b>种植单元：</b>${escapeHtml(unit.name || '-')} · ${escapeHtml(unit.planted_date || '-')} · 面积 ${unit.area_mu ?? '-'} 亩</div>
+      </div>`;
+  }
+  return `
+    <div><b style="color:var(--warning)">需要确认</b> · 风险等级：<code style="background:var(--surface-2);padding:2px 6px;border-radius:4px">${escapeHtml(data.risk_level)}</code></div>
+    <div style="margin-top:8px;font-size:13px"><b>工具：</b><span style="font-family:monospace;color:var(--info)">${escapeHtml(data.tool_name)}</span></div>
+    ${data.summary ? `<div style="margin-top:6px;font-size:13px">${escapeHtml(data.summary)}</div>` : ''}
+    ${planHtml}
+    <div style="margin-top:8px"><b style="font-size:13px">参数：</b></div>
+    ${createCollapsibleJson('参数', JSON.stringify(data.arguments, null, 2))}
+    ${data.rationale && !data.summary ? `<div style="margin-top:8px;opacity:0.8;font-size:13px">${escapeHtml(data.rationale)}</div>` : ''}
+    <div class="approval-buttons" id="approve-${escapeAttr(data.turn_id)}">
+      <button class="btn-approve" onclick="approveTurn('${escapeAttr(data.turn_id)}', this, true)">确认执行</button>
+      <button class="btn-reject" onclick="approveTurn('${escapeAttr(data.turn_id)}', this, false)">取消</button>
+    </div>`;
 }
 
 async function approveTurn(turnId, btnEl, decision) {
