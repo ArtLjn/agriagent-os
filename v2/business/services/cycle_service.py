@@ -43,6 +43,13 @@ from business.models import (
 
 
 def _cycle_stage_to_dict(stage: CycleStage) -> dict[str, Any]:
+    today = date.today()
+    # 动态计算 is_current：今天落在阶段日期区间内则为当前阶段
+    is_current = bool(
+        stage.start_date
+        and stage.end_date
+        and stage.start_date <= today <= stage.end_date
+    )
     return {
         "id": stage.id,
         "cycle_id": stage.cycle_id,
@@ -52,14 +59,17 @@ def _cycle_stage_to_dict(stage: CycleStage) -> dict[str, Any]:
         "order_index": stage.order_index,
         "duration_days": stage.duration_days,
         "key_tasks": stage.key_tasks,
-        "is_current": bool(stage.is_current),
+        "is_current": is_current,
     }
 
 
 def _crop_cycle_to_dict(cycle: CropCycle) -> dict[str, Any]:
     stages = sorted(cycle.stages, key=lambda s: s.order_index)
-    # current_stage_name 推断优先级：第一个 is_current 的阶段；无则 None
-    current_stage_name = next((s.name for s in stages if s.is_current), None)
+    stage_dicts = [_cycle_stage_to_dict(s) for s in stages]
+    # current_stage_name：第一个动态 is_current 的阶段；无则 None
+    current_stage_name = next(
+        (sd["name"] for sd in stage_dicts if sd["is_current"]), None
+    )
     return {
         "id": cycle.id,
         "farm_id": cycle.farm_id,
@@ -74,7 +84,7 @@ def _crop_cycle_to_dict(cycle: CropCycle) -> dict[str, Any]:
         "batch_note": cycle.batch_note,
         "status": cycle.status,
         "created_at": cycle.created_at.isoformat() if cycle.created_at else None,
-        "stages": [_cycle_stage_to_dict(s) for s in stages],
+        "stages": stage_dicts,
         "current_stage_name": current_stage_name,
     }
 
