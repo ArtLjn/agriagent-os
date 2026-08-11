@@ -286,6 +286,30 @@ def update_wage(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+@operations_router.get("/labor/wages")
+def query_wages(
+    mode: str = Query(pattern="^(unpaid|monthly|worker)$"),
+    worker_name: str | None = Query(default=None, max_length=100),
+    month: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}$"),
+    start_date: date | None = None,
+    end_date: date | None = None,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    try:
+        return labor_service.query_wages(
+            db,
+            farm_id=user["farm_id"],
+            mode=mode,
+            worker_name=worker_name,
+            month=month,
+            start_date=start_date,
+            end_date=end_date,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @operations_router.get("/labor/unsettled-summary")
 def unsettled_labor_summary(
     user: dict = Depends(get_current_user),

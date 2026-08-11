@@ -101,7 +101,7 @@ export default function TokenDashboard() {
 
   useEffect(() => {
     let cancelled = false;
-    usersApi.list({ page: 1, size: 100 })
+    usersApi.list({ page: 1, page_size: 100 })
       .then((res) => {
         if (!cancelled) setUsers(res.data.items);
       })

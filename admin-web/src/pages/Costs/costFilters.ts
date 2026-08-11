@@ -17,7 +17,7 @@ export function buildCostListParams({
   size,
   monthRange,
 }: BuildCostListParamsOptions): ListRecordsParams {
-  const params: ListRecordsParams = { page, size };
+  const params: ListRecordsParams = { page, page_size: size };
   if (selectedCycle) params.cycle_id = selectedCycle;
   if (monthRange) {
     params.date_from = monthRange[0].startOf('month').format('YYYY-MM-DD');

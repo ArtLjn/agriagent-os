@@ -15,7 +15,7 @@ describe('buildCostListParams', () => {
     expect(params).toEqual({
       cycle_id: 7,
       page: 2,
-      size: 10,
+      page_size: 10,
       date_from: '2026-05-01',
       date_to: '2026-07-31',
     });
@@ -24,7 +24,7 @@ describe('buildCostListParams', () => {
   it('未选择月份范围时不追加日期参数', () => {
     expect(buildCostListParams({ page: 1, size: 20, monthRange: null })).toEqual({
       page: 1,
-      size: 20,
+      page_size: 20,
     });
   });
 });

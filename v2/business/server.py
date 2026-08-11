@@ -32,6 +32,7 @@ from business.tools import (  # noqa: F401
 from business.api import api_router, install_exception_handlers
 from business.db import check_connection
 from business.mcp_app import mcp
+from business.services.auth_service import ensure_admin_user
 
 
 def setup_logging() -> None:
@@ -100,6 +101,7 @@ def main() -> None:
     setup_logging()
     logger = logging.getLogger(__name__)
     check_connection()
+    ensure_admin_user()
     logger.info("starting business server on http://127.0.0.1:9876")
     logger.info("REST API: http://127.0.0.1:9876/api/v2")
     logger.info("MCP endpoint: http://127.0.0.1:9876/mcp")

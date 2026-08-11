@@ -5,11 +5,13 @@ Provider 优先级（参考 archive/backend/app/skills/web_search/scripts/main.p
   2. DuckDuckGo HTML — 无需 key，作为 fallback
 
 两种 provider 返回统一结构：
-    {"query": str, "count": int, "results": [{"title", "url", "snippet"}, ...]}
+    {"query": str, "count": int, "results": [{"title", "url", "snippet", "content_available"}, ...]}
 """
 
 from __future__ import annotations
 
+import asyncio
+from html.parser import HTMLParser
 import logging
 import os
 import re
@@ -27,6 +29,18 @@ logger = logging.getLogger(__name__)
 _DDG_URL = "https://html.duckduckgo.com/html/"
 
 _REQUEST_TIMEOUT = 15.0
+_FETCH_TIMEOUT = 10.0
+_MAX_CONTENT_LENGTH = 8_000
+_TIME_RANGE_MAP = {
+    "day": "d",
+    "week": "w",
+    "month": "m",
+    "year": "y",
+    "d": "d",
+    "w": "w",
+    "m": "m",
+    "y": "y",
+}
 
 # 简单结果解析：标题 + URL + 摘要
 _DDG_RESULT_PATTERN = re.compile(
@@ -51,6 +65,78 @@ def _strip_html(text: str) -> str:
     return text.strip()
 
 
+class _PageTextParser(HTMLParser):
+    """提取网页正文候选文本，避免 fallback 只返回搜索引擎摘要。"""
+
+    _IGNORED_TAGS = {"script", "style", "noscript", "template", "svg"}
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self._ignored_depth = 0
+        self.parts: list[str] = []
+
+    def handle_starttag(self, tag: str, _attrs) -> None:
+        if tag.lower() in self._IGNORED_TAGS:
+            self._ignored_depth += 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag.lower() in self._IGNORED_TAGS and self._ignored_depth:
+            self._ignored_depth -= 1
+
+    def handle_data(self, data: str) -> None:
+        if not self._ignored_depth:
+            text = re.sub(r"\s+", " ", data).strip()
+            if text:
+                self.parts.append(text)
+
+
+def _extract_page_text(html: str) -> str:
+    """把 HTML 转成有限长度的纯文本，失败时返回空正文。"""
+    parser = _PageTextParser()
+    try:
+        parser.feed(html)
+        parser.close()
+    except Exception:  # noqa: BLE001
+        return ""
+    return " ".join(parser.parts)[:_MAX_CONTENT_LENGTH]
+
+
+async def _fetch_page_text(client: httpx.AsyncClient, url: str) -> str:
+    """抓取单个搜索结果页面；单页失败不影响其他结果。"""
+    try:
+        response = await client.get(url)
+        response.raise_for_status()
+        return _extract_page_text(response.text)
+    except Exception as exc:  # noqa: BLE001
+        logger.info("web search page fetch skipped: url=%s error=%s", url, exc)
+        return ""
+
+
+async def _enrich_with_page_text(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """为 fallback 结果并发抓正文，抓取失败时保留原搜索摘要。"""
+    if not results:
+        return results
+    async with httpx.AsyncClient(
+        timeout=_FETCH_TIMEOUT,
+        follow_redirects=True,
+        headers={
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0 Safari/537.36"
+            )
+        },
+    ) as client:
+        contents = await asyncio.gather(
+            *(_fetch_page_text(client, item["url"]) for item in results),
+        )
+    for item, content in zip(results, contents):
+        if content:
+            item["content"] = content
+            item["snippet"] = content[:500]
+    return results
+
+
 # ─────────────────────────────────────────────────────────────
 # SearchHub provider
 # ─────────────────────────────────────────────────────────────
@@ -64,6 +150,10 @@ async def _searchhub_search(
     *,
     time_range: str | None = None,
     enable_fetch: bool = True,
+    content_mode: str = "evidence",
+    fetch_top_k: int | None = None,
+    max_content_chars: int = 8_000,
+    evidence_chars: int = 2_000,
     enable_embedding_filter: bool | None = None,
     domain: str | None = None,
     region: str | None = None,
@@ -79,9 +169,13 @@ async def _searchhub_search(
         "query": query,
         "top_k": top_k,
         "enable_fetch": enable_fetch,
+        "content_mode": content_mode,
+        "fetch_top_k": fetch_top_k or min(top_k, 5),
+        "max_content_chars": max_content_chars,
+        "evidence_chars": evidence_chars,
     }
     if time_range:
-        payload["time_range"] = time_range
+        payload["time_range"] = _TIME_RANGE_MAP.get(time_range, time_range)
     if enable_embedding_filter is not None:
         payload["enable_embedding_filter"] = enable_embedding_filter
     if domain:
@@ -112,15 +206,16 @@ def _format_searchhub(data: dict[str, Any], query: str) -> dict[str, Any]:
     for item in raw_results[:10]:  # 上限 10
         title = item.get("title") or ""
         url = item.get("url") or item.get("link") or ""
-        snippet = item.get("content") or item.get("snippet") or ""
+        content = _strip_html(str(item.get("content") or ""))
+        snippet = _strip_html(str(item.get("snippet") or ""))
         if title and url:
-            results.append(
-                {
-                    "title": _strip_html(title),
-                    "url": url,
-                    "snippet": _strip_html(snippet)[:300],
-                }
-            )
+            result = {
+                "title": _strip_html(title),
+                "url": url,
+                "snippet": (snippet or content)[:500],
+                "content_available": bool(content),
+            }
+            results.append(result)
 
     answers = data.get("answers") or []
     if answers and not results:
@@ -144,6 +239,29 @@ def _format_searchhub(data: dict[str, Any], query: str) -> dict[str, Any]:
         "provider": "searchhub",
         "count": len(results),
         "results": results,
+        "evidence": data.get("evidence") or {},
+        "agent": data.get("agent") or {},
+        "summary": str((data.get("grounded_answer") or {}).get("markdown") or "")[
+            :2_000
+        ],
+        "trace": _compact_searchhub_trace(data.get("trace") or {}),
+    }
+
+
+def _compact_searchhub_trace(trace: dict[str, Any]) -> dict[str, Any]:
+    """只保留 Agent 需要的追踪摘要，避免把完整 pipeline trace 回灌上下文。"""
+    return {
+        "request_id": trace.get("request_id"),
+        "provider": trace.get("provider"),
+        "search_time": trace.get("search_time", 0),
+        "fetch_time": trace.get("fetch_time", 0),
+        "result_count": trace.get("result_count", 0),
+        "content_mode": trace.get("content_mode"),
+        "fetch_requested": trace.get("fetch_requested"),
+        "fetch_enabled": trace.get("fetch_enabled"),
+        "fetched_count": trace.get("fetched_count", 0),
+        "returned_content_chars": trace.get("returned_content_chars", 0),
+        "error": trace.get("error"),
     }
 
 
@@ -169,7 +287,12 @@ def _parse_ddg(html: str, limit: int) -> list[dict[str, str]]:
     return results
 
 
-async def _ddg_search(query: str, limit: int) -> dict[str, Any]:
+async def _ddg_search(
+    query: str,
+    limit: int,
+    *,
+    enable_fetch: bool = True,
+) -> dict[str, Any]:
     """DuckDuckGo HTML 搜索，无需 API key。"""
     async with httpx.AsyncClient(timeout=_REQUEST_TIMEOUT) as client:
         resp = await client.post(
@@ -187,11 +310,50 @@ async def _ddg_search(query: str, limit: int) -> dict[str, Any]:
         resp.raise_for_status()
         results = _parse_ddg(resp.text, limit)
 
+    if enable_fetch:
+        results = await _enrich_with_page_text(results)
+
     return {
         "query": query,
         "provider": "duckduckgo",
         "count": len(results),
         "results": results,
+        "fetch_requested": enable_fetch,
+        "fetch_enabled": enable_fetch,
+    }
+
+
+def _format_ddg(data: dict[str, Any], query: str) -> dict[str, Any]:
+    """压缩 fallback 结果，避免抓取正文绕过 SearchHub 的响应预算。"""
+    results = []
+    for item in (data.get("results") or [])[:10]:
+        title = _strip_html(str(item.get("title") or ""))
+        url = str(item.get("url") or "")
+        content = _strip_html(str(item.get("content") or ""))
+        snippet = _strip_html(str(item.get("snippet") or ""))
+        if title and url:
+            results.append(
+                {
+                    "title": title,
+                    "url": url,
+                    "snippet": (snippet or content)[:500],
+                    "content_available": bool(content),
+                }
+            )
+    return {
+        "query": query,
+        "provider": "duckduckgo",
+        "count": len(results),
+        "results": results,
+        "trace": {
+            "provider": "duckduckgo",
+            "fetch_requested": bool(data.get("fetch_requested", False)),
+            "fetch_enabled": bool(data.get("fetch_enabled", False)),
+            "fetched_count": sum(
+                1 for item in (data.get("results") or []) if item.get("content")
+            ),
+            "returned_content_chars": 0,
+        },
     }
 
 
@@ -246,7 +408,14 @@ class WebSearchSkill(Skill):
                 },
                 "enable_fetch": {
                     "type": "boolean",
-                    "description": "是否抓取网页正文（默认 true，仅 SearchHub 生效）",
+                    "description": "是否抓取网页正文（默认 true；SearchHub 或 DuckDuckGo fallback 均生效）",
+                    "default": True,
+                },
+                "content_mode": {
+                    "type": "string",
+                    "enum": ["none", "evidence"],
+                    "default": "evidence",
+                    "description": "返回模式。默认 evidence，只返回摘要和结构化证据，不返回网页正文。",
                 },
                 "enable_embedding_filter": {
                     "type": "boolean",
@@ -268,13 +437,25 @@ class WebSearchSkill(Skill):
             "required": ["query"],
         }
 
+    def enrich_params(self, params: dict[str, Any], ctx) -> dict[str, Any]:
+        """把正文抓取默认值显式写入 action/trace，避免 LLM 省略可选参数。"""
+        enriched = dict(params)
+        if enriched.get("enable_fetch") is None:
+            enriched["enable_fetch"] = True
+        if enriched.get("content_mode") not in {"none", "evidence"}:
+            enriched["content_mode"] = "evidence"
+        return enriched
+
     async def execute(self, params: dict[str, Any], ctx: SkillContext) -> SkillResult:
         query = (params.get("query") or "").strip()
         if not query:
             return SkillResult(error="query 不能为空")
         top_k = max(1, min(int(params.get("top_k", 5)), 10))
         time_range = params.get("time_range")
-        enable_fetch = params.get("enable_fetch", True)
+        enable_fetch = params.get("enable_fetch") is not False
+        content_mode = params.get("content_mode")
+        if content_mode not in {"none", "evidence"}:
+            content_mode = "evidence"
         enable_embedding_filter = params.get("enable_embedding_filter")
         domain = params.get("domain")
         region = params.get("region")
@@ -291,6 +472,10 @@ class WebSearchSkill(Skill):
                     api_key,
                     time_range=time_range,
                     enable_fetch=enable_fetch,
+                    content_mode=content_mode,
+                    fetch_top_k=min(top_k, 5),
+                    max_content_chars=8_000,
+                    evidence_chars=2_000,
                     enable_embedding_filter=enable_embedding_filter,
                     domain=domain,
                     region=region,
@@ -307,7 +492,7 @@ class WebSearchSkill(Skill):
 
         # ── Fallback: DuckDuckGo ────────────────────────────────
         try:
-            data = await _ddg_search(query, top_k)
+            data = await _ddg_search(query, top_k, enable_fetch=enable_fetch)
         except httpx.HTTPError as exc:
             return SkillResult(error=f"搜索失败: {exc}")
         except Exception as exc:  # noqa: BLE001
@@ -322,7 +507,7 @@ class WebSearchSkill(Skill):
                 }
             )
 
-        return SkillResult(data=data)
+        return SkillResult(data=_format_ddg(data, query))
 
 
 skill = WebSearchSkill()

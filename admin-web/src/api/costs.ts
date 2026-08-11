@@ -40,41 +40,41 @@ export interface ListRecordsParams {
   cycle_id?: number;
   category?: string;
   page?: number;
-  size?: number;
+  page_size?: number;
   date_from?: string;
   date_to?: string;
 }
 
 export async function listRecords(params?: ListRecordsParams): Promise<PaginatedList<CostRecord>> {
-  const res = await apiClient.get<PaginatedList<CostRecord>>('/costs', { params });
+  const res = await apiClient.get<PaginatedList<CostRecord>>('/cost-records', { params });
   return res.data;
 }
 
 export async function createRecord(data: { cycle_id?: number; record_type: string; category: string; amount: string; record_date: string; recorded_at?: string; note?: string; record_subtype?: string; counterparty?: string; due_date?: string }): Promise<CostRecord> {
-  const res = await apiClient.post<CostRecord>('/costs', data);
+  const res = await apiClient.post<CostRecord>('/cost-records', data);
   return res.data;
 }
 
 export async function parseCostRecord(description: string): Promise<CostParseResponse> {
-  const res = await apiClient.post<CostParseResponse>('/costs/parse', { description });
+  const res = await apiClient.post<CostParseResponse>('/cost-records/parse', { description });
   return res.data;
 }
 
 export async function updateRecord(id: number, data: Partial<Omit<CostRecord, "id" | "created_at">>): Promise<CostRecord> {
-  const res = await apiClient.put<CostRecord>(`/costs/${id}`, data);
+  const res = await apiClient.put<CostRecord>(`/cost-records/${id}`, data);
   return res.data;
 }
 
 export async function deleteRecord(id: number): Promise<void> {
-  await apiClient.delete(`/costs/${id}`);
+  await apiClient.delete(`/cost-records/${id}`);
 }
 
 export async function getCycleProfit(cycleId: number): Promise<CycleProfit> {
-  const res = await apiClient.get<CycleProfit>(`/costs/cycles/${cycleId}/profit`);
+  const res = await apiClient.get<CycleProfit>(`/cost-records/cycles/${cycleId}/profit`);
   return res.data;
 }
 
 export async function getYearlySummary(year: number): Promise<YearlySummary> {
-  const res = await apiClient.get<YearlySummary>(`/costs/summary/${year}`);
+  const res = await apiClient.get<YearlySummary>('/cost-records/summary/yearly', { params: { year } });
   return res.data;
 }

@@ -444,6 +444,65 @@ def delete_record(db: Session, *, farm_id: int, record_id: int) -> dict | None:
     return _record_to_dict(record)
 
 
+def update_record(
+    db: Session,
+    *,
+    farm_id: int,
+    record_id: int,
+    changes: dict,
+) -> dict | None:
+    """更新一条成本记录。
+
+    changes 中键为 None 表示清空；缺省表示不改。支持字段：
+    record_type / category / amount / record_date / settled_amount /
+    note / record_subtype / counterparty / due_date。
+    """
+    record = (
+        db.query(CostRecord)
+        .filter(
+            CostRecord.id == record_id,
+            CostRecord.farm_id == farm_id,
+            CostRecord.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if not record:
+        return None
+
+    updatable = {
+        "record_type",
+        "category",
+        "amount",
+        "record_date",
+        "settled_amount",
+        "note",
+        "record_subtype",
+        "counterparty",
+        "due_date",
+    }
+    for key, value in changes.items():
+        if key not in updatable:
+            continue
+        if key == "amount" and value is not None:
+            value = _quantize_money(Decimal(str(value)))
+        if key == "settled_amount" and value is not None:
+            value = _quantize_money(Decimal(str(value)))
+        if key == "category" and value is not None:
+            cat = _find_category(db, farm_id, value, record.record_type)
+            if cat:
+                record.category_id = cat.id
+                record.category_name_snapshot = cat.name
+        setattr(record, key, value)
+
+    record.settlement_status = settlement_status_for(
+        record.amount, record.settled_amount or Decimal("0")
+    )
+    db.flush()
+    invalidate_farm_context(farm_id)
+    db.refresh(record)
+    return _record_to_dict(record)
+
+
 def get_yearly_summary(db: Session, *, farm_id: int, year: int) -> dict:
     """计算指定年度的收支汇总，返回 dict（含 by_category 按类别分组）。
 

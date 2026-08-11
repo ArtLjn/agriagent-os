@@ -19,7 +19,7 @@ def _resolve_location(
     location: str | None,
     lat: float | None,
     lon: float | None,
-) -> tuple[str, float, float]:
+) -> tuple[str, float | None, float | None]:
     farm = farm_crud_service.get_farm_by_id(db, farm_id)
     resolved_location = location or (farm.location if farm else None) or "北京"
     if lat is not None and lon is not None:
@@ -27,6 +27,10 @@ def _resolve_location(
     coords = location_service.find_coords(resolved_location)
     if coords is not None:
         return resolved_location, coords[0], coords[1]
+    # 显式地点不能静默套用默认坐标，否则 Agent 无法收到 unknown_location
+    # 并按 Skill 约定调用 search_cities 重试；农场自身地点仍保留系统默认兜底。
+    if location and location.strip():
+        return resolved_location, None, None
     return resolved_location, settings.weather.latitude, settings.weather.longitude
 
 

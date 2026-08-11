@@ -19,8 +19,8 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
     setLoading(true);
     try {
       const res = await apiClient.post('/auth/login', { phone, password });
-      const { access_token } = res.data;
-      authStore.setToken(access_token);
+      const { token } = res.data;
+      authStore.setToken(token);
       message.success('登录成功');
       onLogin();
     } catch (e: unknown) {

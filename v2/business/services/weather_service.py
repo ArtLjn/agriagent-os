@@ -9,6 +9,7 @@ Provider 优先级：
   - Geo API:  /v2/city/lookup?location=<city>&key=<key>
   - Weather:  /v7/weather/3d?location=<location_id>&key=<key>
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -24,6 +25,11 @@ logger = logging.getLogger(__name__)
 _OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 _QWEATHER_BASE = "https://p32k5pxvta.re.qweatherapi.com/v7"
 _QWEATHER_GEO = "https://p32k5pxvta.re.qweatherapi.com/v2/city/lookup"
+_CMA_ALARM_URL = "https://weather.cma.cn/api/map/alarm"
+_CMA_HEADERS = {
+    "Referer": "https://weather.cma.cn/",
+    "User-Agent": "Mozilla/5.0 (compatible; FarmManagerWeather/2.0)",
+}
 
 # WMO weather code → 中文描述（Open-Meteo 用）
 _WMO_DESC = {
@@ -116,7 +122,10 @@ async def _fetch_qweather_now(
 
 
 def _summarize_qweather(
-    raw: dict, location: str, current_temp: float | None = None
+    raw: dict,
+    location: str,
+    current_temp: float | None = None,
+    days: int = 3,
 ) -> dict:
     """Trim QWeather response to fields agent cares about.
 
@@ -124,6 +133,7 @@ def _summarize_qweather(
     每个元素含 fxDate/tempMax/tempMin/textDay/precip/windSpeedDay 等。
     """
     daily_list = raw.get("daily") or []
+    forecast_days = max(1, min(days, 7))
     summary = {
         "location": location,
         "provider": "qweather",
@@ -138,7 +148,7 @@ def _summarize_qweather(
                 "code": None,
                 "desc": day.get("textDay", ""),
             }
-            for day in daily_list[:3]
+            for day in daily_list[:forecast_days]
         ],
     }
     return summary
@@ -149,9 +159,7 @@ def _summarize_qweather(
 # ─────────────────────────────────────────────────────────────
 
 
-async def _fetch_open_meteo(
-    lat: float, lon: float, days: int = 3
-) -> dict[str, Any]:
+async def _fetch_open_meteo(lat: float, lon: float, days: int = 3) -> dict[str, Any]:
     """Call Open-Meteo and return raw daily/hourly payload."""
     params = {
         "latitude": lat,
@@ -168,10 +176,11 @@ async def _fetch_open_meteo(
         return r.json()
 
 
-def _summarize_open_meteo(raw: dict, location: str) -> dict:
+def _summarize_open_meteo(raw: dict, location: str, days: int = 3) -> dict:
     """Trim raw API payload to fields agent cares about."""
     daily_raw = raw.get("daily", {})
     times = daily_raw.get("time", [])
+    forecast_days = max(1, min(days, 7))
     summary = {
         "location": location,
         "provider": "open-meteo",
@@ -187,9 +196,153 @@ def _summarize_open_meteo(raw: dict, location: str) -> dict:
                 "code": daily_raw["weathercode"][i],
                 "desc": _WMO_DESC.get(daily_raw["weathercode"][i], "未知"),
             }
-            for i in range(min(len(times), 3))
+            for i in range(min(len(times), forecast_days))
         ],
     }
+    return summary
+
+
+def _alert_terms_for(location: str) -> set[str]:
+    """生成预警匹配词，兼容地级市、区县标题和正文提及。"""
+    cleaned = (location or "").strip()
+    if not cleaned or cleaned in {"当前地块", "地块"}:
+        return set()
+
+    from business.services import location_service
+
+    matches = location_service.search_cities(cleaned, limit=1)
+    terms: set[str] = set()
+    if matches:
+        region = matches[0]
+        for key in ("city", "name", "full_name"):
+            value = str(region.get(key) or "").strip()
+            if value:
+                terms.add(value)
+                terms.add(_strip_city_suffix(value))
+    else:
+        terms.add(cleaned)
+        terms.add(_strip_city_suffix(cleaned))
+
+    return {term for term in terms if len(term) >= 2}
+
+
+def _strip_city_suffix(value: str) -> str:
+    """移除城市名称后缀，适配气象局预警标题中的城市写法。"""
+    for suffix in ("自治区", "自治州", "地区", "盟", "市"):
+        if value.endswith(suffix) and len(value) > len(suffix):
+            return value[: -len(suffix)]
+    return value
+
+
+def _parse_official_alerts(payload: dict[str, Any], city: str | set[str]) -> list[str]:
+    """解析中国气象局预警响应，匹配标题、名称和正文中的地点。"""
+    if payload.get("code") not in (0, "0"):
+        logger.warning(
+            "official weather alert API returned code=%s", payload.get("code")
+        )
+        return []
+
+    terms = {city} if isinstance(city, str) else city
+    alerts: list[str] = []
+    seen: set[str] = set()
+    for item in payload.get("data") or []:
+        if not isinstance(item, dict):
+            continue
+        headline = str(item.get("headline") or "").strip()
+        title = str(item.get("title") or "").strip()
+        description = str(item.get("description") or "").strip()
+        searchable = " ".join((headline, title, description))
+        if terms:
+            if not any(term in searchable for term in terms):
+                continue
+        message = headline or title
+        if description:
+            message = f"{message}: {description}" if message else description
+        if message and message not in seen:
+            seen.add(message)
+            alerts.append(message)
+    return alerts
+
+
+async def _fetch_official_alerts(location: str) -> list[str]:
+    """获取官方气象预警；预警源不可用时不影响天气预报主链路。"""
+    terms = _alert_terms_for(location)
+    if not terms:
+        return []
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(_CMA_ALARM_URL, headers=_CMA_HEADERS)
+            response.raise_for_status()
+            return _parse_official_alerts(response.json(), terms)
+    except (httpx.HTTPError, ValueError) as exc:
+        logger.warning("official weather alert fetch failed: %s", exc)
+        return []
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("unexpected official weather alert error: %s", exc)
+        return []
+
+
+async def _await_official_alerts(task: asyncio.Task[list[str]]) -> list[str]:
+    """安全收敛并行预警任务，避免预报失败时留下未处理异常。"""
+    try:
+        return await task
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("official weather alert task failed: %s", exc)
+        return []
+
+
+def _number(value: Any) -> float | None:
+    """将天气供应商字段安全转换为数值。"""
+    try:
+        return None if value is None else float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _infer_weather_warnings(daily: list[dict[str, Any]]) -> list[str]:
+    """按旧版农事阈值生成预警，弥补 Open-Meteo 没有官方预警字段。"""
+    warnings: list[str] = []
+    for day in daily:
+        date = str(day.get("date") or "未知日期")
+        max_temp = _number(day.get("max_c"))
+        min_temp = _number(day.get("min_c"))
+        precipitation = _number(day.get("precip_mm"))
+        wind = _number(day.get("wind_mps"))
+
+        if max_temp is not None and max_temp >= 35:
+            warnings.append(f"{date} 高温预警：最高温 {max_temp:g}℃")
+        if min_temp is not None and min_temp <= 0:
+            warnings.append(f"{date} 霜冻预警：最低温 {min_temp:g}℃")
+        if precipitation is not None and precipitation >= 50:
+            warnings.append(f"{date} 大雨预警：降水量 {precipitation:g}mm")
+        if wind is not None and wind >= 17:
+            warnings.append(f"{date} 大风预警：最大风速 {wind:g}m/s")
+    return warnings
+
+
+def _to_client_days(daily: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """保留 Agent 友好的 daily，同时提供前端现有契约使用的 days。"""
+    return [
+        {
+            "date": day.get("date", ""),
+            "max_temp": day.get("max_c", 0),
+            "min_temp": day.get("min_c", 0),
+            "precipitation": day.get("precip_mm", 0),
+            "weather_code": day.get("code"),
+            "weather_text": day.get("desc"),
+            "wind_speed": day.get("wind_mps", 0),
+        }
+        for day in daily
+    ]
+
+
+def _complete_summary(summary: dict[str, Any], official_alerts: list[str]) -> dict:
+    """统一补充预警和跨 Agent/前端使用的响应字段。"""
+    daily = summary.get("daily") or []
+    inferred = _infer_weather_warnings(daily)
+    warnings = list(dict.fromkeys([*official_alerts, *inferred]))
+    summary["warnings"] = warnings
+    summary["days"] = _to_client_days(daily)
     return summary
 
 
@@ -249,24 +402,35 @@ async def _fetch_weather_async(
         if matched:
             location = matched[0].get("full_name") or location
 
+    # 预警是增强信息，和主天气请求并行；失败时仍保留预报结果。
+    official_alerts_task = asyncio.create_task(_fetch_official_alerts(location))
+
     # ── 2. Try QWeather (直接用经纬度，跳过 Geo API) ─────────────
     if _qweather_key():
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 raw = await _fetch_qweather_by_coords(client, lat, lon, days)
                 current_temp = await _fetch_qweather_now(client, lat, lon)
-                return _summarize_qweather(raw, location, current_temp)
+                summary = _summarize_qweather(raw, location, current_temp, days)
+                return _complete_summary(
+                    summary, await _await_official_alerts(official_alerts_task)
+                )
         except Exception as exc:  # noqa: BLE001
             logger.warning("qweather fetch failed, fallback to open-meteo: %s", exc)
 
     # ── 3. Fallback: Open-Meteo ────────────────────────────────
     try:
         raw = await _fetch_open_meteo(lat, lon, days)
-        return _summarize_open_meteo(raw, location)
+        summary = _summarize_open_meteo(raw, location, days)
+        return _complete_summary(
+            summary, await _await_official_alerts(official_alerts_task)
+        )
     except httpx.HTTPError as exc:
+        await _await_official_alerts(official_alerts_task)
         logger.warning("open-meteo fetch failed: %s", exc)
         return {"error": "fetch_failed", "message": str(exc)}
     except Exception as exc:  # noqa: BLE001
+        await _await_official_alerts(official_alerts_task)
         logger.exception("unexpected weather error")
         return {"error": "internal", "message": str(exc)}
 

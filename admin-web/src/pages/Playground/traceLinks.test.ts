@@ -3,15 +3,15 @@ import { describe, expect, it } from 'vitest';
 import { buildTraceMonitorUrl, selectLatestTraceRequestId } from './traceLinks';
 
 describe('buildTraceMonitorUrl', () => {
-  it('有 request_id 时同时携带 request_id 和 session_id', () => {
+  it('有 request_id 时同时携带 request_id 和 conversation_id', () => {
     expect(
-      buildTraceMonitorUrl({ sessionId: 'sess-1', requestId: 'req-1' }),
-    ).toBe('/dev/traces?request_id=req-1&session_id=sess-1');
+      buildTraceMonitorUrl({ conversationId: 'sess-1', requestId: 'req-1' }),
+    ).toBe('/dev/traces?request_id=req-1&conversation_id=sess-1');
   });
 
-  it('没有 request_id 时仍按 session_id 跳转链路页', () => {
-    expect(buildTraceMonitorUrl({ sessionId: 'sess-1' })).toBe(
-      '/dev/traces?session_id=sess-1',
+  it('没有 request_id 时仍按 conversation_id 跳转链路页', () => {
+    expect(buildTraceMonitorUrl({ conversationId: 'sess-1' })).toBe(
+      '/dev/traces?conversation_id=sess-1',
     );
   });
 });

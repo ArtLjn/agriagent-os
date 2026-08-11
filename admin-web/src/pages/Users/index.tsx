@@ -105,12 +105,12 @@ export default function Users() {
   const fetchUsers = useCallback(async (targetPage = page) => {
     setLoading(true);
     try {
-      const params: ListUsersParams = { page: targetPage, size };
+      const params: ListUsersParams = { page: targetPage, page_size: size };
       if (statusFilter) params.status = statusFilter;
       if (phoneKeyword.trim()) params.phone_keyword = phoneKeyword.trim();
       const quotaParams = statusFilter
-        ? { page: targetPage, size, status: statusFilter }
-        : { page: targetPage, size };
+        ? { page: targetPage, page_size: size, status: statusFilter }
+        : { page: targetPage, page_size: size };
       const [usersRes, quotaRes] = await Promise.all([
         usersApi.list(params),
         usersApi.getQuotaOverview(quotaParams),

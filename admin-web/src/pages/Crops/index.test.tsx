@@ -35,7 +35,7 @@ describe('Crops 页面', () => {
     );
 
     await waitFor(() => {
-      expect(listTemplates).toHaveBeenCalledWith({ page: 1, size: 20 });
+      expect(listTemplates).toHaveBeenCalledWith({ page: 1, page_size: 20 });
     });
 
     fireEvent.click(screen.getByRole('button', { name: /新建模板/ }));

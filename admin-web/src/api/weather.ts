@@ -79,6 +79,6 @@ function normalizeForecast(data: ForecastResponse | LegacyForecastResponse): For
 
 export async function getForecast(query: number | ForecastQuery = 7): Promise<ForecastResponse> {
   const params = typeof query === 'number' ? { days: query } : { days: query.days ?? 7, location: query.location, lat: query.lat, lon: query.lon };
-  const res = await apiClient.get<ForecastResponse | LegacyForecastResponse>('/weather/forecast', { params });
+  const res = await apiClient.get<ForecastResponse | LegacyForecastResponse>('/weather', { params });
   return normalizeForecast(res.data);
 }

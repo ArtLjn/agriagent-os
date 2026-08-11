@@ -1,19 +1,22 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Input, Button, Space, Drawer, Tag, Tooltip, message, Select } from 'antd';
+import { Input, Button, Space, Tag, Tooltip, message, Select } from 'antd';
 import { SendOutlined, DeleteOutlined, CopyOutlined, PlusOutlined, MenuFoldOutlined, MenuUnfoldOutlined, LoadingOutlined, LinkOutlined, ProfileOutlined } from '@ant-design/icons';
-import { listTraces, getTimeline, type TraceNodeDetail, type TraceTimeline, listUsers, type AdminUserListItem } from '../../api/admin';
-import { getSessionDebugExport, listConversations, getConversationMessages, type ConversationItem, type ConversationMessage } from '../../api/agent';
-import type { PendingAction } from '../../api/agent';
-import type { PendingPlan } from '../../api/agent';
-import { getNodeLabel } from '../../constants/trace';
-import SkillOutputFormatter from '../../components/SkillOutputFormatter';
+import { listTraces, getTimeline, type TraceTimeline } from '../../api/admin';
+import {
+  streamChat,
+  approveTurn,
+  listDevUsers,
+  listConversations,
+  getConversationMessages,
+  type ConversationItem,
+  type ConversationMessage,
+  type DevUser,
+  type PendingAction,
+  type PendingPlan,
+} from '../../api/agent';
 import { MarkdownContent } from '../../components/MarkdownContent';
-import { formatTracePayload, hasTracePayload } from '../../utils/tracePayload';
-import { authStore } from '../../stores/authStore';
 import { palette } from '../../styles/theme';
 import { buildConversationRows } from './conversationRows';
-import { usersApi, type CurrentUser } from '../../api/users';
-import { chooseDefaultUserId } from './currentUser';
 import { buildSessionDebugExport, type DebugExportMessage } from './sessionDebugExport';
 import { applyHistoricalPendingResolution, canConfirmAssistantMessage, hasPendingConfirmationControls, type PendingResolution } from './pendingPlanControls';
 import {
@@ -25,6 +28,8 @@ import { copyAsyncText } from './clipboard';
 import { buildTraceMonitorUrl, selectLatestTraceRequestId } from './traceLinks';
 import { LlmContextInspector, LlmContextTriggerButton } from './LlmContextInspector';
 import { QuickPrompts } from './QuickPrompts';
+import { ExecutionTimeline } from './ExecutionTimeline';
+import { executionEventFromChunk, type ExecutionEvent } from './executionEvents';
 
 const CARD = palette.bgElevated;
 const BORDER = palette.border;
@@ -32,7 +37,6 @@ const TEXT = palette.text;
 const TEXT_DIM = palette.textMuted;
 const ACCENT = palette.accent;
 const USER_BG = palette.accentStrong;
-const AI_BG = palette.bgPanel;
 const SIDEBAR_BG = palette.bgElevated;
 const SIDEBAR_BORDER = palette.borderSoft;
 const ROW_HOVER = 'rgba(139, 148, 158, 0.08)';
@@ -42,6 +46,7 @@ interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  events?: ExecutionEvent[];
   skills?: string[];
   pendingAction?: PendingAction | null;
   pendingPlan?: PendingPlan | null;
@@ -141,29 +146,49 @@ function TraceMetricPill({ label, value, accent }: { label: string; value: strin
 }
 
 /* ── 聊天气泡组件 ── */
-function ChatBubble({ role, content, skills, pendingAction, pendingPlan, pendingResolution, onAction }: { role: 'user' | 'assistant'; content: string; skills?: string[]; pendingAction?: PendingAction | null; pendingPlan?: PendingPlan | null; pendingResolution?: PendingResolution | null; onAction?: (action: string) => void }) {
+function ChatBubble({
+  role, content, events, skills, loading, pendingAction, pendingPlan, pendingResolution, onAction,
+}: {
+  role: 'user' | 'assistant';
+  content: string;
+  events?: ExecutionEvent[];
+  skills?: string[];
+  loading: boolean;
+  pendingAction?: PendingAction | null;
+  pendingPlan?: PendingPlan | null;
+  pendingResolution?: PendingResolution | null;
+  onAction?: (action: string) => void;
+}) {
   const isUser = role === 'user';
   const hasConfirmationControls = hasPendingConfirmationControls({ role, content, pendingAction, pendingPlan, pendingResolution });
   const canConfirm = canConfirmAssistantMessage({ role, content, pendingAction, pendingPlan, pendingResolution });
   const confirmationDisabled = !canConfirm || !onAction;
   return (
-    <div style={{ marginBottom: 16, display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start' }}>
+    <div style={{ marginBottom: isUser ? 16 : 28, display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start', minWidth: 0 }}>
       {!isUser && (
         <div style={{
-          width: 32, height: 32, borderRadius: '50%', background: '#238636',
+          width: 32, height: 32, borderRadius: 10, background: '#238636',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           color: '#fff', fontSize: 14, fontWeight: 700, marginRight: 10, flexShrink: 0,
         }}>AI</div>
       )}
       <div style={{
-        background: isUser ? USER_BG : AI_BG,
+        background: isUser ? USER_BG : 'transparent',
         color: TEXT,
-        padding: '10px 16px',
+        padding: isUser ? '10px 16px' : 0,
         borderRadius: isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-        maxWidth: '78%',
+        maxWidth: isUser ? '78%' : 'min(100%, 1240px)',
+        width: isUser ? 'auto' : '100%',
+        minWidth: 0,
         wordBreak: 'break-word',
       }}>
-        {isUser ? content : <MarkdownContent content={content} style={{ color: TEXT, lineHeight: 1.7, fontSize: 14 }} />}
+        {isUser ? content : (
+          <>
+            <ExecutionTimeline events={events} loading={loading} />
+            {content && <MarkdownContent content={content} style={{ color: TEXT, lineHeight: 1.75, fontSize: 15 }} />}
+          </>
+        )}
+        {/* ── 执行状态 + 技能标签 ── */}
         {!isUser && (
           <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
             <ExecutionStatus
@@ -237,72 +262,25 @@ function ChatBubble({ role, content, skills, pendingAction, pendingPlan, pending
   );
 }
 
-type StreamChunk =
-  | { type: 'content'; data: string }
-  | { type: 'skills'; data: string[] }
-  | { type: 'pending_action'; data: PendingAction }
-  | { type: 'pending_plan'; data: PendingPlan };
-
-/* ── SSE 流式对话 ── */
-async function* streamPlaygroundChat(message: string, sessionId: string, simulateUserId?: string | null): AsyncGenerator<StreamChunk> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  const token = authStore.getToken();
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-  const resp = await fetch('/api/agent/chat/stream', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ message, session_id: sessionId, simulate_user_id: simulateUserId }),
-  });
-  if (!resp.ok || !resp.body) throw new Error(`stream error: ${resp.status}`);
-  const reader = resp.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = '';
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    const lines = buf.split('\n');
-    buf = lines.pop() ?? '';
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed.startsWith('data: ')) continue;
-      const payload = trimmed.slice(6);
-      if (payload === '[DONE]') return;
-      try {
-        const obj = JSON.parse(payload);
-        if (obj.error) throw new Error(obj.error);
-        if (obj.content) yield { type: 'content', data: obj.content };
-        if (obj.skills) yield { type: 'skills', data: obj.skills };
-        if (obj.pending_action) yield { type: 'pending_action', data: obj.pending_action };
-        if (obj.pending_plan) yield { type: 'pending_plan', data: obj.pending_plan };
-      } catch (e) {
-        if (e instanceof SyntaxError) continue;
-        throw e;
-      }
-    }
-  }
-}
-
 /* ── Trace 查询 ── */
-async function fetchSessionTimeline(sid: string): Promise<TraceTimeline | null> {
+async function fetchSessionTimeline(convId: string): Promise<TraceTimeline | null> {
   try {
-    const listRes = await listTraces({ session_id: sid, limit: 1 });
+    const listRes = await listTraces({ conversation_id: convId, limit: 1 });
     if (!listRes.items || listRes.items.length === 0) return null;
     const requestId = listRes.items[0].request_id;
-    const timelineRes = await getTimeline(requestId);
-    return timelineRes;
+    return await getTimeline(requestId);
   } catch {
     return null;
   }
 }
 
 async function fetchSessionLlmContextTimeline(
-  sid: string,
+  convId: string,
   latestTimeline: TraceTimeline | null,
 ): Promise<TraceTimeline | null> {
   if (extractLatestLlmContextSnapshot(latestTimeline)) return latestTimeline;
   try {
-    const listRes = await listTraces({ session_id: sid, limit: 12 });
+    const listRes = await listTraces({ conversation_id: convId, limit: 12 });
     for (const item of listRes.items ?? []) {
       if (!item.request_id) continue;
       const candidate = item.request_id === latestTimeline?.request_id
@@ -322,12 +300,9 @@ export default function Playground() {
     [sessionId]: emptySessionState(),
   }));
   const [input, setInput] = useState('');
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [nodeDetail] = useState<TraceNodeDetail | null>(null);
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
-  const [users, setUsers] = useState<AdminUserListItem[]>([]);
-  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [devUsers, setDevUsers] = useState<DevUser[]>([]);
+  const [selectedDevUser, setSelectedDevUser] = useState<DevUser | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [llmContextOpen, setLlmContextOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -344,6 +319,8 @@ export default function Playground() {
   const timelineNodeCount = timeline?.rounds.reduce((sum, round) => sum + round.nodes.length, 0) ?? 0;
   const currentRequestId = timeline?.request_id;
   const llmContextRequestId = llmContextTimeline?.request_id;
+  // dev user token：模拟用户时注入到 streamChat 的 Authorization 头
+  const activeUserToken = selectedDevUser?.token ?? null;
 
   const updateSession = useCallback((sid: string, updater: (state: ChatSessionState) => ChatSessionState) => {
     setSessions((prev) => {
@@ -372,28 +349,19 @@ export default function Playground() {
   /* ── 加载会话列表 ── */
   const loadConversations = useCallback(async () => {
     try {
-      const list = await listConversations(50, selectedUserId);
+      const list = await listConversations(50);
       setConversations(list);
     } catch {
       // 静默失败
     }
-  }, [selectedUserId]);
+  }, []);
 
-  /* ── 加载用户列表 ── */
-  const loadUsers = useCallback(async () => {
+  /* ── 加载 dev 用户列表（v2 agent /api/v2/dev-users）── */
+  const loadDevUsers = useCallback(async () => {
     try {
-      const [currentRes, res] = await Promise.all([
-        usersApi.getCurrent(),
-        listUsers({ size: 100 }),
-      ]);
-      setUsers(res.items);
-      setCurrentUser(currentRes.data);
-      const defaultUserId = chooseDefaultUserId(currentRes.data, res.items);
-      setSelectedUserId((prev) => prev ?? defaultUserId);
-      if (defaultUserId) {
-        const list = await listConversations(50, defaultUserId);
-        setConversations(list);
-      }
+      const users = await listDevUsers();
+      setDevUsers(users);
+      // 默认不选中任何 dev user，使用 admin 自身 token
     } catch {
       // 静默失败
     }
@@ -401,9 +369,10 @@ export default function Playground() {
 
   useEffect(() => {
     void Promise.resolve().then(() => {
-      loadUsers();
+      loadDevUsers();
+      loadConversations();
     });
-  }, [loadUsers]);
+  }, [loadDevUsers, loadConversations]);
 
   useEffect(() => {
     setLlmContextOpen(false);
@@ -414,17 +383,13 @@ export default function Playground() {
     setSessionId(sid);
     updateSession(sid, () => ({ ...emptySessionState(), loading: true }));
     try {
-      const msgs = await getConversationMessages(sid, selectedUserId);
-      const loaded: Message[] = msgs.map((m: ConversationMessage) => ({
-        id: `history-${m.id}`,
+      const msgs = await getConversationMessages(sid);
+      // v2 agent 只返回 role/content/created_at；skills/pendingAction 仅来自 SSE 流，历史消息无此字段
+      const loaded: Message[] = msgs.map((m: ConversationMessage, idx: number) => ({
+        id: `history-${idx}-${m.role}`,
         role: m.role as 'user' | 'assistant',
         content: m.content,
-        skills: m.skills,
-        pendingAction: m.pending_action,
-        pendingPlan: m.pending_plan,
       }));
-      // pendingResolution 只存在前端，切换会话会丢。根据消息顺序推断：
-      // 非 last 的 pending 消息 → 当时的确认/取消已让对话往下走，标记为已确认。
       const resolved = applyHistoricalPendingResolution(loaded);
       updateSession(sid, (state) => ({
         ...state,
@@ -437,7 +402,7 @@ export default function Playground() {
       updateSession(sid, (state) => ({ ...state, loading: false }));
       message.error('加载会话失败');
     }
-  }, [selectedUserId, updateSession]);
+  }, [updateSession]);
 
   /* ── 新建会话 ── */
   const createNewSession = useCallback(() => {
@@ -456,14 +421,12 @@ export default function Playground() {
       pendingPlan: m.pendingPlan,
     }));
     try {
-      const persistedMessages = await getConversationMessages(sid, selectedUserId);
+      const persistedMessages = await getConversationMessages(sid);
       if (persistedMessages.length > 0) {
+        // v2 agent 历史消息只有 role/content，skills/pendingAction 仅存在于当前会话 SSE 流中
         sourceMessages = persistedMessages.map((m) => ({
           role: m.role,
           content: m.content,
-          skills: m.skills,
-          pendingAction: m.pending_action,
-          pendingPlan: m.pending_plan,
         }));
       }
     } catch {
@@ -472,24 +435,20 @@ export default function Playground() {
     const timeline = state.timeline ?? await fetchSessionTimeline(sid);
     const debugExport = buildSessionDebugExport({
       sessionId: sid,
-      simulateUserId: selectedUserId,
+      simulateUserId: selectedDevUser?.user_id ?? null,
       copiedAt: new Date().toISOString(),
       messages: sourceMessages,
       timeline,
     });
     return JSON.stringify(debugExport, null, 2);
-  }, [selectedUserId, sessions]);
+  }, [selectedDevUser, sessions]);
 
   const copySessionJson = useCallback(async (sid: string) => {
     const ok = await copyAsyncText({
-      placeholder: `正在准备调试 JSON...\nsession_id: ${sid}`,
+      placeholder: `正在准备调试 JSON...\nconversation_id: ${sid}`,
       loadText: async () => {
-        try {
-          const debugExport = await getSessionDebugExport(sid, selectedUserId);
-          return JSON.stringify(debugExport, null, 2);
-        } catch {
-          return buildFallbackSessionDebugJson(sid);
-        }
+        // v2 agent 无独立 debug export 端点，始终走本地 fallback 构建
+        return buildFallbackSessionDebugJson(sid);
       },
     });
     if (ok) {
@@ -497,7 +456,7 @@ export default function Playground() {
     } else {
       message.error('复制失败');
     }
-  }, [buildFallbackSessionDebugJson, selectedUserId]);
+  }, [buildFallbackSessionDebugJson]);
 
   const copySessionId = useCallback(async (sid: string) => {
     try {
@@ -518,15 +477,15 @@ export default function Playground() {
     const state = sessions[sid];
     const requestIdFromTimeline = state?.timeline?.request_id;
     if (requestIdFromTimeline) {
-      window.open(buildTraceMonitorUrl({ sessionId: sid, requestId: requestIdFromTimeline }), '_blank');
+      window.open(buildTraceMonitorUrl({ conversationId: sid, requestId: requestIdFromTimeline }), '_blank');
       return;
     }
     try {
-      const listRes = await listTraces({ session_id: sid, limit: 1 });
+      const listRes = await listTraces({ conversation_id: sid, limit: 1 });
       const requestId = selectLatestTraceRequestId(listRes.items);
-      window.open(buildTraceMonitorUrl({ sessionId: sid, requestId }), '_blank');
+      window.open(buildTraceMonitorUrl({ conversationId: sid, requestId }), '_blank');
     } catch {
-      window.open(buildTraceMonitorUrl({ sessionId: sid }), '_blank');
+      window.open(buildTraceMonitorUrl({ conversationId: sid }), '_blank');
     }
   }, [sessions]);
 
@@ -583,7 +542,18 @@ export default function Playground() {
     scrollToBottom();
 
     try {
-      for await (const chunk of streamPlaygroundChat(userMsg, targetSessionId, selectedUserId)) {
+      for await (const chunk of streamChat(userMsg, targetSessionId, activeUserToken)) {
+        const executionEvent = executionEventFromChunk(chunk);
+        if (executionEvent) {
+          updateSession(targetSessionId, (state) => ({
+            ...state,
+            messages: state.messages.map((item) => (
+              item.id === assistantMessage.id
+                ? { ...item, events: [...(item.events ?? []), executionEvent] }
+                : item
+            )),
+          }));
+        }
         if (chunk.type === 'content') {
           updateSession(targetSessionId, (state) => {
             const next = state.messages.map((item) => (
@@ -594,6 +564,13 @@ export default function Playground() {
             return { ...state, messages: next };
           });
           if (targetSessionId === sessionId) scrollToBottom();
+        } else if (chunk.type === 'final_content') {
+          updateSession(targetSessionId, (state) => ({
+            ...state,
+            messages: state.messages.map((item) => (
+              item.id === assistantMessage.id ? { ...item, content: chunk.data } : item
+            )),
+          }));
         } else if (chunk.type === 'skills') {
           updateSession(targetSessionId, (state) => {
             const next = state.messages.map((item) => (
@@ -639,18 +616,27 @@ export default function Playground() {
         traceLoading: false,
       }));
     }
-  }, [input, scrollToBottom, sessionId, sessions, updateSession, loadConversations, selectedUserId, refreshSessionTimeline]);
+  }, [activeUserToken, input, scrollToBottom, sessionId, sessions, updateSession, loadConversations, refreshSessionTimeline]);
 
-  const handlePendingAction = useCallback((messageId: string, action: string) => {
+  const handlePendingAction = useCallback(async (messageId: string, action: string) => {
     const targetSessionId = sessionId;
     const resolution: PendingResolution = action === '取消' ? 'canceled' : 'confirmed';
+    const pendingAction = sessions[targetSessionId]?.messages.find((item) => item.id === messageId)?.pendingAction;
+    if (!pendingAction?.action_id) {
+      message.error('当前审批上下文已失效，请重新发起请求');
+      return;
+    }
     markPendingResolution(targetSessionId, messageId, resolution);
-    void handleSend(action).then((ok) => {
-      if (!ok) markPendingResolution(targetSessionId, messageId, null);
-    });
-  }, [handleSend, markPendingResolution, sessionId]);
+    try {
+      await approveTurn(pendingAction.action_id, resolution === 'confirmed', resolution === 'confirmed' ? '用户确认' : '用户取消');
+    } catch {
+      markPendingResolution(targetSessionId, messageId, null);
+      message.error('审批提交失败，请重试');
+    }
+  }, [markPendingResolution, sessionId, sessions]);
 
-  const isThinking = loading && messages.length > 0 && messages[messages.length - 1].content === '';
+  const lastMessage = messages[messages.length - 1];
+  const isThinking = loading && Boolean(lastMessage) && lastMessage.content === '' && !lastMessage.events?.length;
 
   return (
     <div style={{ height: '100%', display: 'flex', background: palette.bg }}>
@@ -701,13 +687,14 @@ export default function Playground() {
         {/* 会话列表 */}
         <div className="surface-scroll" style={{ flex: 1, overflow: 'auto', padding: sidebarCollapsed ? '8px 6px' : '8px 8px' }}>
           {conversationRows.map((conv) => {
-            const isActive = conv.session_id === sessionId;
-            const sessionState = sessions[conv.session_id];
+            const conversationId = conv.conversation_id;
+            const isActive = conversationId === sessionId;
+            const sessionState = sessions[conversationId];
             const isRunning = Boolean(sessionState?.loading);
             return (
               <div
-                key={conv.session_id}
-                onClick={() => switchConversation(conv.session_id)}
+                key={conversationId}
+                onClick={() => switchConversation(conversationId)}
                 style={{
                   padding: sidebarCollapsed ? '8px 0' : '8px 10px',
                   borderRadius: 8,
@@ -728,7 +715,7 @@ export default function Playground() {
                 }}
               >
                 {sidebarCollapsed ? (
-                  <Tooltip title={conv.session_id} placement="right">
+                  <Tooltip title={conversationId} placement="right">
                     <div style={{
                       width: 28, height: 28, borderRadius: 8,
                       background: isActive ? ACCENT : 'rgba(139,148,158,0.12)',
@@ -736,7 +723,7 @@ export default function Playground() {
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontSize: 12, fontWeight: 600,
                     }}>
-                      {conv.session_id.slice(-2)}
+                      {conversationId.slice(-2)}
                     </div>
                   </Tooltip>
                 ) : (
@@ -753,7 +740,7 @@ export default function Playground() {
                         flex: 1,
                         minWidth: 0,
                       }}>
-                        {conv.session_id}
+                        {conversationId}
                       </div>
                     </div>
                     <div style={{
@@ -764,7 +751,7 @@ export default function Playground() {
                       marginTop: 4,
                     }}>
                       <div style={{ color: TEXT_DIM, fontSize: 11, flexShrink: 0 }}>
-                        {new Date(conv.created_at).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        {new Date(conv.last_at).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </div>
                       <Space size={0} style={{ opacity: isActive ? 1 : 0.6, flexShrink: 0 }}>
                         <Tooltip title="复制 Session ID">
@@ -772,7 +759,7 @@ export default function Playground() {
                             type="text"
                             size="small"
                             icon={<CopyOutlined />}
-                            onClick={(e) => { e.stopPropagation(); void copySessionId(conv.session_id); }}
+                            onClick={(e) => { e.stopPropagation(); void copySessionId(conversationId); }}
                             style={{ color: isActive ? ACCENT : TEXT_DIM, padding: '0 4px', minWidth: 24, height: 24 }}
                           />
                         </Tooltip>
@@ -781,7 +768,7 @@ export default function Playground() {
                             type="text"
                             size="small"
                             icon={<LinkOutlined />}
-                            onClick={(e) => { e.stopPropagation(); openTraceMonitor(conv.session_id); }}
+                            onClick={(e) => { e.stopPropagation(); openTraceMonitor(conversationId); }}
                             style={{ color: TEXT_DIM, padding: '0 4px', minWidth: 24, height: 24 }}
                           />
                         </Tooltip>
@@ -790,7 +777,7 @@ export default function Playground() {
                             type="text"
                             size="small"
                             icon={<ProfileOutlined />}
-                            onClick={(e) => { e.stopPropagation(); copySessionJson(conv.session_id); }}
+                            onClick={(e) => { e.stopPropagation(); copySessionJson(conversationId); }}
                             style={{ color: TEXT_DIM, padding: '0 4px', minWidth: 24, height: 24 }}
                           />
                         </Tooltip>
@@ -825,25 +812,27 @@ export default function Playground() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
             <Select
               placeholder="选择用户"
-              value={selectedUserId}
+              value={selectedDevUser?.user_id ?? ''}
               onChange={(value) => {
-                setSelectedUserId(value);
+                const user = devUsers.find((u) => u.user_id === value) ?? null;
+                setSelectedDevUser(user);
+                // 切换用户后开启新会话，避免历史会话身份混淆
                 const sid = generateSessionId();
                 setSessionId(sid);
                 setSessions({ [sid]: emptySessionState() });
                 setConversations([]);
-                void listConversations(50, value).then(setConversations).catch(() => {
+                // v2 agent 通过 token 识别用户身份，listConversations 不需要 user_id 参数
+                void listConversations(50).then(setConversations).catch(() => {
                   message.error('加载会话列表失败');
                 });
               }}
-              style={{ width: 180, flexShrink: 0 }}
+              style={{ width: 220, flexShrink: 0 }}
               styles={{ popup: { root: { background: CARD } } }}
               options={[
-                ...users.map((u) => ({
-                  value: u.id,
-                  label: u.id === currentUser?.id
-                    ? `${u.nickname || u.phone}（当前登录）`
-                    : u.nickname || u.phone,
+                { value: '', label: '默认用户（admin 自身）' },
+                ...devUsers.map((u) => ({
+                  value: u.user_id,
+                  label: `${u.nickname || u.phone} (farm:${u.farm_id}, ${u.role})`,
                 })),
               ]}
             />
@@ -967,11 +956,13 @@ export default function Playground() {
               key={m.id}
               role={m.role}
               content={m.content}
+              events={m.events}
               skills={m.skills}
+              loading={loading && m.id === messages[messages.length - 1]?.id}
               pendingAction={m.pendingAction}
               pendingPlan={m.pendingPlan}
               pendingResolution={m.pendingResolution}
-              onAction={loading ? undefined : (action) => handlePendingAction(m.id, action)}
+              onAction={(action) => { void handlePendingAction(m.id, action); }}
             />
           ))}
           {isThinking && (
@@ -1068,7 +1059,7 @@ export default function Playground() {
               size="small"
               type="link"
               onClick={() => {
-                window.open(buildTraceMonitorUrl({ sessionId, requestId: timeline?.request_id }), '_blank');
+                window.open(buildTraceMonitorUrl({ conversationId: sessionId, requestId: timeline?.request_id }), '_blank');
               }}
               style={{ color: ACCENT, padding: 0, flexShrink: 0 }}
             >
@@ -1104,97 +1095,6 @@ export default function Playground() {
           </Button>
         </Space.Compact>
       </div>
-
-      {/* ── 右侧节点详情浮窗 ── */}
-      <Drawer
-        title="节点详情"
-        placement="right"
-        width={480}
-        onClose={() => setDrawerOpen(false)}
-        open={drawerOpen}
-        styles={{
-          body: { background: '#0d1117', padding: 0 },
-          header: { background: '#161b22', borderBottom: '1px solid #30363d', color: '#e6edf3' },
-          mask: { background: 'rgba(0,0,0,0.6)' },
-        }}
-      >
-        {nodeDetail ? (
-          <div style={{ padding: 16, color: TEXT }}>
-            {/* 头部信息 */}
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16 }}>
-              <Tag color={nodeDetail.status === 'success' ? 'success' : 'error'}>
-                {nodeDetail.status}
-              </Tag>
-              <Tag color="processing">{getNodeLabel(nodeDetail.node_type)}</Tag>
-              <span style={{ color: TEXT_DIM, fontSize: 13 }}>
-                {nodeDetail.duration_ms?.toLocaleString() ?? '-'} ms
-              </span>
-            </div>
-
-            {/* 节点名称 */}
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ color: TEXT_DIM, fontSize: 12, marginBottom: 4 }}>节点名称</div>
-              <div style={{ fontSize: 16, fontWeight: 600, color: ACCENT }}>{nodeDetail.node_name}</div>
-            </div>
-
-            {/* 开始时间 */}
-            {nodeDetail.start_time && (
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ color: TEXT_DIM, fontSize: 12, marginBottom: 4 }}>开始时间</div>
-                <div style={{ fontSize: 13 }}>{new Date(nodeDetail.start_time).toLocaleString('zh-CN')}</div>
-              </div>
-            )}
-
-            {/* 错误信息 */}
-            {nodeDetail.error_message && (
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ color: '#ff4d4f', fontSize: 12, marginBottom: 4 }}>错误信息</div>
-                <pre style={{
-                  backgroundColor: '#2a1215', padding: 12, borderRadius: 6,
-                  border: '1px solid #58181c', color: '#ff4d4f', fontSize: 12,
-                  margin: 0, whiteSpace: 'pre-wrap',
-                }}>
-                  {nodeDetail.error_message}
-                </pre>
-              </div>
-            )}
-
-            {/* 输入数据 */}
-            {hasTracePayload(nodeDetail.input_data) && (
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ color: TEXT_DIM, fontSize: 12, marginBottom: 4 }}>输入数据</div>
-                <pre style={{
-                  backgroundColor: '#161b22', padding: 12, borderRadius: 6,
-                  border: '1px solid #30363d', fontSize: 12, margin: 0,
-                  maxHeight: 300, overflow: 'auto', whiteSpace: 'pre-wrap',
-                  color: TEXT,
-                }}>
-                  {formatTracePayload(nodeDetail.input_data)}
-                </pre>
-              </div>
-            )}
-
-            {/* 输出数据 */}
-            {hasTracePayload(nodeDetail.output_data) && (
-              <div>
-                <div style={{ color: TEXT_DIM, fontSize: 12, marginBottom: 4 }}>输出数据</div>
-                {nodeDetail.node_type === 'skill_call' ? (
-                  <SkillOutputFormatter outputData={nodeDetail.output_data} />
-                ) : (
-                  <pre style={{
-                    backgroundColor: '#161b22', padding: 12, borderRadius: 6,
-                    border: '1px solid #30363d', fontSize: 12, margin: 0,
-                    maxHeight: 500, overflow: 'auto', whiteSpace: 'pre-wrap',
-                    color: TEXT,
-                  }}>
-                    {formatTracePayload(nodeDetail.output_data)}
-                  </pre>
-                )}
-              </div>
-            )}
-          </div>
-        ) : null}
-      </Drawer>
     </div>
   );
 }

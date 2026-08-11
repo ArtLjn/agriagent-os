@@ -34,36 +34,36 @@ export interface PaginatedList<T> {
   total: number;
 }
 
-export async function listCycles(params?: { page?: number; size?: number }): Promise<PaginatedList<CropCycleListItem>> {
-  const res = await apiClient.get<PaginatedList<CropCycleListItem>>('/cycles', { params });
+export async function listCycles(params?: { page?: number; page_size?: number }): Promise<PaginatedList<CropCycleListItem>> {
+  const res = await apiClient.get<PaginatedList<CropCycleListItem>>('/crop-cycles', { params });
   return res.data;
 }
 
 export async function getCycle(id: number): Promise<CropCycle> {
-  const res = await apiClient.get<CropCycle>(`/cycles/${id}`);
+  const res = await apiClient.get<CropCycle>(`/crop-cycles/${id}`);
   return res.data;
 }
 
 export async function createCycle(data: { name: string; crop_template_id: number; start_date: string; field_name?: string }): Promise<CropCycle> {
-  const res = await apiClient.post<CropCycle>('/cycles', data);
+  const res = await apiClient.post<CropCycle>('/crop-cycles', data);
   return res.data;
 }
 
 export async function parseCycle(description: string): Promise<CycleParseResponse> {
-  const res = await apiClient.post<CycleParseResponse>('/cycles/parse', { description });
+  const res = await apiClient.post<CycleParseResponse>('/crop-cycles/parse', { description });
   return res.data;
 }
 
 export async function updateCycle(id: number, data: Omit<CropCycle, "id" | "stages">): Promise<CropCycle> {
-  const res = await apiClient.put<CropCycle>(`/cycles/${id}`, data);
+  const res = await apiClient.put<CropCycle>(`/crop-cycles/${id}`, data);
   return res.data;
 }
 
 export async function deleteCycle(id: number): Promise<void> {
-  await apiClient.delete(`/cycles/${id}`);
+  await apiClient.delete(`/crop-cycles/${id}`);
 }
 
 export async function advanceStage(id: number): Promise<CropCycle> {
-  const res = await apiClient.post<CropCycle>(`/cycles/${id}/advance-stage`);
+  const res = await apiClient.post<CropCycle>(`/crop-cycles/${id}/advance-stage`);
   return res.data;
 }

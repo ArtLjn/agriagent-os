@@ -20,7 +20,7 @@ describe('buildConversationRows', () => {
       [],
     );
 
-    expect(rows.map((row) => row.session_id)).toEqual(['active', 'loading']);
+    expect(rows.map((row) => row.conversation_id)).toEqual(['active', 'loading']);
   });
 
   it('后端已存在的会话不重复追加本地行', () => {
@@ -30,17 +30,17 @@ describe('buildConversationRows', () => {
       },
       [
         {
-          id: 1,
-          session_id: 'persisted',
-          status: 'active',
-          created_at: '2026-06-05T00:00:00Z',
-          last_active_at: '2026-06-05T00:00:00Z',
+          conversation_id: 'persisted',
+          last_message: '你好',
+          last_role: 'user',
+          last_at: '2026-06-05T00:00:00Z',
+          message_count: 1,
         },
       ],
     );
 
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ session_id: 'persisted', local: false });
+    expect(rows[0]).toMatchObject({ conversation_id: 'persisted', local: false });
   });
 });
 

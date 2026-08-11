@@ -85,20 +85,20 @@ export interface CurrentUser {
 
 export interface ListUsersParams {
   page?: number;
-  size?: number;
+  page_size?: number;
   status?: string;
   phone_keyword?: string;
 }
 
 export interface ListQuotaOverviewParams {
   page?: number;
-  size?: number;
+  page_size?: number;
   status?: string;
 }
 
 export const usersApi = {
   getCurrent: () =>
-    apiClient.get<CurrentUser>("/auth/me"),
+    apiClient.get<CurrentUser>("/users/me"),
 
   list: (params?: ListUsersParams) =>
     apiClient.get<UserListResponse>("/admin/users", { params }),

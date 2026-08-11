@@ -1,38 +1,8 @@
 import apiClient from './client';
 import type { TracePayload } from '../utils/tracePayload';
 
-// ─── Trace API ───────────────────────────────────────────────────────────────
-
-export interface TraceRecord {
-  id: number;
-  request_id: string;
-  session_id: string | null;
-  farm_id: number;
-  round_index: number;
-  node_type: string;
-  node_name: string;
-  duration_ms: number | null;
-  status: string;
-  token_usage: string | null;
-  error_message: string | null;
-  created_at: string;
-}
-
-export interface TraceRequestSummary {
-  request_id: string;
-  session_id: string | null;
-  farm_id: number;
-  node_count: number;
-  total_duration_ms: number;
-  created_at: string | null;
-  status?: string;
-  status_reason?: string | null;
-  error_count?: number;
-  root_error?: TraceRootError | null;
-  metrics?: TraceMetrics;
-  started_at?: string | null;
-  ended_at?: string | null;
-}
+// ─── Trace API（对齐 v2 agent /api/v2/traces*）──────────────────────────────
+// vite proxy: /api/admin/traces* → http://localhost:8000/api/v2/traces*
 
 export interface TraceRootError {
   node_id?: number | null;
@@ -60,8 +30,35 @@ export interface TraceMetrics {
   [key: string]: unknown;
 }
 
+export interface TraceNodeBreakdownItem {
+  node_type: string;
+  count: number;
+  duration_ms_total: number;
+  error_count: number;
+  avg_duration_ms?: number;
+}
+
+/** v2 agent trace 列表项（请求级 summary）*/
+export interface TraceRequestSummary {
+  request_id: string;
+  conversation_id: string;
+  turn_id?: string;
+  node_count: number;
+  total_duration_ms: number;
+  status?: string;
+  status_reason?: string | null;
+  error_count?: number;
+  root_error?: TraceRootError | null;
+  metrics?: TraceMetrics;
+  started_at?: string | null;
+  ended_at?: string | null;
+  node_breakdown?: TraceNodeBreakdownItem[];
+}
+
+/** v2 agent trace node（get_trace_nodes 返回）*/
 export interface TraceNode {
   id?: number | null;
+  step_index?: number;
   node_type: string;
   node_name: string;
   duration_ms: number | null;
@@ -81,12 +78,14 @@ export interface TraceRound {
   nodes: TraceNode[];
 }
 
+/** 前端统一 timeline 结构：v2 返回的是 flat nodes，这里包成单 round 以兼容 GanttTimeline */
 export interface TraceTimeline {
   request_id: string;
   summary?: TraceRequestSummary | null;
   rounds: TraceRound[];
 }
 
+/** 节点详情（前端从 timeline node 派生，用于 Drawer 展示）*/
 export interface TraceNodeDetail {
   id: number;
   request_id: string;
@@ -96,7 +95,7 @@ export interface TraceNodeDetail {
   input_data: TracePayload;
   output_data: TracePayload;
   duration_ms: number | null;
-  token_usage: string | null;
+  token_usage: Record<string, unknown> | null;
   status: string;
   error_message: string | null;
   error_code?: string | null;
@@ -105,84 +104,93 @@ export interface TraceNodeDetail {
   end_time: string | null;
 }
 
-export interface TraceReflectionIssue {
-  code?: string;
-  severity?: string;
-  message?: string;
-  evidence?: unknown;
-}
-
-export interface TraceReflectionCheck {
-  trigger: string;
-  decision: string;
-  reason: string;
-  checks: string[];
-  issues: TraceReflectionIssue[];
-  input: Record<string, unknown>;
-}
-
-export interface TraceReflectionDiagnostic {
-  blocked: boolean;
-  decisions: string[];
-  issue_codes: string[];
-}
-
-export interface TraceDiagnostics {
-  request_id: string;
-  reflection_checks: TraceReflectionCheck[];
-  reflection_diagnostic: TraceReflectionDiagnostic;
-}
-
 export interface ListTracesParams {
-  request_id?: string;
-  session_id?: string;
-  farm_id?: number;
+  conversation_id?: string;
   limit?: number;
-  offset?: number;
+  cursor?: string | null;
 }
 
 export interface ListTracesResponse {
-  items: TraceRecord[];
-  total: number;
-}
-
-export interface ListTraceRequestsResponse {
   items: TraceRequestSummary[];
-  total: number;
+  next_cursor: string | null;
+  has_more: boolean;
 }
 
-export interface DeleteTracesResponse {
-  deleted: number;
+/** v2 get_trace_nodes 返回结构 */
+interface TraceNodesResponse {
+  request_id: string;
+  conversation_id: string;
+  turn_id?: string;
+  nodes: TraceNode[];
+  count: number;
+  has_more: boolean;
 }
 
+/**
+ * 列出 trace 请求级 summary（v2 /api/v2/traces）。
+ * 兼容旧调用：返回 items + next_cursor + has_more。
+ */
 export async function listTraces(params?: ListTracesParams): Promise<ListTracesResponse> {
   const res = await apiClient.get<ListTracesResponse>('/admin/traces', { params });
   return res.data;
 }
 
-export async function listTraceRequests(params?: ListTracesParams): Promise<ListTraceRequestsResponse> {
-  const res = await apiClient.get<ListTraceRequestsResponse>('/admin/traces/requests', { params });
-  return res.data;
+/**
+ * 列出 trace 请求级 summary（与 listTraces 同一端点，保留旧 API 名以减少调用方改动）。
+ */
+export async function listTraceRequests(params?: ListTracesParams): Promise<ListTracesResponse> {
+  return listTraces(params);
 }
 
+/**
+ * 获取 timeline：并发拉取 nodes + summary，合并为前端统一的 TraceTimeline。
+ * v2 后端没有 /timeline 端点，需要前端合并。
+ */
 export async function getTimeline(requestId: string): Promise<TraceTimeline> {
-  const res = await apiClient.get<TraceTimeline>(`/admin/traces/${requestId}/timeline`);
-  return res.data;
+  const [nodesResp, summaryResp] = await Promise.all([
+    apiClient.get<TraceNodesResponse>(`/admin/traces/${encodeURIComponent(requestId)}`),
+    apiClient.get<TraceRequestSummary | null>(
+      `/admin/traces/${encodeURIComponent(requestId)}/summary`,
+    ).catch(() => null),
+  ]);
+
+  const nodes = nodesResp.data.nodes ?? [];
+  // v2 返回 flat nodes 列表，按 step_index 分组成单 round 以兼容 GanttTimeline
+  const rounds: TraceRound[] = [{
+    round_index: 0,
+    nodes,
+  }];
+
+  return {
+    request_id: requestId,
+    summary: summaryResp?.data ?? null,
+    rounds,
+  };
 }
 
-export async function getNodeDetail(requestId: string, nodeId: string): Promise<TraceNodeDetail> {
-  const res = await apiClient.get<TraceNodeDetail>(`/admin/traces/${requestId}/nodes/${nodeId}`);
-  return res.data;
-}
-
-export async function deleteTracesBefore(before: string): Promise<DeleteTracesResponse> {
-  const res = await apiClient.delete<DeleteTracesResponse>('/admin/traces', { params: { before } });
-  return res.data;
-}
-
-export async function getTraceDiagnostics(requestId: string): Promise<TraceDiagnostics> {
-  const res = await apiClient.get<TraceDiagnostics>(`/admin/traces/${requestId}/diagnostics`);
-  return res.data;
+/** 从 timeline node 派生 TraceNodeDetail（前端不再单独请求 node 详情端点）*/
+export function deriveNodeDetail(
+  requestId: string,
+  roundIndex: number,
+  node: TraceNode,
+): TraceNodeDetail {
+  return {
+    id: node.id ?? 0,
+    request_id: requestId,
+    round_index: roundIndex,
+    node_type: node.node_type,
+    node_name: node.node_name,
+    input_data: node.input_data,
+    output_data: node.output_data,
+    duration_ms: node.duration_ms,
+    token_usage: node.token_usage,
+    status: node.status,
+    error_message: node.error_message,
+    error_code: node.error_code,
+    recover: node.recover,
+    start_time: node.start_time,
+    end_time: node.end_time ?? null,
+  };
 }
 
 // ─── Token Stats API ─────────────────────────────────────────────────────────
@@ -304,6 +312,43 @@ export interface ListSkillsResponse {
 export async function listSkills(): Promise<ListSkillsResponse> {
   const res = await apiClient.get<ListSkillsResponse>('/admin/skills');
   return res.data;
+}
+
+/** v2 尚未提供 trace 清理接口，保留显式入口避免旧页面导入时整站加载失败。 */
+export async function deleteTracesBefore(_before: string): Promise<{ deleted: number }> {
+  void _before;
+  throw new Error('v2 trace cleanup endpoint is not available');
+}
+
+/** v2 尚未提供 reflection diagnostics 独立接口。 */
+export async function getTraceDiagnostics(_requestId: string): Promise<TraceDiagnostics> {
+  void _requestId;
+  throw new Error('v2 trace diagnostics endpoint is not available');
+}
+
+export interface TraceReflectionIssue {
+  code?: string;
+  severity?: string;
+  message?: string;
+}
+
+export interface TraceReflectionCheck {
+  trigger: string;
+  decision: string;
+  reason: string;
+  checks: string[];
+  issues: TraceReflectionIssue[];
+  input?: Record<string, unknown>;
+}
+
+export interface TraceDiagnostics {
+  request_id: string;
+  reflection_checks: TraceReflectionCheck[];
+  reflection_diagnostic: {
+    blocked: boolean;
+    decisions: string[];
+    issue_codes: string[];
+  };
 }
 
 export interface UpdateSkillEnabledRequest {
@@ -527,7 +572,7 @@ export interface AdminUserListResponse {
   total: number;
 }
 
-export async function listUsers(params?: { page?: number; size?: number; status?: string }): Promise<AdminUserListResponse> {
+export async function listUsers(params?: { page?: number; page_size?: number; status?: string }): Promise<AdminUserListResponse> {
   const res = await apiClient.get<AdminUserListResponse>('/admin/users', { params });
   return res.data;
 }

@@ -146,7 +146,7 @@ export interface UserSettings {
   default_city?: string | null;
   default_lat?: number | null;
   default_lon?: number | null;
-  assistant_role?: 'professional' | 'warm' | 'creative';
+  assistant_role?: 'professional' | 'warm' | 'concise';
 }
 
 export interface FeedbackStats {
@@ -165,32 +165,38 @@ export interface VersionCheck {
 }
 
 export const operationsApi = {
-  listUnits: (cycleId?: number) =>
-    apiClient.get<PlantingUnit[]>('/planting/units', { params: { cycle_id: cycleId } }),
+  listUnits: async (cycleId?: number): Promise<PlantingUnit[]> => {
+    const res = await apiClient.get<PaginatedList<PlantingUnit>>('/planting-units', { params: { cycle_id: cycleId } });
+    return res.data.items;
+  },
   createUnit: (data: Omit<PlantingUnit, 'id' | 'farm_id' | 'created_at'>) =>
-    apiClient.post<PlantingUnit>('/planting/units', data),
+    apiClient.post<PlantingUnit>('/planting-units', data),
   updateUnit: (unitId: number, data: Partial<PlantingUnit>) =>
-    apiClient.put<PlantingUnit>(`/planting/units/${unitId}`, data),
+    apiClient.put<PlantingUnit>(`/planting-units/${unitId}`, data),
   deleteUnit: (unitId: number) =>
-    apiClient.delete<{ message: string }>(`/planting/units/${unitId}`),
+    apiClient.delete<{ deleted: number }>(`/planting-units/${unitId}`),
 
-  listWorkers: (activeOnly = false) =>
-    apiClient.get<Worker[]>('/planting/workers', { params: { active_only: activeOnly } }),
+  listWorkers: async (activeOnly = false): Promise<Worker[]> => {
+    const res = await apiClient.get<PaginatedList<Worker>>('/workers', { params: { active_only: activeOnly } });
+    return res.data.items;
+  },
   listWorkerSummaries: (activeOnly = false) =>
-    apiClient.get<PaginatedList<WorkerLaborSummary>>('/planting/workers/summary', { params: { active_only: activeOnly } }),
+    apiClient.get<PaginatedList<WorkerLaborSummary>>('/workers/summary', { params: { active_only: activeOnly } }),
   createWorker: (data: Omit<Worker, 'id' | 'farm_id' | 'created_at'>) =>
-    apiClient.post<Worker>('/planting/workers', data),
+    apiClient.post<Worker>('/workers', data),
   updateWorker: (workerId: number, data: Partial<Worker>) =>
-    apiClient.put<Worker>(`/planting/workers/${workerId}`, data),
+    apiClient.put<Worker>(`/workers/${workerId}`, data),
   deleteWorker: (workerId: number) =>
-    apiClient.delete<{ message: string }>(`/planting/workers/${workerId}`),
+    apiClient.delete<{ deleted: number }>(`/workers/${workerId}`),
 
-  listOperationTypes: (cropName?: string) =>
-    apiClient.get<OperationType[]>('/planting/operation-types', { params: { crop_name: cropName } }),
-  listWorkOrders: (params?: { cycle_id?: number; page?: number; size?: number }) =>
-    apiClient.get<PaginatedList<OperationWorkOrder>>('/planting/work-orders', { params }),
+  listOperationTypes: async (cropName?: string): Promise<OperationType[]> => {
+    const res = await apiClient.get<{ items: OperationType[] }>('/operation-types', { params: { crop_name: cropName } });
+    return res.data.items;
+  },
+  listWorkOrders: (params?: { cycle_id?: number; page?: number; page_size?: number }) =>
+    apiClient.get<PaginatedList<OperationWorkOrder>>('/work-orders', { params }),
   getWorkOrder: (workOrderId: number) =>
-    apiClient.get<OperationWorkOrder>(`/planting/work-orders/${workOrderId}`),
+    apiClient.get<OperationWorkOrder>(`/work-orders/${workOrderId}`),
   createWorkOrder: (data: {
     cycle_id?: number | null;
     operation_type: string;
@@ -200,37 +206,47 @@ export const operationsApi = {
     note?: string;
     photo_urls?: string;
     labor_entries: LaborEntryPayload[];
-  }) => apiClient.post<OperationWorkOrder>('/planting/work-orders', data),
-  listRecentOperations: (params?: { cycle_id?: number; days?: number; limit?: number }) =>
-    apiClient.get<RecentOperation[]>('/planting/recent-operations', { params }),
+  }) => apiClient.post<OperationWorkOrder>('/work-orders', data),
+  settleWorkOrderLabor: (workOrderId: number, data?: { amount?: number; worker_name?: string; cycle_id?: number; start_date?: string; end_date?: string }) =>
+    apiClient.post<OperationWorkOrder>(`/work-orders/${workOrderId}/settle`, data),
+  listRecentOperations: async (params?: { cycle_id?: number; days?: number; limit?: number }): Promise<RecentOperation[]> => {
+    const res = await apiClient.get<{ items: RecentOperation[] }>('/recent-operations', { params });
+    return res.data.items;
+  },
   getUnsettledLaborSummary: () =>
-    apiClient.get<Record<string, unknown>>('/planting/labor/unsettled-summary'),
+    apiClient.get<Record<string, unknown>>('/labor/unsettled-summary'),
   saveWage: (data: WagePayload) =>
     apiClient.post<OperationWorkOrder['labor_entries'][number] & {
       cycle_id: number;
       operation_type: string;
       worker_name: string;
       cost_record_id?: number | null;
-    }>('/planting/labor/wages', data),
+    }>('/labor/wages', data),
+  queryWages: (params: { mode: 'unpaid' | 'monthly' | 'worker'; worker_name?: string; month?: string; start_date?: string; end_date?: string }) =>
+    apiClient.get<Record<string, unknown>>('/labor/wages', { params }),
 
-  listDebts: (params?: { counterparty?: string; page?: number; size?: number }) =>
+  listDebts: (params?: { counterparty?: string; page?: number; page_size?: number }) =>
     apiClient.get<DebtListResponse>('/debts', { params }),
   createDebt: (data: Record<string, unknown>) =>
     apiClient.post<CostRecord>('/debts', data),
   settleDebt: (data: { counterparty: string; amount?: string | number | null; note?: string }) =>
     apiClient.post<CostRecord>('/debts/settle', data),
 
-  listCostCategories: () =>
-    apiClient.get<CostCategory[]>('/cost-categories'),
+  listCostCategories: async (): Promise<CostCategory[]> => {
+    const res = await apiClient.get<{ items: CostCategory[] }>('/cost-categories');
+    return res.data.items;
+  },
   createCostCategory: (data: Omit<CostCategory, 'id' | 'farm_id' | 'is_default'>) =>
     apiClient.post<CostCategory>('/cost-categories', data),
+  updateCostCategory: (categoryId: number, data: Partial<CostCategory>) =>
+    apiClient.put<CostCategory>(`/cost-categories/${categoryId}`, data),
   deleteCostCategory: (categoryId: number) =>
-    apiClient.delete<{ message: string }>(`/cost-categories/${categoryId}`),
+    apiClient.delete<{ deleted: number }>(`/cost-categories/${categoryId}`),
 
   getSettings: () =>
-    apiClient.get<UserSettings>('/settings'),
+    apiClient.get<UserSettings>('/users/me/settings'),
   updateSettings: (data: Partial<UserSettings>) =>
-    apiClient.put<UserSettings>('/settings', data),
+    apiClient.patch<UserSettings>('/users/me/settings', data),
   getFeedbackStats: () =>
     apiClient.get<FeedbackStats>('/agent/feedback/stats'),
   checkVersion: (currentVersionCode: number) =>

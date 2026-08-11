@@ -145,6 +145,39 @@ def delete_category(db: Session, category_id: int, farm_id: int) -> None:
     logger.info("删除分类 %s（农场 %s）", category_id, farm_id)
 
 
+def update_category(
+    db: Session,
+    *,
+    category_id: int,
+    farm_id: int,
+    changes: dict,
+) -> CostCategory:
+    """更新分类字段。
+
+    支持字段：name / type / icon / sort_order。
+    系统预设分类只允许修改 name / icon / sort_order，不允许修改 type。
+    """
+    category = (
+        db.query(CostCategory)
+        .filter_by(id=category_id, farm_id=farm_id)
+        .first()
+    )
+    if not category:
+        raise ValueError(f"分类 {category_id} 不存在")
+
+    editable = {"name", "type", "icon", "sort_order"}
+    for key, value in changes.items():
+        if key not in editable:
+            continue
+        if key == "type" and category.is_default:
+            raise ValueError("系统预设分类不允许修改 type")
+        setattr(category, key, value)
+
+    db.flush()
+    logger.info("更新分类 %s（农场 %s）", category_id, farm_id)
+    return category
+
+
 def find_category(
     db: Session, farm_id: int, category_name: str, record_type: str
 ) -> CostCategory | None:
@@ -168,6 +201,7 @@ __all__ = [
     "init_default_categories",
     "get_categories",
     "create_category",
+    "update_category",
     "delete_category",
     "find_category",
 ]

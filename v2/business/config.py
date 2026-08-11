@@ -54,13 +54,15 @@ class WeatherCfg:
 
 @dataclass
 class AuthCfg:
-    """认证配置（JWT、bcrypt、Agent Service Token）。"""
+    """认证配置（JWT、bcrypt、Agent Service Token、初始管理员）。"""
 
     jwt_secret: str = ""
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60 * 24 * 7  # 7 天
     bcrypt_rounds: int = 12
     agent_service_token: str = ""
+    admin_phone: str = ""
+    admin_password: str = ""
 
 
 @dataclass
@@ -133,6 +135,8 @@ def _build_settings() -> Settings:
             jwt_expire_minutes=int(auth_raw.get("jwt_expire_minutes", 60 * 24 * 7)),
             bcrypt_rounds=int(auth_raw.get("bcrypt_rounds", 12)),
             agent_service_token=auth_raw.get("agent_service_token", ""),
+            admin_phone=auth_raw.get("admin_phone", ""),
+            admin_password=auth_raw.get("admin_password", ""),
         ),
         token_quota=TokenQuotaCfg(
             monthly_limit=int(quota_raw.get("monthly_limit", 1_000_000)),

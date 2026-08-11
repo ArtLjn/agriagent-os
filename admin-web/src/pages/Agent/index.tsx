@@ -1,17 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Tabs, Input, Button, Select, Space, message, Typography } from 'antd';
-import { SendOutlined, BulbOutlined, FileTextOutlined, HistoryOutlined, ReloadOutlined } from '@ant-design/icons';
-import {
-  streamChat,
-  getDailyAdvice,
-  refreshDailyAdvice,
-  generateReport,
-  getAdviceHistory,
-  getReportHistory,
-  type AdviceHistoryItem,
-  type PendingAction,
-  type ReportHistoryItem,
-} from '../../api/agent';
+import { SendOutlined, BulbOutlined, FileTextOutlined, HistoryOutlined } from '@ant-design/icons';
+import { approveTurn, streamChat, type PendingAction } from '../../api/agent';
 import { listCycles, type CropCycleListItem } from '../../api/cycles';
 import { MarkdownContent } from '../../components/MarkdownContent';
 
@@ -20,7 +10,6 @@ const CARD = '#161b22';
 const BORDER = '#30363d';
 const TEXT = '#e6edf3';
 const TEXT_DIM = '#8b949e';
-const ACCENT = '#58a6ff';
 const USER_BG = '#1f6feb';
 const AI_BG = '#21262d';
 
@@ -116,7 +105,7 @@ function ChatTab({ cycles, selectedCycle, setSelectedCycle }: { cycles: CropCycl
     try {
       let idx = -1;
       setMessages((prev) => { idx = prev.length - 1; return prev; });
-      for await (const chunk of streamChat(userMsg, selectedCycle, sessionId)) {
+      for await (const chunk of streamChat(userMsg, sessionId)) {
         if (chunk.type === 'content') {
           setMessages((prev) => {
             const next = [...prev];
@@ -140,6 +129,19 @@ function ChatTab({ cycles, selectedCycle, setSelectedCycle }: { cycles: CropCycl
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleApproval = async (messageIndex: number, action: string) => {
+    const pendingAction = messages[messageIndex]?.pendingAction;
+    if (!pendingAction?.action_id) {
+      message.error('当前审批上下文已失效，请重新发起请求');
+      return;
+    }
+    try {
+      await approveTurn(pendingAction.action_id, action === '确认', action === '确认' ? '用户确认' : '用户取消');
+    } catch {
+      message.error('审批提交失败，请重试');
     }
   };
 
@@ -169,7 +171,7 @@ function ChatTab({ cycles, selectedCycle, setSelectedCycle }: { cycles: CropCycl
             role={m.role}
             content={m.content}
             pendingAction={m.pendingAction}
-            onAction={loading ? undefined : (action) => handleSend(action)}
+            onAction={(action) => { void handleApproval(i, action); }}
           />
         ))}
         {loading && messages[messages.length - 1]?.content === '' && (
@@ -192,215 +194,26 @@ function ChatTab({ cycles, selectedCycle, setSelectedCycle }: { cycles: CropCycl
   );
 }
 
-/* ── 每日建议 Tab ── */
-export function AdviceTab({ cycleId }: { cycleId?: number }) {
-  const [advice, setAdvice] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [fetched, setFetched] = useState(false);
-
-  const fetchAdvice = async () => {
-    setLoading(true);
-    setFetched(true);
-    try {
-      const res = await getDailyAdvice(cycleId);
-      setAdvice(res.advice);
-    } catch {
-      message.error('获取建议失败，请确认后端服务正常运行');
-      setFetched(false);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRefreshAdvice = async () => {
-    setRefreshing(true);
-    setFetched(true);
-    try {
-      const res = await refreshDailyAdvice(cycleId);
-      setAdvice(res.advice);
-      message.success('已重新获取今日建议');
-    } catch {
-      message.error('重新获取建议失败，请确认后端服务正常运行');
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  const busy = loading || refreshing;
-  const handlePrimaryAdviceClick = fetched ? handleRefreshAdvice : fetchAdvice;
-
+/* v2 当前只提供 Agent 对话和审批流；每日建议、报告、历史接口尚未纳入 v2。 */
+function V2Unavailable({ title }: { title: string }) {
   return (
-    <div style={{ height: 'calc(100vh - 220px)', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ marginBottom: 16, display: 'flex', gap: 12, alignItems: 'center' }}>
-        <Button type="primary" icon={<BulbOutlined />} onClick={handlePrimaryAdviceClick} loading={busy} size="large">
-          {fetched ? '刷新建议' : '获取今日建议'}
-        </Button>
-        {busy && <span style={{ color: TEXT_DIM }}>AI 正在分析天气和种植数据，请稍候...</span>}
-      </div>
-
-      <div style={{
-        flex: 1, overflow: 'auto', background: CARD, borderRadius: 12,
-        border: `1px solid ${BORDER}`, padding: 24,
-      }}>
-        {!fetched && !loading ? (
-          <div style={{ textAlign: 'center', color: TEXT_DIM, padding: '80px 0' }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>☀️</div>
-            <div style={{ fontSize: 16, marginBottom: 8 }}>点击上方按钮获取今日农事建议</div>
-            <div style={{ fontSize: 13 }}>AI 将结合天气预报和种植周期给出具体建议</div>
-          </div>
-        ) : advice ? (
-          <MarkdownContent content={advice} style={{ color: TEXT, lineHeight: 1.7, fontSize: 14 }} />
-        ) : null}
-      </div>
+    <div style={{ height: 'calc(100vh - 220px)', display: 'grid', placeItems: 'center', color: TEXT_DIM }}>
+      <Typography.Text style={{ color: TEXT_DIM }}>{title}暂未接入 v2 Agent 接口</Typography.Text>
     </div>
   );
 }
 
-/* ── 报告生成 Tab ── */
-function ReportTab({ cycles, selectedCycle, setSelectedCycle }: { cycles: CropCycleListItem[]; selectedCycle?: number; setSelectedCycle: (v?: number) => void }) {
-  const [report, setReport] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const handleGenerate = async () => {
-    setLoading(true);
-    try {
-      const res = await generateReport('weekly', selectedCycle);
-      setReport(res.content);
-    } catch {
-      message.error('生成报告失败');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div style={{ height: 'calc(100vh - 220px)', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ marginBottom: 16, display: 'flex', gap: 12, alignItems: 'center' }}>
-        <Select placeholder="关联茬口（可选）" allowClear style={{ width: 220 }}
-          value={selectedCycle} onChange={setSelectedCycle}
-          options={cycles.map((c) => ({ value: c.id, label: c.name }))} />
-        <Button type="primary" icon={<FileTextOutlined />} onClick={handleGenerate} loading={loading}>
-          生成周报
-        </Button>
-        {loading && <span style={{ color: TEXT_DIM }}>AI 正在生成报告...</span>}
-      </div>
-
-      <div style={{
-        flex: 1, overflow: 'auto', background: CARD, borderRadius: 12,
-        border: `1px solid ${BORDER}`, padding: 24,
-      }}>
-        {report ? <MarkdownContent content={report} style={{ color: TEXT, lineHeight: 1.7, fontSize: 14 }} /> : (
-          <div style={{ textAlign: 'center', color: TEXT_DIM, padding: '80px 0' }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
-            <div style={{ fontSize: 16, marginBottom: 8 }}>选择茬口后点击生成周报</div>
-            <div style={{ fontSize: 13 }}>AI 将汇总种植周期数据生成分析报告</div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+export function AdviceTab(props: { cycleId?: number }) {
+  void props;
+  return <V2Unavailable title="每日建议" />;
 }
 
-/* ── 历史记录条目（可展开） ── */
-function HistoryItem({
-  item,
-  icon,
-}: {
-  item: AdviceHistoryItem | ReportHistoryItem;
-  icon: string;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const itemType =
-    'advice_type' in item
-      ? item.advice_type === 'daily'
-        ? '每日建议'
-        : item.advice_type === 'chat'
-          ? '对话'
-          : item.advice_type
-      : item.report_type === 'weekly'
-        ? '周报'
-        : '月报';
-
-  return (
-    <div style={{
-      background: CARD, borderRadius: 8, border: `1px solid ${BORDER}`,
-      marginBottom: 8, overflow: 'hidden',
-    }}>
-      <div
-        onClick={() => setExpanded(!expanded)}
-        style={{
-          padding: '12px 16px', cursor: 'pointer', display: 'flex',
-          justifyContent: 'space-between', alignItems: 'center',
-        }}
-      >
-        <span style={{ color: TEXT }}>
-          {icon} {itemType}
-          {' · '}
-          <span style={{ color: TEXT_DIM }}>{new Date(item.created_at).toLocaleString('zh-CN')}</span>
-        </span>
-        <span style={{ color: TEXT_DIM, fontSize: 12 }}>{expanded ? '收起 ▲' : '展开 ▼'}</span>
-      </div>
-      {expanded && (
-        <div style={{
-          padding: '0 16px 16px', borderTop: `1px solid ${BORDER}`,
-          maxHeight: 400, overflow: 'auto',
-        }}>
-          <MarkdownContent content={item.content} style={{ color: TEXT, lineHeight: 1.7, fontSize: 14 }} />
-        </div>
-      )}
-    </div>
-  );
+function ReportTab(props: { cycles: CropCycleListItem[]; selectedCycle?: number; setSelectedCycle: (v?: number) => void }) {
+  void props;
+  return <V2Unavailable title="报告" />;
 }
 
-/* ── 历史记录 Tab ── */
-function HistoryTab({ cycleId }: { cycleId?: number }) {
-  const [adviceHistory, setAdviceHistory] = useState<AdviceHistoryItem[]>([]);
-  const [reportHistory, setReportHistory] = useState<ReportHistoryItem[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const [a, r] = await Promise.all([
-        getAdviceHistory({ cycle_id: cycleId, limit: 10 }).catch(() => ([])),
-        getReportHistory({ cycle_id: cycleId, limit: 10 }).catch(() => ({ items: [], total: 0 })),
-      ]);
-      setAdviceHistory(a);
-      setReportHistory(r.items);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { fetchData(); }, [cycleId]);
-
-  return (
-    <div style={{
-      height: 'calc(100vh - 220px)', display: 'flex', flexDirection: 'column', color: TEXT,
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <Typography.Title level={4} style={{ color: TEXT, margin: 0 }}>
-          <HistoryOutlined style={{ marginRight: 8 }} />历史记录
-        </Typography.Title>
-        <Button icon={<ReloadOutlined />} onClick={fetchData} loading={loading} size="small">刷新</Button>
-      </div>
-
-      <div style={{ flex: 1, overflow: 'auto', paddingRight: 4 }}>
-        <Typography.Title level={5} style={{ color: ACCENT }}>
-          <BulbOutlined style={{ marginRight: 8 }} />建议记录 ({adviceHistory.length})
-        </Typography.Title>
-        {adviceHistory.length === 0 ? (
-          <div style={{ color: TEXT_DIM, padding: '20px 0', textAlign: 'center' }}>暂无建议记录</div>
-        ) : adviceHistory.map((item) => <HistoryItem key={item.id} item={item} icon="💡" />)}
-
-        <Typography.Title level={5} style={{ color: ACCENT, marginTop: 24 }}>
-          <FileTextOutlined style={{ marginRight: 8 }} />报告记录 ({reportHistory.length})
-        </Typography.Title>
-        {reportHistory.length === 0 ? (
-          <div style={{ color: TEXT_DIM, padding: '20px 0', textAlign: 'center' }}>暂无报告记录</div>
-        ) : reportHistory.map((item) => <HistoryItem key={item.id} item={item} icon="📊" />)}
-      </div>
-    </div>
-  );
+function HistoryTab(props: { cycleId?: number }) {
+  void props;
+  return <V2Unavailable title="历史记录" />;
 }

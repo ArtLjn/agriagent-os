@@ -28,7 +28,7 @@ export default function Cycles() {
     setLoading(true);
     try {
       const [cyclesRes, tplRes] = await Promise.all([
-        listCycles({ page, size: pageSize }),
+        listCycles({ page, page_size: pageSize }),
         listTemplates(),
       ]);
       setData(cyclesRes.items);

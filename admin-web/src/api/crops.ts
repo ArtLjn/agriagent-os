@@ -34,37 +34,37 @@ export interface PaginatedList<T> {
   total: number;
 }
 
-export async function listTemplates(params?: { page?: number; size?: number }): Promise<PaginatedList<CropTemplate>> {
-  const res = await apiClient.get<PaginatedList<CropTemplate>>('/crops/templates', { params });
+export async function listTemplates(params?: { page?: number; page_size?: number }): Promise<PaginatedList<CropTemplate>> {
+  const res = await apiClient.get<PaginatedList<CropTemplate>>('/crop-templates', { params });
   return res.data;
 }
 
 export async function getTemplate(id: number): Promise<CropTemplate> {
-  const res = await apiClient.get<CropTemplate>(`/crops/templates/${id}`);
+  const res = await apiClient.get<CropTemplate>(`/crop-templates/${id}`);
   return res.data;
 }
 
 export async function createTemplate(data: { name: string; variety?: string; stages: GrowthStage[] }): Promise<CropTemplate> {
-  const res = await apiClient.post<CropTemplate>('/crops/templates', data);
+  const res = await apiClient.post<CropTemplate>('/crop-templates', data);
   return res.data;
 }
 
 export async function listSystemCropTemplates(category?: string): Promise<CropTemplate[]> {
-  const res = await apiClient.get<CropTemplate[]>('/crops/templates/system', {
+  const res = await apiClient.get<{ items: CropTemplate[] }>('/crop-templates/system/list', {
     params: category ? { category } : undefined,
   });
-  return res.data;
+  return res.data.items;
 }
 
 export async function importSystemCropTemplate(id: number): Promise<CropTemplateImportResponse> {
-  const res = await apiClient.post<CropTemplateImportResponse>(`/crops/templates/system/${id}/import`);
+  const res = await apiClient.post<CropTemplateImportResponse>(`/crop-templates/system/${id}/import`);
   return res.data;
 }
 
 export async function createSystemTemplate(
   data: { name: string; variety?: string | null; category?: string | null; stages: GrowthStage[] },
 ): Promise<CropTemplate> {
-  const res = await apiClient.post<CropTemplate>('/crops/templates/system', data);
+  const res = await apiClient.post<CropTemplate>('/crop-templates/system', data);
   return res.data;
 }
 
@@ -72,24 +72,24 @@ export async function updateSystemTemplate(
   id: number,
   data: { name: string; variety?: string | null; category?: string | null; stages: GrowthStage[] },
 ): Promise<CropTemplate> {
-  const res = await apiClient.put<CropTemplate>(`/crops/templates/system/${id}`, data);
+  const res = await apiClient.put<CropTemplate>(`/crop-templates/system/${id}`, data);
   return res.data;
 }
 
 export async function deleteSystemTemplate(id: number): Promise<void> {
-  await apiClient.delete(`/crops/templates/system/${id}`);
+  await apiClient.delete(`/crop-templates/system/${id}`);
 }
 
 export async function parseTemplate(description: string): Promise<CropTemplateParseResponse> {
-  const res = await apiClient.post<CropTemplateParseResponse>('/crops/templates/parse', { description });
+  const res = await apiClient.post<CropTemplateParseResponse>('/crop-templates/parse', { description });
   return res.data;
 }
 
 export async function updateTemplate(id: number, data: Omit<CropTemplate, "id">): Promise<CropTemplate> {
-  const res = await apiClient.put<CropTemplate>(`/crops/templates/${id}`, data);
+  const res = await apiClient.put<CropTemplate>(`/crop-templates/${id}`, data);
   return res.data;
 }
 
 export async function deleteTemplate(id: number): Promise<void> {
-  await apiClient.delete(`/crops/templates/${id}`);
+  await apiClient.delete(`/crop-templates/${id}`);
 }

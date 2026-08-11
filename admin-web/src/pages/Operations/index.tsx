@@ -142,7 +142,7 @@ type SettingsForm = {
   default_city?: string;
   default_lat?: number | null;
   default_lon?: number | null;
-  assistant_role?: 'professional' | 'warm' | 'creative';
+  assistant_role?: 'professional' | 'warm' | 'concise';
 };
 
 const assistantRoleOptions = [
@@ -157,9 +157,9 @@ const assistantRoleOptions = [
     description: '自然亲切、耐心稳定，默认回答风格。',
   },
   {
-    value: 'creative',
-    label: '灵感创意型',
-    description: '表达鲜活、主动发散，适合创意和方案讨论。',
+    value: 'concise',
+    label: '简洁高效型',
+    description: '简短直接、信息密度高，适合快速查看和操作。',
   },
 ] as const;
 
@@ -230,7 +230,7 @@ function useCycles() {
   const [cycles, setCycles] = useState<CropCycleListItem[]>([]);
 
   const refreshCycles = useCallback(async () => {
-    const res = await listCycles({ page: 1, size: 100 });
+    const res = await listCycles({ page: 1, page_size: 100 });
     setCycles(res.items);
   }, []);
 
@@ -553,16 +553,16 @@ function PlantingPanel({ cycles, initialCycleId }: { cycles: CropCycleListItem[]
       const [unitsRes, workersRes, ordersRes, recentRes, typesRes] = await Promise.all([
         operationsApi.listUnits(selectedCycle),
         operationsApi.listWorkers(true),
-        operationsApi.listWorkOrders({ cycle_id: selectedCycle, page: 1, size: 20 }),
+        operationsApi.listWorkOrders({ cycle_id: selectedCycle, page: 1, page_size: 20 }),
         operationsApi.listRecentOperations({ cycle_id: selectedCycle, days: 60, limit: 20 }),
         operationsApi.listOperationTypes(),
       ]);
-      setUnits(unitsRes.data);
-      setWorkers(workersRes.data);
+      setUnits(unitsRes);
+      setWorkers(workersRes);
       setWorkOrders(ordersRes.data.items);
       setOrderTotal(ordersRes.data.total);
-      setRecent(recentRes.data);
-      setOperationOptions(normalizeOperationOptions(typesRes.data));
+      setRecent(recentRes);
+      setOperationOptions(normalizeOperationOptions(typesRes));
     } catch {
       message.error('加载种植作业数据失败');
     } finally {
@@ -758,10 +758,10 @@ function LaborPanel({ cycles }: { cycles: CropCycleListItem[] }) {
         operationsApi.getUnsettledLaborSummary(),
         operationsApi.listOperationTypes(),
       ]);
-      setWorkers(workersRes.data);
+      setWorkers(workersRes);
       setSummaries(summariesRes.data.items);
       setUnsettled(unsettledRes.data);
-      setOperationOptions(normalizeOperationOptions(typesRes.data));
+      setOperationOptions(normalizeOperationOptions(typesRes));
     } catch {
       message.error('加载用工数据失败');
     } finally {
@@ -889,11 +889,11 @@ function FinancePanel() {
     setLoading(true);
     try {
       const [debtsRes, categoriesRes] = await Promise.all([
-        operationsApi.listDebts({ page: 1, size: 50 }),
+        operationsApi.listDebts({ page: 1, page_size: 50 }),
         operationsApi.listCostCategories(),
       ]);
       setDebts(debtsRes.data);
-      setCategories(categoriesRes.data);
+      setCategories(categoriesRes);
     } catch {
       message.error('加载财务调试数据失败');
     } finally {

@@ -17,16 +17,16 @@ export function buildConversationRows(
   sessions: Record<string, LocalSessionState>,
   conversations: ConversationItem[],
 ): ConversationRow[] {
-  const persistedSessionIds = new Set(conversations.map((conv) => conv.session_id));
+  const persistedIds = new Set(conversations.map((conv) => conv.conversation_id));
   return [
     ...Object.keys(sessions)
-      .filter((sid) => !persistedSessionIds.has(sid) && hasVisibleLocalSession(sessions[sid]))
+      .filter((sid) => !persistedIds.has(sid) && hasVisibleLocalSession(sessions[sid]))
       .map((sid) => ({
-        id: -Math.abs(sid.split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0)),
-        session_id: sid,
-        status: 'active',
-        created_at: new Date().toISOString(),
-        last_active_at: new Date().toISOString(),
+        conversation_id: sid,
+        last_message: '',
+        last_role: '',
+        last_at: new Date().toISOString(),
+        message_count: 0,
         local: true,
       })),
     ...conversations.map((conv) => ({ ...conv, local: false })),

@@ -73,6 +73,26 @@ def create_category(
     return _category_out(category)
 
 
+@categories_router.patch("/{category_id}")
+@categories_router.put("/{category_id}")
+def update_category(
+    category_id: int,
+    request: dict,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    try:
+        category = cost_category_service.update_category(
+            db,
+            category_id=category_id,
+            farm_id=user["farm_id"],
+            changes=request,
+        )
+        return _category_out(category)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @categories_router.delete("/{category_id}")
 def delete_category(
     category_id: int,
@@ -152,6 +172,25 @@ def cycle_profit(
     db: Session = Depends(get_db),
 ) -> dict:
     return cost_service.get_cycle_profit(db, farm_id=user["farm_id"], cycle_id=cycle_id)
+
+
+@records_router.patch("/{record_id}")
+@records_router.put("/{record_id}")
+def update_record(
+    record_id: int,
+    request: dict,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    result = cost_service.update_record(
+        db,
+        farm_id=user["farm_id"],
+        record_id=record_id,
+        changes=request,
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="记录不存在或已删除")
+    return result
 
 
 @records_router.delete("/{record_id}")

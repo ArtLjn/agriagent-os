@@ -22,7 +22,7 @@ export default function Logs() {
     setLoading(true);
     try {
       const [logsRes, cyclesRes] = await Promise.all([
-        listLogs(filterCycleId ? { cycle_id: filterCycleId, page, size: pageSize } : { page, size: pageSize }),
+        listLogs(filterCycleId ? { cycle_id: filterCycleId, page, page_size: pageSize } : { page, page_size: pageSize }),
         listCycles(),
       ]);
       setData(logsRes.items);

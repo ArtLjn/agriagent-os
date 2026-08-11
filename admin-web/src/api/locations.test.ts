@@ -32,7 +32,7 @@ describe('locations api', () => {
     const result = await searchLocations('虎丘', 50);
 
     expect(mockedApiClient.get).toHaveBeenCalledWith('/locations/search', {
-      params: { q: '虎丘', limit: 50 },
+      params: { keyword: '虎丘', limit: 50 },
     });
     expect(result[0]).toMatchObject({
       display_name: '苏州市虎丘区',

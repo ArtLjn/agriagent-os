@@ -11,11 +11,10 @@ from __future__ import annotations
 import logging
 import uuid
 
-from sqlalchemy.orm import Session
 
 from business.config import settings
 from business.db import session_scope
-from business.models import Farm, User
+from business.models import User
 from business.services import farm_crud_service
 from business.services.password import hash_password, verify_password
 from business.services.tokens import create_access_token
@@ -118,8 +117,52 @@ def get_user_by_id(user_id: str) -> User | None:
         return db.query(User).filter(User.id == user_id).first()
 
 
+def ensure_admin_user() -> None:
+    """启动时检查配置的管理员账号，不存在则自动创建。
+
+    读取 config.auth.admin_phone / admin_password，为空则跳过。
+    已存在同手机号用户则跳过（幂等）。
+    """
+    phone = settings.auth.admin_phone
+    password = settings.auth.admin_password
+    if not phone or not password:
+        return
+
+    with session_scope() as db:
+        existing = db.query(User).filter(User.phone == phone).first()
+        if existing is not None:
+            return
+
+        user_id = str(uuid.uuid4())
+        user = User(
+            id=user_id,
+            phone=phone,
+            password_hash=hash_password(password),
+            nickname="管理员",
+            role="admin",
+            status="active",
+        )
+        db.add(user)
+
+        farm = farm_crud_service.create_default_farm(
+            db, user_id=user_id, nickname="管理员农场"
+        )
+
+        from business.services import cost_category_service
+
+        cost_category_service.init_default_categories(db, farm_id=farm.id)
+        db.flush()
+        logger.info(
+            "自动创建管理员 | phone=%s user_id=%s farm_id=%s",
+            phone,
+            user_id,
+            farm.id,
+        )
+
+
 __all__ = [
     "register",
     "login",
     "get_user_by_id",
+    "ensure_admin_user",
 ]

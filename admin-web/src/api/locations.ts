@@ -22,7 +22,7 @@ interface LocationSearchResponse {
 
 export async function searchLocations(q: string, limit: number = 20): Promise<LocationOption[]> {
   const res = await apiClient.get<LocationSearchResponse>('/locations/search', {
-    params: { q, limit },
+    params: { keyword: q, limit },
   });
   return res.data.items ?? [];
 }

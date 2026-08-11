@@ -31,7 +31,7 @@ export default function Crops() {
   const fetchData = useCallback(async (page: number, pageSize: number) => {
     setLoading(true);
     try {
-      const res = await listTemplates({ page, size: pageSize });
+      const res = await listTemplates({ page, page_size: pageSize });
       setData(res.items);
       setPagination({ current: page, pageSize, total: res.total });
     } catch {

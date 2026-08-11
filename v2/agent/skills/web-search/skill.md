@@ -35,7 +35,13 @@ parameters:
       enum: [day, week, month, year]
     enable_fetch:
       type: boolean
-      description: "是否请求 SearchHub 抓取网页正文。默认 true，获得更完整证据；只做标题级快搜时传 false。仅 SearchHub provider 生效。"
+      default: true
+      description: "是否抓取网页正文。默认 true，获得更完整证据；只做标题级快搜时传 false。SearchHub 和 DuckDuckGo fallback 均支持。"
+    content_mode:
+      type: string
+      enum: [none, evidence]
+      default: evidence
+      description: "返回模式。默认 evidence，只返回摘要和结构化证据，不把网页正文回传给主 Agent。"
     enable_embedding_filter:
       type: boolean
       description: "是否启用 SearchHub embedding 精筛。开启后按 query 与结果文本的向量相似度过滤排序，减少标题噪声。"
@@ -88,7 +94,8 @@ Provider 优先级：
 ## 正文抓取
 - 默认传 `enable_fetch=true`，特别是新闻、政策、价格、技术资料
 - 只要标题和链接时传 `enable_fetch=false`
-- 仅 SearchHub provider 生效；DuckDuckGo fallback 忽略此参数
+- SearchHub 由服务端抓取；DuckDuckGo fallback 由 Agent 直接抓取结果页面
+- 主 Agent 默认只接收 `content_mode="evidence"` 的摘要、证据和来源，完整正文不进入工具结果
 
 ## Embedding 精筛
 - 用户要求"精筛、精排、相关性更准、减少标题噪声、交叉验证"时，传 `enable_embedding_filter=true`

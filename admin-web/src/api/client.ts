@@ -34,12 +34,18 @@ apiClient.interceptors.response.use(
       if (status === 429) {
         message.error("请求过于频繁，请稍后再试");
       } else if (status === 422) {
-        const details = data.errors?.map((e: { field: string; message: string }) => `${e.field}: ${e.message}`).join("；") || data.detail;
-        message.error(`参数错误：${details}`);
+        const detail = data?.detail;
+        const msg = typeof detail === 'object' ? detail?.message : detail;
+        const fields = data?.errors?.map((e: { field: string; message: string }) => `${e.field}: ${e.message}`).join("；");
+        message.error(`参数错误：${fields || msg || "未知错误"}`);
       } else if (status >= 500) {
-        message.error("服务器异常，请稍后再试");
+        const detail = data?.detail;
+        const msg = typeof detail === 'object' ? detail?.message : detail;
+        message.error(msg || "服务器异常，请稍后再试");
       } else {
-        message.error(data.detail || "请求失败");
+        const detail = data?.detail;
+        const msg = typeof detail === 'object' ? detail?.message : detail;
+        message.error(msg || "请求失败");
       }
     } else if (error.request) {
       message.error("网络错误，请检查连接");

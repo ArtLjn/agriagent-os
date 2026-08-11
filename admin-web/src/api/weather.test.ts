@@ -35,7 +35,7 @@ describe('weather api', () => {
 
     const result = await getForecast(7);
 
-    expect(mockedApiClient.get).toHaveBeenCalledWith('/weather/forecast', { params: { days: 7 } });
+    expect(mockedApiClient.get).toHaveBeenCalledWith('/weather', { params: { days: 7 } });
     expect(result.days[0]).toEqual({
       date: '2026-06-08',
       max_temp: 33,
@@ -61,7 +61,7 @@ describe('weather api', () => {
       lon: 120.4342,
     });
 
-    expect(mockedApiClient.get).toHaveBeenCalledWith('/weather/forecast', {
+    expect(mockedApiClient.get).toHaveBeenCalledWith('/weather', {
       params: {
         days: 7,
         location: '苏州市虎丘区',
@@ -88,7 +88,7 @@ describe('weather api', () => {
     const result = await searchLocations('虎丘');
 
     expect(mockedApiClient.get).toHaveBeenCalledWith('/locations/search', {
-      params: { q: '虎丘', limit: 20 },
+      params: { keyword: '虎丘', limit: 20 },
     });
     expect(result[0].display_name).toBe('苏州市虎丘区');
   });
