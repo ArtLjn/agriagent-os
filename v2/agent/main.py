@@ -31,6 +31,12 @@ from agent.api import (  # noqa: E402, F401
     turns,
 )  # register routes
 from agent.infra.chat_store import check_connection, close  # noqa: E402
+from agent.infra.redis_store import (  # noqa: E402
+    check_connection as check_redis_connection,
+    close as close_redis,
+)
+from agent.infra.worker import start as start_worker, stop as stop_worker  # noqa: E402
+from agent.infra.sweeper import start as start_sweeper, stop as stop_sweeper  # noqa: E402
 from agent.infra.logging import get_logger, setup_logging  # noqa: E402
 from agent.infra.trace import start_trace_system, stop_trace_system  # noqa: E402
 
@@ -43,9 +49,15 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await check_connection()
+    await check_redis_connection()
     await start_trace_system()
+    await start_worker()
+    await start_sweeper()
     yield
+    await stop_worker()
+    await stop_sweeper()
     await stop_trace_system()
+    await close_redis()
     await close()
 
 

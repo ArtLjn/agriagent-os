@@ -10,13 +10,28 @@ from fastapi import HTTPException
 from agent.api import api_router
 from agent.config import settings
 from agent.deps import pending_approvals
+from agent.infra.redis_store import get_client, key, status as redis_status
+from agent.infra.turn_store import pending_approval_count
 
 logger = logging.getLogger(__name__)
 
 
 @api_router.get("/health")
-def health() -> dict:
-    return {"status": "ok", "pending_approvals": len(pending_approvals)}
+async def health() -> dict:
+    redis = await redis_status()
+    return {
+        "status": "ok" if not redis["enabled"] or redis["reachable"] else "degraded",
+        "pending_approvals": await pending_approval_count(),
+        "active_turns": await _active_turn_count(),
+        "redis": redis,
+    }
+
+
+async def _active_turn_count() -> int:
+    client = get_client()
+    if client is None:
+        return len(pending_approvals)
+    return int(await client.scard(key("capacity", "active_turns")))
 
 
 @api_router.get("/dev-users")

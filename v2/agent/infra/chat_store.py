@@ -13,6 +13,7 @@
 
 只做单条消息追加 + 简单查询；不做 trace/agent_records，那些 v2 MVP 暂不落库。
 """
+
 from __future__ import annotations
 
 import logging
@@ -80,6 +81,8 @@ async def append_message(
     content: str,
     turn_id: int | None = None,
     meta: dict[str, Any] | None = None,
+    user_id: str | None = None,
+    farm_id: int | None = None,
 ) -> str | None:
     """Insert one message document. Returns MongoDB _id as string, or None if disabled."""
     coll = get_collection()
@@ -87,13 +90,15 @@ async def append_message(
         return None
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
     doc: dict[str, Any] = {
-        "farmId": _DEFAULT_FARM_ID,
+        "farmId": farm_id if farm_id is not None else _DEFAULT_FARM_ID,
         "conversationId": conversation_id,
         "sessionId": conversation_id,  # archive 习惯，sessionId = conversationId
         "role": role,
         "content": content,
         "createdAt": now,
     }
+    if user_id:
+        doc["userId"] = user_id
     if turn_id is not None:
         doc["turnId"] = turn_id
     if meta:
@@ -109,15 +114,23 @@ async def append_message(
 async def load_recent(
     conversation_id: str,
     limit: int = 20,
+    *,
+    user_id: str | None = None,
+    farm_id: int | None = None,
 ) -> list[dict[str, Any]]:
     """Return recent N messages for a conversation, oldest first."""
     coll = get_collection()
     if coll is None:
         return []
     try:
+        filter_doc: dict[str, Any] = {"conversationId": conversation_id}
+        if farm_id is not None:
+            filter_doc["farmId"] = farm_id
+        if user_id:
+            filter_doc["userId"] = user_id
         cursor = (
             coll.find(
-                {"conversationId": conversation_id},
+                filter_doc,
                 projection={"_id": 0, "role": 1, "content": 1, "createdAt": 1},
             )
             .sort("_id", -1)
@@ -126,7 +139,11 @@ async def load_recent(
         docs = await cursor.to_list(length=limit)
         docs.reverse()  # oldest first
         return [
-            {"role": d["role"], "content": d["content"], "createdAt": d.get("createdAt")}
+            {
+                "role": d["role"],
+                "content": d["content"],
+                "createdAt": d.get("createdAt"),
+            }
             for d in docs
         ]
     except Exception as exc:  # noqa: BLE001
@@ -163,6 +180,9 @@ async def close() -> None:
 async def list_conversations(
     limit: int = 20,
     cursor: str | None = None,
+    *,
+    user_id: str | None = None,
+    farm_id: int | None = None,
 ) -> dict[str, Any]:
     """List conversations with pagination.
 
@@ -181,8 +201,13 @@ async def list_conversations(
         return {"items": [], "next_cursor": None, "has_more": False}
 
     # First get all distinct conversation_ids sorted by last message time
+    match: dict[str, Any] = {
+        "farmId": farm_id if farm_id is not None else _DEFAULT_FARM_ID
+    }
+    if user_id:
+        match["userId"] = user_id
     pipeline: list[dict[str, Any]] = [
-        {"$match": {"farmId": _DEFAULT_FARM_ID}},
+        {"$match": match},
         {
             "$group": {
                 "_id": "$conversationId",
@@ -230,6 +255,9 @@ async def get_conversation(
     conversation_id: str,
     limit: int = 100,
     before: str | None = None,
+    *,
+    user_id: str | None = None,
+    farm_id: int | None = None,
 ) -> dict[str, Any]:
     """Get messages for a conversation, oldest first.
 
@@ -243,9 +271,19 @@ async def get_conversation(
     """
     coll = get_collection()
     if coll is None:
-        return {"conversation_id": conversation_id, "items": [], "count": 0, "has_more": False}
+        return {
+            "conversation_id": conversation_id,
+            "items": [],
+            "count": 0,
+            "has_more": False,
+        }
 
-    filter_doc: dict[str, Any] = {"conversationId": conversation_id}
+    filter_doc: dict[str, Any] = {
+        "conversationId": conversation_id,
+        "farmId": farm_id if farm_id is not None else _DEFAULT_FARM_ID,
+    }
+    if user_id:
+        filter_doc["userId"] = user_id
     if before:
         filter_doc["createdAt"] = {"$lt": before}
 
@@ -278,4 +316,9 @@ async def get_conversation(
         }
     except Exception as exc:  # noqa: BLE001
         logger.warning("get_conversation failed: %s", exc)
-        return {"conversation_id": conversation_id, "items": [], "count": 0, "has_more": False}
+        return {
+            "conversation_id": conversation_id,
+            "items": [],
+            "count": 0,
+            "has_more": False,
+        }

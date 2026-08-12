@@ -1,9 +1,10 @@
 """Agent 配置加载。
 
-从 agent/config.yaml 读取 MongoDB + Business MCP 地址。
+从 agent/config.yaml 读取 Redis、MongoDB + Business MCP 地址。
 LLM 仍走 providers.json（在 v2 根目录，agent/llm.py 读）。
 环境变量覆盖：MONGODB__URI、BUSINESS_MCP__URL 等。
 """
+
 from __future__ import annotations
 
 import os
@@ -34,6 +35,39 @@ class BusinessMcpCfg:
 
 
 @dataclass
+class RedisCfg:
+    """Agent 并发协调层配置。"""
+
+    enabled: bool = False
+    host: str = "127.0.0.1"
+    port: int = 6379
+    username: str = ""
+    password: str = ""
+    database: int = 0
+    connect_timeout_ms: int = 2000
+    socket_timeout_ms: int = 2000
+    max_connections: int = 50
+    key_prefix: str = "fm:v2:agent:dev"
+    global_active_limit: int = 8
+    user_active_limit: int = 2
+    conversation_lock_ttl_ms: int = 30000
+    conversation_lock_renew_ms: int = 10000
+    conversation_queue_limit: int = 2
+    global_queue_limit: int = 32
+    queue_wait_timeout_seconds: int = 30
+    turn_execution_timeout_seconds: int = 120
+    event_stream_maxlen: int = 1000
+    turn_state_ttl_seconds: int = 86400
+    approval_ttl_seconds: int = 600
+    idempotency_ttl_seconds: int = 86400
+    cleanup_interval_seconds: int = 30
+    dispatch_stream_ttl_seconds: int = 86400
+    worker_count: int = 2
+    dispatch_stream: str = "turn:dispatch"
+    dispatch_group: str = "agent-workers"
+
+
+@dataclass
 class AuthCfg:
     """认证配置（与 business 共享 JWT secret，用于解析前端传入的 Bearer token）。"""
 
@@ -44,6 +78,7 @@ class AuthCfg:
 
 @dataclass
 class Settings:
+    redis: RedisCfg = field(default_factory=RedisCfg)
     mongodb: MongoCfg = field(default_factory=MongoCfg)
     business_mcp: BusinessMcpCfg = field(default_factory=BusinessMcpCfg)
     auth: AuthCfg = field(default_factory=AuthCfg)
@@ -59,9 +94,51 @@ def _load_yaml() -> dict:
 def _build_settings() -> Settings:
     raw = _load_yaml()
     mongo_raw = raw.get("mongodb", {}) or {}
+    redis_raw = raw.get("redis", {}) or {}
     mcp_raw = raw.get("business_mcp", {}) or {}
     auth_raw = raw.get("auth", {}) or {}
     settings = Settings(
+        redis=RedisCfg(
+            enabled=bool(redis_raw.get("enabled", False)),
+            host=str(redis_raw.get("host", "127.0.0.1")),
+            port=int(redis_raw.get("port", 6379)),
+            username=str(redis_raw.get("username", "")),
+            password=str(redis_raw.get("password", "")),
+            database=int(redis_raw.get("database", 0)),
+            connect_timeout_ms=int(redis_raw.get("connect_timeout_ms", 2000)),
+            socket_timeout_ms=int(redis_raw.get("socket_timeout_ms", 2000)),
+            max_connections=int(redis_raw.get("max_connections", 50)),
+            key_prefix=str(redis_raw.get("key_prefix", "fm:v2:agent:dev")),
+            global_active_limit=int(redis_raw.get("global_active_limit", 8)),
+            user_active_limit=int(redis_raw.get("user_active_limit", 2)),
+            conversation_lock_ttl_ms=int(
+                redis_raw.get("conversation_lock_ttl_ms", 30000)
+            ),
+            conversation_lock_renew_ms=int(
+                redis_raw.get("conversation_lock_renew_ms", 10000)
+            ),
+            conversation_queue_limit=int(redis_raw.get("conversation_queue_limit", 2)),
+            global_queue_limit=int(redis_raw.get("global_queue_limit", 32)),
+            queue_wait_timeout_seconds=int(
+                redis_raw.get("queue_wait_timeout_seconds", 30)
+            ),
+            turn_execution_timeout_seconds=int(
+                redis_raw.get("turn_execution_timeout_seconds", 120)
+            ),
+            event_stream_maxlen=int(redis_raw.get("event_stream_maxlen", 1000)),
+            turn_state_ttl_seconds=int(redis_raw.get("turn_state_ttl_seconds", 86400)),
+            approval_ttl_seconds=int(redis_raw.get("approval_ttl_seconds", 600)),
+            idempotency_ttl_seconds=int(
+                redis_raw.get("idempotency_ttl_seconds", 86400)
+            ),
+            cleanup_interval_seconds=int(redis_raw.get("cleanup_interval_seconds", 30)),
+            dispatch_stream_ttl_seconds=int(
+                redis_raw.get("dispatch_stream_ttl_seconds", 86400)
+            ),
+            worker_count=int(redis_raw.get("worker_count", 2)),
+            dispatch_stream=str(redis_raw.get("dispatch_stream", "turn:dispatch")),
+            dispatch_group=str(redis_raw.get("dispatch_group", "agent-workers")),
+        ),
         mongodb=MongoCfg(
             enabled=bool(mongo_raw.get("enabled", False)),
             uri=mongo_raw.get("uri", ""),
@@ -74,7 +151,9 @@ def _build_settings() -> Settings:
             max_pool_size=int(mongo_raw.get("max_pool_size", 20)),
             collections=dict(mongo_raw.get("collections", {}) or {}),
         ),
-        business_mcp=BusinessMcpCfg(url=mcp_raw.get("url", "http://127.0.0.1:9876/mcp")),
+        business_mcp=BusinessMcpCfg(
+            url=mcp_raw.get("url", "http://127.0.0.1:9876/mcp")
+        ),
         auth=AuthCfg(
             jwt_secret=auth_raw.get("jwt_secret", ""),
             jwt_algorithm=auth_raw.get("jwt_algorithm", "HS256"),
@@ -84,6 +163,56 @@ def _build_settings() -> Settings:
     )
     if env := os.getenv("MONGODB__URI"):
         settings.mongodb.uri = env
+    if env := os.getenv("REDIS__HOST"):
+        settings.redis.host = env
+    if env := os.getenv("REDIS__ENABLED"):
+        settings.redis.enabled = env.lower() in {"1", "true", "yes", "on"}
+    if env := os.getenv("REDIS__PORT"):
+        settings.redis.port = int(env)
+    if env := os.getenv("REDIS__USERNAME"):
+        settings.redis.username = env
+    if env := os.getenv("REDIS__PASSWORD"):
+        settings.redis.password = env
+    if env := os.getenv("REDIS__DATABASE"):
+        settings.redis.database = int(env)
+    if env := os.getenv("REDIS__KEY_PREFIX"):
+        settings.redis.key_prefix = env
+    if env := os.getenv("REDIS__CONNECT_TIMEOUT_MS"):
+        settings.redis.connect_timeout_ms = int(env)
+    if env := os.getenv("REDIS__SOCKET_TIMEOUT_MS"):
+        settings.redis.socket_timeout_ms = int(env)
+    if env := os.getenv("REDIS__MAX_CONNECTIONS"):
+        settings.redis.max_connections = int(env)
+    if env := os.getenv("REDIS__GLOBAL_ACTIVE_LIMIT"):
+        settings.redis.global_active_limit = int(env)
+    if env := os.getenv("REDIS__USER_ACTIVE_LIMIT"):
+        settings.redis.user_active_limit = int(env)
+    if env := os.getenv("REDIS__CONVERSATION_LOCK_TTL_MS"):
+        settings.redis.conversation_lock_ttl_ms = int(env)
+    if env := os.getenv("REDIS__CONVERSATION_LOCK_RENEW_MS"):
+        settings.redis.conversation_lock_renew_ms = int(env)
+    if env := os.getenv("REDIS__CONVERSATION_QUEUE_LIMIT"):
+        settings.redis.conversation_queue_limit = int(env)
+    if env := os.getenv("REDIS__GLOBAL_QUEUE_LIMIT"):
+        settings.redis.global_queue_limit = int(env)
+    if env := os.getenv("REDIS__QUEUE_WAIT_TIMEOUT_SECONDS"):
+        settings.redis.queue_wait_timeout_seconds = int(env)
+    if env := os.getenv("REDIS__TURN_EXECUTION_TIMEOUT_SECONDS"):
+        settings.redis.turn_execution_timeout_seconds = int(env)
+    if env := os.getenv("REDIS__EVENT_STREAM_MAXLEN"):
+        settings.redis.event_stream_maxlen = int(env)
+    if env := os.getenv("REDIS__TURN_STATE_TTL_SECONDS"):
+        settings.redis.turn_state_ttl_seconds = int(env)
+    if env := os.getenv("REDIS__APPROVAL_TTL_SECONDS"):
+        settings.redis.approval_ttl_seconds = int(env)
+    if env := os.getenv("REDIS__IDEMPOTENCY_TTL_SECONDS"):
+        settings.redis.idempotency_ttl_seconds = int(env)
+    if env := os.getenv("REDIS__CLEANUP_INTERVAL_SECONDS"):
+        settings.redis.cleanup_interval_seconds = int(env)
+    if env := os.getenv("REDIS__DISPATCH_STREAM_TTL_SECONDS"):
+        settings.redis.dispatch_stream_ttl_seconds = int(env)
+    if env := os.getenv("REDIS__WORKER_COUNT"):
+        settings.redis.worker_count = int(env)
     if env := os.getenv("BUSINESS_MCP__URL"):
         settings.business_mcp.url = env
     if env := os.getenv("JWT_SECRET"):

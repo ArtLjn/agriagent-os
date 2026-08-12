@@ -5,6 +5,35 @@ server:
   host: "127.0.0.1"
   port: 8000
 
+redis:
+  enabled: false
+  host: "127.0.0.1"
+  port: 6379
+  username: ""
+  password: ""
+  database: 0
+  connect_timeout_ms: 2000
+  socket_timeout_ms: 2000
+  max_connections: 50
+  key_prefix: "fm:v2:agent:dev"
+  global_active_limit: 8
+  user_active_limit: 2
+  conversation_lock_ttl_ms: 30000
+  conversation_lock_renew_ms: 10000
+  conversation_queue_limit: 2
+  global_queue_limit: 32
+  queue_wait_timeout_seconds: 30
+  turn_execution_timeout_seconds: 120
+  event_stream_maxlen: 1000
+  turn_state_ttl_seconds: 86400
+  approval_ttl_seconds: 600
+  idempotency_ttl_seconds: 86400
+  cleanup_interval_seconds: 30
+  dispatch_stream_ttl_seconds: 86400
+  worker_count: 2
+  dispatch_stream: "turn:dispatch"
+  dispatch_group: "agent-workers"
+
 mongodb:
   enabled: true
   uri: "mongodb://USER:PASSWORD@HOST:27017/?authSource=admin"

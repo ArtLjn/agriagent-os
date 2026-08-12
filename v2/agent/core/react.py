@@ -173,7 +173,8 @@ def _setup_turn_runtime(
     turn: Turn,
 ) -> tuple[list[Skill], list[dict], dict[str, Skill], verify.CallTracker, dict]:
     """加载 skills、构建 tools schema、初始化 tracker。"""
-    turn.memory_snapshot = memory.snapshot(turn.conversation_id)
+    memory_key = turn.memory_key or turn.conversation_id
+    turn.memory_snapshot = memory.snapshot(memory_key)
     skills = skill_loader.load_all()
     tools_schema = skill_loader.to_openai_tools(skills)
     # 注入 make_plan 工具，让 LLM 可以一次性规划多步任务
@@ -192,15 +193,14 @@ def _setup_turn_runtime(
 
 async def _try_compress_context(turn: Turn) -> AsyncGenerator[dict, None]:
     """检查 token 用量，超阈值触发压缩。"""
+    memory_key = turn.memory_key or turn.conversation_id
     usage = tokenizer.compute_usage(turn.messages)
     yield sse.context_usage(usage.used, usage.total, usage.percent, usage.level, step=0)
     if tokenizer.must_compress(usage):
         yield sse.context_compressing("hard", usage.percent)
-        summary = await summarizer.maybe_summarize_async(
-            turn.conversation_id, force=True
-        )
+        summary = await summarizer.maybe_summarize_async(memory_key, force=True)
         if summary:
-            turn.memory_snapshot = memory.snapshot(turn.conversation_id)
+            turn.memory_snapshot = memory.snapshot(memory_key)
             turn.messages = context.build_initial_messages(
                 turn.user_input, turn.memory_snapshot
             )
@@ -208,9 +208,7 @@ async def _try_compress_context(turn: Turn) -> AsyncGenerator[dict, None]:
             yield sse.context_compressed(new_usage.percent, summary[:200])
     elif tokenizer.should_compress(usage):
         # soft 阈值：异步压缩，不阻塞当前 turn
-        asyncio.create_task(
-            summarizer.maybe_summarize_async(turn.conversation_id, force=False)
-        )
+        asyncio.create_task(summarizer.maybe_summarize_async(memory_key, force=False))
 
 
 # ── 阶段 3: while 主循环单步 ──────────────────────────────
@@ -748,9 +746,25 @@ async def _apply_approval_gate(
     yield ev
 
     decision, reason = await approval_waiter(turn.turn_id)
-    turn = hitl.approve(turn, decision, reason)
+    if reason == "approval_expired":
+        turn.status = "timeout"
+        turn.error = "approval expired"
+    elif reason == "turn_cancelled":
+        turn.status = "cancelled"
+        turn.error = "turn cancelled"
+    else:
+        turn = hitl.approve(turn, decision, reason)
 
-    ev = sse.approval_result("approved" if decision else "rejected", reason)
+    decision_name = (
+        "expired"
+        if reason == "approval_expired"
+        else "cancelled"
+        if reason == "turn_cancelled"
+        else "approved"
+        if decision
+        else "rejected"
+    )
+    ev = sse.approval_result(decision_name, reason)
     turn.emit("approval_result", ev["data"])
     yield ev
 
@@ -1220,7 +1234,7 @@ def _persist_memory(turn: Turn) -> None:
     non_system = [m for m in turn.messages if m.get("role") != "system"]
     if turn.final_answer:
         non_system.append({"role": "assistant", "content": turn.final_answer})
-    memory.save_messages(turn.conversation_id, non_system)
+    memory.save_messages(turn.memory_key or turn.conversation_id, non_system)
 
 
 def _structured_commit_answer(result: dict) -> str:

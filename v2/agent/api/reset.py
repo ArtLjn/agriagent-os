@@ -6,6 +6,9 @@ from pydantic import BaseModel
 
 from agent.api import api_router
 from agent.core import memory
+from agent.auth import parse_identity
+from fastapi import Header
+from agent.infra.coordination import scope_hash
 
 
 class ResetRequest(BaseModel):
@@ -13,6 +16,9 @@ class ResetRequest(BaseModel):
 
 
 @api_router.post("/reset")
-def reset(req: ResetRequest) -> dict:
-    memory.reset_conversation(req.conversation_id)
+def reset(req: ResetRequest, authorization: str | None = Header(default=None)) -> dict:
+    identity = parse_identity(authorization)
+    memory.reset_conversation(
+        scope_hash(identity["user_id"], identity["farm_id"], req.conversation_id)
+    )
     return {"ok": True, "conversation_id": req.conversation_id}

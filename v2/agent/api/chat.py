@@ -2,20 +2,35 @@
 
 from __future__ import annotations
 
+import hashlib
+import uuid
 import logging
 
-from fastapi import Header
+from fastapi import Header, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from agent.api import api_router
 from agent.auth import parse_identity
-from agent.deps import active_turns, approval_waiter, pending_approvals
-from agent.core.react import run_turn
 from agent.core.turn import Turn
 from agent.infra.chat_store import append_message
+from agent.infra.coordination import (
+    CoordinationError,
+    TurnAdmissionError,
+    admit_turn,
+    release_turn,
+    scope_hash,
+)
 from agent.infra.sse import sse_event
-from agent.infra.trace import clear_trace, flush_now, init_trace, trace_turn_outcome
+from agent.infra.turn_store import (
+    claim_idempotency,
+    dispatch_turn,
+    get_turn,
+    publish_event,
+    save_turn,
+    stream_events,
+    update_turn,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -23,58 +38,131 @@ logger = logging.getLogger(__name__)
 class ChatRequest(BaseModel):
     message: str
     conversation_id: str = "default"
+    client_request_id: str | None = None
 
 
 @api_router.post("/chat")
 async def chat(
     req: ChatRequest,
     authorization: str | None = Header(default=None),
+    after_seq: int = Query(default=0, ge=0),
 ) -> StreamingResponse:
-    """Start a ReAct turn and stream events back as SSE."""
+    """Create a durable turn and stream replayable Redis events."""
     conv_id = req.conversation_id or "default"
     identity = parse_identity(authorization)
+    scope = scope_hash(identity["user_id"], identity["farm_id"], conv_id)
+    request_id = req.client_request_id or uuid.uuid4().hex
+    request_fingerprint = hashlib.sha256(
+        f"{conv_id}|{req.message}".encode("utf-8")
+    ).hexdigest()
     turn = Turn(
         conversation_id=conv_id,
         user_input=req.message,
         user_id=identity["user_id"],
         farm_id=identity["farm_id"],
         agent_token=identity["agent_token"],
+        memory_key=scope_hash(identity["user_id"], identity["farm_id"], conv_id),
     )
-    active_turns[turn.turn_id] = turn
+    try:
+        admission = None
+        claimed, existing = await claim_idempotency(
+            scope_hash=scope,
+            client_request_id=request_id,
+            request_fingerprint=request_fingerprint,
+            turn_id=turn.turn_id,
+        )
+        if not claimed:
+            if not existing:
+                raise HTTPException(409, {"code": "idempotency_state_missing"})
+            if existing.get("request_fingerprint") != request_fingerprint:
+                raise HTTPException(
+                    409,
+                    {
+                        "code": "idempotency_key_reused",
+                        "message": "幂等键已被其他请求使用",
+                    },
+                )
+            existing_turn_id = existing["turn_id"]
+            turn_state = await get_turn(existing_turn_id)
+            if turn_state is None:
+                raise HTTPException(404, {"code": "turn_not_found"})
+            turn.turn_id = existing_turn_id
+            await update_turn(existing_turn_id, reconnect_count=1)
+            admission = None
+        else:
+            admission = await admit_turn(
+                turn_id=turn.turn_id,
+                user_id=turn.user_id,
+                farm_id=turn.farm_id,
+                conversation_id=conv_id,
+            )
+            await save_turn(
+                turn,
+                scope_hash=scope,
+                lease_token=admission.lease.token,
+                queued=admission.queued,
+                queue_kind=admission.queue_kind,
+            )
+            await append_message(
+                conversation_id=conv_id,
+                role="user",
+                content=req.message,
+                turn_id=turn.turn_id,
+                user_id=identity["user_id"],
+                farm_id=identity["farm_id"],
+            )
+            await publish_event(
+                turn.turn_id,
+                {
+                    "type": "queued" if admission.queued else "accepted",
+                    "data": {
+                        "turn_id": turn.turn_id,
+                        "conversation_id": conv_id,
+                        "queue": admission.queued,
+                    },
+                },
+            )
+            await dispatch_turn(turn.turn_id)
+    except TurnAdmissionError as exc:
+        from agent.infra.turn_store import release_idempotency
 
-    # 落库 user message（不阻塞 stream；失败 infra 内部已降级 warning）
-    await append_message(
-        conversation_id=conv_id,
-        role="user",
-        content=req.message,
-    )
+        await release_idempotency(scope, request_id)
+        status_code = 409 if exc.code.startswith("conversation") else 429
+        raise HTTPException(
+            status_code,
+            detail={"code": exc.code, "message": str(exc)},
+        ) from exc
+    except CoordinationError as exc:
+        from agent.infra.turn_store import release_idempotency
+
+        await release_idempotency(scope, request_id)
+        raise HTTPException(
+            503,
+            detail={"code": "coordination_unavailable", "message": str(exc)},
+        ) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        if admission is not None:
+            if admission.queued:
+                from agent.infra.turn_store import remove_from_queues
+
+                await remove_from_queues(turn.turn_id, scope)
+            else:
+                await release_turn(admission.lease)
+        from agent.infra.turn_store import release_idempotency
+
+        await release_idempotency(scope, request_id)
+        raise HTTPException(
+            503, {"code": "turn_creation_failed", "message": str(exc)}
+        ) from exc
 
     async def event_stream():
-        final_answer = ""
-        init_trace(conversation_id=conv_id, turn_id=turn.turn_id)
-        try:
-            async for event in run_turn(turn, approval_waiter):
-                ev_type = event.get("type", "")
-                if ev_type == "final_answer":
-                    final_answer = event.get("data", {}).get("text", "")
-                elif ev_type == "final_answer_delta":
-                    final_answer += event.get("data", {}).get("delta", "")
-                yield sse_event(ev_type, event.get("data", {}))
-        except Exception as exc:
-            logger.exception("event stream crashed")
-            yield sse_event("error", {"code": "stream_crash", "message": str(exc)})
-        finally:
-            active_turns.pop(turn.turn_id, None)
-            pending_approvals.pop(turn.turn_id, None)
-            trace_turn_outcome(turn.status, turn.error)
-            await flush_now()
-            clear_trace()
-            if final_answer:
-                await append_message(
-                    conversation_id=conv_id,
-                    role="assistant",
-                    content=final_answer,
-                )
+        async for event in stream_events(turn.turn_id, after_seq=after_seq):
+            yield sse_event(
+                event["type"],
+                {**event["data"], "seq": event["seq"]},
+            )
 
     return StreamingResponse(
         event_stream(),

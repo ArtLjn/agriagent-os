@@ -16,10 +16,14 @@ from typing import Any, Literal
 
 TurnStatus = Literal[
     "running",  # ReAct loop iterating
+    "accepted",  # 已创建，等待 Worker 领取
+    "queued",  # 等待会话或全局执行槽位
     "awaiting_approval",  # Blocked on HITL gate
     "completed",  # Final answer emitted
     "rejected",  # User rejected HITL
     "failed",  # Error
+    "cancelled",  # User cancelled
+    "timeout",  # Queue or approval timeout
 ]
 
 
@@ -30,6 +34,8 @@ class Turn:
     # Identity.
     turn_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     conversation_id: str = "default"
+    # 展示用 conversation_id 与身份隔离后的记忆 key 分离。
+    memory_key: str | None = None
 
     # Input.
     user_input: str = ""
