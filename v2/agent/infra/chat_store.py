@@ -79,7 +79,7 @@ async def append_message(
     conversation_id: str,
     role: str,
     content: str,
-    turn_id: int | None = None,
+    turn_id: str | None = None,
     meta: dict[str, Any] | None = None,
     user_id: str | None = None,
     farm_id: int | None = None,

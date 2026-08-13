@@ -279,6 +279,9 @@ def update_crop_template(
 
     for stage in list(template.growth_stages):
         db.delete(stage)
+    # growth_stages 对 (crop_template_id, order_index) 有唯一约束。
+    # 先提交删除，再插入同序号的新阶段，避免同一 flush 内 INSERT 先于 DELETE。
+    db.flush()
 
     for stage in stages:
         db.add(

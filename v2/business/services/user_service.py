@@ -8,14 +8,14 @@
 """
 from __future__ import annotations
 
+from datetime import datetime
 import logging
 from typing import Any
 
 from sqlalchemy import or_
-from sqlalchemy.orm import Session
 
 from business.db import session_scope
-from business.models import Farm, User, UserSetting
+from business.models import User, UserSetting
 from business.services import farm_crud_service
 
 logger = logging.getLogger(__name__)
@@ -73,7 +73,23 @@ def update_user_profile(
         if avatar_url is not None:
             user.avatar_url = avatar_url
         db.flush()
-        return user
+        farm = farm_crud_service.get_farm_by_user_id(db, user_id=user.id)
+        return {
+            "id": user.id,
+            "phone": user.phone,
+            "nickname": user.nickname,
+            "avatar_url": user.avatar_url,
+            "role": user.role,
+            "status": user.status,
+            "farm": {
+                "id": farm.id,
+                "uid": farm.uid,
+                "name": farm.name,
+                "location": farm.location,
+            }
+            if farm
+            else None,
+        }
 
 
 def get_user_settings(user_id: str) -> dict[str, Any] | None:
@@ -110,7 +126,7 @@ def update_user_settings(
             db.query(UserSetting).filter(UserSetting.user_id == user_id).first()
         )
         if setting is None:
-            setting = UserSetting(user_id=user_id)
+            setting = UserSetting(user_id=user_id, updated_at=datetime.now())
             db.add(setting)
         if default_city is not None:
             setting.default_city = default_city
@@ -121,7 +137,13 @@ def update_user_settings(
         if assistant_role is not None:
             setting.assistant_role = assistant_role
         db.flush()
-        return setting
+        return {
+            "user_id": setting.user_id,
+            "default_city": setting.default_city,
+            "default_lat": setting.default_lat,
+            "default_lon": setting.default_lon,
+            "assistant_role": setting.assistant_role,
+        }
 
 
 # ─────────────────────────────────────────────────────────────

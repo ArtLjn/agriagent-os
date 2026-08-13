@@ -76,7 +76,13 @@ class UserSetting(Base):
         String(20), nullable=False, default="warm", server_default="warm"
     )
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=func.now(),
+        onupdate=func.now(),
+        server_default=func.now(),
+    )
 
 
 class Farm(Base):
@@ -86,7 +92,13 @@ class Farm(Base):
     uid = Column(String(36), unique=True, nullable=False, index=True)
     name = Column(String(100), nullable=False)
     location = Column(String(200), nullable=True)
-    user_id = Column(String(36), unique=True, nullable=True, index=True)
+    user_id = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        unique=True,
+        nullable=True,
+        index=True,
+    )
     created_at = Column(DateTime, server_default=func.now())
 
 
@@ -178,7 +190,13 @@ class Worker(Base):
     note = Column(String(500), nullable=True)
     status = Column(String(20), nullable=False, default="active")
     created_at = Column(DateTime, server_default=func.now())
-    updated_at = Column(DateTime, onupdate=func.now())
+    updated_at = Column(
+        DateTime,
+        nullable=False,
+        default=func.now(),
+        onupdate=func.now(),
+        server_default=func.now(),
+    )
 
     farm_log_links = relationship("FarmLogWorker", back_populates="worker")
     labor_entries = relationship("LaborEntry", back_populates="worker")
@@ -259,7 +277,13 @@ class PlantingUnit(Base):
     status = Column(String(20), nullable=False, default="active")
     note = Column(String(500), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=func.now(),
+        onupdate=func.now(),
+        server_default=func.now(),
+    )
 
     cycle = relationship("CropCycle", back_populates="planting_units")
     work_order_links = relationship(
@@ -295,7 +319,13 @@ class PlantingPlanExecution(Base):
     planting_unit_id = Column(Integer, nullable=True)
     result_json = Column(JSON, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
-    updated_at = Column(DateTime, onupdate=func.now())
+    updated_at = Column(
+        DateTime,
+        nullable=False,
+        default=func.now(),
+        onupdate=func.now(),
+        server_default=func.now(),
+    )
 
 
 class OperationWorkOrder(Base):
@@ -315,7 +345,13 @@ class OperationWorkOrder(Base):
     source_id = Column(Integer, nullable=True)
     labor_cost_record_id = Column(Integer, ForeignKey("cost_records.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=func.now(),
+        onupdate=func.now(),
+        server_default=func.now(),
+    )
 
     cycle = relationship("CropCycle", back_populates="work_orders")
     unit_links = relationship(
@@ -392,7 +428,13 @@ class LaborEntry(Base):
     client_request_id = Column(String(100), nullable=True)
     note = Column(String(500), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=func.now(),
+        onupdate=func.now(),
+        server_default=func.now(),
+    )
 
     work_order = relationship("OperationWorkOrder", back_populates="labor_entries")
     worker = relationship("Worker", back_populates="labor_entries")
