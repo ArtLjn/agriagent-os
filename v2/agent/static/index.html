@@ -259,6 +259,33 @@
     gap: 6px;
   }
 
+  .auth-status {
+    max-width: 360px;
+    padding: 3px 8px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--text-muted);
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .auth-status.ok {
+    color: var(--success);
+    border-color: rgba(52, 211, 153, 0.35);
+    background: var(--success-bg);
+  }
+  .auth-status.warn {
+    color: var(--warning);
+    border-color: rgba(251, 191, 36, 0.35);
+    background: var(--warning-bg);
+  }
+  .auth-status.error {
+    color: var(--danger);
+    border-color: rgba(248, 113, 113, 0.35);
+    background: var(--danger-bg);
+  }
+
   .btn {
     background: var(--surface-2);
     color: var(--text-dim);
@@ -1046,10 +1073,11 @@
           <span id="current-conv-title">选择一个对话</span>
         </div>
         <div class="turn-status" id="turn-status"></div>
+        <div class="auth-status" id="auth-status" title="浏览器只持有 User Access Token；Service Token 和 Delegation Token 由 Agent 内部生成并发送给 Business MCP。">鉴权初始化中…</div>
       </div>
       <div class="chat-header-actions">
         <select id="user-select" class="user-select" onchange="selectUser(this.value)" title="切换用户（不同用户看到不同农场数据）">
-          <option value="">默认用户</option>
+          <option value="">未选择用户</option>
         </select>
         <button class="btn" id="trace-toggle-btn" onclick="toggleTrace()" title="切换 Trace 面板">🔍 Trace</button>
         <button class="btn" onclick="copySessionJson()" title="复制整个会话 JSON（含所有轮次和 skill 调用事件）">📋 复制会话</button>
@@ -1113,8 +1141,8 @@ const state = {
   currentTurnEvents: [], // 存储当前轮次(turn)的所有事件，用于复制 JSON
   currentTurnUserInput: '', // 存储当前轮次的用户输入
   allTurns: [], // 存储整个会话的所有轮次，用于复制整个 session
-  currentUserToken: '', // 当前选中用户的 JWT token（空=默认用户）
-  currentUserInfo: null, // {user_id, nickname, phone, role, farm_id}
+  currentUserToken: '', // 当前选中用户的 User Access JWT
+  currentUserInfo: null, // {user_id, nickname, phone, role, farm_uid, farm_id}
   devUsers: [], // /dev-users 返回的用户列表
 };
 
@@ -1129,6 +1157,7 @@ const chatEmptyEl = document.getElementById('chat-empty');
 const inputEl = document.getElementById('msg-input');
 const sendBtn = document.getElementById('send-btn');
 const turnStatusEl = document.getElementById('turn-status');
+const authStatusEl = document.getElementById('auth-status');
 const tracePanelEl = document.getElementById('trace-panel');
 const traceBodyEl = document.getElementById('trace-body');
 const traceTabEls = document.querySelectorAll('.trace-tab');
@@ -1173,16 +1202,48 @@ function autoScroll(el) {
   el.scrollTop = el.scrollHeight;
 }
 
+function authHeaders(extra = {}) {
+  const headers = {...extra};
+  if (state.currentUserToken) {
+    headers['Authorization'] = 'Bearer ' + state.currentUserToken;
+  }
+  return headers;
+}
+
+function setAuthStatus(message, level = '') {
+  if (!authStatusEl) return;
+  authStatusEl.textContent = message;
+  authStatusEl.className = `auth-status ${level}`.trim();
+}
+
+async function apiError(resp) {
+  try {
+    const data = await resp.json();
+    const detail = data.detail;
+    if (detail && typeof detail === 'object') {
+      return detail.message || detail.code || `HTTP ${resp.status}`;
+    }
+    return detail || data.message || `HTTP ${resp.status}`;
+  } catch (e) {
+    return `HTTP ${resp.status}`;
+  }
+}
+
 // ═══════════════════════════════════════════════════════════
 // Conversation List
 // ═══════════════════════════════════════════════════════════
 async function loadConversations() {
   try {
+    if (!state.currentUserToken) {
+      convListEl.innerHTML = '<div class="conv-empty">请先选择已认证用户</div>';
+      setAuthStatus('未加载 User Access Token', 'warn');
+      return;
+    }
     const url = state.convCursor
       ? `/api/v2/conversations?limit=20&cursor=${encodeURIComponent(state.convCursor)}`
       : `/api/v2/conversations?limit=20`;
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const resp = await fetch(url, {headers: authHeaders()});
+    if (!resp.ok) throw new Error(await apiError(resp));
     const data = await resp.json();
     state.convList = state.convCursor
       ? [...state.convList, ...data.items]
@@ -1192,43 +1253,74 @@ async function loadConversations() {
     renderConvList();
   } catch (e) {
     console.error('loadConversations failed:', e);
-    convListEl.innerHTML = '<div class="conv-empty">Failed to load conversations</div>';
+    convListEl.innerHTML = `<div class="conv-empty">会话加载失败<br><small>${escapeHtml(e.message)}</small></div>`;
   }
 }
 
 async function loadDevUsers() {
   try {
     const resp = await fetch('/api/v2/dev-users');
-    if (!resp.ok) return;
+    if (!resp.ok) {
+      const message = await apiError(resp);
+      const sel = document.getElementById('user-select');
+      if (sel) sel.innerHTML = '<option value="">开发用户不可用</option>';
+      setAuthStatus(`开发用户不可用：${message}`, 'error');
+      return false;
+    }
     const data = await resp.json();
     state.devUsers = data.users || [];
     const sel = document.getElementById('user-select');
-    if (!sel) return;
-    sel.innerHTML = '<option value="">默认用户 (farm_id=1)</option>';
+    if (!sel) return false;
+    sel.innerHTML = '<option value="">未选择用户</option>';
     state.devUsers.forEach(u => {
       const opt = document.createElement('option');
       opt.value = u.user_id;
-      opt.textContent = `${u.nickname} (farm:${u.farm_id}, ${u.role})`;
+      opt.textContent = `${u.nickname} (farm_uid:${u.farm_uid || '未绑定'}, ${u.role})`;
       sel.appendChild(opt);
     });
+    if (!state.devUsers.length) {
+      setAuthStatus('没有可用的 active 用户或农场', 'warn');
+      return false;
+    }
+    sel.value = state.devUsers[0].user_id;
+    selectUser(sel.value, {reload: false});
+    return true;
   } catch (e) {
     console.warn('loadDevUsers failed:', e);
+    setAuthStatus(`开发用户加载失败：${e.message}`, 'error');
+    return false;
   }
 }
 
-function selectUser(userId) {
+function selectUser(userId, options = {}) {
   if (!userId) {
     state.currentUserToken = '';
     state.currentUserInfo = null;
-    convTitleEl.textContent = state.currentConvId || '选择一个对话';
+    state.convList = [];
+    state.convCursor = null;
+    state.currentConvId = null;
+    convTitleEl.textContent = '选择一个对话';
+    renderConvList();
+    setAuthStatus('未选择 User Access Token', 'warn');
     return;
   }
   const user = state.devUsers.find(u => u.user_id === userId);
   if (user) {
     state.currentUserToken = user.token;
     state.currentUserInfo = user;
-    convTitleEl.textContent = `${state.currentConvId || '新对话'} · ${user.nickname}`;
-    console.log(`已切换用户: ${user.nickname} (farm_id=${user.farm_id})`);
+    state.convList = [];
+    state.convCursor = null;
+    state.currentConvId = null;
+    state.pendingNewConvId = null;
+    state.traceRequests = [];
+    state.selectedRequestId = null;
+    convTitleEl.textContent = `选择一个对话 · ${user.nickname}`;
+    setAuthStatus(`User JWT 已加载 · ${user.nickname} · farm_uid=${user.farm_uid}`, 'ok');
+    console.log(`已切换用户: ${user.nickname} (farm_uid=${user.farm_uid})`);
+    renderConvList();
+    if (options.reload !== false) {
+      loadConversations();
+    }
   }
 }
 
@@ -1295,8 +1387,8 @@ function newConversation() {
 
 async function loadConversationMessages(convId) {
   try {
-    const resp = await fetch(`/api/v2/conversations/${encodeURIComponent(convId)}?limit=100`);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const resp = await fetch(`/api/v2/conversations/${encodeURIComponent(convId)}?limit=100`, {headers: authHeaders()});
+    if (!resp.ok) throw new Error(await apiError(resp));
     const data = await resp.json();
     renderMessages(data.items || []);
   } catch (e) {
@@ -1478,8 +1570,8 @@ async function copySessionJson() {
   } else if (state.currentConvId) {
     // fallback：从 API 加载历史消息（可能不含事件详情）
     try {
-      const resp = await fetch(`/api/v2/conversations/${encodeURIComponent(state.currentConvId)}?limit=500`);
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const resp = await fetch(`/api/v2/conversations/${encodeURIComponent(state.currentConvId)}?limit=500`, {headers: authHeaders()});
+      if (!resp.ok) throw new Error(await apiError(resp));
       const data = await resp.json();
       sessionData = {
         conversation_id: state.currentConvId,
@@ -1762,6 +1854,11 @@ function appendEvent(type, data) {
 async function sendMessage() {
   const msg = inputEl.value.trim();
   if (!msg || busy) return;
+  if (!state.currentUserToken) {
+    setAuthStatus('请先选择 User Access Token', 'warn');
+    alert('请先选择已认证用户，再发送消息');
+    return;
+  }
   if (!state.currentConvId) {
     newConversation();
   }
@@ -1788,16 +1885,13 @@ async function sendMessage() {
   autoScroll(chatMainEl);
 
   try {
-    const headers = {'Content-Type': 'application/json'};
-    if (state.currentUserToken) {
-      headers['Authorization'] = 'Bearer ' + state.currentUserToken;
-    }
+    const headers = authHeaders({'Content-Type': 'application/json'});
     const resp = await fetch('/api/v2/chat', {
       method: 'POST',
       headers: headers,
       body: JSON.stringify({message: msg, conversation_id: state.currentConvId}),
     });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    if (!resp.ok) throw new Error(await apiError(resp));
 
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
@@ -1887,6 +1981,11 @@ function renderApprovalCard(data) {
 }
 
 async function approveTurn(turnId, btnEl, decision) {
+  if (!state.currentUserToken) {
+    setAuthStatus('请先选择 User Access Token', 'warn');
+    alert('审批需要 User Access Token');
+    return;
+  }
   const btnContainer = btnEl.closest('.approval-buttons');
   if (btnContainer) {
     const buttons = btnContainer.querySelectorAll('button');
@@ -1895,12 +1994,11 @@ async function approveTurn(turnId, btnEl, decision) {
   try {
     const resp = await fetch('/api/v2/approve', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: authHeaders({'Content-Type': 'application/json'}),
       body: JSON.stringify({turn_id: turnId, decision: decision, reason: ''}),
     });
     if (!resp.ok) {
-      const err = await resp.json();
-      alert('批准失败：' + (err.detail || resp.status));
+      alert('批准失败：' + await apiError(resp));
       if (btnContainer) {
         const buttons = btnContainer.querySelectorAll('button');
         buttons.forEach(b => { b.disabled = false; b.style.opacity = ''; b.style.pointerEvents = ''; });
@@ -1916,11 +2014,11 @@ async function approveTurn(turnId, btnEl, decision) {
 }
 
 async function resetConversation() {
-  if (!state.currentConvId) return;
+  if (!state.currentConvId || !state.currentUserToken) return;
   if (!confirm('确认清空当前会话记忆？')) return;
   await fetch('/api/v2/reset', {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
+    headers: authHeaders({'Content-Type': 'application/json'}),
     body: JSON.stringify({conversation_id: state.currentConvId}),
   });
   chatMainEl.innerHTML = '';
@@ -1970,8 +2068,8 @@ async function loadTraceRequests(convId) {
   try {
     traceBodyEl.innerHTML = '<div class="trace-empty">加载中...</div>';
     const url = `/api/v2/traces?conversation_id=${encodeURIComponent(convId)}&limit=20`;
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const resp = await fetch(url, {headers: authHeaders()});
+    if (!resp.ok) throw new Error(await apiError(resp));
     const data = await resp.json();
     state.traceRequests = data.items || [];
     state.traceCursor = data.next_cursor;
@@ -2024,8 +2122,8 @@ async function selectTraceRequest(requestId) {
 
   try {
     const [nodesResp, summaryResp] = await Promise.all([
-      fetch(`/api/v2/traces/${encodeURIComponent(requestId)}`),
-      fetch(`/api/v2/traces/${encodeURIComponent(requestId)}/summary`),
+      fetch(`/api/v2/traces/${encodeURIComponent(requestId)}`, {headers: authHeaders()}),
+      fetch(`/api/v2/traces/${encodeURIComponent(requestId)}/summary`, {headers: authHeaders()}),
     ]);
     if (!nodesResp.ok) throw new Error(`HTTP ${nodesResp.status}`);
     const nodesData = await nodesResp.json();
@@ -2148,8 +2246,12 @@ function jumpToTrace(requestId) {
 // ═══════════════════════════════════════════════════════════
 async function init() {
   try {
-    await loadConversations();
-    loadDevUsers(); // 非阻塞，后台加载用户列表
+    const userReady = await loadDevUsers();
+    if (userReady) {
+      await loadConversations();
+    } else {
+      convListEl.innerHTML = '<div class="conv-empty">请先配置 JWT_SECRET 并加载开发用户</div>';
+    }
   } catch (e) {
     console.error('Failed to load conversations:', e);
   }
