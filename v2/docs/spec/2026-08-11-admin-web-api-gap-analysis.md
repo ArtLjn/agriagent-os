@@ -1,9 +1,17 @@
+---
+last_updated: 2026-08-13
+status: draft
+---
+
 # admin-web 接入接口缺口分析
 
 > Spec ID: 2026-08-11-admin-web-api-gap-analysis
 > 状态: draft
+> 关联矩阵：[2026-08-13-api-compatibility-matrix.md](./2026-08-13-api-compatibility-matrix.md)
 > 目标: 梳理 admin-web 前端预期调用的 REST 接口与 v2 business 实际提供的接口间的差异，
 >       标注哪些必须后端补齐、哪些可通过协调 admin-web 复用现有接口或调整调用方式。
+
+> **运行时复核说明（2026-08-13）**：本文件的历史分析以 2026-08-11 快照为基础；当前运行时代码优先以关联矩阵为准。`PUT/PATCH /cost-records/{id}`、`PUT/PATCH /cost-categories/{id}` 和 `GET /labor/wages` 当前均已存在，不再作为待补接口。
 
 ## 0. 背景
 
@@ -60,7 +68,7 @@
 |---|---------------|--------|------|------|
 | 1 | `GET  /costs` (listRecords) | `GET /cost-records` 已在 `records_router` | **A** | admin-web 改为 `/cost-records` |
 | 2 | `POST /costs` (createRecord) | `POST /cost-records` 已存在 | **A** | admin-web 改为 `/cost-records` |
-| 3 | `PUT  /costs/{id}` (updateRecord) | `PUT /cost-records/{id}` **无** | **C** | 后端新增路由 + `cost_service.update_record` |
+| 3 | `PUT  /costs/{id}` (updateRecord) | `PUT/PATCH /cost-records/{id}` 已存在 | **A** | admin-web 改为 `/cost-records/{id}` |
 | 4 | `DELETE /costs/{id}` (deleteRecord) | `DELETE /cost-records/{id}` 已存在 | **A** | admin-web 改为 `/cost-records` |
 | 5 | `GET /costs/cycles/{id}/profit` | `GET /cost-records/cycles/{id}/profit` 已存在 | **A** | admin-web 改为 `/cost-records/...` |
 | 6 | `GET /costs/summary/{year}` (getYearlySummary) | `GET /cost-records/summary/yearly?year=` 已存在 | **B** | admin-web 改为 `/cost-records/summary/yearly?year=` |
@@ -68,7 +76,7 @@
 | 8 | `GET /cost-categories` | 已存在 | — | 无需调整 |
 | 9 | `POST /cost-categories` | 已存在 | — | 无需调整 |
 | 10 | `DELETE /cost-categories/{id}` | 已存在 | — | 无需调整 |
-| 11 | `PUT /cost-categories/{id}` | **无**；`cost_category_service.update_category` 也不存在 | **C** | 后端补齐 update 路由 + Service |
+| 11 | `PUT /cost-categories/{id}` | `PUT/PATCH /cost-categories/{id}` 已存在 | **A** | admin-web 保持资源路径并适配 v2 响应 |
 
 ### 2.2 种植域（单元/工人/作业单/工时）
 
@@ -133,11 +141,11 @@
 
 | 优先级 | 接口 | 类型 | 工作量 | 理由 |
 |--------|------|------|--------|------|
-| **P0** | `PUT /cost-records/{id}` | C：后端补齐 | 中 | admin-web 成本管理页直接依赖"编辑记录"。Service 已有 `get_records/delete_record` 参照，新增 `update_record` 结构一致。 |
-| **P0** | `PUT /cost-categories/{id}` | C：后端补齐 | 小 | admin-web 分类管理需编辑分类。Service 层需补 `update_category`（字段变更：name、type、sort_order、icon）。 |
-| **P1** | `GET /labor/wages?mode=...` | D：新增路由 | 中 | 工人工资查询（未结/按月/按工人）。Service 已就绪 `labor_service.query_wages`，只缺 HTTP 路由。 |
+| **已完成** | `PUT/PATCH /cost-records/{id}` | v2 已实现 | — | 当前代码已有 `cost_service.update_record` 与 REST 路由。 |
+| **已完成** | `PUT/PATCH /cost-categories/{id}` | v2 已实现 | — | 当前代码已有 `cost_category_service.update_category` 与 REST 路由。 |
+| **已完成** | `GET /labor/wages?mode=...` | v2 已实现 | — | 当前代码已有 `labor_service.query_wages` 与 REST 路由。 |
 
-> 说明：3 条均为"后端补齐"，均不涉及数据模型变更，也不影响 admin-web 主要工作流。
+> 说明：上述三项在历史版本中曾被判断为后端缺口，但截至 2026-08-13 已由运行时代码补齐；当前真正缺口以关联矩阵第 9 节为准。
 
 ### 3.2 协调 admin-web 可立即生效（A+B，约 30 条）
 
