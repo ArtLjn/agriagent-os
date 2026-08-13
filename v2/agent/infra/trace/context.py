@@ -18,6 +18,8 @@ class TraceInfo:
     conversation_id: str
     created_at: float
     turn_id: str = ""
+    user_id: str = ""
+    farm_uid: str = ""
     step_index: int = 0
 
 
@@ -33,6 +35,8 @@ def init_trace(
     conversation_id: str = "",
     turn_id: str = "",
     request_id: str = "",
+    user_id: str = "",
+    farm_uid: str = "",
 ) -> TraceInfo:
     """初始化追踪上下文。"""
     trace = TraceInfo(
@@ -40,6 +44,8 @@ def init_trace(
         conversation_id=conversation_id,
         created_at=time.time(),
         turn_id=turn_id,
+        user_id=user_id,
+        farm_uid=farm_uid,
     )
     _trace_ctx.set(trace)
     _step_ctx.set(0)

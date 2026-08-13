@@ -124,6 +124,8 @@ def record(
         "request_id": trace.request_id,
         "conversation_id": trace.conversation_id,
         "turn_id": trace.turn_id,
+        "user_id": trace.user_id,
+        "farm_uid": trace.farm_uid,
         "step_index": get_step_index(),
         "node_type": node_type,
         "node_name": node_name,

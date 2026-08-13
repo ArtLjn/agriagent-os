@@ -107,9 +107,15 @@ async def cancel_turn(
 
 def _check_access(turn: dict[str, str], authorization: str | None) -> None:
     identity = parse_identity(authorization)
-    if str(turn.get("user_id", "")) != str(identity["user_id"]) or int(
-        turn.get("farm_id", 1)
-    ) != int(identity["farm_id"]):
+    if str(turn.get("user_id", "")) != str(identity["user_id"]):
+        raise HTTPException(
+            403, {"code": "turn_forbidden", "message": "无权访问该 turn"}
+        )
+    if turn.get("farm_uid"):
+        farm_matches = str(turn["farm_uid"]) == str(identity["farm_uid"])
+    else:
+        farm_matches = int(turn.get("farm_id", 1)) == int(identity["farm_id"])
+    if not farm_matches:
         raise HTTPException(
             403, {"code": "turn_forbidden", "message": "无权访问该 turn"}
         )

@@ -26,9 +26,7 @@ async def approve(
     if turn is None:
         raise HTTPException(404, {"code": "turn_not_found", "message": "turn 不存在"})
     identity = parse_identity(authorization)
-    if str(turn.get("user_id", "")) != str(identity["user_id"]) or int(
-        turn.get("farm_id", 1)
-    ) != int(identity["farm_id"]):
+    if not _same_identity(turn, identity):
         raise HTTPException(
             403, {"code": "turn_forbidden", "message": "无权操作该 turn"}
         )
@@ -39,3 +37,12 @@ async def approve(
             {"code": "approval_already_resolved", "message": "审批已经完成或已过期"},
         )
     return {"ok": True, "turn_id": req.turn_id, "decision": req.decision}
+
+
+def _same_identity(turn: dict[str, str], identity: dict) -> bool:
+    """优先用 farm_uid 校验，兼容旧 Redis turn 的 farm_id。"""
+    if str(turn.get("user_id", "")) != str(identity["user_id"]):
+        return False
+    if turn.get("farm_uid"):
+        return str(turn["farm_uid"]) == str(identity["farm_uid"])
+    return int(turn.get("farm_id", 1)) == int(identity["farm_id"])

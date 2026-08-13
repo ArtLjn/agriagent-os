@@ -55,6 +55,9 @@ async def list_traces(
     conversation_id: str | None = None,
     limit: int = 20,
     cursor: str | None = None,
+    *,
+    user_id: str,
+    farm_uid: str,
 ) -> dict[str, Any]:
     """List request-level trace summaries.
 
@@ -81,7 +84,7 @@ async def list_traces(
     if summary_coll is not None:
         try:
             result = await _list_from_summary_collection(
-                summary_coll, conversation_id, limit, cursor
+                summary_coll, conversation_id, limit, cursor, user_id, farm_uid
             )
             if result["items"]:
                 return result
@@ -89,7 +92,9 @@ async def list_traces(
             logger.warning("trace summary collection read failed, fallback to aggregation: %s", exc)
 
     # ── Fallback: on-demand aggregation from raw records ───────────────
-    return await _list_from_raw_records(coll, conversation_id, limit, cursor)
+    return await _list_from_raw_records(
+        coll, conversation_id, limit, cursor, user_id, farm_uid
+    )
 
 
 async def _list_from_summary_collection(
@@ -97,9 +102,14 @@ async def _list_from_summary_collection(
     conversation_id: str | None,
     limit: int,
     cursor: str | None,
+    user_id: str,
+    farm_uid: str,
 ) -> dict[str, Any]:
     """Read from pre-computed summaries collection."""
-    filter_doc: dict[str, Any] = {}
+    filter_doc: dict[str, Any] = {
+        "user_id": user_id,
+        "farm_uid": farm_uid,
+    }
     if conversation_id:
         filter_doc["conversation_id"] = conversation_id
     if cursor:
@@ -124,9 +134,14 @@ async def _list_from_raw_records(
     conversation_id: str | None,
     limit: int,
     cursor: str | None,
+    user_id: str,
+    farm_uid: str,
 ) -> dict[str, Any]:
     """On-demand aggregation from raw traceRecords."""
-    filter_doc: dict[str, Any] = {}
+    filter_doc: dict[str, Any] = {
+        "user_id": user_id,
+        "farm_uid": farm_uid,
+    }
     if conversation_id:
         filter_doc["conversation_id"] = conversation_id
 
@@ -177,7 +192,9 @@ async def _list_from_raw_records(
     items = []
     for r in results:
         request_id = r["_id"]
-        nodes = await coll.find({"request_id": request_id}).to_list(length=500)
+        nodes = await coll.find(
+            {"request_id": request_id, "user_id": user_id, "farm_uid": farm_uid}
+        ).to_list(length=500)
         summary = _build_summary_from_nodes(nodes, request_id)
         if summary:
             items.append(summary)
@@ -189,6 +206,9 @@ async def _list_from_raw_records(
 async def get_trace_nodes(
     request_id: str,
     limit: int = 200,
+    *,
+    user_id: str,
+    farm_uid: str,
 ) -> dict[str, Any]:
     """Get all trace nodes for a request_id, ordered by step_index + created_at.
 
@@ -207,7 +227,13 @@ async def get_trace_nodes(
         return {"request_id": request_id, "nodes": [], "count": 0, "has_more": False}
 
     cursor = (
-        coll.find({"request_id": request_id})
+        coll.find(
+            {
+                "request_id": request_id,
+                "user_id": user_id,
+                "farm_uid": farm_uid,
+            }
+        )
         .sort([("step_index", 1), ("created_at", 1)])
         .limit(limit + 1)
     )
@@ -231,6 +257,9 @@ async def get_trace_nodes(
 
 async def get_trace_summary(
     request_id: str,
+    *,
+    user_id: str,
+    farm_uid: str,
 ) -> dict[str, Any] | None:
     """Get request-level summary (pre-computed or on-demand).
 
@@ -240,7 +269,9 @@ async def get_trace_summary(
     summary_coll = _get_summary_collection()
     if summary_coll is not None:
         try:
-            doc = await summary_coll.find_one({"_id": request_id})
+            doc = await summary_coll.find_one(
+                {"_id": request_id, "user_id": user_id, "farm_uid": farm_uid}
+            )
             if doc:
                 return _summary_doc_to_full_api(doc)
         except Exception:
@@ -251,7 +282,9 @@ async def get_trace_summary(
     if coll is None:
         return None
 
-    nodes = await coll.find({"request_id": request_id}).to_list(length=500)
+    nodes = await coll.find(
+        {"request_id": request_id, "user_id": user_id, "farm_uid": farm_uid}
+    ).to_list(length=500)
     if not nodes:
         return None
 
@@ -292,6 +325,8 @@ def _build_summary_from_nodes(
         "request_id": request_id,
         "conversation_id": first.get("conversation_id", ""),
         "turn_id": first.get("turn_id", ""),
+        "user_id": first.get("user_id", ""),
+        "farm_uid": first.get("farm_uid", ""),
         "node_count": len(ordered),
         "total_duration_ms": metrics["total_duration_ms"],
         "status": status,
@@ -482,6 +517,8 @@ def _summary_doc_to_api(doc: dict[str, Any]) -> dict[str, Any]:
         "request_id": doc.get("request_id", doc.get("_id", "")),
         "conversation_id": doc.get("conversation_id", ""),
         "turn_id": doc.get("turn_id", ""),
+        "user_id": doc.get("user_id", ""),
+        "farm_uid": doc.get("farm_uid", ""),
         "node_count": int(doc.get("node_count") or 0),
         "total_duration_ms": int(doc.get("total_duration_ms") or 0),
         "status": doc.get("status", "success"),

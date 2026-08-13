@@ -58,9 +58,16 @@ class AuthCfg:
 
     jwt_secret: str = ""
     jwt_algorithm: str = "HS256"
+    jwt_issuer: str = "farm-manager-auth"
+    jwt_audience: str | list[str] = field(
+        default_factory=lambda: ["farm-manager-agent", "farm-manager-business"]
+    )
     jwt_expire_minutes: int = 60 * 24 * 7  # 7 天
     bcrypt_rounds: int = 12
     agent_service_token: str = ""
+    delegation_secret: str = ""
+    delegation_issuer: str = "farm-manager-agent"
+    delegation_audience: str = "farm-manager-business-mcp"
     admin_phone: str = ""
     admin_password: str = ""
 
@@ -132,9 +139,21 @@ def _build_settings() -> Settings:
         auth=AuthCfg(
             jwt_secret=auth_raw.get("jwt_secret", ""),
             jwt_algorithm=auth_raw.get("jwt_algorithm", "HS256"),
+            jwt_issuer=auth_raw.get("jwt_issuer", "farm-manager-auth"),
+            jwt_audience=auth_raw.get(
+                "jwt_audience",
+                ["farm-manager-agent", "farm-manager-business"],
+            ),
             jwt_expire_minutes=int(auth_raw.get("jwt_expire_minutes", 60 * 24 * 7)),
             bcrypt_rounds=int(auth_raw.get("bcrypt_rounds", 12)),
             agent_service_token=auth_raw.get("agent_service_token", ""),
+            delegation_secret=auth_raw.get("delegation_secret", ""),
+            delegation_issuer=auth_raw.get(
+                "delegation_issuer", "farm-manager-agent"
+            ),
+            delegation_audience=auth_raw.get(
+                "delegation_audience", "farm-manager-business-mcp"
+            ),
             admin_phone=auth_raw.get("admin_phone", ""),
             admin_password=auth_raw.get("admin_password", ""),
         ),
@@ -159,8 +178,14 @@ def _build_settings() -> Settings:
         settings.secrets.searchhub_api_key = env
     if env := os.getenv("JWT_SECRET"):
         settings.auth.jwt_secret = env
+    if env := os.getenv("JWT_ISSUER"):
+        settings.auth.jwt_issuer = env
+    if env := os.getenv("JWT_AUDIENCE"):
+        settings.auth.jwt_audience = env
     if env := os.getenv("AGENT_SERVICE_TOKEN"):
         settings.auth.agent_service_token = env
+    if env := os.getenv("AGENT_DELEGATION_SECRET"):
+        settings.auth.delegation_secret = env
     if env := os.getenv("DEFAULT_FARM_ID"):
         settings.default_farm_id = int(env)
     return settings

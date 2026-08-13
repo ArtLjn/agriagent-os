@@ -57,8 +57,14 @@ business_mcp:
   url: "http://127.0.0.1:9876/mcp"
 
 auth:
-  # 与 business 共享同一个 JWT secret，用于解析前端 Bearer token 中的 user_id / farm_id
+  # 与 business 共享同一个 JWT secret，用于解析前端 Bearer token 中的 sub / farm_uid
   jwt_secret: ""
   jwt_algorithm: "HS256"
-  # Agent 调用 business MCP 时携带的 X-Agent-Token（business 侧校验）
+  jwt_issuer: "farm-manager-auth"
+  jwt_audience: "farm-manager-agent"
+  # Agent 调用 Business MCP 的服务凭证（当前为轮换型 opaque token）
   agent_service_token: ""
+  # Agent 为每个 turn 签发的短时用户委托凭证密钥
+  delegation_secret: ""
+  delegation_issuer: "farm-manager-agent"
+  delegation_audience: "farm-manager-business-mcp"

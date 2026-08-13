@@ -87,7 +87,11 @@ async def save_turn(
         mapping={
             "turn_id": turn.turn_id,
             "user_id": turn.user_id,
+            "farm_uid": turn.farm_uid,
             "farm_id": str(turn.farm_id),
+            "role": turn.role,
+            "token_id": turn.token_id,
+            "scope": turn.scope,
             "conversation_id": turn.conversation_id,
             "memory_key": turn.memory_key or "",
             "user_input": turn.user_input,
@@ -105,7 +109,7 @@ async def save_turn(
     await client.expire(turn_key(turn.turn_id), settings.redis.turn_state_ttl_seconds)
 
 
-async def get_turn(turn_id: str) -> dict[str, str] | None:
+async def get_turn(turn_id: str) -> dict[bytes | str, bytes | str] | None:
     client = get_client()
     if client is None:
         return None

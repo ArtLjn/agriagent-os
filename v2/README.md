@@ -44,6 +44,8 @@ uv sync                                  # 装齐所有依赖
 # Business 必须配置 MySQL 和 JWT 密钥（JWT_SECRET 至少 32 字节）
 export DATABASE__URL='mysql+pymysql://USER:PASSWORD@HOST:3306/farm_manager?charset=utf8mb4'
 export JWT_SECRET='请替换为随机的高强度密钥'
+export AGENT_SERVICE_TOKEN='请替换为 Agent 到 Business 的服务凭证'
+export AGENT_DELEGATION_SECRET='请替换为 Agent/Business 委托凭证密钥'
 
 # Terminal 1：启动 business（MCP Server）
 uv run --package farm-manager-business python -m business.server

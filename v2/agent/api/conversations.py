@@ -28,6 +28,8 @@ async def conversations_list(
             user_id=identity["user_id"],
             farm_id=identity["farm_id"],
         )
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.warning("conversations list failed: %s", exc)
         raise HTTPException(500, {"detail": str(exc), "code": "internal"})

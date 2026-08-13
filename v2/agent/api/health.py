@@ -40,8 +40,13 @@ def dev_users() -> dict:
     from business.db import session_scope
     from business.models import Farm, User
 
-    secret = settings.auth.jwt_secret or "dev-secret-key"
+    secret = settings.auth.jwt_secret
     algorithm = settings.auth.jwt_algorithm or "HS256"
+    if not secret:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "auth_unavailable", "message": "JWT_SECRET 未配置"},
+        )
 
     try:
         import jwt as pyjwt
@@ -64,13 +69,25 @@ def dev_users() -> dict:
             exp = now + 30 * 86400
 
             for user, farm in rows:
-                farm_id = farm.id if farm else (settings.default_farm_id or 1)
+                farm_id = farm.id if farm else None
+                farm_uid = farm.uid if farm else None
+                if farm is None:
+                    continue
                 payload = {
+                    "iss": settings.auth.jwt_issuer,
+                    "aud": settings.auth.jwt_audience,
                     "sub": user.id,
+                    "farm_uid": farm_uid,
+                    # Redis/Mongo 迁移完成后删除；当前 Agent 仍用它计算内部 scope。
                     "farm_id": farm_id,
                     "nickname": user.nickname,
                     "role": user.role,
+                    "type": "access",
+                    "scope": "farm:read farm:write",
+                    "iat": now,
+                    "nbf": now,
                     "exp": exp,
+                    "jti": f"dev-{user.id}-{now}",
                 }
                 token = pyjwt.encode(payload, secret, algorithm=algorithm)
                 users.append(
@@ -79,6 +96,7 @@ def dev_users() -> dict:
                         "nickname": user.nickname,
                         "phone": user.phone,
                         "role": user.role,
+                        "farm_uid": farm_uid,
                         "farm_id": farm_id,
                         "token": token,
                     }

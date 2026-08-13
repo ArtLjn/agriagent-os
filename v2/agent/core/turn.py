@@ -40,9 +40,13 @@ class Turn:
     # Input.
     user_input: str = ""
 
-    # Identity（从 JWT 解析，用于 MCP 调用时注入 X-Farm-Id / X-User-Id / X-Agent-Token）。
+    # Identity（farm_uid 是对外可信标识，farm_id 仅为 Redis/历史状态兼容）。
     user_id: str = ""
+    farm_uid: str = ""
     farm_id: int = 1
+    role: str = "user"
+    token_id: str = ""
+    scope: str = ""
     agent_token: str = ""
 
     # Accumulated LLM messages (system + user + assistant + tool).

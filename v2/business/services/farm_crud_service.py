@@ -14,6 +14,7 @@
 """
 from __future__ import annotations
 
+from datetime import datetime
 import logging
 import uuid
 from typing import Any
@@ -51,6 +52,11 @@ def create_default_farm(db: Session, user_id: str, nickname: str) -> Farm:
 def get_farm_by_id(db: Session, farm_id: int) -> Farm | None:
     """通过 farm_id 查询农场。"""
     return db.get(Farm, farm_id)
+
+
+def get_farm_by_uid(db: Session, farm_uid: str) -> Farm | None:
+    """通过对外稳定 UID 查询农场，内部再使用自增 farm.id。"""
+    return db.query(Farm).filter(Farm.uid == farm_uid).first()
 
 
 def get_farm_by_user_id(db: Session, user_id: str) -> Farm | None:
@@ -129,7 +135,7 @@ def update_farm_location(
             .first()
         )
         if setting is None:
-            setting = UserSetting(user_id=farm.user_id)
+            setting = UserSetting(user_id=farm.user_id, updated_at=datetime.now())
             db.add(setting)
         setting.default_city = farm.location
 
@@ -168,6 +174,7 @@ def backfill_default_farm_location(
 __all__ = [
     "create_default_farm",
     "get_farm_by_id",
+    "get_farm_by_uid",
     "get_farm_by_user_id",
     "get_farm_with_user",
     "update_farm_info",

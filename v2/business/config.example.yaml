@@ -22,9 +22,18 @@ secrets:
 auth:
   jwt_secret: ""
   jwt_algorithm: "HS256"
+  jwt_issuer: "farm-manager-auth"
+  jwt_audience:
+    - "farm-manager-agent"
+    - "farm-manager-business"
   jwt_expire_minutes: 10080
   bcrypt_rounds: 12
+  # Agent -> Business MCP 服务凭证；当前为轮换型 opaque token
   agent_service_token: ""
+  # 必须与 Agent 的 AGENT_DELEGATION_SECRET 一致
+  delegation_secret: ""
+  delegation_issuer: "farm-manager-agent"
+  delegation_audience: "farm-manager-business-mcp"
 
 weather:
   latitude: 34.26

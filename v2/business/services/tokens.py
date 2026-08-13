@@ -1,15 +1,15 @@
-"""Auth JWT 签发与校验（从 archive 复用）。
+"""用户 Access JWT 签发与校验。
 
 JWT payload 标准：
   - sub: user_id
   - phone: 用户手机号
   - role: user/admin
-  - farm_id: 关联农场 ID
+  - farm_uid: 关联农场 UUID
+  - farm_id: 迁移期内部兼容字段，不作为对外租户标识
   - type: "access"
   - iat / exp / jti
 
-签发时绑定 farm_id，便于 business 中间件直接从 JWT 拿到隔离维度，
-无需额外查表。farm_id 由 auth_service.register/login 注入。
+签发时绑定 farm_uid，Business 再通过用户归属关系解析内部 farm_id。
 """
 
 from __future__ import annotations
@@ -35,7 +35,9 @@ def create_access_token(
     user_id: str,
     phone: str | None = None,
     role: str = "user",
+    farm_uid: str | None = None,
     farm_id: int | None = None,
+    scope: str | None = None,
     expires_minutes: int | None = None,
 ) -> str:
     """签发标准 access token。
@@ -44,7 +46,8 @@ def create_access_token(
         user_id: 用户 ID
         phone: 手机号（可选，便于日志展示）
         role: 角色（user/admin）
-        farm_id: 关联农场 ID（业务隔离维度）
+        farm_uid: 对外农场 UUID
+        farm_id: 迁移期内部 ID，不作为对外租户标识
         expires_minutes: 过期分钟数，默认从 config 读
 
     Returns:
@@ -60,6 +63,8 @@ def create_access_token(
         else cfg.jwt_expire_minutes
     )
     payload: dict[str, Any] = {
+        "iss": cfg.jwt_issuer,
+        "aud": cfg.jwt_audience,
         "sub": user_id,
         "type": "access",
         "iat": now,
@@ -70,6 +75,12 @@ def create_access_token(
         payload["phone"] = phone
     if role is not None:
         payload["role"] = role
+    payload["scope"] = scope or (
+        "farm:read farm:write admin:*" if role == "admin" else "farm:read farm:write"
+    )
+    if farm_uid is not None:
+        payload["farm_uid"] = farm_uid
+    # 迁移期保留内部 farm_id，待 Agent Redis/Mongo 状态完成 farm_uid 化后删除。
     if farm_id is not None:
         payload["farm_id"] = farm_id
     return jwt.encode(payload, cfg.jwt_secret, algorithm=cfg.jwt_algorithm)
@@ -81,12 +92,18 @@ def decode_access_token(token: str) -> dict:
     if not cfg.jwt_secret:
         raise RuntimeError("JWT_SECRET 未配置，无法校验认证令牌")
     try:
-        payload = jwt.decode(token, cfg.jwt_secret, algorithms=[cfg.jwt_algorithm])
+        payload = jwt.decode(
+            token,
+            cfg.jwt_secret,
+            algorithms=[cfg.jwt_algorithm],
+            issuer=cfg.jwt_issuer,
+            audience=cfg.jwt_audience,
+        )
     except jwt.ExpiredSignatureError as exc:
         raise TokenExpiredError from exc
     except jwt.InvalidTokenError as exc:
         raise TokenInvalidError from exc
-    if payload.get("type", "access") != "access":
+    if payload.get("type") != "access":
         raise TokenInvalidError
     return payload
 

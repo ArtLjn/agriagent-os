@@ -11,7 +11,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from agent.api import api_router
-from agent.auth import parse_identity
+from agent.auth import ensure_mcp_credentials, parse_identity
 from agent.core.turn import Turn
 from agent.infra.chat_store import append_message
 from agent.infra.coordination import (
@@ -50,6 +50,7 @@ async def chat(
     """Create a durable turn and stream replayable Redis events."""
     conv_id = req.conversation_id or "default"
     identity = parse_identity(authorization)
+    ensure_mcp_credentials()
     scope = scope_hash(identity["user_id"], identity["farm_id"], conv_id)
     request_id = req.client_request_id or uuid.uuid4().hex
     request_fingerprint = hashlib.sha256(
@@ -59,7 +60,11 @@ async def chat(
         conversation_id=conv_id,
         user_input=req.message,
         user_id=identity["user_id"],
+        farm_uid=identity["farm_uid"],
         farm_id=identity["farm_id"],
+        role=identity["role"],
+        token_id=identity["token_id"],
+        scope=identity["scope"],
         agent_token=identity["agent_token"],
         memory_key=scope_hash(identity["user_id"], identity["farm_id"], conv_id),
     )
@@ -71,6 +76,7 @@ async def chat(
             request_fingerprint=request_fingerprint,
             turn_id=turn.turn_id,
         )
+
         if not claimed:
             if not existing:
                 raise HTTPException(409, {"code": "idempotency_state_missing"})

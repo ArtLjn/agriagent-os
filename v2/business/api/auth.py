@@ -28,10 +28,19 @@ def _auth_response(user, token: str) -> dict:
     if farm is None:
         raise HTTPException(status_code=500, detail="用户注册后未创建默认农场")
     return {
+        "access_token": token,
+        "token_type": "Bearer",
+        "user": {
+            "id": user.id,
+            "phone": user.phone,
+            "nickname": user.nickname,
+            "role": user.role,
+        },
         "user_id": user.id,
         "phone": user.phone,
         "nickname": user.nickname,
         "role": user.role,
+        "farm_uid": farm.uid,
         "farm_id": farm.id,
         "token": token,
     }

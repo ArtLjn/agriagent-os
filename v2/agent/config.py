@@ -74,6 +74,11 @@ class AuthCfg:
     jwt_secret: str = ""
     jwt_algorithm: str = "HS256"
     agent_service_token: str = ""
+    jwt_issuer: str = "farm-manager-auth"
+    jwt_audience: str | list[str] = "farm-manager-agent"
+    delegation_secret: str = ""
+    delegation_issuer: str = "farm-manager-agent"
+    delegation_audience: str = "farm-manager-business-mcp"
 
 
 @dataclass
@@ -158,6 +163,15 @@ def _build_settings() -> Settings:
             jwt_secret=auth_raw.get("jwt_secret", ""),
             jwt_algorithm=auth_raw.get("jwt_algorithm", "HS256"),
             agent_service_token=auth_raw.get("agent_service_token", ""),
+            jwt_issuer=auth_raw.get("jwt_issuer", "farm-manager-auth"),
+            jwt_audience=auth_raw.get("jwt_audience", "farm-manager-agent"),
+            delegation_secret=auth_raw.get("delegation_secret", ""),
+            delegation_issuer=auth_raw.get(
+                "delegation_issuer", "farm-manager-agent"
+            ),
+            delegation_audience=auth_raw.get(
+                "delegation_audience", "farm-manager-business-mcp"
+            ),
         ),
         default_farm_id=int(raw.get("default_farm_id", 1)),
     )
@@ -217,8 +231,14 @@ def _build_settings() -> Settings:
         settings.business_mcp.url = env
     if env := os.getenv("JWT_SECRET"):
         settings.auth.jwt_secret = env
+    if env := os.getenv("JWT_ISSUER"):
+        settings.auth.jwt_issuer = env
+    if env := os.getenv("AGENT_JWT_AUDIENCE"):
+        settings.auth.jwt_audience = env
     if env := os.getenv("AGENT_SERVICE_TOKEN"):
         settings.auth.agent_service_token = env
+    if env := os.getenv("AGENT_DELEGATION_SECRET"):
+        settings.auth.delegation_secret = env
     if env := os.getenv("DEFAULT_FARM_ID"):
         settings.default_farm_id = int(env)
     return settings

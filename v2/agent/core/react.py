@@ -46,6 +46,7 @@ from agent.infra import sse
 from agent.infra.llm import chat_stream, MODEL
 from agent.infra.logging import log_event
 from agent.infra.mcp_client import BusinessClient
+from agent.auth import create_delegation_token
 from agent.infra.trace import (
     get_trace,
     increment_step,
@@ -113,9 +114,21 @@ async def run_turn(
 
     try:
         identity_headers = {
-            "X-Farm-Id": str(turn.farm_id),
+            "Authorization": f"Bearer {turn.agent_token}",
+            "X-Delegation-Token": create_delegation_token(
+                {
+                    "user_id": turn.user_id,
+                    "farm_uid": turn.farm_uid,
+                    "role": turn.role,
+                    "token_id": turn.token_id,
+                    "scope": turn.scope,
+                },
+                conversation_id=turn.conversation_id,
+                turn_id=turn.turn_id,
+            ),
+            "X-Farm-Uid": turn.farm_uid,
             "X-User-Id": turn.user_id,
-            "X-Agent-Token": turn.agent_token,
+            "X-Farm-Id": str(turn.farm_id),
         }
         async with BusinessClient(headers=identity_headers) as business:
             skill_ctx = SkillContext(
@@ -123,6 +136,7 @@ async def run_turn(
                 turn=turn,
                 user_id=turn.user_id,
                 farm_id=turn.farm_id,
+                farm_uid=turn.farm_uid,
                 agent_token=turn.agent_token,
             )
 

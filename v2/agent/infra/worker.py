@@ -67,7 +67,12 @@ def _turn_from_state(state: dict[str, str]) -> Turn:
         memory_key=state.get("memory_key") or None,
         user_input=state.get("user_input", ""),
         user_id=state.get("user_id", ""),
+        farm_uid=state.get("farm_uid", ""),
         farm_id=int(state.get("farm_id", "1")),
+        role=state.get("role", "user"),
+        token_id=state.get("token_id", ""),
+        scope=state.get("scope", ""),
+        agent_token=settings.auth.agent_service_token,
     )
 
 
@@ -127,7 +132,12 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
     renew_stop = asyncio.Event()
     renew_task = asyncio.create_task(renew_until_done(lease, renew_stop))
     final_answer = ""
-    init_trace(conversation_id=turn.conversation_id, turn_id=turn.turn_id)
+    init_trace(
+        conversation_id=turn.conversation_id,
+        turn_id=turn.turn_id,
+        user_id=turn.user_id,
+        farm_uid=turn.farm_uid,
+    )
 
     async def approval_waiter(turn_id: str) -> tuple[bool, str]:
         return await wait_approval(turn_id)

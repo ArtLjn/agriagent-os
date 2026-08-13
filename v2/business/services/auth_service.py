@@ -3,7 +3,7 @@
 变更点：
   - 移除 archive 的 `app.context.runtime` / `app.infra.repository_runtime` 依赖
   - 使用 v2 的 session_scope 替代直接传 db: Session
-  - JWT 签发时注入 farm_id（业务隔离维度）
+  - JWT 签发时注入 farm_uid（对外租户标识）和 farm_id（迁移期兼容）
   - 注册时自动创建默认农场和成本分类
 """
 from __future__ import annotations
@@ -53,6 +53,8 @@ def register(
             status="active",
         )
         db.add(user)
+        # 农场通过外键引用用户；先落地用户行，再 flush 默认农场。
+        db.flush()
 
         # 创建默认农场（farm_crud_service 内部 flush 拿到 farm.id）
         farm = farm_crud_service.create_default_farm(
@@ -72,6 +74,7 @@ def register(
             user_id=user.id,
             phone=user.phone,
             role=user.role,
+            farm_uid=farm.uid,
             farm_id=farm.id,
         )
         logger.info("用户注册 | phone=%s user_id=%s farm_id=%s", phone, user.id, farm.id)
@@ -101,10 +104,13 @@ def login(phone: str, password: str) -> tuple[User, str] | None:
         farm = farm_crud_service.get_farm_by_user_id(db, user_id=user.id)
         farm_id = farm.id if farm else None
 
+        if farm is None:
+            return None
         token = create_access_token(
             user_id=user.id,
             phone=user.phone,
             role=user.role,
+            farm_uid=farm.uid,
             farm_id=farm_id,
         )
         logger.info("用户登录 | phone=%s farm_id=%s", phone, farm_id)
@@ -143,6 +149,8 @@ def ensure_admin_user() -> None:
             status="active",
         )
         db.add(user)
+        # 管理员初始化同样需要先落地 users，避免 farms 外键插入失败。
+        db.flush()
 
         farm = farm_crud_service.create_default_farm(
             db, user_id=user_id, nickname="管理员农场"
