@@ -12,11 +12,11 @@ from agent.skills.base import Skill, SkillResult
 from agent.skills.context import SkillContext
 
 # 允许的 AST 节点：数字、二元运算、一元负号、括号。
+# Python 3.14 已移除 ast.Num 属性；数字统一由 ast.Constant 表示。
 _ALLOWED_NODES = (
     ast.Expression,
     ast.BinOp,
     ast.UnaryOp,
-    ast.Num,  # py<3.8 兼容
     ast.Constant,
     ast.Add,
     ast.Sub,
@@ -45,8 +45,6 @@ def _evaluate(node: ast.AST) -> Decimal:
         return _evaluate(node.body)
     if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
         return Decimal(str(node.value))
-    if isinstance(node, ast.Num):  # py<3.8
-        return Decimal(str(node.n))
     if isinstance(node, ast.BinOp):
         left = _evaluate(node.left)
         right = _evaluate(node.right)
