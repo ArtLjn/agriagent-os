@@ -968,6 +968,7 @@ Redis 适合做短期状态、锁、队列、事件重放和容量协调，不�
 | Redis admission / queue promotion | 通过 | 真实 Redis：容量占满后进入 global queue，释放后提升并释放资源 |
 | 40 请求容量阶梯 | 通过 | 真实 Redis：8 个 active、32 个 global queued；同会话 2 个排队后返回 `conversation_queue_full` |
 | Redis 索引回收 | 通过 | 孤儿 Set/List 被删除，dispatch Stream 获得 TTL；有效 lease turn 保留 |
+| 本地 Redis Worker 启动 | 通过 | Redis 7 `XAUTOCLAIM` 返回 2 项时正常兼容，Worker 与 sweeper 启动后无循环异常 |
 | 幂等提交 | 通过 | 同一 scope/request id 第二次读取到原 turn，不创建第二个 turn |
 | SSE 事件重放 | 通过 | `accepted(seq=1) → done(seq=2)`，重复 done 返回原 seq |
 | Redis 6 Worker 兼容 | 通过 | `XAUTOCLAIM` 不可用时回退 `XPENDING/XCLAIM` |

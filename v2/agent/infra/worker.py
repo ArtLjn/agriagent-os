@@ -256,9 +256,9 @@ async def _worker_loop(stop: asyncio.Event, consumer: str) -> None:
 
 
 async def _reclaim_messages(client, consumer: str) -> list[tuple[str, dict[str, str]]]:
-    """兼容 Redis 5/6：优先 XAUTOCLAIM，旧版本回退到 XPENDING/XCLAIM。"""
+    """兼容不同 Redis/redis-py：优先 XAUTOCLAIM，失败时回退。"""
     try:
-        _, reclaimed, _ = await client.xautoclaim(
+        result = await client.xautoclaim(
             dispatch_key(),
             settings.redis.dispatch_group,
             consumer,
@@ -266,6 +266,12 @@ async def _reclaim_messages(client, consumer: str) -> list[tuple[str, dict[str, 
             start_id="0-0",
             count=10,
         )
+        if len(result) == 2:
+            _, reclaimed = result
+        elif len(result) == 3:
+            _, reclaimed, _ = result
+        else:
+            raise RuntimeError(f"unexpected XAUTOCLAIM response length: {len(result)}")
         return reclaimed
     except Exception as exc:  # noqa: BLE001
         if (
