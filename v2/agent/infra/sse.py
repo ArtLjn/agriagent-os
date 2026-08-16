@@ -5,6 +5,8 @@ Event types emitted to the Web UI:
   - thought       : LLM reasoning (raw content)
   - plan          : multi-step plan (when LLM proposes plan)
   - action        : tool call initiated (name, arguments, rationale)
+  - tool_started  : Tool 开始执行，携带稳定调用标识
+  - tool_finished : Tool 完成，携带耗时和结果/错误
   - observation   : tool result (data, possibly trimmed)
   - approval_required : HITL gate fired (tool_name, args, risk_level)
   - approval_result   : user approved/rejected (decision, reason)
@@ -12,6 +14,8 @@ Event types emitted to the Web UI:
   - write_committed_reply_failed : write succeeded but reply generation failed
   - final_answer_start : begin streaming final answer (empty)
   - final_answer_delta  : incremental token of final answer
+  - assistant_delta     : incremental model output during reasoning
+  - heartbeat           : the turn is still executing
   - final_answer : assistant's final reply complete (text)
   - error         : pipeline failure (message)
   - done          : turn finished (status)
@@ -57,6 +61,16 @@ def thought(content: str) -> dict:
     return {"type": "thought", "data": {"content": content}}
 
 
+def assistant_delta(delta: str) -> dict:
+    """在 Runtime 尚未确定是否为最终答复前，推送模型输出增量。"""
+    return {"type": "assistant_delta", "data": {"delta": delta}}
+
+
+def heartbeat(stage: str, step: int = 0) -> dict:
+    """让长时间运行的 LLM 或 Skill 调用保持可观测，不伪造执行进度。"""
+    return {"type": "heartbeat", "data": {"stage": stage, "step": step}}
+
+
 def plan(steps: list[str]) -> dict:
     return {"type": "plan", "data": {"steps": steps}}
 
@@ -93,14 +107,66 @@ def action(tool_name: str, arguments: dict, rationale: str = "") -> dict:
     }
 
 
-def observation(tool_name: str, data: Any, error: str | None = None) -> dict:
+def tool_started(
+    turn_id: str,
+    tool_call_id: str,
+    tool_name: str,
+    step: int,
+    arguments: dict,
+) -> dict:
+    """标记 Tool 已进入执行，供长耗时调用和并行调用关联。"""
     return {
-        "type": "observation",
+        "type": "tool_started",
         "data": {
+            "turn_id": turn_id,
+            "tool_call_id": tool_call_id,
             "tool_name": tool_name,
-            "result": data,
+            "step": step,
+            "arguments": arguments,
+        },
+    }
+
+
+def tool_finished(
+    turn_id: str,
+    tool_call_id: str,
+    tool_name: str,
+    step: int,
+    duration_ms: int,
+    result: Any = None,
+    error: dict[str, Any] | None = None,
+) -> dict:
+    """标记 Tool 完成，保留稳定调用 ID、耗时和结果/错误。"""
+    return {
+        "type": "tool_finished",
+        "data": {
+            "turn_id": turn_id,
+            "tool_call_id": tool_call_id,
+            "tool_name": tool_name,
+            "step": step,
+            "duration_ms": duration_ms,
+            "result": result,
             "error": error,
         },
+    }
+
+
+def observation(
+    tool_name: str,
+    data: Any,
+    error: str | None = None,
+    error_info: dict[str, Any] | None = None,
+) -> dict:
+    payload = {
+        "tool_name": tool_name,
+        "result": data,
+        "error": error,
+    }
+    if error_info is not None:
+        payload["error_info"] = error_info
+    return {
+        "type": "observation",
+        "data": payload,
     }
 
 
@@ -161,8 +227,25 @@ def final_answer_delta(delta: str) -> dict:
     return {"type": "final_answer_delta", "data": {"delta": delta}}
 
 
-def error_event(message: str, code: str = "internal") -> dict:
-    return {"type": "error", "data": {"code": code, "message": message}}
+def error_event(
+    message: str,
+    code: str = "internal",
+    *,
+    phase: str = "",
+    tool_name: str = "",
+    retryable: bool = False,
+    attempt: int = 0,
+) -> dict:
+    data = {
+        "code": code,
+        "message": message,
+        "phase": phase,
+        "retryable": retryable,
+        "attempt": attempt,
+    }
+    if tool_name:
+        data["tool_name"] = tool_name
+    return {"type": "error", "data": data}
 
 
 def done(status: str, turn_id: str) -> dict:

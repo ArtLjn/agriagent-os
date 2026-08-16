@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import apiClient from './client';
-import { getSessionDebugExport, listAppSkills, refreshDailyAdvice } from './agent';
+import {
+  getSessionDebugExport,
+  listAppSkills,
+  mapSseToChunk,
+  refreshDailyAdvice,
+} from './agent';
 
 vi.mock('./client', () => ({
   default: {
@@ -13,6 +18,24 @@ vi.mock('./client', () => ({
 const mockedApiClient = vi.mocked(apiClient, true);
 
 describe('agent api', () => {
+  it('将推理增量映射为对话内容增量', () => {
+    expect(
+      mapSseToChunk({ type: 'assistant_delta', data: { delta: '正在查询' } }),
+    ).toEqual({ type: 'content', data: '正在查询' });
+  });
+
+  it('保留 LLM 重试事件供执行时间线展示', () => {
+    expect(
+      mapSseToChunk({
+        type: 'retrying',
+        data: { code: 'llm_retrying', attempt: 1, delay_ms: 1000 },
+      }),
+    ).toEqual({
+      type: 'retrying',
+      data: { code: 'llm_retrying', attempt: 1, delay_ms: 1000 },
+    });
+  });
+
   it('读取 App 端技能列表接口', async () => {
     mockedApiClient.get.mockResolvedValueOnce({
       data: {

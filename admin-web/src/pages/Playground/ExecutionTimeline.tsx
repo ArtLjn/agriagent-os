@@ -35,6 +35,7 @@ const eventMeta: Record<ExecutionEvent['type'], { label: string; color: string }
   doom_loop_warning: { label: '循环告警', color: palette.danger },
   verification_warning: { label: '检查告警', color: palette.warning },
   write_committed_reply_failed: { label: '收尾告警', color: palette.warning },
+  retrying: { label: '自动重试', color: palette.warning },
   error: { label: '执行失败', color: palette.danger },
 };
 
@@ -129,6 +130,8 @@ function EventBody({ event }: { event: ExecutionEvent }) {
       return <ul style={{ margin: 0, paddingLeft: 20, color: TEXT }}>{event.issues.map((issue, index) => <li key={index}>{issue}</li>)}</ul>;
     case 'write_committed_reply_failed':
       return <span style={{ color: palette.warning }}>{event.code} · {event.message}</span>;
+    case 'retrying':
+      return <span style={{ color: palette.warning }}>{event.code} · 第 {event.attempt} 次，等待 {event.delay_ms}ms</span>;
     case 'error':
       return <span style={{ color: palette.danger }}>{event.code} · {event.message}</span>;
   }

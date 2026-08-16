@@ -19,6 +19,7 @@ from typing import Any
 import yaml
 
 from agent.skills.base import McpSkill, Skill
+from agent.skills.registry import SkillRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -87,8 +88,8 @@ def _load_skill(skill_dir: Path) -> Skill | None:
         module_path = f"agent.skills.{skill_dir.name}.scripts.main"
         try:
             module = importlib.import_module(module_path)
-        except Exception as exc:  # noqa: BLE001
-            logger.exception("failed to import %s: %s", module_path, exc)
+        except Exception:
+            logger.exception("failed to import %s", module_path)
             return None
 
         # 找 Skill 子类实例
@@ -138,28 +139,39 @@ def _load_skill(skill_dir: Path) -> Skill | None:
     return None
 
 
-def load_all() -> list[Skill]:
-    """加载所有 skill，返回实例列表。"""
+def load_registry() -> SkillRegistry:
+    """发现并加载所有 Skill，返回运行时注册表。"""
     skills: list[Skill] = []
     for skill_dir in _discover_skill_dirs():
         result = _load_skill(skill_dir)
         if result is not None:
             operation_skills = result.operation_skills()
             skills.extend(operation_skills or [result])
-    return skills
+    return SkillRegistry.from_skills(skills)
 
 
-def to_openai_tools(skills: list[Skill]) -> list[dict[str, Any]]:
+def load_all() -> list[Skill]:
+    """兼容旧调用方；新代码应使用 :func:`load_registry`。"""
+    return list(load_registry().all())
+
+
+def to_openai_tools(
+    skills: list[Skill] | SkillRegistry,
+) -> list[dict[str, Any]]:
     """合并所有 skill 为 OpenAI tools schema。
 
     expose_to_model=false 的 skill（如 commit_planting_plan）不暴露给模型，
     由 Runtime 在 prepare 审批通过后用原始参数自动驱动。
     """
+    if isinstance(skills, SkillRegistry):
+        return skills.exposed_tools()
     return [s.to_openai_tool() for s in skills if s.exposed]
 
 
-def find_skill(skills: list[Skill], name: str) -> Skill | None:
+def find_skill(skills: list[Skill] | SkillRegistry, name: str) -> Skill | None:
     """按 name 查找 skill。"""
+    if isinstance(skills, SkillRegistry):
+        return skills.get(name)
     for s in skills:
         if s.name == name:
             return s

@@ -9,16 +9,16 @@ import uuid
 
 from agent.config import settings
 from agent.core.react import run_turn
-from agent.core.turn import Turn
+from agent.core.turn import StopReason, Turn, TurnPhase
 from agent.infra.chat_store import append_message
 from agent.infra.coordination import (
     TurnLease,
-    promote_turn,
     owns_turn_lease,
+    promote_turn,
     release_turn,
     renew_until_done,
-    wake_global_queue,
     wake_conversation,
+    wake_global_queue,
 )
 from agent.infra.redis_store import get_client, key
 from agent.infra.trace import (
@@ -55,7 +55,7 @@ async def _ensure_group() -> None:
             id="0-0",
             mkstream=True,
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         if "BUSYGROUP" not in str(exc):
             raise
 
@@ -155,7 +155,13 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
             async for event in run_turn(turn, approval_waiter):
                 latest = await get_turn(turn.turn_id)
                 if latest and latest.get("status") == "cancelled":
-                    turn.status = "cancelled"
+                    turn.record_error(
+                        "turn_cancelled",
+                        "本轮任务已取消",
+                        phase=turn.phase,
+                        stop_reason=StopReason.USER_CANCELLED,
+                        status="cancelled",
+                    )
                     await publish_event(
                         turn.turn_id,
                         {
@@ -173,8 +179,11 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
         await update_turn(
             turn.turn_id,
             status=turn.status,
-            error_code="" if not turn.error else "pipeline_error",
-            error_message=turn.error or "",
+            phase=turn.phase.value,
+            stop_reason=turn.stop_reason.value if turn.stop_reason else "",
+            error_code=turn.error_code or "",
+            error_message=turn.error_message or turn.error or "",
+            error_details=turn.error_details,
             final_answer=final_answer,
         )
         if final_answer:
@@ -186,14 +195,37 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
                 user_id=turn.user_id,
                 farm_id=turn.farm_id,
             )
-    except asyncio.TimeoutError:
-        turn.status = "timeout"
-        turn.error = "turn execution timed out"
+    except TimeoutError:
+        error_info = turn.record_error(
+            "turn_timeout",
+            "本轮执行超时",
+            phase=turn.phase,
+            stop_reason=StopReason.TURN_TIMEOUT,
+            status="timeout",
+        )
+        timeout_answer = (
+            "本轮执行超时，尚未确认请求是否完成，请稍后查看状态或重新发起。"
+        )
         await update_turn(
             turn.turn_id,
             status="timeout",
-            error_code="turn_timeout",
-            error_message=turn.error,
+            phase=turn.phase.value,
+            stop_reason=turn.stop_reason.value,
+            error_code=error_info["code"],
+            error_message=error_info["message"],
+            error_details=error_info,
+            final_answer=timeout_answer,
+        )
+        await publish_event(
+            turn.turn_id,
+            {
+                "type": "error",
+                "data": error_info,
+            },
+        )
+        await publish_event(
+            turn.turn_id,
+            {"type": "final_answer", "data": {"text": timeout_answer}},
         )
         await publish_event(
             turn.turn_id,
@@ -202,17 +234,37 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
                 "data": {"code": "turn_timeout", "turn_id": turn.turn_id},
             },
         )
-    except Exception as exc:  # noqa: BLE001
+        await publish_event(
+            turn.turn_id,
+            {"type": "done", "data": {"status": "timeout", "turn_id": turn.turn_id}},
+        )
+    except Exception as exc:
         logger.exception("turn worker failed turn_id=%s", turn.turn_id)
+        error_info = turn.record_error(
+            "worker_failed",
+            str(exc),
+            phase=turn.phase or TurnPhase.SETUP,
+            stop_reason=StopReason.PIPELINE_CRASH,
+            status="failed",
+        )
+        failure_answer = "本轮执行失败，系统未能确认请求是否完成，请稍后重试。"
         await update_turn(
             turn.turn_id,
             status="failed",
-            error_code="worker_failed",
-            error_message=str(exc),
+            phase=turn.phase.value,
+            stop_reason=turn.stop_reason.value,
+            error_code=error_info["code"],
+            error_message=error_info["message"],
+            error_details=error_info,
+            final_answer=failure_answer,
         )
         await publish_event(
             turn.turn_id,
-            {"type": "error", "data": {"code": "worker_failed", "message": str(exc)}},
+            {"type": "error", "data": error_info},
+        )
+        await publish_event(
+            turn.turn_id,
+            {"type": "final_answer", "data": {"text": failure_answer}},
         )
         await publish_event(
             turn.turn_id,
@@ -260,7 +312,7 @@ async def _worker_loop(stop: asyncio.Event, consumer: str) -> None:
                 await _process_messages(client, consumer, stream, messages)
         except asyncio.CancelledError:
             return
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception("agent dispatch worker loop failed")
             await asyncio.sleep(1)
 
@@ -283,7 +335,7 @@ async def _reclaim_messages(client, consumer: str) -> list[tuple[str, dict[str, 
         else:
             raise RuntimeError(f"unexpected XAUTOCLAIM response length: {len(result)}")
         return reclaimed
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         if (
             "unknown command" not in str(exc).lower()
             or "xautoclaim" not in str(exc).lower()

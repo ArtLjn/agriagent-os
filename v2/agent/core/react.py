@@ -40,13 +40,14 @@ import time
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from dataclasses import dataclass, field
 
+from agent.auth import create_delegation_token
+from agent.config import settings
 from agent.core import context, hitl, memory, planner, summarizer, tokenizer, verify
-from agent.core.turn import Turn
+from agent.core.turn import StopReason, Turn, TurnPhase
 from agent.infra import sse
-from agent.infra.llm import chat_stream, MODEL
+from agent.infra.llm import MODEL, chat_stream
 from agent.infra.logging import log_event
 from agent.infra.mcp_client import BusinessClient
-from agent.auth import create_delegation_token
 from agent.infra.trace import (
     get_trace,
     increment_step,
@@ -57,6 +58,7 @@ from agent.infra.trace import (
 from agent.skills import loader as skill_loader
 from agent.skills.base import Skill, SkillResult
 from agent.skills.context import SkillContext
+from agent.skills.registry import SkillRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +102,7 @@ async def run_turn(
     approval_waiter: ApprovalWaiter,
 ) -> AsyncGenerator[dict, None]:
     """Execute one user turn. Yields SSE events as they happen."""
+    turn.set_phase(TurnPhase.SETUP)
     yield sse.meta(
         turn.turn_id,
         turn.conversation_id,
@@ -107,10 +110,21 @@ async def run_turn(
         request_id=(get_trace().request_id if get_trace() else ""),
     )
 
-    skills, tools_schema, skill_index, tracker, plan_box = _setup_turn_runtime(turn)
+    try:
+        _registry, tools_schema, skill_index, tracker, plan_box = _setup_turn_runtime(
+            turn
+        )
+        turn.set_phase(TurnPhase.REASONING)
 
-    async for ev in _try_compress_context(turn):
+        async for ev in _try_compress_context(turn):
+            yield ev
+    except Exception as exc:
+        logger.exception("run_turn setup failed")
+        ev = _pipeline_error_event(turn, exc)
         yield ev
+        _persist_memory(turn)
+        yield sse.done(turn.status, turn.turn_id)
+        return
 
     try:
         identity_headers = {
@@ -143,6 +157,7 @@ async def run_turn(
             while turn.status == "running" and (
                 turn.step_count < turn.max_steps or turn.finalization_pending
             ):
+                turn.set_phase(TurnPhase.REASONING)
                 turn.step_count += 1
                 increment_step()
 
@@ -165,19 +180,36 @@ async def run_turn(
                     break
 
             if turn.status == "running":
+                turn.set_phase(TurnPhase.FINALIZING)
                 async for ev in _finalize_turn(turn):
                     yield ev
 
     except Exception as exc:
         logger.exception("run_turn pipeline crashed")
-        turn.status = "failed"
-        turn.error = str(exc)
-        ev = sse.error_event(str(exc), "pipeline_crash")
-        turn.emit("error", ev["data"])
+        ev = _pipeline_error_event(turn, exc)
         yield ev
 
     _persist_memory(turn)
     yield sse.done(turn.status, turn.turn_id)
+
+
+def _pipeline_error_event(turn: Turn, exc: Exception) -> dict:
+    """将初始化或运行时异常转换为统一的 pipeline 错误事件。"""
+    error_info = turn.record_error(
+        "pipeline_crash",
+        str(exc),
+        phase=turn.phase,
+        stop_reason=StopReason.PIPELINE_CRASH,
+    )
+    event = sse.error_event(
+        error_info["message"],
+        error_info["code"],
+        phase=error_info["phase"],
+        retryable=error_info["retryable"],
+        attempt=error_info["attempt"],
+    )
+    turn.emit("error", event["data"])
+    return event
 
 
 # ── 阶段 1: Setup ─────────────────────────────────────────
@@ -185,24 +217,25 @@ async def run_turn(
 
 def _setup_turn_runtime(
     turn: Turn,
-) -> tuple[list[Skill], list[dict], dict[str, Skill], verify.CallTracker, dict]:
+) -> tuple[SkillRegistry, list[dict], dict[str, Skill], verify.CallTracker, dict]:
     """加载 skills、构建 tools schema、初始化 tracker。"""
     memory_key = turn.memory_key or turn.conversation_id
     turn.memory_snapshot = memory.snapshot(memory_key)
-    skills = skill_loader.load_all()
-    tools_schema = skill_loader.to_openai_tools(skills)
+    # 兼容旧调用方对 load_all 的注入，再在 Runtime 边界统一构建 Registry。
+    registry = SkillRegistry.from_skills(skill_loader.load_all())
+    tools_schema = registry.exposed_tools()
     # 注入 make_plan 工具，让 LLM 可以一次性规划多步任务
     tools_schema.append(planner.MAKE_PLAN_TOOL_SCHEMA)
-    skill_index = {s.name: s for s in skills}
+    skill_index = registry.as_index()
     logger.info(
         "loaded %d skills: %s",
-        len(skills),
-        [f"{s.name}({s.kind},{s.risk_level})" for s in skills],
+        len(registry.all()),
+        [f"{s.name}({s.kind},{s.risk_level})" for s in registry.all()],
     )
     turn.messages = context.build_initial_messages(
         turn.user_input, turn.memory_snapshot
     )
-    return skills, tools_schema, skill_index, verify.CallTracker(), {"plan": None}
+    return registry, tools_schema, skill_index, verify.CallTracker(), {"plan": None}
 
 
 async def _try_compress_context(turn: Turn) -> AsyncGenerator[dict, None]:
@@ -239,6 +272,7 @@ async def _run_single_reasoning_step(
     approval_waiter: ApprovalWaiter,
 ) -> AsyncGenerator[dict, None]:
     """一次 while 迭代：doom 检测 → LLM → 工具分发。"""
+    turn.set_phase(TurnPhase.REASONING)
     # ── Doom Loop 检测（参考 _example/tools/safety.py）──
     doom_msg = verify.detect_doom_loop(tracker.calls)
     if doom_msg:
@@ -246,6 +280,22 @@ async def _run_single_reasoning_step(
         ev = sse.doom_loop_warning(doom_msg, step=turn.step_count)
         turn.emit("doom_loop_warning", ev["data"])
         yield ev
+        error_info = turn.record_error(
+            "doom_loop_detected",
+            "检测到重复工具调用，已停止本轮执行。请重新描述目标或补充必要信息。",
+            phase=TurnPhase.REASONING,
+            stop_reason=StopReason.DOOM_LOOP_DETECTED,
+        )
+        error_ev = sse.error_event(
+            error_info["message"],
+            error_info["code"],
+            phase=error_info["phase"],
+            retryable=error_info["retryable"],
+            attempt=error_info["attempt"],
+        )
+        turn.emit("error", error_ev["data"])
+        yield error_ev
+        return
 
     # ── 上下文使用情况（每步都报）──
     step_usage = tokenizer.compute_usage(turn.messages)
@@ -262,8 +312,16 @@ async def _run_single_reasoning_step(
 
     # ── 流式 LLM 调用 ──
     try:
-        llm_result = await _call_llm_stream(llm_messages, tools_schema)
-    except Exception as exc:
+        llm_result: _LlmResult | None = None
+        async for stream_item in _call_llm_stream(llm_messages, tools_schema):
+            if isinstance(stream_item, _LlmResult):
+                llm_result = stream_item
+                continue
+            turn.emit(stream_item["type"], stream_item["data"])
+            yield stream_item
+        if llm_result is None:
+            raise RuntimeError("llm_stream_empty")
+    except Exception as exc:  # noqa: BLE001
         async for ev in _handle_llm_error(turn, exc):
             yield ev
         return
@@ -316,6 +374,7 @@ async def _emit_final_answer(
     tracker: verify.CallTracker,
 ) -> AsyncGenerator[dict, None]:
     """无 tool_calls 时输出最终回答 + pre-completion checklist。"""
+    turn.set_phase(TurnPhase.FINALIZING)
     issues = verify.pre_completion_checklist(plan, tracker)
     if issues:
         ev = sse.verification_warning(issues, step=turn.step_count)
@@ -327,7 +386,11 @@ async def _emit_final_answer(
         trace_commit_state(turn.committed_result, reply_generated=True)
     turn.finalization_pending = False
     turn.status = "completed"
+    turn.stop_reason = StopReason.MODEL_COMPLETED
+    turn.set_phase(TurnPhase.TERMINAL)
     yield sse.final_answer_start()
+    if content:
+        yield sse.final_answer_delta(content)
     yield sse.final_answer(content)
 
 
@@ -336,19 +399,45 @@ async def _emit_final_answer(
 
 async def _call_llm_stream(
     llm_messages: list[dict], tools_schema: list[dict]
-) -> _LlmResult:
-    """流式 LLM 调用 + trace + 日志。失败时 raise。"""
+) -> AsyncGenerator[dict | _LlmResult, None]:
+    """流式 LLM 调用，同时转发增量和等待心跳。"""
     _llm_start = time.time()
     full_content = ""
     tool_calls: list[dict] = []
 
-    async for token in chat_stream(llm_messages, tools=tools_schema):
-        if token["type"] == "text":
-            full_content += token["delta"]
-        elif token["type"] == "done":
-            tool_calls = token.get("tool_calls", [])
-        elif token["type"] == "error":
-            raise RuntimeError(token["message"])
+    stream = chat_stream(llm_messages, tools=tools_schema)
+    next_token = asyncio.create_task(stream.__anext__())
+    try:
+        while True:
+            done, _ = await asyncio.wait({next_token}, timeout=5.0)
+            if not done:
+                yield sse.heartbeat("llm")
+                continue
+            try:
+                token = next_token.result()
+            except StopAsyncIteration:
+                break
+            next_token = asyncio.create_task(stream.__anext__())
+            if token["type"] == "text":
+                full_content += token["delta"]
+                yield sse.assistant_delta(token["delta"])
+            elif token["type"] == "tool_call":
+                yield {
+                    "type": "tool_call_delta",
+                    "data": {
+                        "name": token.get("name", ""),
+                        "index": token.get("index", 0),
+                    },
+                }
+            elif token["type"] == "done":
+                tool_calls = token.get("tool_calls", [])
+            elif token["type"] == "retrying":
+                yield {"type": "retrying", "data": token.get("data", {})}
+            elif token["type"] == "error":
+                raise RuntimeError(token["message"])
+    finally:
+        if not next_token.done():
+            next_token.cancel()
 
     _llm_ms = int((time.time() - _llm_start) * 1000)
     trace_llm_call(
@@ -375,7 +464,7 @@ async def _call_llm_stream(
         duration_ms=_llm_ms,
         data={"model": MODEL, "tool_calls": len(tool_calls)},
     )
-    return _LlmResult(full_content=full_content, tool_calls=tool_calls)
+    yield _LlmResult(full_content=full_content, tool_calls=tool_calls)
 
 
 async def _handle_llm_error(turn: Turn, exc: Exception) -> AsyncGenerator[dict, None]:
@@ -386,9 +475,19 @@ async def _handle_llm_error(turn: Turn, exc: Exception) -> AsyncGenerator[dict, 
         ):
             yield ev
     else:
-        turn.status = "failed"
-        turn.error = f"llm_stream_failed: {exc}"
-        ev = sse.error_event(str(exc), "llm_call_failed")
+        error_info = turn.record_error(
+            "llm_call_failed",
+            str(exc),
+            phase=TurnPhase.REASONING,
+            stop_reason=StopReason.LLM_FAILED,
+        )
+        ev = sse.error_event(
+            error_info["message"],
+            error_info["code"],
+            phase=error_info["phase"],
+            retryable=error_info["retryable"],
+            attempt=error_info["attempt"],
+        )
         turn.emit("error", ev["data"])
         yield ev
 
@@ -408,6 +507,25 @@ async def _dispatch_tool_calls(
     plan_box: dict,
 ) -> AsyncGenerator[dict, None]:
     """处理一轮 tool_calls：make_plan / 普通 skill / approval_followup。"""
+    if len(tool_calls) > 1 and all(
+        tc["name"] != "make_plan"
+        and skill_index.get(tc["name"]) is not None
+        and skill_index[tc["name"]].parallel_safe
+        for tc in tool_calls
+    ):
+        async for ev in _dispatch_parallel_tool_calls(
+            tool_calls=tool_calls,
+            rationale=rationale,
+            skill_index=skill_index,
+            skill_ctx=skill_ctx,
+            approval_waiter=approval_waiter,
+            turn=turn,
+            tracker=tracker,
+            max_parallel_skills=settings.max_parallel_skills,
+        ):
+            yield ev
+        return
+
     for tc in tool_calls:
         tool_call_id = tc["id"]
 
@@ -448,6 +566,116 @@ async def _dispatch_tool_calls(
             return
 
 
+async def _dispatch_parallel_tool_calls(
+    *,
+    tool_calls: list[dict],
+    rationale: str,
+    skill_index: dict[str, Skill],
+    skill_ctx: SkillContext,
+    approval_waiter: ApprovalWaiter,
+    turn: Turn,
+    tracker: verify.CallTracker,
+    max_parallel_skills: int,
+) -> AsyncGenerator[dict, None]:
+    """并行执行同一轮中相互独立的只读 Skill。
+
+    每个调用仍复用完整的校验、trace 和 observation 流程。事件按完成顺序
+    推送，Tool 结果消息在批次结束时按原始 tool_call_id 顺序整理；写操作和
+    Plan 不会进入这个分支。
+    """
+    queue: asyncio.Queue[tuple[int, dict | None]] = asyncio.Queue()
+    semaphore = asyncio.Semaphore(max(1, max_parallel_skills))
+    active = 0
+    max_inflight = 0
+    active_lock = asyncio.Lock()
+
+    async def collect(index: int, tool_call: dict) -> None:
+        nonlocal active, max_inflight
+        try:
+            async with semaphore:
+                async with active_lock:
+                    active += 1
+                    max_inflight = max(max_inflight, active)
+                try:
+                    async for event in _process_skill_call(
+                        tc=tool_call,
+                        rationale=rationale,
+                        skill_index=skill_index,
+                        skill_ctx=skill_ctx,
+                        approval_waiter=approval_waiter,
+                        turn=turn,
+                        tracker=tracker,
+                    ):
+                        await queue.put((index, event))
+                finally:
+                    async with active_lock:
+                        active -= 1
+        finally:
+            await queue.put((index, None))
+
+    tasks = [
+        asyncio.create_task(collect(index, tool_call))
+        for index, tool_call in enumerate(tool_calls)
+    ]
+    completed = 0
+    batch_events: list[dict] = []
+    try:
+        while completed < len(tasks):
+            _, event = await queue.get()
+            if event is None:
+                completed += 1
+                continue
+            batch_events.append(event)
+            yield event
+    finally:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        _reorder_parallel_tool_messages(turn, tool_calls)
+        log_event(
+            logger,
+            logging.INFO,
+            "parallel_tool_batch",
+            status="completed",
+            data={
+                "parallel_batch_size": len(tool_calls),
+                "parallel_inflight_max": max_inflight,
+                "tool_failure_count": sum(
+                    event["type"] == "observation" and bool(event["data"].get("error"))
+                    for event in batch_events
+                ),
+                "event_sequence": [event["type"] for event in batch_events],
+                "tool_durations_ms": [
+                    event["data"]["duration_ms"]
+                    for event in batch_events
+                    if event["type"] == "tool_finished"
+                ],
+            },
+        )
+
+
+def _reorder_parallel_tool_messages(turn: Turn, tool_calls: list[dict]) -> None:
+    """按 assistant 原始 Tool Call 顺序写回并行结果消息。"""
+    order = {call["id"]: index for index, call in enumerate(tool_calls)}
+    indexed = [
+        (index, message)
+        for index, message in enumerate(turn.messages)
+        if message.get("role") == "tool" and message.get("tool_call_id") in order
+    ]
+    if len(indexed) != len(tool_calls):
+        return
+    positions = [index for index, _ in indexed]
+    messages = [
+        message
+        for _, message in sorted(
+            indexed, key=lambda item: order[item[1]["tool_call_id"]]
+        )
+    ]
+    for position, message in zip(positions, messages):
+        turn.messages[position] = message
+
+
 async def _process_skill_call(
     *,
     tc: dict,
@@ -459,6 +687,7 @@ async def _process_skill_call(
     tracker: verify.CallTracker,
 ) -> AsyncGenerator[dict, None]:
     """单个 skill tool_call 完整处理：校验→审批→执行→后处理。终止分支通过 turn 状态通知外层。"""
+    turn.set_phase(TurnPhase.TOOL_PREPARING)
     tool_name = tc["name"]
     args = tc["arguments"]
     tool_call_id = tc["id"]
@@ -506,6 +735,7 @@ async def _process_skill_call(
         skill_ctx=skill_ctx,
         rationale=rationale,
         state=state,
+        tool_call_id=tool_call_id,
     ):
         yield ev
 
@@ -642,7 +872,19 @@ async def _emit_unknown_tool(
     """未知工具错误：发 observation + 写 tool_msg。"""
     err_msg = f"未知工具: {tool_name}"
     result = {"error": err_msg}
-    ev = sse.observation(tool_name, None, error=err_msg)
+    ev = sse.observation(
+        tool_name,
+        None,
+        error=err_msg,
+        error_info={
+            "code": "unknown_tool",
+            "message": err_msg,
+            "phase": TurnPhase.TOOL_PREPARING.value,
+            "tool_name": tool_name,
+            "retryable": False,
+            "attempt": 0,
+        },
+    )
     turn.emit("observation", ev["data"])
     yield ev
     turn.messages.append(context.tool_result_message(tool_call_id, tool_name, result))
@@ -659,7 +901,19 @@ async def _emit_not_exposed_tool(
         "message": err_msg,
     }
     trace_tool_call(tool_name, args, result, error=err_msg)
-    ev = sse.observation(tool_name, None, error=err_msg)
+    ev = sse.observation(
+        tool_name,
+        None,
+        error=err_msg,
+        error_info={
+            "code": "tool_not_exposed",
+            "message": err_msg,
+            "phase": TurnPhase.TOOL_PREPARING.value,
+            "tool_name": tool_name,
+            "retryable": False,
+            "attempt": 0,
+        },
+    )
     turn.emit("observation", ev["data"])
     yield ev
     turn.messages.append(context.tool_result_message(tool_call_id, tool_name, result))
@@ -677,7 +931,19 @@ async def _emit_missing_params(
     result = _missing_params_result(skill, missing)
     message = result["message"]
     trace_tool_call(tool_name, args, result, error=message)
-    ev = sse.observation(tool_name, None, error=message)
+    ev = sse.observation(
+        tool_name,
+        None,
+        error=message,
+        error_info={
+            "code": str(result.get("code") or "missing_required_params"),
+            "message": message,
+            "phase": TurnPhase.TOOL_PREPARING.value,
+            "tool_name": tool_name,
+            "retryable": False,
+            "attempt": 0,
+        },
+    )
     turn.emit("observation", ev["data"])
     yield ev
     turn.messages.append(context.tool_result_message(tool_call_id, tool_name, result))
@@ -700,13 +966,29 @@ async def _check_duplication(
     # doom loop 强制终止：同一 (skill, args) 重复 >= 3 次
     doom = verify.detect_doom_loop(tracker.calls)
     if doom:
-        turn.final_answer = (
+        message = (
             f"⚠️ 已终止：{doom}\n\n"
             "可能原因：缺少必要参数或操作无法完成。"
             "请提供更详细的信息后重试。"
         )
-        turn.status = "completed"
-        yield sse.final_answer(turn.final_answer)
+        error_info = turn.record_error(
+            "doom_loop_detected",
+            message,
+            phase=TurnPhase.REASONING,
+            stop_reason=StopReason.DOOM_LOOP_DETECTED,
+        )
+        error_ev = sse.error_event(
+            message,
+            error_info["code"],
+            phase=error_info["phase"],
+            retryable=error_info["retryable"],
+            attempt=error_info["attempt"],
+        )
+        turn.emit("error", error_ev["data"])
+        yield error_ev
+        turn.final_answer = message
+        yield sse.final_answer_start()
+        yield sse.final_answer(message)
 
 
 # ── HITL 审批闸门（P5）────────────────────────────────────
@@ -737,6 +1019,7 @@ async def _apply_approval_gate(
     if not hitl.needs_approval(risk):
         return
 
+    turn.set_phase(TurnPhase.AWAITING_APPROVAL)
     turn = hitl.gate(
         turn,
         tool_name=skill.name,
@@ -761,13 +1044,33 @@ async def _apply_approval_gate(
 
     decision, reason = await approval_waiter(turn.turn_id)
     if reason == "approval_expired":
-        turn.status = "timeout"
-        turn.error = "approval expired"
+        turn.record_error(
+            "approval_expired",
+            "审批已过期",
+            phase=TurnPhase.AWAITING_APPROVAL,
+            stop_reason=StopReason.APPROVAL_EXPIRED,
+            status="timeout",
+        )
     elif reason == "turn_cancelled":
-        turn.status = "cancelled"
-        turn.error = "turn cancelled"
+        turn.record_error(
+            "turn_cancelled",
+            "本轮任务已取消",
+            phase=TurnPhase.AWAITING_APPROVAL,
+            stop_reason=StopReason.USER_CANCELLED,
+            status="cancelled",
+        )
     else:
         turn = hitl.approve(turn, decision, reason)
+        if decision:
+            turn.set_phase(TurnPhase.TOOL_PREPARING)
+        else:
+            turn.record_error(
+                "approval_rejected",
+                reason or "用户拒绝执行该操作",
+                phase=TurnPhase.AWAITING_APPROVAL,
+                stop_reason=StopReason.APPROVAL_REJECTED,
+                status="rejected",
+            )
 
     decision_name = (
         "expired"
@@ -794,47 +1097,120 @@ async def _run_skill_call(
     skill_ctx: SkillContext,
     rationale: str,
     state: _SkillExecState,
+    tool_call_id: str = "",
 ) -> AsyncGenerator[dict, None]:
     """执行 skill：action → skill.execute() → observation。填充 state。
 
     被三处调用方复用：主循环 _dispatch_tool_calls、_drive_approval_followup、
     _execute_plan_step，避免 HITL/trace/事件逻辑出现三份不同实现。
     """
+    turn.set_phase(TurnPhase.TOOL_EXECUTING)
     ev = sse.action(skill.name, args, rationale=rationale)
     # 先 emit 占位事件，skill 可能兜底替换参数后回写
     turn.emit("action", ev["data"])
+    yield ev
+    started_ev = sse.tool_started(
+        turn.turn_id, tool_call_id, skill.name, turn.step_count, args
+    )
+    turn.emit("tool_started", started_ev["data"])
+    yield started_ev
 
+    _tool_start = time.time()
     try:
-        _tool_start = time.time()
-        result_obj = await skill.execute(args, skill_ctx)
+        execution_task = asyncio.create_task(skill.execute(args, skill_ctx))
+        while True:
+            done, _ = await asyncio.wait({execution_task}, timeout=5.0)
+            if done:
+                result_obj = execution_task.result()
+                break
+            heartbeat_ev = sse.heartbeat(f"skill:{skill.name}", turn.step_count)
+            turn.emit("heartbeat", heartbeat_ev["data"])
+            yield heartbeat_ev
         _tool_ms = int((time.time() - _tool_start) * 1000)
         # skill 兜底可能回写了 action 事件的 arguments
         action_data = _find_latest_action_data(turn, skill.name) or ev["data"]
-        yield sse.action(
-            action_data["tool_name"],
-            action_data.get("arguments", args),
-            rationale=action_data.get("rationale", ""),
-        )
+        if action_data != ev["data"]:
+            yield sse.action(
+                action_data["tool_name"],
+                action_data.get("arguments", args),
+                rationale=action_data.get("rationale", ""),
+            )
         state.result_obj = result_obj
         if result_obj.error:
             state.result = result_obj.data or {"error": result_obj.error}
             state.error = result_obj.error
-            obs_ev = sse.observation(skill.name, None, error=result_obj.error)
+            result_data = state.result if isinstance(state.result, dict) else {}
+            error_info = {
+                "code": str(result_data.get("code") or "tool_failed"),
+                "message": result_obj.error,
+                "phase": TurnPhase.TOOL_EXECUTING.value,
+                "tool_name": skill.name,
+                "retryable": bool(result_data.get("retryable", False)),
+                "attempt": 0,
+            }
+            obs_ev = sse.observation(
+                skill.name,
+                None,
+                error=result_obj.error,
+                error_info=error_info,
+            )
             trace_tool_call(
                 skill.name, args, None, duration_ms=_tool_ms, error=result_obj.error
+            )
+            finished_ev = sse.tool_finished(
+                turn.turn_id,
+                tool_call_id,
+                skill.name,
+                turn.step_count,
+                _tool_ms,
+                error=error_info,
             )
         else:
             state.result = result_obj.data
             state.finalize_after_success = skill.finalize_after_success
             obs_ev = sse.observation(skill.name, state.result)
             trace_tool_call(skill.name, args, state.result, duration_ms=_tool_ms)
+            finished_ev = sse.tool_finished(
+                turn.turn_id,
+                tool_call_id,
+                skill.name,
+                turn.step_count,
+                _tool_ms,
+                result=state.result,
+            )
+        turn.emit("tool_finished", finished_ev["data"])
+        yield finished_ev
         turn.emit("observation", obs_ev["data"])
         yield obs_ev
     except Exception as exc:
         logger.exception("skill execution failed: %s", skill.name)
         state.result = {"error": str(exc)}
         state.error = str(exc)
-        obs_ev = sse.observation(skill.name, None, error=str(exc))
+        error_info = {
+            "code": "tool_execution_failed",
+            "message": str(exc),
+            "phase": TurnPhase.TOOL_EXECUTING.value,
+            "tool_name": skill.name,
+            "retryable": False,
+            "attempt": 0,
+        }
+        obs_ev = sse.observation(
+            skill.name,
+            None,
+            error=str(exc),
+            error_info=error_info,
+        )
+        duration_ms = int((time.time() - _tool_start) * 1000)
+        finished_ev = sse.tool_finished(
+            turn.turn_id,
+            tool_call_id,
+            skill.name,
+            turn.step_count,
+            duration_ms,
+            error=error_info,
+        )
+        turn.emit("tool_finished", finished_ev["data"])
+        yield finished_ev
         turn.emit("observation", obs_ev["data"])
         yield obs_ev
         trace_tool_call(skill.name, args, None, error=str(exc))
@@ -904,6 +1280,7 @@ async def _drive_approval_followup(
         skill_ctx=skill_ctx,
         rationale=approval_summary,
         state=state,
+        tool_call_id=f"followup-{followup_tool_name}",
     ):
         yield ev
 
@@ -926,12 +1303,36 @@ async def _emit_followup_skill_missing(
 ) -> AsyncGenerator[dict, None]:
     """审批后继动作未注册时发出错误并终止 turn。"""
     message = f"审批后继动作 {followup_tool_name} 未注册"
-    ev = sse.observation(followup_tool_name, None, error=message)
+    ev = sse.observation(
+        followup_tool_name,
+        None,
+        error=message,
+        error_info={
+            "code": "followup_skill_missing",
+            "message": message,
+            "phase": TurnPhase.TOOL_PREPARING.value,
+            "tool_name": followup_tool_name,
+            "retryable": False,
+            "attempt": 0,
+        },
+    )
     turn.emit("observation", ev["data"])
     yield ev
-    turn.status = "failed"
-    turn.error = message
-    err_ev = sse.error_event(message, "followup_skill_missing")
+    error_info = turn.record_error(
+        "followup_skill_missing",
+        message,
+        phase=TurnPhase.TOOL_PREPARING,
+        tool_name=followup_tool_name,
+        stop_reason=StopReason.TOOL_FAILED,
+    )
+    err_ev = sse.error_event(
+        message,
+        error_info["code"],
+        phase=error_info["phase"],
+        tool_name=error_info["tool_name"],
+        retryable=error_info["retryable"],
+        attempt=error_info["attempt"],
+    )
     turn.emit("error", err_ev["data"])
     yield err_ev
 
@@ -943,9 +1344,19 @@ async def _converge_followup_error(
     code = (
         state.result.get("code") if isinstance(state.result, dict) else None
     ) or "commit_failed"
-    turn.status = "failed"
-    turn.error = code
-    err_ev = sse.error_event(state.error, code)
+    error_info = turn.record_error(
+        code,
+        state.error or "业务操作失败",
+        phase=TurnPhase.TOOL_EXECUTING,
+        stop_reason=StopReason.TOOL_FAILED,
+    )
+    err_ev = sse.error_event(
+        error_info["message"],
+        error_info["code"],
+        phase=error_info["phase"],
+        retryable=error_info["retryable"],
+        attempt=error_info["attempt"],
+    )
     turn.emit("error", err_ev["data"])
     yield err_ev
 
@@ -990,12 +1401,36 @@ async def _emit_prepare_incomplete(
         "message": message,
     }
     trace_tool_call(followup_tool_name, {}, result, error="prepare_result_incomplete")
-    ev = sse.observation(followup_tool_name, None, error=message)
+    ev = sse.observation(
+        followup_tool_name,
+        None,
+        error=message,
+        error_info={
+            "code": "prepare_result_incomplete",
+            "message": message,
+            "phase": TurnPhase.TOOL_PREPARING.value,
+            "tool_name": followup_tool_name,
+            "retryable": False,
+            "attempt": 0,
+        },
+    )
     turn.emit("observation", ev["data"])
     yield ev
-    turn.status = "failed"
-    turn.error = "prepare_result_incomplete"
-    err_ev = sse.error_event(message, "prepare_result_incomplete")
+    error_info = turn.record_error(
+        "prepare_result_incomplete",
+        message,
+        phase=TurnPhase.TOOL_PREPARING,
+        tool_name=followup_tool_name,
+        stop_reason=StopReason.TOOL_FAILED,
+    )
+    err_ev = sse.error_event(
+        message,
+        error_info["code"],
+        phase=error_info["phase"],
+        tool_name=error_info["tool_name"],
+        retryable=error_info["retryable"],
+        attempt=error_info["attempt"],
+    )
     turn.emit("error", err_ev["data"])
     yield err_ev
 
@@ -1185,6 +1620,7 @@ async def _execute_plan_step(
         skill_ctx=skill_ctx,
         rationale=rationale,
         state=state,
+        tool_call_id=f"plan-{tool_name}",
     ):
         yield (ev, None)
 
@@ -1214,11 +1650,26 @@ async def _finalize_turn(turn: Turn) -> AsyncGenerator[dict, None]:
         ):
             yield ev
     else:
-        turn.status = "failed"
-        turn.error = "max_steps_reached"
-        ev = sse.error_event("达到最大步数限制，请缩小问题范围或重试", "max_steps")
+        error_info = turn.record_error(
+            "max_steps_reached",
+            "达到最大步数限制，请缩小问题范围或重试",
+            phase=TurnPhase.FINALIZING,
+            stop_reason=StopReason.STEP_BUDGET_EXHAUSTED,
+        )
+        ev = sse.error_event(
+            error_info["message"],
+            "max_steps",
+            phase=error_info["phase"],
+            retryable=error_info["retryable"],
+            attempt=error_info["attempt"],
+        )
         turn.emit("error", ev["data"])
         yield ev
+        answer = "本轮执行已达到推理步数上限，尚未完成请求。已停止继续调用工具，请补充信息后重试。"
+        turn.final_answer = answer
+        turn.set_phase(TurnPhase.TERMINAL)
+        yield sse.final_answer_start()
+        yield sse.final_answer(answer)
 
 
 async def _finalize_committed_with_fallback(
@@ -1237,6 +1688,8 @@ async def _finalize_committed_with_fallback(
     turn.final_answer = _structured_commit_answer(turn.committed_result or {})
     turn.finalization_pending = False
     turn.status = "completed"
+    turn.stop_reason = StopReason.MODEL_COMPLETED
+    turn.set_phase(TurnPhase.TERMINAL)
     yield sse.final_answer_start()
     yield sse.final_answer(turn.final_answer)
 

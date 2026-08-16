@@ -90,6 +90,7 @@ class Settings:
     auth: AuthCfg = field(default_factory=AuthCfg)
     environment: str = "development"
     default_farm_id: int = 1
+    max_parallel_skills: int = 4
 
 
 def _load_yaml() -> dict:
@@ -176,6 +177,7 @@ def _build_settings() -> Settings:
         ),
         environment=str(raw.get("environment", "development")),
         default_farm_id=int(raw.get("default_farm_id", 1)),
+        max_parallel_skills=max(1, int(raw.get("max_parallel_skills", 4))),
     )
     if env := os.getenv("MONGODB__URI"):
         settings.mongodb.uri = env
@@ -229,6 +231,8 @@ def _build_settings() -> Settings:
         settings.redis.dispatch_stream_ttl_seconds = int(env)
     if env := os.getenv("REDIS__WORKER_COUNT"):
         settings.redis.worker_count = int(env)
+    if env := os.getenv("AGENT_MAX_PARALLEL_SKILLS"):
+        settings.max_parallel_skills = max(1, int(env))
     if env := os.getenv("BUSINESS_MCP__URL"):
         settings.business_mcp.url = env
     if env := os.getenv("BUSINESS_API__URL"):

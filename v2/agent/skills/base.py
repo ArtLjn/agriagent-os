@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 if TYPE_CHECKING:
     from agent.skills.context import SkillContext
@@ -44,7 +44,7 @@ class Skill:
     mcp_tool: str = ""
 
     # loader 从 skill.md 注入的元数据
-    _meta: dict[str, Any] = {}
+    _meta: ClassVar[dict[str, Any]] = {}
 
     @property
     def name(self) -> str:
@@ -62,6 +62,18 @@ class Skill:
     def finalize_after_success(self) -> bool:
         """成功执行后是否应立即进入无工具最终回答。"""
         return self._meta.get("finalize_after_success") is True
+
+    @property
+    def parallel_safe(self) -> bool:
+        """判断只读 Skill 是否可以与同轮同伴共享一次推理步骤。
+
+        写操作默认串行；如果只读操作共享状态，可在元数据中用 ``serial``
+        显式关闭并行执行。
+        """
+        execution = self._meta.get("execution") or {}
+        if isinstance(execution, dict) and execution.get("mode") == "serial":
+            return False
+        return self.risk_level == "read" and not self.finalize_after_success
 
     @property
     def exposed(self) -> bool:
@@ -144,7 +156,7 @@ class Skill:
             "parameters", {"type": "object", "properties": {}, "required": []}
         )
 
-    async def execute(self, params: dict[str, Any], ctx: "SkillContext") -> SkillResult:
+    async def execute(self, params: dict[str, Any], ctx: SkillContext) -> SkillResult:
         """执行 skill。子类必须实现（或 kind=mcp 时由 McpSkill 提供默认实现）。"""
         raise NotImplementedError
 
@@ -163,7 +175,7 @@ class Skill:
         """返回面向模型的业务描述，不投影 Business MCP 内部协议。"""
         return self.description
 
-    def operation_skills(self) -> list["OperationSkill"]:
+    def operation_skills(self) -> list[OperationSkill]:
         """把聚合 skill 展开为模型可直接选择的单一动作 skill。"""
         operations = self._meta.get("operations") or {}
         if not isinstance(operations, dict):
@@ -178,7 +190,7 @@ class McpSkill(Skill):
     有自定义逻辑的 skill 应继承 Skill 而非 McpSkill。
     """
 
-    async def execute(self, params: dict[str, Any], ctx: "SkillContext") -> SkillResult:
+    async def execute(self, params: dict[str, Any], ctx: SkillContext) -> SkillResult:
         enriched = self.enrich_params(params, ctx)
         missing = self.missing_required_params(enriched)
         if missing:
@@ -255,7 +267,7 @@ class OperationSkill(McpSkill):
             "risk_level"
         ) or self._source.dynamic_risk_level({**params, "operation": self.operation})
 
-    async def execute(self, params: dict[str, Any], ctx: "SkillContext") -> SkillResult:
+    async def execute(self, params: dict[str, Any], ctx: SkillContext) -> SkillResult:
         enriched = self.enrich_params(params, ctx)
         missing = self.missing_required_params(enriched)
         if missing:

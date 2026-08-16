@@ -19,6 +19,7 @@ import asyncio
 import json
 import logging
 import os
+import random
 from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Any
@@ -32,6 +33,11 @@ _PROVIDERS_FILE = Path(__file__).resolve().parent.parent.parent / "providers.jso
 # 网络重试配置
 MAX_RETRIES = 2
 RETRY_DELAY_SECONDS = 1.0
+
+
+def _retry_delay(attempt: int) -> float:
+    """计算带抖动的异步重试延迟，避免多个 Turn 同步重试。"""
+    return RETRY_DELAY_SECONDS * (2**attempt) + random.uniform(0, 0.25)
 
 
 def _load_provider() -> tuple[str, str, str]:
@@ -361,13 +367,22 @@ async def chat_stream(
 
             # 还没 yield 任何内容 → 可以重试
             if attempt < MAX_RETRIES and _is_retryable(exc):
+                delay = _retry_delay(attempt)
                 logger.warning(
-                    "LLM stream attempt %d failed (retryable: %s), retry in %ss",
+                    "LLM stream attempt %d failed (retryable: %s), retry in %.2fs",
                     attempt + 1,
                     type(exc).__name__,
-                    RETRY_DELAY_SECONDS,
+                    delay,
                 )
-                await asyncio.sleep(RETRY_DELAY_SECONDS)
+                yield {
+                    "type": "retrying",
+                    "data": {
+                        "code": "llm_retrying",
+                        "attempt": attempt + 1,
+                        "delay_ms": int(delay * 1000),
+                    },
+                }
+                await asyncio.sleep(delay)
                 continue
 
             # 不可重试或重试次数用完

@@ -15,6 +15,7 @@ export type ExecutionEvent =
   | { type: 'doom_loop_warning'; message: string }
   | { type: 'verification_warning'; issues: string[] }
   | { type: 'write_committed_reply_failed'; code: string; message: string }
+  | { type: 'retrying'; code: string; attempt: number; delay_ms: number }
   | { type: 'error'; code: string; message: string };
 
 export function executionEventFromChunk(chunk: StreamChunk): ExecutionEvent | null {
@@ -59,6 +60,8 @@ export function executionEventFromChunk(chunk: StreamChunk): ExecutionEvent | nu
       return { type: 'verification_warning', ...chunk.data };
     case 'write_committed_reply_failed':
       return { type: 'write_committed_reply_failed', ...chunk.data };
+    case 'retrying':
+      return { type: 'retrying', ...chunk.data };
     case 'error':
       return { type: 'error', ...chunk.data };
     default:

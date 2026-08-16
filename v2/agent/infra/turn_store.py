@@ -13,7 +13,8 @@ from agent.config import settings
 from agent.core.turn import Turn
 from agent.infra.redis_store import get_client, key
 
-_TERMINAL_EVENTS = {"done", "cancelled", "timeout"}
+# timeout/cancelled 是过程结果事件，允许随后发布唯一的 done 终态事件。
+_TERMINAL_EVENTS = {"done"}
 
 
 def turn_key(turn_id: str) -> str:
@@ -277,8 +278,24 @@ async def stream_events(
             "cancelled",
             "timeout",
         }:
+            yield {
+                "seq": next_seq,
+                "type": "done",
+                "data": {"status": state["status"], "turn_id": turn_id},
+                "terminal": True,
+            }
             return
         await asyncio.sleep(poll_interval)
+    yield {
+        "seq": next_seq,
+        "type": "stream_timeout",
+        "data": {
+            "code": "stream_timeout",
+            "message": "事件流等待超时，Turn 仍未发布终态。",
+            "turn_id": turn_id,
+        },
+        "terminal": False,
+    }
 
 
 async def create_approval(turn: Turn, event_data: dict[str, Any]) -> None:

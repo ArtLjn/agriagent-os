@@ -102,6 +102,7 @@ export type StreamChunk =
   | { type: 'doom_loop_warning'; data: { message: string } }
   | { type: 'verification_warning'; data: { issues: string[] } }
   | { type: 'write_committed_reply_failed'; data: { code: string; message: string } }
+  | { type: 'retrying'; data: { code: string; attempt: number; delay_ms: number } }
   | { type: 'meta'; data: { turn_id: string; conversation_id: string; request_id?: string } }
   | { type: 'done'; data: DoneEvent }
   | { type: 'error'; data: { code: string; message: string } };
@@ -160,6 +161,8 @@ export function mapSseToChunk(event: SseEvent): StreamChunk | null {
     case 'final_answer_start':
       return { type: 'final_answer_start', data: null };
     case 'final_answer_delta':
+      return { type: 'content', data: String(data.delta ?? '') };
+    case 'assistant_delta':
       return { type: 'content', data: String(data.delta ?? '') };
     case 'final_answer':
       return { type: 'final_content', data: String(data.text ?? '') };
@@ -276,6 +279,15 @@ export function mapSseToChunk(event: SseEvent): StreamChunk | null {
         data: {
           code: String(data.code ?? 'error'),
           message: String(data.message ?? ''),
+        },
+      };
+    case 'retrying':
+      return {
+        type: 'retrying',
+        data: {
+          code: String(data.code ?? 'retrying'),
+          attempt: Number(data.attempt ?? 0),
+          delay_ms: Number(data.delay_ms ?? 0),
         },
       };
     case 'done':

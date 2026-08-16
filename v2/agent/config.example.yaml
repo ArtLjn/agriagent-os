@@ -2,6 +2,7 @@
 # 复制为 config.yaml 后填入真实值。
 
 environment: "development"
+max_parallel_skills: 4
 
 server:
   host: "127.0.0.1"
