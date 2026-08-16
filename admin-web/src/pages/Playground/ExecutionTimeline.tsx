@@ -24,6 +24,7 @@ const eventMeta: Record<ExecutionEvent['type'], { label: string; color: string }
   thought: { label: '思考', color: palette.purple },
   plan: { label: '执行计划', color: '#79c0ff' },
   plan_step_done: { label: '计划步骤', color: palette.success },
+  tool_call_delta: { label: '准备调用', color: '#79c0ff' },
   action: { label: '工具调用', color: '#79c0ff' },
   observation: { label: '工具结果', color: palette.success },
   approval_required: { label: '等待确认', color: palette.warning },
@@ -45,6 +46,7 @@ function EventIcon({ type }: { type: ExecutionEvent['type'] }) {
     case 'thought': return <NodeIndexOutlined {...props} />;
     case 'plan': return <FileTextOutlined {...props} />;
     case 'action': return <ToolOutlined {...props} />;
+    case 'tool_call_delta': return <ToolOutlined {...props} />;
     case 'observation': return <CodeOutlined {...props} />;
     case 'approval_required': return <SafetyCertificateOutlined {...props} />;
     case 'approval_result':
@@ -101,6 +103,13 @@ function EventBody({ event }: { event: ExecutionEvent }) {
           <DetailDisclosure label="查看调用参数" value={event.arguments} tone="#79c0ff" />
         </>
       );
+    case 'tool_call_delta':
+      return (
+        <div style={{ color: TEXT_DIM, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+          {event.arguments_delta ? `参数增量：${event.arguments_delta}` : '正在等待完整参数'}
+          <div style={{ marginTop: 4, fontSize: 11 }}>调用标识：{event.tool_call_id} · 索引：{event.index}</div>
+        </div>
+      );
     case 'observation':
       return event.error
         ? <div style={{ color: palette.danger, whiteSpace: 'pre-wrap' }}>{event.error}</div>
@@ -131,9 +140,9 @@ function EventBody({ event }: { event: ExecutionEvent }) {
     case 'write_committed_reply_failed':
       return <span style={{ color: palette.warning }}>{event.code} · {event.message}</span>;
     case 'retrying':
-      return <span style={{ color: palette.warning }}>{event.code} · 第 {event.attempt} 次，等待 {event.delay_ms}ms</span>;
+      return <span style={{ color: palette.warning }}>{event.code} · {event.category ?? 'transient'} · 第 {event.attempt} 次，等待 {event.delay_ms}ms</span>;
     case 'error':
-      return <span style={{ color: palette.danger }}>{event.code} · {event.message}</span>;
+      return <span style={{ color: palette.danger }}>{event.code} · {event.category ? `${event.category} · ` : ''}{event.message}</span>;
   }
 }
 
@@ -141,6 +150,8 @@ function TimelineEvent({ event, index, isLast }: { event: ExecutionEvent; index:
   const meta = eventMeta[event.type];
   const title = event.type === 'action' || event.type === 'observation' || event.type === 'approval_required'
     ? event.tool_name
+    : event.type === 'tool_call_delta'
+      ? event.name
     : event.type === 'plan' && event.goal
       ? event.goal
       : meta.label;

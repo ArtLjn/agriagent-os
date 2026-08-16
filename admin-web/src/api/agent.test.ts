@@ -28,11 +28,23 @@ describe('agent api', () => {
     expect(
       mapSseToChunk({
         type: 'retrying',
-        data: { code: 'llm_retrying', attempt: 1, delay_ms: 1000 },
+        data: { code: 'llm_retrying', category: 'transient', attempt: 1, delay_ms: 1000 },
       }),
     ).toEqual({
       type: 'retrying',
-      data: { code: 'llm_retrying', attempt: 1, delay_ms: 1000 },
+      data: { code: 'llm_retrying', category: 'transient', attempt: 1, delay_ms: 1000 },
+    });
+  });
+
+  it('保留尚未完成的 Tool Call 参数增量', () => {
+    expect(
+      mapSseToChunk({
+        type: 'tool_call_delta',
+        data: { tool_call_id: 'call-1', name: 'get_weather', index: 0, arguments_delta: '{"location":' },
+      }),
+    ).toEqual({
+      type: 'tool_call_delta',
+      data: { tool_call_id: 'call-1', name: 'get_weather', index: 0, arguments_delta: '{"location":' },
     });
   });
 

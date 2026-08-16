@@ -90,6 +90,7 @@ export type StreamChunk =
   | { type: 'plan'; data: { steps: string[] } }
   | { type: 'plan_created'; data: { goal: string; step_count: number; steps: PlanStep[] } }
   | { type: 'plan_step_done'; data: { step_index: number; skill: string; status: string } }
+  | { type: 'tool_call_delta'; data: { tool_call_id: string; name: string; index: number; arguments_delta: string } }
   | { type: 'action'; data: { tool_name: string; arguments: Record<string, unknown>; rationale?: string } }
   | { type: 'observation'; data: Observation }
   | { type: 'pending_action'; data: PendingAction }
@@ -102,10 +103,10 @@ export type StreamChunk =
   | { type: 'doom_loop_warning'; data: { message: string } }
   | { type: 'verification_warning'; data: { issues: string[] } }
   | { type: 'write_committed_reply_failed'; data: { code: string; message: string } }
-  | { type: 'retrying'; data: { code: string; attempt: number; delay_ms: number } }
+  | { type: 'retrying'; data: { code: string; category?: string; attempt: number; delay_ms: number } }
   | { type: 'meta'; data: { turn_id: string; conversation_id: string; request_id?: string } }
   | { type: 'done'; data: DoneEvent }
-  | { type: 'error'; data: { code: string; message: string } };
+  | { type: 'error'; data: { code: string; message: string; category?: string; phase?: string; tool_name?: string; retryable?: boolean; attempt?: number; stream_started?: boolean } };
 
 // ── SSE 解析器：标准 event:/data: 格式 ──
 export async function* parseSseStream(
@@ -202,6 +203,16 @@ export function mapSseToChunk(event: SseEvent): StreamChunk | null {
           rationale: typeof data.rationale === 'string' ? data.rationale : undefined,
         },
       };
+    case 'tool_call_delta':
+      return {
+        type: 'tool_call_delta',
+        data: {
+          tool_call_id: String(data.tool_call_id ?? ''),
+          name: String(data.name ?? ''),
+          index: Number(data.index ?? 0),
+          arguments_delta: String(data.arguments_delta ?? ''),
+        },
+      };
     case 'observation':
       return {
         type: 'observation',
@@ -286,6 +297,7 @@ export function mapSseToChunk(event: SseEvent): StreamChunk | null {
         type: 'retrying',
         data: {
           code: String(data.code ?? 'retrying'),
+          category: typeof data.category === 'string' ? data.category : undefined,
           attempt: Number(data.attempt ?? 0),
           delay_ms: Number(data.delay_ms ?? 0),
         },
@@ -301,6 +313,12 @@ export function mapSseToChunk(event: SseEvent): StreamChunk | null {
         data: {
           code: String(data.code ?? 'error'),
           message: String(data.message ?? '未知错误'),
+          category: typeof data.category === 'string' ? data.category : undefined,
+          phase: typeof data.phase === 'string' ? data.phase : undefined,
+          tool_name: typeof data.tool_name === 'string' ? data.tool_name : undefined,
+          retryable: typeof data.retryable === 'boolean' ? data.retryable : undefined,
+          attempt: typeof data.attempt === 'number' ? data.attempt : undefined,
+          stream_started: typeof data.stream_started === 'boolean' ? data.stream_started : undefined,
         },
       };
     default:

@@ -278,10 +278,31 @@ async def stream_events(
             "cancelled",
             "timeout",
         }:
-            yield {
-                "seq": next_seq,
+            done_event = {
                 "type": "done",
                 "data": {"status": state["status"], "turn_id": turn_id},
+            }
+            # Worker 崩溃或旧数据可能只留下终态状态，没有写入 done。
+            # 将补发终态持久化，保证下一次 after_seq 重连不会再次合成同一事件。
+            client = get_client()
+            if client is not None:
+                published_seq = await publish_event(turn_id, done_event)
+                replayed = await read_events(turn_id, next_seq)
+                for event in replayed:
+                    next_seq = max(next_seq, event["seq"])
+                    yield event
+                    if event["terminal"]:
+                        return
+                if published_seq > next_seq:
+                    yield {
+                        "seq": published_seq,
+                        **done_event,
+                        "terminal": True,
+                    }
+                return
+            yield {
+                "seq": max(next_seq, int(state.get("last_event_seq", "0") or 0)) + 1,
+                **done_event,
                 "terminal": True,
             }
             return

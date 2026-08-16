@@ -4,6 +4,7 @@ export type ExecutionEvent =
   | { type: 'thought'; content: string }
   | { type: 'plan'; goal?: string; steps: unknown[] }
   | { type: 'plan_step_done'; step_index: number; skill: string; status: string }
+  | { type: 'tool_call_delta'; tool_call_id: string; name: string; index: number; arguments_delta: string }
   | { type: 'action'; tool_name: string; arguments: Record<string, unknown>; rationale?: string }
   | { type: 'observation'; tool_name: string; result?: unknown; error?: string | null }
   | { type: 'approval_required'; tool_name: string; arguments: Record<string, unknown> }
@@ -15,8 +16,8 @@ export type ExecutionEvent =
   | { type: 'doom_loop_warning'; message: string }
   | { type: 'verification_warning'; issues: string[] }
   | { type: 'write_committed_reply_failed'; code: string; message: string }
-  | { type: 'retrying'; code: string; attempt: number; delay_ms: number }
-  | { type: 'error'; code: string; message: string };
+  | { type: 'retrying'; code: string; category?: string; attempt: number; delay_ms: number }
+  | { type: 'error'; code: string; message: string; category?: string; phase?: string; retryable?: boolean; attempt?: number; stream_started?: boolean };
 
 export function executionEventFromChunk(chunk: StreamChunk): ExecutionEvent | null {
   switch (chunk.type) {
@@ -30,6 +31,8 @@ export function executionEventFromChunk(chunk: StreamChunk): ExecutionEvent | nu
       return { type: 'plan_step_done', ...chunk.data };
     case 'action':
       return { type: 'action', ...chunk.data };
+    case 'tool_call_delta':
+      return { type: 'tool_call_delta', ...chunk.data };
     case 'observation':
       return { type: 'observation', ...chunk.data };
     case 'pending_action':

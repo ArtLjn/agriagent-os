@@ -45,6 +45,7 @@ from agent.config import settings
 from agent.core import context, hitl, memory, planner, summarizer, tokenizer, verify
 from agent.core.turn import StopReason, Turn, TurnPhase
 from agent.infra import sse
+from agent.infra.error_policy import LlmStreamError, classify_exception
 from agent.infra.llm import MODEL, chat_stream
 from agent.infra.logging import log_event
 from agent.infra.mcp_client import BusinessClient
@@ -63,6 +64,7 @@ from agent.skills.registry import SkillRegistry
 logger = logging.getLogger(__name__)
 
 ApprovalWaiter = Callable[[str], Awaitable[tuple[bool, str]]]
+SkillLookup = dict[str, Skill] | SkillRegistry
 
 
 # ── 数据容器 ──────────────────────────────────────────────
@@ -111,8 +113,8 @@ async def run_turn(
     )
 
     try:
-        _registry, tools_schema, skill_index, tracker, plan_box = _setup_turn_runtime(
-            turn
+        _registry, tools_schema, skill_registry, tracker, plan_box = (
+            _setup_turn_runtime(turn)
         )
         turn.set_phase(TurnPhase.REASONING)
 
@@ -166,7 +168,7 @@ async def run_turn(
                     tools_schema=tools_schema,
                     tracker=tracker,
                     plan_box=plan_box,
-                    skill_index=skill_index,
+                    skill_index=skill_registry,
                     skill_ctx=skill_ctx,
                     approval_waiter=approval_waiter,
                 ):
@@ -217,7 +219,7 @@ def _pipeline_error_event(turn: Turn, exc: Exception) -> dict:
 
 def _setup_turn_runtime(
     turn: Turn,
-) -> tuple[SkillRegistry, list[dict], dict[str, Skill], verify.CallTracker, dict]:
+) -> tuple[SkillRegistry, list[dict], SkillRegistry, verify.CallTracker, dict]:
     """加载 skills、构建 tools schema、初始化 tracker。"""
     memory_key = turn.memory_key or turn.conversation_id
     turn.memory_snapshot = memory.snapshot(memory_key)
@@ -226,7 +228,6 @@ def _setup_turn_runtime(
     tools_schema = registry.exposed_tools()
     # 注入 make_plan 工具，让 LLM 可以一次性规划多步任务
     tools_schema.append(planner.MAKE_PLAN_TOOL_SCHEMA)
-    skill_index = registry.as_index()
     logger.info(
         "loaded %d skills: %s",
         len(registry.all()),
@@ -235,7 +236,7 @@ def _setup_turn_runtime(
     turn.messages = context.build_initial_messages(
         turn.user_input, turn.memory_snapshot
     )
-    return registry, tools_schema, skill_index, verify.CallTracker(), {"plan": None}
+    return registry, tools_schema, registry, verify.CallTracker(), {"plan": None}
 
 
 async def _try_compress_context(turn: Turn) -> AsyncGenerator[dict, None]:
@@ -267,7 +268,7 @@ async def _run_single_reasoning_step(
     tools_schema: list[dict],
     tracker: verify.CallTracker,
     plan_box: dict,
-    skill_index: dict[str, Skill],
+    skill_index: dict[str, Skill] | SkillRegistry,
     skill_ctx: SkillContext,
     approval_waiter: ApprovalWaiter,
 ) -> AsyncGenerator[dict, None]:
@@ -425,8 +426,10 @@ async def _call_llm_stream(
                 yield {
                     "type": "tool_call_delta",
                     "data": {
+                        "tool_call_id": token.get("id", ""),
                         "name": token.get("name", ""),
                         "index": token.get("index", 0),
+                        "arguments_delta": token.get("arguments_delta", ""),
                     },
                 }
             elif token["type"] == "done":
@@ -434,7 +437,15 @@ async def _call_llm_stream(
             elif token["type"] == "retrying":
                 yield {"type": "retrying", "data": token.get("data", {})}
             elif token["type"] == "error":
-                raise RuntimeError(token["message"])
+                payload = token.get("data") or {}
+                classified = classify_exception(
+                    RuntimeError(payload.get("message") or "llm_stream_failed")
+                )
+                raise LlmStreamError(
+                    classified,
+                    stream_started=bool(payload.get("stream_started")),
+                    attempt=int(payload.get("attempt") or 0),
+                )
     finally:
         if not next_token.done():
             next_token.cancel()
@@ -467,6 +478,41 @@ async def _call_llm_stream(
     yield _LlmResult(full_content=full_content, tool_calls=tool_calls)
 
 
+def _validate_tool_calls(turn: Turn, tool_calls: list[dict]) -> dict | None:
+    """在任何调度前校验调用身份，避免结果无法与 assistant 消息关联。"""
+    seen: set[str] = set()
+    for call in tool_calls:
+        reason = ""
+        if not isinstance(call, dict):
+            reason = "tool call 必须是对象"
+        else:
+            call_id = str(call.get("id") or "")
+            if not call_id:
+                reason = "tool call 缺少 tool_call_id"
+            elif call_id in seen:
+                reason = f"tool_call_id 重复：{call_id}"
+            else:
+                seen.add(call_id)
+        if not reason:
+            continue
+        error_info = turn.record_error(
+            "invalid_tool_call",
+            reason,
+            phase=TurnPhase.TOOL_PREPARING,
+            stop_reason=StopReason.TOOL_FAILED,
+        )
+        event = sse.error_event(
+            reason,
+            error_info["code"],
+            phase=error_info["phase"],
+            retryable=error_info["retryable"],
+            attempt=error_info["attempt"],
+        )
+        turn.emit("error", event["data"])
+        return event
+    return None
+
+
 async def _handle_llm_error(turn: Turn, exc: Exception) -> AsyncGenerator[dict, None]:
     """LLM 调用失败时的错误处理：已提交→结构化降级，否则→failed。"""
     if turn.committed_result is not None:
@@ -474,22 +520,61 @@ async def _handle_llm_error(turn: Turn, exc: Exception) -> AsyncGenerator[dict, 
             turn, f"写入已成功，但最终答复生成失败：{exc}"
         ):
             yield ev
+        return
+
+    if isinstance(exc, LlmStreamError):
+        classified = exc.classified
+        code = "llm_stream_interrupted" if exc.stream_started else classified.code
+        message = (
+            "模型流式输出中断，已停止重试，请重新发送消息。"
+            if exc.stream_started
+            else classified.message
+        )
+        attempt = exc.attempt
     else:
-        error_info = turn.record_error(
-            "llm_call_failed",
-            str(exc),
-            phase=TurnPhase.REASONING,
-            stop_reason=StopReason.LLM_FAILED,
-        )
-        ev = sse.error_event(
-            error_info["message"],
-            error_info["code"],
-            phase=error_info["phase"],
-            retryable=error_info["retryable"],
-            attempt=error_info["attempt"],
-        )
-        turn.emit("error", ev["data"])
-        yield ev
+        classified = classify_exception(exc)
+        code = "llm_call_failed"
+        message = str(exc)
+        attempt = 0
+    error_info = turn.record_error(
+        code,
+        message,
+        phase=TurnPhase.REASONING,
+        retryable=classified.retryable,
+        attempt=attempt,
+        category=classified.category.value,
+        stop_reason=StopReason.LLM_FAILED,
+    )
+    ev = sse.error_event(
+        error_info["message"],
+        error_info["code"],
+        phase=error_info["phase"],
+        retryable=error_info["retryable"],
+        attempt=error_info["attempt"],
+        category=error_info.get("category", ""),
+    )
+    turn.emit("error", ev["data"])
+    yield ev
+    answer = _llm_failure_answer(
+        classified.category.value,
+        stream_started=isinstance(exc, LlmStreamError) and exc.stream_started,
+    )
+    turn.final_answer = answer
+    yield sse.final_answer_start()
+    yield sse.final_answer_delta(answer)
+    yield sse.final_answer(answer)
+
+
+def _llm_failure_answer(category: str, *, stream_started: bool) -> str:
+    """将模型故障分类转换为用户可理解的终态答复。"""
+    if stream_started:
+        return "模型输出中断，本轮未完成，请重新发送消息。"
+    return {
+        "transient": "模型服务暂时不可用，本轮未完成，请稍后重试。",
+        "resource": "本轮上下文或模型资源超出限制，请缩短请求后重试。",
+        "permanent": "模型请求被拒绝，本轮未完成，请检查请求内容后重试。",
+        "model": "模型未能生成有效结果，本轮未完成，请调整请求后重试。",
+    }.get(category, "模型调用失败，本轮未完成，请稍后重试。")
 
 
 # ── 工具分发 ──────────────────────────────────────────────
@@ -499,7 +584,7 @@ async def _dispatch_tool_calls(
     *,
     tool_calls: list[dict],
     rationale: str,
-    skill_index: dict[str, Skill],
+    skill_index: SkillLookup,
     skill_ctx: SkillContext,
     approval_waiter: ApprovalWaiter,
     turn: Turn,
@@ -507,10 +592,15 @@ async def _dispatch_tool_calls(
     plan_box: dict,
 ) -> AsyncGenerator[dict, None]:
     """处理一轮 tool_calls：make_plan / 普通 skill / approval_followup。"""
+    invalid_event = _validate_tool_calls(turn, tool_calls)
+    if invalid_event is not None:
+        yield invalid_event
+        return
+
     if len(tool_calls) > 1 and all(
         tc["name"] != "make_plan"
-        and skill_index.get(tc["name"]) is not None
-        and skill_index[tc["name"]].parallel_safe
+        and (skill := skill_index.get(tc["name"])) is not None
+        and skill.parallel_safe
         for tc in tool_calls
     ):
         async for ev in _dispatch_parallel_tool_calls(
@@ -570,7 +660,7 @@ async def _dispatch_parallel_tool_calls(
     *,
     tool_calls: list[dict],
     rationale: str,
-    skill_index: dict[str, Skill],
+    skill_index: SkillLookup,
     skill_ctx: SkillContext,
     approval_waiter: ApprovalWaiter,
     turn: Turn,
@@ -680,7 +770,7 @@ async def _process_skill_call(
     *,
     tc: dict,
     rationale: str,
-    skill_index: dict[str, Skill],
+    skill_index: SkillLookup,
     skill_ctx: SkillContext,
     approval_waiter: ApprovalWaiter,
     turn: Turn,
@@ -758,7 +848,7 @@ async def _post_process_skill_result(
     turn: Turn,
     skill: Skill,
     state: _SkillExecState,
-    skill_index: dict[str, Skill],
+    skill_index: SkillLookup,
     skill_ctx: SkillContext,
     approval_waiter: ApprovalWaiter,
     rationale: str,
@@ -822,7 +912,7 @@ async def _drive_followup_if_ready(
     *,
     skill: Skill,
     state: _SkillExecState,
-    skill_index: dict[str, Skill],
+    skill_index: SkillLookup,
     skill_ctx: SkillContext,
     approval_waiter: ApprovalWaiter,
     turn: Turn,
@@ -1223,7 +1313,7 @@ async def _drive_approval_followup(
     *,
     prepare_result: dict,
     followup_config: dict,
-    skill_index: dict[str, Skill],
+    skill_index: SkillLookup,
     skill_ctx: SkillContext,
     approval_waiter: ApprovalWaiter,
     turn: Turn,
@@ -1441,7 +1531,7 @@ async def _emit_prepare_incomplete(
 async def _handle_make_plan(
     args: dict,
     rationale: str,
-    skill_index: dict[str, Skill],
+    skill_index: SkillLookup,
     skill_ctx: SkillContext,
     approval_waiter: ApprovalWaiter,
     turn: Turn,
@@ -1502,7 +1592,7 @@ async def _handle_make_plan(
 async def _execute_plan_steps(
     plan,
     rationale: str,
-    skill_index: dict[str, Skill],
+    skill_index: SkillLookup,
     skill_ctx: SkillContext,
     approval_waiter: ApprovalWaiter,
     turn: Turn,
@@ -1555,7 +1645,7 @@ async def _execute_plan_step(
     tool_name: str,
     args: dict,
     rationale: str,
-    skill_index: dict[str, Skill],
+    skill_index: SkillLookup,
     skill_ctx: SkillContext,
     approval_waiter: ApprovalWaiter,
     turn: Turn,

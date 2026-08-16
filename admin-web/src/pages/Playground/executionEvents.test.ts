@@ -25,6 +25,19 @@ describe('executionEventFromChunk', () => {
     });
   });
 
+  it('将未完成 Tool Call 增量保留在执行时间线', () => {
+    expect(executionEventFromChunk({
+      type: 'tool_call_delta',
+      data: { tool_call_id: 'call-1', name: 'get_weather', index: 0, arguments_delta: '{"location":' },
+    })).toEqual({
+      type: 'tool_call_delta',
+      tool_call_id: 'call-1',
+      name: 'get_weather',
+      index: 0,
+      arguments_delta: '{"location":',
+    });
+  });
+
   it('将待确认计划保留为时间线中的计划卡片', () => {
     expect(executionEventFromChunk({
       type: 'pending_plan',

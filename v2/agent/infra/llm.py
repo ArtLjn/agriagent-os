@@ -26,6 +26,8 @@ from typing import Any
 
 from openai import AsyncOpenAI, OpenAI
 
+from agent.infra.error_policy import classify_exception, error_payload
+
 logger = logging.getLogger(__name__)
 
 _PROVIDERS_FILE = Path(__file__).resolve().parent.parent.parent / "providers.json"
@@ -71,35 +73,13 @@ _async_client = AsyncOpenAI(base_url=BASE_URL, api_key=API_KEY, timeout=60.0)
 
 def _is_retryable(exc: Exception) -> bool:
     """判断异常是否值得重试（网络/服务端临时问题）。"""
-    status_code = getattr(exc, "status_code", None)
-    if isinstance(status_code, int) and (status_code == 429 or status_code >= 500):
-        return True
-
-    # httpcore.RemoteProtocolError, httpx.NetworkError, ConnectionError 等
-    exc_name = type(exc).__name__
-    retryable_names = {
-        "RemoteProtocolError",
-        "ConnectError",
-        "NetworkError",
-        "ReadError",
-        "ReadTimeout",
-        "ConnectTimeout",
-        "PoolTimeout",
-        "ConnectionResetError",
-        "ConnectionError",
-        "ChunkedEncodingError",
-    }
-    if exc_name in retryable_names:
-        return True
-    # APITimeoutError / APIConnectionError（openai SDK）
-    if "timeout" in exc_name.lower() or "connection" in exc_name.lower():
-        return True
-    return False
+    return classify_exception(exc).retryable
 
 
 def _stream_error_message(exc: Exception) -> str:
     """将 Provider 故障转换为可直接展示给用户的短提示。"""
-    if _is_retryable(exc):
+    classified = classify_exception(exc)
+    if classified.retryable:
         status_code = getattr(exc, "status_code", None)
         suffix = f"（HTTP {status_code}）" if isinstance(status_code, int) else ""
         return f"模型服务暂时不可用{suffix}，已自动重试，请稍后重新发送消息。"
@@ -319,6 +299,7 @@ async def chat_stream(
                             tc["arguments_raw"] += tc_delta.function.arguments
                         yield {
                             "type": "tool_call",
+                            "id": tc["id"],
                             "name": tc["name"],
                             "arguments_delta": tc_delta.function.arguments or "",
                             "index": idx,
@@ -359,9 +340,14 @@ async def chat_stream(
                 logger.exception(
                     "LLM stream failed mid-stream (no retry, already yielded)"
                 )
+                classified = classify_exception(exc)
                 yield {
                     "type": "error",
-                    "message": f"网络中断（{type(exc).__name__}），请重新发送消息重试",
+                    "data": error_payload(
+                        classified,
+                        attempt=attempt,
+                        stream_started=True,
+                    ),
                 }
                 return
 
@@ -378,6 +364,7 @@ async def chat_stream(
                     "type": "retrying",
                     "data": {
                         "code": "llm_retrying",
+                        "category": "transient",
                         "attempt": attempt + 1,
                         "delay_ms": int(delay * 1000),
                     },
@@ -387,9 +374,14 @@ async def chat_stream(
 
             # 不可重试或重试次数用完
             logger.exception("LLM stream failed (no more retries)")
-            yield {"type": "error", "message": _stream_error_message(exc)}
+            classified = classify_exception(exc)
+            yield {
+                "type": "error",
+                "data": error_payload(classified, attempt=attempt),
+            }
             return
 
     # 理论上不会走到这里
     if last_exc:
-        yield {"type": "error", "message": _stream_error_message(last_exc)}
+        classified = classify_exception(last_exc)
+        yield {"type": "error", "data": error_payload(classified, attempt=MAX_RETRIES)}

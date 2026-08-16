@@ -134,6 +134,7 @@ class Turn:
         tool_name: str = "",
         retryable: bool = False,
         attempt: int = 0,
+        category: str = "",
         stop_reason: StopReason | None = None,
         status: TurnStatus | None = "failed",
     ) -> dict[str, Any]:
@@ -151,6 +152,8 @@ class Turn:
             "retryable": retryable,
             "attempt": attempt,
         }
+        if category:
+            self.error_details["category"] = category
         if stop_reason is not None:
             self.stop_reason = stop_reason
         if status is not None:

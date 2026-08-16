@@ -58,18 +58,34 @@ def _build_mcp_skill(meta: dict[str, Any]) -> McpSkill:
     return skill
 
 
+class SkillLoader:
+    """从指定 skills 目录发现并实例化 Skill，供 Registry 统一接管。"""
+
+    def __init__(self, directory: Path | str) -> None:
+        self.directory = Path(directory)
+
+    def _discover_skill_dirs(self) -> list[Path]:
+        if not self.directory.is_dir():
+            raise FileNotFoundError(f"skill directory not found: {self.directory}")
+        return [
+            entry
+            for entry in sorted(self.directory.iterdir())
+            if entry.is_dir() and not entry.name.startswith(("_", "."))
+        ]
+
+    def load_all(self) -> list[Skill]:
+        skills: list[Skill] = []
+        for skill_dir in self._discover_skill_dirs():
+            result = _load_skill(skill_dir)
+            if result is not None:
+                operation_skills = result.operation_skills()
+                skills.extend(operation_skills or [result])
+        return skills
+
+
 def _discover_skill_dirs() -> list[Path]:
     """扫描 agent/skills/*/ 目录。"""
-    dirs = []
-    for entry in sorted(_SKILLS_DIR.iterdir()):
-        if (
-            not entry.is_dir()
-            or entry.name.startswith("_")
-            or entry.name.startswith(".")
-        ):
-            continue
-        dirs.append(entry)
-    return dirs
+    return SkillLoader(_SKILLS_DIR)._discover_skill_dirs()
 
 
 def _load_skill(skill_dir: Path) -> Skill | None:
@@ -141,13 +157,7 @@ def _load_skill(skill_dir: Path) -> Skill | None:
 
 def load_registry() -> SkillRegistry:
     """发现并加载所有 Skill，返回运行时注册表。"""
-    skills: list[Skill] = []
-    for skill_dir in _discover_skill_dirs():
-        result = _load_skill(skill_dir)
-        if result is not None:
-            operation_skills = result.operation_skills()
-            skills.extend(operation_skills or [result])
-    return SkillRegistry.from_skills(skills)
+    return SkillRegistry.from_skills(SkillLoader(_SKILLS_DIR).load_all())
 
 
 def load_all() -> list[Skill]:

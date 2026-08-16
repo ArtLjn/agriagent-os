@@ -12,8 +12,8 @@ from agent.config import settings
 from agent.core import react
 from agent.core.turn import StopReason, Turn, TurnPhase
 from agent.infra import sse, turn_store
-from agent.skills.base import Skill, SkillResult
-from agent.skills.registry import SkillRegistry
+from agent.skills.base import McpSkill, Skill, SkillResult
+from agent.skills.registry import SkillRegistry, SkillRegistryError
 
 
 class _ReadSkill(Skill):
@@ -42,8 +42,47 @@ def test_skill_registry_indexes_and_rejects_duplicate_names() -> None:
     assert registry.require("first") is first
     assert registry.exposed_tools()[0]["function"]["name"] == "first"
 
-    with pytest.raises(ValueError, match="duplicate skill name"):
+    with pytest.raises(SkillRegistryError, match="duplicate_skill_name"):
         SkillRegistry.from_skills([first, _ReadSkill("first")])
+
+
+def test_skill_registry_rejects_invalid_schema_with_context() -> None:
+    skill = _ReadSkill("bad-schema")
+    skill._meta["parameters"] = {
+        "type": "object",
+        "properties": {},
+        "required": ["missing"],
+    }
+
+    with pytest.raises(SkillRegistryError, match="invalid_skill_schema.*bad-schema"):
+        SkillRegistry.from_skills([skill])
+
+
+def test_skill_registry_rejects_mcp_skill_without_tool_name() -> None:
+    skill = McpSkill()
+    skill._meta = {
+        "name": "missing-mcp-tool",
+        "description": "invalid",
+        "parameters": {"type": "object", "properties": {}, "required": []},
+    }
+
+    with pytest.raises(SkillRegistryError, match="mcp_tool_missing.*missing-mcp-tool"):
+        SkillRegistry.from_skills([skill])
+
+
+def test_runtime_keeps_registry_as_the_skill_lookup(monkeypatch) -> None:
+    skill = _ReadSkill("runtime-lookup")
+    monkeypatch.setattr(react.skill_loader, "load_all", lambda: [skill])
+    monkeypatch.setattr(react.memory, "snapshot", lambda _key: {})
+    monkeypatch.setattr(react.context, "build_initial_messages", lambda *_args: [])
+
+    registry, _tools, lookup, _tracker, _plan_box = react._setup_turn_runtime(
+        Turn(user_input="验证注册表")
+    )
+
+    assert lookup is registry
+    assert "runtime-lookup" in registry
+    assert registry.get("runtime-lookup") is skill
 
 
 def test_turn_records_structured_error_without_breaking_legacy_fields() -> None:
@@ -147,6 +186,102 @@ async def test_read_only_tool_calls_run_in_parallel() -> None:
         "slow-call",
         "fast-call",
     }
+
+
+@pytest.mark.asyncio
+async def test_serial_read_only_calls_do_not_run_in_parallel() -> None:
+    first = _ReadSkill("serial-first", delay=0.05)
+    second = _ReadSkill("serial-second", delay=0.05)
+    first._meta["execution"] = {"mode": "serial"}
+    second._meta["execution"] = {"mode": "serial"}
+    calls = [
+        {"id": "serial-1", "name": first.name, "arguments": {}},
+        {"id": "serial-2", "name": second.name, "arguments": {}},
+    ]
+
+    started = time.monotonic()
+    events = [
+        event
+        async for event in react._dispatch_tool_calls(
+            tool_calls=calls,
+            rationale="显式串行",
+            skill_index={first.name: first, second.name: second},
+            skill_ctx=SimpleNamespace(),
+            approval_waiter=_approve,
+            turn=Turn(user_input="串行查询"),
+            tracker=react.verify.CallTracker(),
+            plan_box={"plan": None},
+        )
+    ]
+
+    assert time.monotonic() - started >= 0.09
+    assert [event["type"] for event in events].count("tool_started") == 2
+
+
+@pytest.mark.asyncio
+async def test_write_calls_and_hitl_are_serialized() -> None:
+    first = _ReadSkill("write-first", delay=0.04)
+    second = _ReadSkill("write-second", delay=0.04)
+    first._meta["risk_level"] = "write_confirm"
+    second._meta["risk_level"] = "write_confirm"
+    active_approvals = 0
+    max_active_approvals = 0
+
+    async def approve_serially(_: str) -> tuple[bool, str]:
+        nonlocal active_approvals, max_active_approvals
+        active_approvals += 1
+        max_active_approvals = max(max_active_approvals, active_approvals)
+        await asyncio.sleep(0.01)
+        active_approvals -= 1
+        return True, "同意"
+
+    calls = [
+        {"id": "write-1", "name": first.name, "arguments": {}},
+        {"id": "write-2", "name": second.name, "arguments": {}},
+    ]
+    events = [
+        event
+        async for event in react._dispatch_tool_calls(
+            tool_calls=calls,
+            rationale="写入串行",
+            skill_index={first.name: first, second.name: second},
+            skill_ctx=SimpleNamespace(),
+            approval_waiter=approve_serially,
+            turn=Turn(user_input="串行写入"),
+            tracker=react.verify.CallTracker(),
+            plan_box={"plan": None},
+        )
+    ]
+
+    assert max_active_approvals == 1
+    assert [event["type"] for event in events].count("approval_required") == 2
+    assert [event["type"] for event in events].count("tool_started") == 2
+
+
+@pytest.mark.asyncio
+async def test_invalid_or_duplicate_tool_call_id_stops_batch() -> None:
+    skill = _ReadSkill("lookup")
+    turn = Turn(user_input="无效调用")
+    events = [
+        event
+        async for event in react._dispatch_tool_calls(
+            tool_calls=[
+                {"id": "same", "name": skill.name, "arguments": {}},
+                {"id": "same", "name": skill.name, "arguments": {}},
+            ],
+            rationale="调用身份校验",
+            skill_index={skill.name: skill},
+            skill_ctx=SimpleNamespace(),
+            approval_waiter=_approve,
+            turn=turn,
+            tracker=react.verify.CallTracker(),
+            plan_box={"plan": None},
+        )
+    ]
+
+    assert [event["type"] for event in events] == ["error"]
+    assert events[0]["data"]["code"] == "invalid_tool_call"
+    assert turn.status == "failed"
 
 
 @pytest.mark.asyncio
@@ -256,6 +391,7 @@ async def test_llm_stream_forwards_deltas_and_final_result(monkeypatch) -> None:
         yield {"type": "text", "delta": "正在查询"}
         yield {
             "type": "tool_call",
+            "id": "status-call",
             "name": "get_status",
             "arguments_delta": "{}",
             "index": 0,
@@ -274,6 +410,12 @@ async def test_llm_stream_forwards_deltas_and_final_result(monkeypatch) -> None:
         "data": {"delta": "正在查询"},
     }
     assert items[2]["type"] == "tool_call_delta"
+    assert items[2]["data"] == {
+        "tool_call_id": "status-call",
+        "name": "get_status",
+        "index": 0,
+        "arguments_delta": "{}",
+    }
     assert isinstance(items[-1], react._LlmResult)
 
 
@@ -355,6 +497,7 @@ async def test_stream_replays_terminal_state_when_done_event_is_missing(
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(turn_store, "read_events", lambda *args: _empty_events())
+    monkeypatch.setattr(turn_store, "get_client", lambda: None)
     monkeypatch.setattr(turn_store, "get_turn", lambda *args: _completed_turn())
 
     events = [
@@ -367,6 +510,45 @@ async def test_stream_replays_terminal_state_when_done_event_is_missing(
     assert events[0]["type"] == "done"
     assert events[0]["terminal"] is True
     assert events[0]["data"] == {"status": "completed", "turn_id": "turn-2"}
+
+
+@pytest.mark.asyncio
+async def test_stream_persists_missing_done_before_replay(monkeypatch) -> None:
+    published = []
+
+    async def fake_publish(turn_id, event):
+        published.append((turn_id, event))
+        return 4
+
+    async def fake_read(turn_id, after_seq):
+        if published and after_seq < 4:
+            return [
+                {
+                    "seq": 4,
+                    "type": "done",
+                    "data": {"status": "completed", "turn_id": turn_id},
+                    "terminal": True,
+                }
+            ]
+        return []
+
+    monkeypatch.setattr(turn_store, "get_client", lambda: object())
+    monkeypatch.setattr(turn_store, "read_events", fake_read)
+    monkeypatch.setattr(turn_store, "publish_event", fake_publish)
+    monkeypatch.setattr(turn_store, "get_turn", _completed_turn)
+
+    events = [event async for event in turn_store.stream_events("turn-3")]
+
+    assert published == [
+        (
+            "turn-3",
+            {
+                "type": "done",
+                "data": {"status": "completed", "turn_id": "turn-3"},
+            },
+        )
+    ]
+    assert events[0]["seq"] == 4
 
 
 async def _empty_events(*_args):

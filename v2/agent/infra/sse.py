@@ -235,6 +235,7 @@ def error_event(
     tool_name: str = "",
     retryable: bool = False,
     attempt: int = 0,
+    category: str = "",
 ) -> dict:
     data = {
         "code": code,
@@ -243,6 +244,8 @@ def error_event(
         "retryable": retryable,
         "attempt": attempt,
     }
+    if category:
+        data["category"] = category
     if tool_name:
         data["tool_name"] = tool_name
     return {"type": "error", "data": data}

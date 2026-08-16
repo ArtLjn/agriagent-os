@@ -705,16 +705,16 @@ v2/tests/
 
 ### 13.1 Registry
 
-- [ ] SkillRegistry.from_directory 能加载当前所有有效 Skill。
-- [ ] registry.get、registry.require 和 registry.exposed_tools 替代手动 skill_index。
-- [ ] 名称重复、Schema 错误、MCP tool 缺失时失败，并包含 code 和 Skill 名称。
+- [x] SkillRegistry.from_directory 能加载当前所有有效 Skill。
+- [x] registry.get、registry.require 和 registry.exposed_tools 替代手动 skill_index。
+- [x] 名称重复、Schema 错误、MCP tool 缺失时失败，并包含 code 和 Skill 名称。
 - [x] expose_to_model=false 的 follow-up 可被 Runtime 查找，但不出现在模型 Schema。
-- [ ] 迁移前后 Skill 名称集合、公开 Tool 名称和风险等级一致。
+- [x] 迁移前后 Skill 名称集合、公开 Tool 名称和风险等级一致。
 
 ### 13.2 Run Loop 收敛
 
 - [x] Turn 具备显式 `TurnPhase` 和 `StopReason`，并保留 `status/error` 兼容字段。
-- [ ] 无 Tool Call 时产生 final_answer 和 done(completed)。
+- [x] 无 Tool Call 时产生 final_answer 和 done(completed)。
 - [ ] Doom Loop 达到阈值后停止继续调用，并产生 doom_loop_detected。
 - [x] 达到 max_steps 后产生用户可读最终答复，不出现只有 error 没有答复的路径。
 - [x] final_answer 不作为公开 Tool Schema。
@@ -724,12 +724,12 @@ v2/tests/
 ### 13.3 流式输出
 
 - [ ] LLM 文本增量可以通过 Redis Stream/SSE 逐步到达客户端。
-- [ ] Tool Call 参数尚未收完整时只产生增量事件，不提前执行。
+- [x] Tool Call 参数尚未收完整时只产生增量事件，不提前执行。
 - [x] Tool 执行前立即产生 tool_started。
 - [x] Tool 完成后产生对应 tool_finished，包含 tool_call_id、耗时和结果/错误。
 - [x] 最终答复使用 final_answer_delta，并最终产生一次完整 final_answer。
 - [ ] 长时间无下游事件时持续产生 heartbeat 或明确 waiting 状态。
-- [ ] after_seq 重连不重复执行 Turn，事件序号连续可解释。
+- [x] after_seq 重连不重复执行 Turn，事件序号连续可解释。
 - [x] 事件流等待超时不会静默断开，必须得到 stream_timeout 或 Turn 终态。
 
 ### 13.4 并行 Skill
@@ -739,22 +739,22 @@ v2/tests/
 - [x] 单 Turn 并发数不超过 max_parallel_skills。
 - [x] Tool Result 按原始 Tool Call 顺序写入，且每个 tool_call_id 唯一对应。
 - [x] 一个只读 Tool 失败时，其他独立 Tool 的结果仍被记录并返回。
-- [ ] 未声明 parallel_safe 的 Skill 默认串行。
-- [ ] 写操作、HITL follow-up 和同一资源更新不会并行提交。
+- [x] 未声明 parallel_safe 的 Skill 默认串行。
+- [x] 写操作、HITL follow-up 和同一资源更新不会并行提交。
 - [x] Turn 并发限制与 Skill 并发限制分别有指标和配置。
 
 ### 13.5 错误处理与恢复
 
 - [x] 定义统一错误对象，至少包含 `code`、`message`、`phase`、`tool_name`、`retryable` 和 `attempt`。
-- [ ] 错误分类至少覆盖瞬时错误、永久错误、模型错误和资源错误，并由分类结果决定恢复策略。
-- [ ] LLM 尚未产生流式输出、且错误属于瞬时错误时，使用有界异步指数退避和抖动重试。
-- [ ] LLM 已开始输出后断流默认不重试当前流，避免客户端收到重复增量；重试或终止原因必须可观测。
+- [x] 错误分类至少覆盖瞬时错误、永久错误、模型错误和资源错误，并由分类结果决定恢复策略。
+- [x] LLM 尚未产生流式输出、且错误属于瞬时错误时，使用有界异步指数退避和抖动重试。
+- [x] LLM 已开始输出后断流默认不重试当前流，避免客户端收到重复增量；重试或终止原因必须可观测。
 - [ ] MCP 只读调用允许有限重试；写操作只有在幂等键和业务契约明确支持时才允许重试。
 - [ ] 参数缺失、未知 Tool、认证失败、审批冲突和业务不可重试错误不能盲目重试，并返回带上下文的结构化错误。
 - [ ] 可恢复 Tool 错误进入 Observation 供模型调整；Runtime 崩溃、资源耗尽和终态错误必须进入 TurnFinalizer。
 - [x] `timeout`/`cancelled` 可作为过程事件发布，`done` 是唯一终态事件标记，避免终态事件被重复去重。
 - [ ] fallback 只能来自 Skill/Registry 声明的安全替代关系，不能由模型自由改用其他写操作。
-- [ ] 重试耗尽、资源错误和关键路径持续失败具备明确的用户答复、运行告警或人工升级策略。
+- [x] 重试耗尽、资源错误和关键路径持续失败具备明确的用户答复、运行告警或人工升级策略。
 - [ ] 错误路径均有 Redis 状态、Trace、事件和最终答复，并覆盖重试、断流、MCP、审批、Context 和 Worker 异常测试。
 
 ### 13.6 真实链路
