@@ -19,7 +19,15 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
     setLoading(true);
     try {
       const res = await apiClient.post('/auth/login', { phone, password });
-      const { token } = res.data;
+      const responseData = res.data as { access_token?: unknown; token?: unknown };
+      const token = typeof responseData.access_token === 'string'
+        ? responseData.access_token
+        : typeof responseData.token === 'string'
+          ? responseData.token
+          : '';
+      if (!token) {
+        throw new Error('登录服务未返回有效认证令牌');
+      }
       authStore.setToken(token);
       message.success('登录成功');
       onLogin();

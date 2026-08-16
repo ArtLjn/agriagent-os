@@ -1,46 +1,35 @@
 import apiClient from './client';
 
 export interface DashboardSummary {
-  farm_count: number;
-  user_count: number;
-  dau_today: number;
-  records_today: number;
-}
-
-export interface DashboardTrendItem {
-  date: string;
-  count: number;
-}
-
-export interface DashboardTrend {
-  days: DashboardTrendItem[];
-}
-
-export interface DashboardActiveUser {
-  user_id: string;
-  nickname: string;
-  phone_masked: string;
-  last_active_at: string | null;
-  farm_name: string | null;
-}
-
-export interface DashboardActiveUsers {
-  items: DashboardActiveUser[];
+  farm_id: number;
+  name: string;
+  location: string | null;
+  today: string;
+  active_cycles: unknown[];
+  recent_logs_count: number;
+  recent_logs_preview: unknown[];
+  weather_today: {
+    date: string;
+    max_c: number;
+    min_c: number;
+    precip_mm: number;
+    wind_mps: number;
+    code: string | null;
+    desc: string;
+  } | null;
+  workers_summary: {
+    total: number;
+    active: number;
+    unsettled_wages: number;
+  };
+  cost_summary: {
+    month_income: number;
+    month_cost: number;
+    year_profit: number;
+  };
 }
 
 export async function getSummary(): Promise<DashboardSummary> {
-  const res = await apiClient.get<DashboardSummary>('/admin/dashboard/summary');
-  return res.data;
-}
-
-export async function getTrend(days = 7): Promise<DashboardTrend> {
-  const res = await apiClient.get<DashboardTrend>('/admin/dashboard/trend', {
-    params: { days },
-  });
-  return res.data;
-}
-
-export async function getActiveUsers(): Promise<DashboardActiveUsers> {
-  const res = await apiClient.get<DashboardActiveUsers>('/admin/dashboard/active-users');
+  const res = await apiClient.get<DashboardSummary>('/dashboard');
   return res.data;
 }
