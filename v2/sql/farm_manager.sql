@@ -343,7 +343,7 @@ CREATE TABLE planting_plan_executions (
   approval_fingerprint VARCHAR(80) NOT NULL,
   status VARCHAR(20) NOT NULL DEFAULT 'committed',
   crop_template_id INT NULL,
-  cycle_id INT NULL,
+  crop_cycle_id INT NULL,
   planting_unit_id INT NULL,
   result_json JSON NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -360,7 +360,7 @@ CREATE TABLE planting_plan_executions (
     FOREIGN KEY (crop_template_id) REFERENCES crop_templates (id)
     ON DELETE SET NULL,
   CONSTRAINT fk_planting_plan_executions_cycle
-    FOREIGN KEY (cycle_id) REFERENCES crop_cycles (id)
+    FOREIGN KEY (crop_cycle_id) REFERENCES crop_cycles (id)
     ON DELETE SET NULL,
   CONSTRAINT fk_planting_plan_executions_unit
     FOREIGN KEY (planting_unit_id) REFERENCES planting_units (id)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine
@@ -105,6 +106,8 @@ def test_prepare_and_commit_use_matching_template_atomically(
         assert bound_template.name == "西瓜"
         assert db.query(PlantingUnit).count() == 1
         assert db.query(PlantingPlanExecution).count() == 1
+        execution = db.query(PlantingPlanExecution).one()
+        assert execution.crop_cycle_id == committed["cycle"]["id"]
 
         replay = planting_plan_service.commit_planting_plan(
             db,
@@ -116,6 +119,36 @@ def test_prepare_and_commit_use_matching_template_atomically(
         assert replay["idempotent_replay"] is True
         assert db.query(CropCycle).count() == 1
         assert db.query(PlantingUnit).count() == 1
+
+
+def test_planting_plan_schema_uses_canonical_crop_cycle_id() -> None:
+    table = PlantingPlanExecution.__table__
+    assert "crop_cycle_id" in table.c
+    assert table.c.client_request_id.type.length == 100
+    assert table.c.status.server_default is not None
+    assert {
+        (foreign_key.target_fullname, foreign_key.ondelete)
+        for column in (
+            table.c.crop_template_id,
+            table.c.crop_cycle_id,
+            table.c.planting_unit_id,
+        )
+        for foreign_key in column.foreign_keys
+    } == {
+        ("crop_templates.id", "SET NULL"),
+        ("crop_cycles.id", "SET NULL"),
+        ("planting_units.id", "SET NULL"),
+    }
+
+    project_root = Path(__file__).resolve().parents[1]
+    baseline_ddl = (project_root / "sql" / "farm_manager.sql").read_text()
+    create_migration = (
+        project_root / "business/migrations/20260809_planting_plan_executions_up.sql"
+    ).read_text()
+    for ddl in (baseline_ddl, create_migration):
+        assert "crop_cycle_id INT NULL" in ddl
+        assert "uq_planting_plan_executions_farm_request" in ddl
+        assert "fk_planting_plan_executions_cycle" in ddl
 
 
 def test_cycle_rejects_template_for_another_crop(

@@ -13,7 +13,7 @@ status: proposed
 
 ## 1. 结论与边界
 
-v2 不直接复用旧的全量生产快照作为新 schema。`v2/sql/farm_manager.sql` 与 `archive/backend/sql/farm_manager.sql` 当前内容一致，属于历史生产快照，不是 v2 增量迁移入口。
+当前 v2 Business 表结构以 `v2/sql/farm_manager.sql` 为规范基线；现有环境不得直接执行整份基线文件，必须通过版本化增量迁移同步。
 
 v2 Business canonical schema 包含 18 张业务/平台表：
 
@@ -481,7 +481,7 @@ CREATE TABLE planting_plan_executions (
   approval_fingerprint VARCHAR(80) NOT NULL,
   status VARCHAR(20) NOT NULL DEFAULT 'committed',
   crop_template_id INT NULL,
-  cycle_id INT NULL,
+  crop_cycle_id INT NULL,
   planting_unit_id INT NULL,
   result_json JSON NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -498,7 +498,7 @@ CREATE TABLE planting_plan_executions (
     FOREIGN KEY (crop_template_id) REFERENCES crop_templates (id)
     ON DELETE SET NULL,
   CONSTRAINT fk_planting_plan_executions_cycle
-    FOREIGN KEY (cycle_id) REFERENCES crop_cycles (id)
+    FOREIGN KEY (crop_cycle_id) REFERENCES crop_cycles (id)
     ON DELETE SET NULL,
   CONSTRAINT fk_planting_plan_executions_unit
     FOREIGN KEY (planting_unit_id) REFERENCES planting_units (id)
@@ -621,7 +621,7 @@ ON DUPLICATE KEY UPDATE
 1. 校验 `farms`、`users` 和 16 张 Business 旧表的现状；
 2. 补齐缺失的外键、索引、默认值和 `NOT NULL`；
 3. 创建 `planting_plan_executions`；
-4. 将 `crop_cycle_id` 统一为 `cycle_id`，如当前线上已经创建该字段，先执行数据回填再删除旧字段；
+4. `planting_plan_executions` 统一使用 `crop_cycle_id`；如当前线上已经创建 `cycle_id`，先执行数据回填再删除旧字段；
 5. 创建或修正 `token_daily_stats`；
 6. 对旧 Agent MySQL 表进行只读观察，确认无 v2 读写后再迁出或归档；
 7. 最后进行物理表重命名，例如 `operation_work_orders` → `work_orders`。

@@ -310,13 +310,21 @@ class PlantingPlanExecution(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     farm_id = Column(Integer, ForeignKey("farms.id"), nullable=False, index=True)
-    client_request_id = Column(String(64), nullable=False)
+    client_request_id = Column(String(100), nullable=False)
     request_fingerprint = Column(String(80), nullable=False)
     approval_fingerprint = Column(String(80), nullable=False)
-    status = Column(String(20), nullable=False, default="committed")
-    crop_template_id = Column(Integer, nullable=True)
-    crop_cycle_id = Column(Integer, nullable=True)
-    planting_unit_id = Column(Integer, nullable=True)
+    status = Column(
+        String(20), nullable=False, default="committed", server_default="committed"
+    )
+    crop_template_id = Column(
+        Integer, ForeignKey("crop_templates.id", ondelete="SET NULL"), nullable=True
+    )
+    crop_cycle_id = Column(
+        Integer, ForeignKey("crop_cycles.id", ondelete="SET NULL"), nullable=True
+    )
+    planting_unit_id = Column(
+        Integer, ForeignKey("planting_units.id", ondelete="SET NULL"), nullable=True
+    )
     result_json = Column(JSON, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(

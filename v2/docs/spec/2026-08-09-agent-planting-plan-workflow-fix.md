@@ -340,24 +340,14 @@ Business 内部调用现有：
 
 ## 9. 数据模型变更
 
-新增聚合执行记录，用于幂等和审计：
+新增聚合执行记录，用于幂等和审计。表结构以 `v2/sql/farm_manager.sql` 中的
+`planting_plan_executions` 定义为准：
 
 ```sql
-CREATE TABLE planting_plan_executions (
-  id BIGINT PRIMARY KEY AUTO_INCREMENT,
-  farm_id BIGINT NOT NULL,
-  client_request_id VARCHAR(64) NOT NULL,
-  request_fingerprint VARCHAR(80) NOT NULL,
-  approval_fingerprint VARCHAR(80) NOT NULL,
-  status VARCHAR(20) NOT NULL,
-  crop_template_id BIGINT NULL,
-  crop_cycle_id BIGINT NULL,
-  planting_unit_id BIGINT NULL,
-  result_json JSON NULL,
-  created_at DATETIME NOT NULL,
-  updated_at DATETIME NULL,
-  UNIQUE KEY uq_planting_plan_farm_request (farm_id, client_request_id)
-);
+CREATE TABLE planting_plan_executions (...);
+
+完整基线定义和外键约束以 `v2/sql/farm_manager.sql` 为准，增量迁移必须保持
+字段名、类型、默认值、索引和外键一致；该表关联茬口字段固定为 `crop_cycle_id`。
 ```
 
 约束：
