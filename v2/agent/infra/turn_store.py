@@ -109,7 +109,7 @@ async def save_turn(
     await client.expire(turn_key(turn.turn_id), settings.redis.turn_state_ttl_seconds)
 
 
-async def get_turn(turn_id: str) -> dict[bytes | str, bytes | str] | None:
+async def get_turn(turn_id: str) -> dict[str, str] | None:
     client = get_client()
     if client is None:
         return None

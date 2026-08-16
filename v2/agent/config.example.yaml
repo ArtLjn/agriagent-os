@@ -1,6 +1,8 @@
 # Agent 服务配置模板（不含真实密钥）。
 # 复制为 config.yaml 后填入真实值。
 
+environment: "development"
+
 server:
   host: "127.0.0.1"
   port: 8000
@@ -55,6 +57,7 @@ ai:
 
 business_mcp:
   url: "http://127.0.0.1:9876/mcp"
+  api_url: "http://127.0.0.1:9876/api/v2"
 
 auth:
   # 与 business 共享同一个 JWT secret，用于解析前端 Bearer token 中的 sub / farm_uid

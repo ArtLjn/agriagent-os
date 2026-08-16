@@ -32,6 +32,7 @@ class MongoCfg:
 @dataclass
 class BusinessMcpCfg:
     url: str = "http://127.0.0.1:9876/mcp"
+    api_url: str = "http://127.0.0.1:9876/api/v2"
 
 
 @dataclass
@@ -87,6 +88,7 @@ class Settings:
     mongodb: MongoCfg = field(default_factory=MongoCfg)
     business_mcp: BusinessMcpCfg = field(default_factory=BusinessMcpCfg)
     auth: AuthCfg = field(default_factory=AuthCfg)
+    environment: str = "development"
     default_farm_id: int = 1
 
 
@@ -157,7 +159,8 @@ def _build_settings() -> Settings:
             collections=dict(mongo_raw.get("collections", {}) or {}),
         ),
         business_mcp=BusinessMcpCfg(
-            url=mcp_raw.get("url", "http://127.0.0.1:9876/mcp")
+            url=mcp_raw.get("url", "http://127.0.0.1:9876/mcp"),
+            api_url=mcp_raw.get("api_url", "http://127.0.0.1:9876/api/v2"),
         ),
         auth=AuthCfg(
             jwt_secret=auth_raw.get("jwt_secret", ""),
@@ -166,13 +169,12 @@ def _build_settings() -> Settings:
             jwt_issuer=auth_raw.get("jwt_issuer", "farm-manager-auth"),
             jwt_audience=auth_raw.get("jwt_audience", "farm-manager-agent"),
             delegation_secret=auth_raw.get("delegation_secret", ""),
-            delegation_issuer=auth_raw.get(
-                "delegation_issuer", "farm-manager-agent"
-            ),
+            delegation_issuer=auth_raw.get("delegation_issuer", "farm-manager-agent"),
             delegation_audience=auth_raw.get(
                 "delegation_audience", "farm-manager-business-mcp"
             ),
         ),
+        environment=str(raw.get("environment", "development")),
         default_farm_id=int(raw.get("default_farm_id", 1)),
     )
     if env := os.getenv("MONGODB__URI"):
@@ -229,6 +231,10 @@ def _build_settings() -> Settings:
         settings.redis.worker_count = int(env)
     if env := os.getenv("BUSINESS_MCP__URL"):
         settings.business_mcp.url = env
+    if env := os.getenv("BUSINESS_API__URL"):
+        settings.business_mcp.api_url = env
+    if env := os.getenv("AGENT_ENV"):
+        settings.environment = env.lower().strip()
     if env := os.getenv("JWT_SECRET"):
         settings.auth.jwt_secret = env
     if env := os.getenv("JWT_ISSUER"):

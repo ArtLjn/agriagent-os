@@ -26,6 +26,7 @@ from agent.api import (  # noqa: E402, F401
     chat,
     conversations,
     health,
+    login,
     reset,
     traces,
     turns,

@@ -37,6 +37,11 @@ async def _active_turn_count() -> int:
 @api_router.get("/dev-users")
 def dev_users() -> dict:
     """开发环境：返回数据库中的用户列表 + JWT token，供前端切换用户。"""
+    if settings.environment != "development":
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "not_found", "message": "开发用户接口未启用"},
+        )
     from business.db import session_scope
     from business.models import Farm, User
 

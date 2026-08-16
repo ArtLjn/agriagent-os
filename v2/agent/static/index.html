@@ -1035,6 +1035,40 @@
 
   .hidden { display: none !important; }
 
+  .auth-gate {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    background: rgba(15, 17, 21, 0.98);
+  }
+  .auth-card {
+    width: min(100%, 380px);
+    padding: 28px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+  }
+  .auth-card h1 { font-size: 20px; margin-bottom: 8px; }
+  .auth-card p { color: var(--text-dim); font-size: 13px; margin-bottom: 22px; }
+  .auth-field { display: grid; gap: 6px; margin-top: 14px; }
+  .auth-field label { color: var(--text-dim); font-size: 12px; }
+  .auth-field input {
+    width: 100%;
+    padding: 10px 12px;
+    color: var(--text);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    outline: none;
+  }
+  .auth-field input:focus { border-color: var(--primary); }
+  .auth-submit { width: 100%; margin-top: 20px; }
+  .auth-error { min-height: 20px; margin-top: 12px; color: var(--danger); font-size: 12px; }
+
   @media (max-width: 768px) {
     .sidebar { width: 60px; }
     .sidebar .conv-item-preview,
@@ -1046,6 +1080,22 @@
 </style>
 </head>
 <body>
+<div class="auth-gate" id="auth-gate">
+  <form class="auth-card" id="login-form">
+    <h1>Farm Manager Agent</h1>
+    <p>登录后访问你的农场会话和 Agent 能力。</p>
+    <div class="auth-field">
+      <label for="login-phone">手机号</label>
+      <input id="login-phone" name="phone" type="tel" inputmode="tel" autocomplete="username" required>
+    </div>
+    <div class="auth-field">
+      <label for="login-password">密码</label>
+      <input id="login-password" name="password" type="password" autocomplete="current-password" required>
+    </div>
+    <button class="btn btn-primary auth-submit" id="login-submit" type="submit">登录</button>
+    <div class="auth-error" id="login-error" role="alert"></div>
+  </form>
+</div>
 <div class="app">
   <!-- ─── Left Sidebar: Conversation List ──────────────────── -->
   <aside class="sidebar">
@@ -1079,6 +1129,7 @@
         <select id="user-select" class="user-select" onchange="selectUser(this.value)" title="切换用户（不同用户看到不同农场数据）">
           <option value="">未选择用户</option>
         </select>
+        <button class="btn" onclick="logout()" title="退出登录">退出</button>
         <button class="btn" id="trace-toggle-btn" onclick="toggleTrace()" title="切换 Trace 面板">🔍 Trace</button>
         <button class="btn" onclick="copySessionJson()" title="复制整个会话 JSON（含所有轮次和 skill 调用事件）">📋 复制会话</button>
         <button class="btn" onclick="resetConversation()" title="重置当前对话">🗑 重置</button>
@@ -1161,6 +1212,10 @@ const authStatusEl = document.getElementById('auth-status');
 const tracePanelEl = document.getElementById('trace-panel');
 const traceBodyEl = document.getElementById('trace-body');
 const traceTabEls = document.querySelectorAll('.trace-tab');
+const authGateEl = document.getElementById('auth-gate');
+const loginFormEl = document.getElementById('login-form');
+const loginSubmitEl = document.getElementById('login-submit');
+const loginErrorEl = document.getElementById('login-error');
 
 // ═══════════════════════════════════════════════════════════
 // Icons
@@ -1210,6 +1265,14 @@ function authHeaders(extra = {}) {
   return headers;
 }
 
+async function apiFetch(input, options = {}) {
+  const resp = await fetch(input, options);
+  if (resp.status === 401) {
+    logout(true);
+  }
+  return resp;
+}
+
 function setAuthStatus(message, level = '') {
   if (!authStatusEl) return;
   authStatusEl.textContent = message;
@@ -1229,6 +1292,91 @@ async function apiError(resp) {
   }
 }
 
+function setAuthenticatedUser(token, userInfo) {
+  state.currentUserToken = token;
+  state.currentUserInfo = userInfo || null;
+  state.convList = [];
+  state.convCursor = null;
+  state.currentConvId = null;
+  state.pendingNewConvId = null;
+  state.traceRequests = [];
+  state.selectedRequestId = null;
+  const nickname = userInfo?.nickname || userInfo?.user?.nickname || '当前用户';
+  const farmUid = userInfo?.farm_uid || '未知';
+  convTitleEl.textContent = `选择一个对话 · ${nickname}`;
+  setAuthStatus(`User JWT 已加载 · ${nickname} · farm_uid=${farmUid}`, 'ok');
+  authGateEl.classList.add('hidden');
+  const userSelect = document.getElementById('user-select');
+  if (userSelect && userInfo?.user_id) {
+    if (![...userSelect.options].some(option => option.value === userInfo.user_id)) {
+      const option = document.createElement('option');
+      option.value = userInfo.user_id;
+      option.textContent = `${nickname} (${userInfo.role || 'user'})`;
+      userSelect.appendChild(option);
+    }
+    userSelect.value = userInfo.user_id;
+  }
+}
+
+function showAuthGate(message = '') {
+  state.currentUserToken = '';
+  state.currentUserInfo = null;
+  state.convList = [];
+  state.convCursor = null;
+  state.currentConvId = null;
+  sessionStorage.removeItem('farm_manager_agent_access_token');
+  authGateEl.classList.remove('hidden');
+  loginErrorEl.textContent = message;
+  convTitleEl.textContent = '请先登录';
+  convListEl.innerHTML = '<div class="conv-empty">登录后加载会话</div>';
+  setAuthStatus('未登录', 'warn');
+}
+
+function logout(silent = false) {
+  showAuthGate(silent ? '登录已失效，请重新登录' : '');
+  if (!silent) loginFormEl.querySelector('[name="password"]').value = '';
+}
+
+async function login(event) {
+  event.preventDefault();
+  loginErrorEl.textContent = '';
+  loginSubmitEl.disabled = true;
+  try {
+    const form = new FormData(loginFormEl);
+    const resp = await fetch('/api/v2/auth/login', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({phone: form.get('phone'), password: form.get('password')}),
+    });
+    if (!resp.ok) throw new Error(await apiError(resp));
+    const data = await resp.json();
+    if (!data.access_token) throw new Error('登录服务未返回认证令牌');
+    const user = data.user || {};
+    const userInfo = {
+      ...user,
+      user_id: user.id || data.user_id,
+      farm_uid: data.farm_uid,
+      role: user.role || data.role,
+    };
+    sessionStorage.setItem('farm_manager_agent_access_token', data.access_token);
+    setAuthenticatedUser(data.access_token, userInfo);
+    await loadConversations();
+  } catch (error) {
+    loginErrorEl.textContent = error.message || '登录失败';
+  } finally {
+    loginSubmitEl.disabled = false;
+  }
+}
+
+function restoreSession() {
+  const token = sessionStorage.getItem('farm_manager_agent_access_token');
+  if (!token) return false;
+  setAuthenticatedUser(token, null);
+  return true;
+}
+
+loginFormEl.addEventListener('submit', login);
+
 // ═══════════════════════════════════════════════════════════
 // Conversation List
 // ═══════════════════════════════════════════════════════════
@@ -1242,7 +1390,7 @@ async function loadConversations() {
     const url = state.convCursor
       ? `/api/v2/conversations?limit=20&cursor=${encodeURIComponent(state.convCursor)}`
       : `/api/v2/conversations?limit=20`;
-    const resp = await fetch(url, {headers: authHeaders()});
+    const resp = await apiFetch(url, {headers: authHeaders()});
     if (!resp.ok) throw new Error(await apiError(resp));
     const data = await resp.json();
     state.convList = state.convCursor
@@ -1259,7 +1407,7 @@ async function loadConversations() {
 
 async function loadDevUsers() {
   try {
-    const resp = await fetch('/api/v2/dev-users');
+    const resp = await apiFetch('/api/v2/dev-users');
     if (!resp.ok) {
       const message = await apiError(resp);
       const sel = document.getElementById('user-select');
@@ -1306,16 +1454,7 @@ function selectUser(userId, options = {}) {
   }
   const user = state.devUsers.find(u => u.user_id === userId);
   if (user) {
-    state.currentUserToken = user.token;
-    state.currentUserInfo = user;
-    state.convList = [];
-    state.convCursor = null;
-    state.currentConvId = null;
-    state.pendingNewConvId = null;
-    state.traceRequests = [];
-    state.selectedRequestId = null;
-    convTitleEl.textContent = `选择一个对话 · ${user.nickname}`;
-    setAuthStatus(`User JWT 已加载 · ${user.nickname} · farm_uid=${user.farm_uid}`, 'ok');
+    setAuthenticatedUser(user.token, user);
     console.log(`已切换用户: ${user.nickname} (farm_uid=${user.farm_uid})`);
     renderConvList();
     if (options.reload !== false) {
@@ -1387,7 +1526,7 @@ function newConversation() {
 
 async function loadConversationMessages(convId) {
   try {
-    const resp = await fetch(`/api/v2/conversations/${encodeURIComponent(convId)}?limit=100`, {headers: authHeaders()});
+    const resp = await apiFetch(`/api/v2/conversations/${encodeURIComponent(convId)}?limit=100`, {headers: authHeaders()});
     if (!resp.ok) throw new Error(await apiError(resp));
     const data = await resp.json();
     renderMessages(data.items || []);
@@ -1570,7 +1709,7 @@ async function copySessionJson() {
   } else if (state.currentConvId) {
     // fallback：从 API 加载历史消息（可能不含事件详情）
     try {
-      const resp = await fetch(`/api/v2/conversations/${encodeURIComponent(state.currentConvId)}?limit=500`, {headers: authHeaders()});
+      const resp = await apiFetch(`/api/v2/conversations/${encodeURIComponent(state.currentConvId)}?limit=500`, {headers: authHeaders()});
       if (!resp.ok) throw new Error(await apiError(resp));
       const data = await resp.json();
       sessionData = {
@@ -1886,7 +2025,7 @@ async function sendMessage() {
 
   try {
     const headers = authHeaders({'Content-Type': 'application/json'});
-    const resp = await fetch('/api/v2/chat', {
+    const resp = await apiFetch('/api/v2/chat', {
       method: 'POST',
       headers: headers,
       body: JSON.stringify({message: msg, conversation_id: state.currentConvId}),
@@ -1992,7 +2131,7 @@ async function approveTurn(turnId, btnEl, decision) {
     buttons.forEach(b => { b.disabled = true; b.style.opacity = '0.5'; b.style.pointerEvents = 'none'; });
   }
   try {
-    const resp = await fetch('/api/v2/approve', {
+    const resp = await apiFetch('/api/v2/approve', {
       method: 'POST',
       headers: authHeaders({'Content-Type': 'application/json'}),
       body: JSON.stringify({turn_id: turnId, decision: decision, reason: ''}),
@@ -2016,7 +2155,7 @@ async function approveTurn(turnId, btnEl, decision) {
 async function resetConversation() {
   if (!state.currentConvId || !state.currentUserToken) return;
   if (!confirm('确认清空当前会话记忆？')) return;
-  await fetch('/api/v2/reset', {
+  await apiFetch('/api/v2/reset', {
     method: 'POST',
     headers: authHeaders({'Content-Type': 'application/json'}),
     body: JSON.stringify({conversation_id: state.currentConvId}),
@@ -2068,7 +2207,7 @@ async function loadTraceRequests(convId) {
   try {
     traceBodyEl.innerHTML = '<div class="trace-empty">加载中...</div>';
     const url = `/api/v2/traces?conversation_id=${encodeURIComponent(convId)}&limit=20`;
-    const resp = await fetch(url, {headers: authHeaders()});
+    const resp = await apiFetch(url, {headers: authHeaders()});
     if (!resp.ok) throw new Error(await apiError(resp));
     const data = await resp.json();
     state.traceRequests = data.items || [];
@@ -2122,8 +2261,8 @@ async function selectTraceRequest(requestId) {
 
   try {
     const [nodesResp, summaryResp] = await Promise.all([
-      fetch(`/api/v2/traces/${encodeURIComponent(requestId)}`, {headers: authHeaders()}),
-      fetch(`/api/v2/traces/${encodeURIComponent(requestId)}/summary`, {headers: authHeaders()}),
+      apiFetch(`/api/v2/traces/${encodeURIComponent(requestId)}`, {headers: authHeaders()}),
+      apiFetch(`/api/v2/traces/${encodeURIComponent(requestId)}/summary`, {headers: authHeaders()}),
     ]);
     if (!nodesResp.ok) throw new Error(`HTTP ${nodesResp.status}`);
     const nodesData = await nodesResp.json();
@@ -2246,14 +2385,20 @@ function jumpToTrace(requestId) {
 // ═══════════════════════════════════════════════════════════
 async function init() {
   try {
-    const userReady = await loadDevUsers();
-    if (userReady) {
+    if (restoreSession()) {
       await loadConversations();
     } else {
-      convListEl.innerHTML = '<div class="conv-empty">请先配置 JWT_SECRET 并加载开发用户</div>';
+      // 开发环境保留用户切换入口；生产环境接口返回 404，不会泄露用户或令牌。
+      const userReady = await loadDevUsers();
+      if (userReady) {
+        await loadConversations();
+      } else {
+        showAuthGate();
+      }
     }
   } catch (e) {
     console.error('Failed to load conversations:', e);
+    showAuthGate('初始化失败，请重新登录');
   }
   inputEl.focus();
 }

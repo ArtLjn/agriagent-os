@@ -1,277 +1,283 @@
 #!/usr/bin/env bash
-# 日常同步 — 快速同步后端代码到远程服务器并重启服务
+# 日常同步 v2 — 上传 v2 代码并重启 Business、Agent 服务
 # 用法: bash deploy/server-sync.sh
 set -euo pipefail
 
 # --- 服务器配置 ---
-SERVER_USER="root"
-SERVER_HOST="43.155.217.74"
+SERVER_USER="${SERVER_USER:-root}"
+SERVER_HOST="${SERVER_HOST:-43.155.217.74}"
 SERVER="${SERVER_USER}@${SERVER_HOST}"
-REMOTE_DIR="/root/workspace/farm-manager/backend"
-SERVICE_NAME="farm-manager"
-APP_PORT=8000
+REMOTE_ROOT="/root/workspace/farm-manager"
+REMOTE_DIR="${REMOTE_ROOT}/v2"
+AGENT_SERVICE_NAME="farm-manager"
+BUSINESS_SERVICE_NAME="farm-manager-business"
+AGENT_PORT=8000
+BUSINESS_PORT=9876
 
 PROJECT_ROOT="$(cd "$(dirname "$0")"/.. && pwd)"
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
+ARCHIVE="/tmp/farm-manager-v2-sync.tar.gz"
+LOCAL_AGENT_CONFIG=0
+LOCAL_BUSINESS_CONFIG=0
+[ -f "${PROJECT_ROOT}/v2/agent/config.yaml" ] && LOCAL_AGENT_CONFIG=1
+[ -f "${PROJECT_ROOT}/v2/business/config.yaml" ] && LOCAL_BUSINESS_CONFIG=1
 
 log()  { echo "[$(date '+%H:%M:%S')] $*"; }
-die()  { log "ERROR: $*"; exit 1; }
+die()  { log "错误: $*" >&2; exit 1; }
+
+cleanup() {
+    rm -f "${ARCHIVE}"
+}
+trap cleanup EXIT
 
 # --- 0. 预检 SSH 连接 ---
 log "预检 SSH 连接 ${SERVER}..."
-if ! ssh -o ConnectTimeout=5 -o BatchMode=yes "${SERVER}" "true" 2>/dev/null; then
+if ! ssh -o ConnectTimeout=8 -o BatchMode=yes "${SERVER}" "true" 2>/dev/null; then
     die "无法免密登录 ${SERVER}。请先配置: ssh-copy-id ${SERVER}"
 fi
 
-# --- 1. 本地打包 ---
-log "打包后端代码..."
-COPYFILE_DISABLE=1 tar czf /tmp/farm-backend-sync.tar.gz \
+# --- 1. 本地打包 v2 代码 ---
+log "打包 v2 代码..."
+COPYFILE_DISABLE=1 tar czf "${ARCHIVE}" \
     --exclude='__pycache__' \
     --exclude='*.pyc' \
     --exclude='*.pyo' \
-    --exclude='.pytest_cache' \
-    --exclude='.ruff_cache' \
-    --exclude='*.db' \
-    --exclude='*.db-shm' \
-    --exclude='*.db-wal' \
-    --exclude='.venv' \
-    --exclude='.claude' \
-    --exclude='.git' \
-    --exclude='._*' \
+    --exclude='*.egg-info' \
+    --exclude='.DS_Store' \
+    --exclude='v2/.venv' \
+    --exclude='v2/.pytest_cache' \
+    --exclude='v2/.ruff_cache' \
+    --exclude='v2/logs' \
+    --exclude='v2/.env' \
+    --exclude='v2/.env.*' \
+    --exclude='v2/._*' \
+    --exclude='v2/.claude' \
+    --exclude='v2/.git' \
     -C "${PROJECT_ROOT}" \
-    backend/app \
-    backend/alembic \
-    backend/alembic.ini \
-    backend/requirements.txt \
-    backend/config.yaml \
-    backend/config.yaml.example \
-    backend/providers.json \
-    backend/prompts \
-    shared/location
+    v2
 
-log "上传到服务器..."
-# 清理可能残留的旧包（sticky bit 下 scp 无法覆盖非当前用户拥有的文件）
-ssh -o ConnectTimeout=5 "${SERVER}" "rm -f /tmp/farm-backend-sync.tar.gz" 2>/dev/null || true
-scp -q /tmp/farm-backend-sync.tar.gz "${SERVER}:/tmp/farm-backend-sync.tar.gz"
+log "上传 v2 代码..."
+ssh -o ConnectTimeout=8 "${SERVER}" "rm -f '${ARCHIVE}'" 2>/dev/null || true
+scp -q -o ConnectTimeout=8 "${ARCHIVE}" "${SERVER}:${ARCHIVE}"
 
 # --- 2. 远程部署 ---
-log "远程部署..."
+log "远程部署 v2..."
 ssh "${SERVER}" \
-    "TIMESTAMP='${TIMESTAMP}' REMOTE_DIR='${REMOTE_DIR}' SERVICE_NAME='${SERVICE_NAME}' APP_PORT='${APP_PORT}' SERVER_HOST='${SERVER_HOST}' bash -s" <<'REMOTE_SCRIPT'
+    "TIMESTAMP='${TIMESTAMP}' REMOTE_ROOT='${REMOTE_ROOT}' REMOTE_DIR='${REMOTE_DIR}' AGENT_SERVICE_NAME='${AGENT_SERVICE_NAME}' BUSINESS_SERVICE_NAME='${BUSINESS_SERVICE_NAME}' AGENT_PORT='${AGENT_PORT}' BUSINESS_PORT='${BUSINESS_PORT}' SERVER_HOST='${SERVER_HOST}' ARCHIVE='${ARCHIVE}' LOCAL_AGENT_CONFIG='${LOCAL_AGENT_CONFIG}' LOCAL_BUSINESS_CONFIG='${LOCAL_BUSINESS_CONFIG}' bash -s" <<'REMOTE_SCRIPT'
 set -euo pipefail
 
 rlog()  { echo "  [$(date '+%H:%M:%S')] $*"; }
-rdie()  { rlog "ERROR: $*"; exit 1; }
+rdie()  { rlog "错误: $*" >&2; exit 1; }
 
-# --- 确保部署目录存在 ---
-mkdir -p "${REMOTE_DIR}"
+BACKUP_DIR="/tmp/farm-manager-v2-backup-${TIMESTAMP}"
+SYSTEMD_DIR="/etc/systemd/system"
+OLD_PATHS=()
+
+rollback() {
+    set +e
+    rlog "执行自动回滚..."
+
+    systemctl stop "${AGENT_SERVICE_NAME}" "${BUSINESS_SERVICE_NAME}" 2>/dev/null || true
+
+    # 删除本次解压的代码，再恢复部署前的代码目录。
+    for path in agent business shared scripts sql docs tests pyproject.toml uv.lock providers.json; do
+        rm -rf "${REMOTE_DIR}/${path}"
+    done
+    for path in "${OLD_PATHS[@]}"; do
+        if [ -e "${BACKUP_DIR}/source/${path}" ]; then
+            mkdir -p "$(dirname "${REMOTE_DIR}/${path}")"
+            mv "${BACKUP_DIR}/source/${path}" "${REMOTE_DIR}/${path}"
+        fi
+    done
+
+    if [ -f "${BACKUP_DIR}/config/agent.yaml" ]; then
+        mkdir -p "${REMOTE_DIR}/agent"
+        cp "${BACKUP_DIR}/config/agent.yaml" "${REMOTE_DIR}/agent/config.yaml"
+    fi
+    if [ -f "${BACKUP_DIR}/config/business.yaml" ]; then
+        mkdir -p "${REMOTE_DIR}/business"
+        cp "${BACKUP_DIR}/config/business.yaml" "${REMOTE_DIR}/business/config.yaml"
+    fi
+
+    for service in "${AGENT_SERVICE_NAME}" "${BUSINESS_SERVICE_NAME}"; do
+        if [ -f "${BACKUP_DIR}/units/${service}.service" ]; then
+            cp "${BACKUP_DIR}/units/${service}.service" "${SYSTEMD_DIR}/${service}.service"
+        else
+            rm -f "${SYSTEMD_DIR}/${service}.service"
+        fi
+    done
+    systemctl daemon-reload 2>/dev/null || true
+    if [ -f "${BACKUP_DIR}/units/${AGENT_SERVICE_NAME}.service" ]; then
+        systemctl restart "${AGENT_SERVICE_NAME}" 2>/dev/null || true
+    fi
+    if [ -f "${BACKUP_DIR}/units/${BUSINESS_SERVICE_NAME}.service" ]; then
+        systemctl restart "${BUSINESS_SERVICE_NAME}" 2>/dev/null || true
+    fi
+    rlog "已回滚，备份目录: ${BACKUP_DIR}"
+}
+
+mkdir -p "${REMOTE_ROOT}" "${REMOTE_DIR}" "${BACKUP_DIR}/source" "${BACKUP_DIR}/config" "${BACKUP_DIR}/units"
 cd "${REMOTE_DIR}" || rdie "无法进入 ${REMOTE_DIR}"
 
 # --- 并发锁 ---
-LOCKFILE="/tmp/farm-sync.lock"
+LOCKFILE="/tmp/farm-manager-v2-sync.lock"
 if [ -f "${LOCKFILE}" ]; then
     LOCK_PID=$(cat "${LOCKFILE}" 2>/dev/null || true)
     if [ -n "${LOCK_PID}" ] && kill -0 "${LOCK_PID}" 2>/dev/null; then
-        rdie "另一个部署正在运行 (PID=${LOCK_PID})，退出"
+        rdie "另一个 v2 部署正在运行 (PID=${LOCK_PID})，退出"
     fi
     rlog "清理过期锁文件"
 fi
 echo $$ > "${LOCKFILE}"
 trap 'rm -f "${LOCKFILE}"' EXIT
 
-# --- 解压 ---
-rlog "解压..."
-tar xzf /tmp/farm-backend-sync.tar.gz 2>&1 | grep -v 'LIBARCHIVE.xattr' || true
-rm -f /tmp/farm-backend-sync.tar.gz
-
-# --- 备份旧代码 + config + shared 数据 ---
-rlog "备份旧代码..."
-BACKUP_DIR="/tmp/farm-backup-${TIMESTAMP}"
-mkdir -p "${BACKUP_DIR}"
-for d in app alembic skillify-sdk prompts; do
-    [ -d "$d" ] && cp -a "$d" "${BACKUP_DIR}/"
+# --- 备份旧 v2 代码和配置 ---
+rlog "备份旧 v2 代码..."
+if [ -f agent/config.yaml ]; then
+    cp agent/config.yaml "${BACKUP_DIR}/config/agent.yaml"
+fi
+if [ -f business/config.yaml ]; then
+    cp business/config.yaml "${BACKUP_DIR}/config/business.yaml"
+fi
+for path in agent business shared scripts sql docs tests pyproject.toml uv.lock providers.json; do
+    if [ -e "${REMOTE_DIR}/${path}" ]; then
+        mv "${REMOTE_DIR}/${path}" "${BACKUP_DIR}/source/${path}"
+        OLD_PATHS+=("${path}")
+    fi
 done
-[ -f alembic.ini ] && cp alembic.ini "${BACKUP_DIR}/"
-[ -f config.yaml ] && cp config.yaml "${BACKUP_DIR}/"
-[ -f providers.json ] && cp providers.json "${BACKUP_DIR}/"
-[ -f requirements.txt ] && cp requirements.txt "${BACKUP_DIR}/"
-# shared 目录位于 REMOTE_DIR 上一级（仓库根）
-if [ -d "../shared" ]; then
-    rm -rf "${BACKUP_DIR}/shared"
-    cp -a "../shared" "${BACKUP_DIR}/shared"
-fi
-rlog "备份已保存到 ${BACKUP_DIR}"
 
-# --- 自动回滚函数（建表或启动失败时调用）---
-rollback() {
-    rlog "执行自动回滚..."
-    for d in app alembic skillify-sdk prompts; do
-        [ -d "${BACKUP_DIR}/$d" ] && rm -rf "$d" && cp -a "${BACKUP_DIR}/$d" .
-    done
-    [ -f "${BACKUP_DIR}/alembic.ini" ] && cp "${BACKUP_DIR}/alembic.ini" .
-    [ -f "${BACKUP_DIR}/config.yaml" ] && cp "${BACKUP_DIR}/config.yaml" .
-    [ -f "${BACKUP_DIR}/providers.json" ] && cp "${BACKUP_DIR}/providers.json" .
-    [ -f "${BACKUP_DIR}/requirements.txt" ] && cp "${BACKUP_DIR}/requirements.txt" .
-    if [ -d "${BACKUP_DIR}/shared" ]; then
-        rm -rf "../shared"
-        cp -a "${BACKUP_DIR}/shared" "../shared"
+for service in "${AGENT_SERVICE_NAME}" "${BUSINESS_SERVICE_NAME}"; do
+    if [ -f "${SYSTEMD_DIR}/${service}.service" ]; then
+        cp "${SYSTEMD_DIR}/${service}.service" "${BACKUP_DIR}/units/${service}.service"
     fi
-    systemctl restart "${SERVICE_NAME}" 2>/dev/null || true
-    rlog "已回滚到 ${BACKUP_DIR}"
-}
+done
 
-# --- 覆盖代码 ---
-rlog "覆盖代码..."
-rm -rf app alembic skillify-sdk prompts
-mv backend/app .
-mv backend/alembic .
-mv backend/alembic.ini .
-mv backend/prompts .
-mv backend/requirements.txt .
-mv backend/config.yaml .
-mv backend/config.yaml.example .
-[ -f backend/providers.json ] && mv backend/providers.json .
-# shared 部署到仓库根（REMOTE_DIR 上一级），代码通过 parents[3] 解析
-if [ -d shared ]; then
-    mkdir -p ../shared
-    rm -rf ../shared/location
-    mv shared/location ../shared/
-    rm -rf shared
+# --- 解压新代码 ---
+rlog "解压 v2 代码..."
+if ! tar xzf "${ARCHIVE}" -C "${REMOTE_ROOT}"; then
+    rollback
+    rdie "v2 代码解压失败"
 fi
-rm -rf backend
+rm -f "${ARCHIVE}"
 
-# --- 配置兜底 ---
-rlog "检查配置文件..."
-if [ ! -f config.yaml ]; then
-    if [ -f "${BACKUP_DIR}/config.yaml" ]; then
-        cp "${BACKUP_DIR}/config.yaml" config.yaml
-    else
-        rlog "无 config.yaml，使用 example"
-        cp config.yaml.example config.yaml
+# 本地有配置时使用本地配置；本地没有时沿用远程配置。
+if [ "${LOCAL_AGENT_CONFIG}" != "1" ] && [ -f "${BACKUP_DIR}/config/agent.yaml" ]; then
+    cp "${BACKUP_DIR}/config/agent.yaml" "${REMOTE_DIR}/agent/config.yaml"
+fi
+if [ "${LOCAL_BUSINESS_CONFIG}" != "1" ] && [ -f "${BACKUP_DIR}/config/business.yaml" ]; then
+    cp "${BACKUP_DIR}/config/business.yaml" "${REMOTE_DIR}/business/config.yaml"
+fi
+
+if [ ! -f "${REMOTE_DIR}/agent/config.yaml" ]; then
+    rollback
+    rdie "缺少 ${REMOTE_DIR}/agent/config.yaml，请先根据 config.example.yaml 创建并填写生产配置"
+fi
+if [ ! -f "${REMOTE_DIR}/business/config.yaml" ]; then
+    rollback
+    rdie "缺少 ${REMOTE_DIR}/business/config.yaml，请先根据 config.example.yaml 创建并填写生产配置"
+fi
+
+# --- 安装 v2 依赖 ---
+cd "${REMOTE_DIR}" || { rollback; rdie "无法进入 ${REMOTE_DIR}"; }
+UV_BIN="$(command -v uv || true)"
+if [ -z "${UV_BIN}" ] && [ -x /root/.local/bin/uv ]; then
+    UV_BIN="/root/.local/bin/uv"
+fi
+if [ -z "${UV_BIN}" ]; then
+    rlog "远程未找到 uv，开始安装..."
+    if ! command -v curl >/dev/null 2>&1 \
+        || ! curl -LsSf https://astral.sh/uv/install.sh | sh; then
+        rollback
+        rdie "uv 自动安装失败，请检查远程网络或手动安装 uv 后重试"
+    fi
+    UV_BIN="/root/.local/bin/uv"
+    if [ ! -x "${UV_BIN}" ]; then
+        rollback
+        rdie "uv 安装完成但找不到 ${UV_BIN}"
     fi
 fi
-if [ ! -f providers.json ] && [ -f "${BACKUP_DIR}/providers.json" ]; then
-    cp "${BACKUP_DIR}/providers.json" providers.json
-fi
-if [ ! -f config.yaml ]; then
-    cp config.yaml.example config.yaml
-fi
-
-# --- 虚拟环境（Python 3.12）---
-rlog "检查虚拟环境..."
-if [ ! -x .venv/bin/python ]; then
-    rm -rf .venv
-    python3.12 -m venv .venv
-    # 兜底：deadsnakes Python 3.12 在 Ubuntu 22.04 上有时不创建 python 软链接
-    [ -e .venv/bin/python ]    || ln -s /usr/bin/python3.12 .venv/bin/python
-    [ -e .venv/bin/python3 ]   || ln -s /usr/bin/python3.12 .venv/bin/python3
-    [ -e .venv/bin/python3.12 ] || ln -s /usr/bin/python3.12 .venv/bin/python3.12
-    rlog "已创建虚拟环境 (Python 3.12)"
-fi
-source .venv/bin/activate
-hash -r
-
-# --- 安装依赖 ---
-rlog "安装依赖..."
-python -m pip install -q --upgrade pip || rdie "pip 升级失败"
-# 旧部署曾用 editable skillify-sdk；切到 pip 包时必须先移除失效的 pth 指针。
-SKILLIFY_INFO="$(python -m pip show skillify 2>/dev/null || true)"
-if [[ "${SKILLIFY_INFO}" == *"Editable project location:"* ]]; then
-    rlog "  清理旧的 skillify editable 安装..."
-    python -m pip uninstall -y -q skillify || rdie "skillify 清理失败"
-fi
-rlog "  安装 requirements.txt..."
-python -m pip install -q -r requirements.txt 2>&1 || { rollback; rdie "依赖安装失败，已回滚"; }
-
-# --- 数据库备份 ---
-rlog "检查数据库..."
-if [ -f farm_manager.db ]; then
-    cp farm_manager.db "farm_manager.db.bak.${TIMESTAMP}"
+rlog "同步 v2 Business 和 Agent 依赖..."
+if ! "${UV_BIN}" sync --frozen --all-packages; then
+    rollback
+    rdie "uv sync 失败"
 fi
 
-# --- 数据库迁移 ---
-rlog "执行 Alembic 迁移..."
-if [ -f alembic.ini ] && [ -d alembic ]; then
-    alembic upgrade head || { rollback; rdie "Alembic 迁移失败，已回滚"; }
-else
-    rlog "未发现 alembic 配置，跳过迁移"
+# 在切换 systemd 前确认 Business 能连接数据库，并完成必要的初始管理员检查。
+rlog "检查 Business 数据库..."
+if ! .venv/bin/python -c 'from business.db import check_connection; from business.services.auth_service import ensure_admin_user; check_connection(); ensure_admin_user()'; then
+    rollback
+    rdie "Business 数据库检查失败"
 fi
 
-# --- 注册 systemd unit（首次部署或 unit 缺失时）---
-SYSTEMD_UNIT="/etc/systemd/system/${SERVICE_NAME}.service"
-if ! systemctl list-unit-files --no-pager 2>/dev/null | grep -q "^${SERVICE_NAME}\.service"; then
-    rlog "首次部署：注册 systemd unit..."
-    cat > "${SYSTEMD_UNIT}" <<UNIT_EOF
+write_unit() {
+    local service="$1"
+    local description="$2"
+    local module="$3"
+    local port="$4"
+    local after="network.target"
+    local factory_flag=""
+    [ "${service}" = "${AGENT_SERVICE_NAME}" ] && after="${BUSINESS_SERVICE_NAME}.service"
+    [ "${service}" = "${BUSINESS_SERVICE_NAME}" ] && { module="business.server:create_app"; factory_flag="--factory"; }
+
+    cat > "${SYSTEMD_DIR}/${service}.service" <<UNIT_EOF
 [Unit]
-Description=Farm Manager API (FastAPI + Uvicorn)
-After=network.target
+Description=${description}
+After=${after}
 
 [Service]
 Type=simple
 User=root
 WorkingDirectory=${REMOTE_DIR}
-ExecStart=${REMOTE_DIR}/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port ${APP_PORT}
+ExecStart=${REMOTE_DIR}/.venv/bin/uvicorn ${module} ${factory_flag} --host 0.0.0.0 --port ${port}
 Restart=on-failure
 RestartSec=5
+TimeoutStartSec=90
 Environment=PYTHONUNBUFFERED=1
 Environment=PYTHONPATH=${REMOTE_DIR}
+EnvironmentFile=-${REMOTE_DIR}/.env
 StandardOutput=journal
 StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
 UNIT_EOF
-    systemctl daemon-reload
-    systemctl enable "${SERVICE_NAME}" >/dev/null 2>&1 || true
-    rlog "systemd unit 已注册并 enable"
-fi
+}
 
-# --- 重启服务 ---
-rlog "重启服务 (systemctl)..."
-systemctl restart "${SERVICE_NAME}"
+# farm-manager 这个服务名沿用旧脚本，保证 server-ctl.sh 仍可管理 Agent。
+rlog "更新 systemd 服务..."
+write_unit "${BUSINESS_SERVICE_NAME}" "Farm Manager v2 Business (REST + MCP)" "business.server" "${BUSINESS_PORT}"
+write_unit "${AGENT_SERVICE_NAME}" "Farm Manager v2 Agent (SSE API)" "agent.main:app" "${AGENT_PORT}"
+systemctl daemon-reload
+systemctl enable "${BUSINESS_SERVICE_NAME}" "${AGENT_SERVICE_NAME}" >/dev/null
+
+# 旧 farm-manager unit 会被上面的 Agent unit 覆盖，不再启动旧 backend。
+rlog "重启 v2 服务..."
+systemctl restart "${BUSINESS_SERVICE_NAME}"
+systemctl restart "${AGENT_SERVICE_NAME}"
 
 # --- 健康检查 ---
-rlog "等待启动..."
-for i in $(seq 1 20); do
-    # 优先尝试 /health（应用根路由），fallback 到 /docs
-    if curl -sf "http://localhost:${APP_PORT}/health" > /dev/null 2>&1; then
-        echo "  部署成功！"
-        echo "  API:    http://${SERVER_HOST}:${APP_PORT}"
-        echo "  文档:   http://${SERVER_HOST}:${APP_PORT}/docs"
-        echo "  日志:   journalctl -u ${SERVICE_NAME} -f"
-        echo "  回滚:   cp -a ${BACKUP_DIR}/* ${REMOTE_DIR}/ && systemctl restart ${SERVICE_NAME}"
+rlog "等待 v2 服务健康检查..."
+for i in $(seq 1 30); do
+    if curl -fsS "http://127.0.0.1:${BUSINESS_PORT}/api/v2/readiness" >/dev/null 2>&1 \
+        && curl -fsS "http://127.0.0.1:${AGENT_PORT}/api/v2/health" >/dev/null 2>&1; then
+        echo "  v2 部署成功！"
+        echo "  Agent:    http://${SERVER_HOST}:${AGENT_PORT}"
+        echo "  Business: http://${SERVER_HOST}:${BUSINESS_PORT}/api/v2"
+        echo "  日志:     journalctl -u ${AGENT_SERVICE_NAME} -f"
+        echo "  备份:     ${BACKUP_DIR}"
         exit 0
     fi
-    # 也可用 /docs 作为备选健康检查
-    if curl -sf "http://localhost:${APP_PORT}/docs" > /dev/null 2>&1; then
-        echo "  部署成功！（/docs）"
-        echo "  API:    http://${SERVER_HOST}:${APP_PORT}"
-        echo "  日志:   journalctl -u ${SERVICE_NAME} -f"
-        echo "  回滚:   cp -a ${BACKUP_DIR}/* ${REMOTE_DIR}/ && systemctl restart ${SERVICE_NAME}"
-        exit 0
-    fi
-    # 每 4 秒打印进度
-    if [ $((i % 2)) -eq 0 ]; then
-        rlog "  等待中... ($((i * 2))s)"
+    if [ $((i % 5)) -eq 0 ]; then
+        rlog "等待中... ($((i * 2))s)"
     fi
     sleep 2
 done
 
-# --- 失败处理 ---
-echo "  启动超时，最近日志："
-journalctl -u "${SERVICE_NAME}" -n 50 --no-pager
-echo ""
-echo "  尝试 import 测试..."
-source .venv/bin/activate
-python3 -c "import sys; sys.path.insert(0, '.'); from app.main import app; print('Import OK')" 2>&1 || true
-
-# --- 自动回滚（启动失败时）---
-echo ""
-echo "  健康检查失败，执行自动回滚..."
+echo "  v2 启动超时，最近日志："
+journalctl -u "${BUSINESS_SERVICE_NAME}" -n 40 --no-pager || true
+journalctl -u "${AGENT_SERVICE_NAME}" -n 40 --no-pager || true
 rollback
-echo "  回滚命令（手动）: cp -a ${BACKUP_DIR}/* ${REMOTE_DIR}/ && systemctl restart ${SERVICE_NAME}"
 exit 1
 REMOTE_SCRIPT
 
-rm -f /tmp/farm-backend-sync.tar.gz
-log "同步完成"
+log "v2 同步完成"

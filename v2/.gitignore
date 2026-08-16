@@ -16,6 +16,7 @@ business/data/*.json
 !business/data/seed.json
 agent/data/memory.json
 agent/data/conversations/
+debug/
 
 # Logs (runtime output, never commit)
 logs/
