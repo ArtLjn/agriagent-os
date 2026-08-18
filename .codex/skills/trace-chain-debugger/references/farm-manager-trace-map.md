@@ -32,3 +32,11 @@
 ## 存储原则
 
 MySQL 是主状态和热索引；Mongo 是证据和审计。Mongo 失败不能阻断主问答链路。调试时允许 Mongo 缺失，但必须在报告中说明证据缺口。
+
+## v2 关联补充
+
+- v2 正式使用 `trace_id` 作为一轮完整诊断链路主键；当前 API 中的 `request_id` 是兼容名称，不能与 `client_request_id`（幂等键）或 SSE `transport_request_id` 混用。
+- v2 `conversation_id` 是整段会话召回主键；`turn_id` 是单轮精确定位主键；SSE 事件使用稳定 `event_id + seq`，重连不得重新生成事件 ID。
+- 目标 Trace 集合分为 `traceRequestSummaries`（一轮汇总）、`traceRecords`（执行节点）和 `traceEvents`（SSE 语义事件）。在 `traceEvents` 尚未实现时，报告必须输出 `trace_events=not_available`，不能把空列表当成“本轮没有 SSE 事件”。
+- v2 单轮召回顺序：`traces?turn_id=` → `traces/{trace_id}/summary` → `traces/{trace_id}/timeline` → `conversations/{conversation_id}`；整段会话召回顺序：会话消息分页 → 会话 Trace 摘要分页 → 每轮时间线合并。
+- v2 事件时间线的终态边界是唯一 `done`；`error`、`cancelled`、`timeout` 可以是终态收敛过程中的事件，不能替代 `done`。

@@ -12,7 +12,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 from collections import Counter
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -20,6 +20,7 @@ from typing import Any
 PREVIEW_LIMIT = 220
 DEFAULT_LIMIT = 5
 MAX_LIMIT = 50
+MAX_V2_PAGES = 100
 SENSITIVE_KEYS = {
     "authorization",
     "api_key",
@@ -58,6 +59,13 @@ class TraceNode:
     output_data: Any
     started_at: str | None
     sort_key: str
+    trace_id: str | None = None
+    turn_id: str | None = None
+    conversation_id: str | None = None
+    span_id: str | None = None
+    parent_span_id: str | None = None
+    phase: str | None = None
+    attempt: int | None = None
 
 
 @dataclass
@@ -75,6 +83,8 @@ class TurnItem:
     event_file: str | None
     event_seq_start: int | None
     event_seq_end: int | None
+    trace_id: str | None = None
+    conversation_id: str | None = None
 
 
 @dataclass
@@ -84,7 +94,7 @@ class MessageItem:
     role: str | None
     content: str | None
     created_at: str | None
-    turn_id: int | None
+    turn_id: int | str | None
     session_id: str | None
     farm_id: int | None
     meta: dict[str, Any] | None
@@ -97,8 +107,17 @@ class EventItem:
     seq: int | None
     event_type: str | None
     request_id: str | None
-    turn_id: int | None
+    turn_id: int | str | None
     payload: Any
+    event_id: str | None = None
+    trace_id: str | None = None
+    conversation_id: str | None = None
+    phase: str | None = None
+    status_before: str | None = None
+    status_after: str | None = None
+    terminal: bool | None = None
+    occurred_at: str | None = None
+    span_id: str | None = None
 
 
 @dataclass
@@ -112,14 +131,23 @@ class ChainReport:
     events: list[EventItem]
     errors: list[str]
     suggestions: list[str]
+    conversation_overview: dict[str, Any] = field(default_factory=dict)
+    turn_overview: list[dict[str, Any]] = field(default_factory=list)
+    sse_timeline: list[dict[str, Any]] = field(default_factory=list)
+    trace_timeline: list[dict[str, Any]] = field(default_factory=list)
+    business_outcome: dict[str, Any] = field(default_factory=dict)
+    evidence_gaps: list[str] = field(default_factory=list)
+    evidence_details: dict[str, str] = field(default_factory=dict)
 
 
 def main() -> int:
     args = parse_args()
     project = Path(args.project).expanduser().resolve()
-    report = asyncio.run(build_report(project, args))
+    report = finalize_report(asyncio.run(build_report(project, args)))
     if args.json:
-        print(json.dumps(asdict(report), ensure_ascii=False, indent=2, default=str))
+        print(
+            json.dumps(report_dict(report), ensure_ascii=False, indent=2, default=str)
+        )
     else:
         print(format_markdown(report, include_payload=args.include_payload))
     return 0
@@ -130,7 +158,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--project", default=".", help="项目根目录，默认当前目录")
     parser.add_argument("--request-id", help="完整 request_id 或前缀")
     parser.add_argument("--session-id", help="session_id")
-    parser.add_argument("--turn-id", help="旧版 agent_turns.id 或 v2 Agent 的字符串 turn_id")
+    parser.add_argument(
+        "--turn-id", help="旧版 agent_turns.id 或 v2 Agent 的字符串 turn_id"
+    )
+    parser.add_argument("--trace-id", help="v2 Trace 的正式 trace_id，精确召回一轮")
+    parser.add_argument("--conversation-id", help="v2 conversation_id，召回整段会话")
     parser.add_argument("--farm-id", type=int, help="可选 farm_id 过滤")
     parser.add_argument(
         "--v2",
@@ -146,12 +178,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--include-payload", action="store_true", help="展示输入输出摘要"
     )
+    parser.add_argument(
+        "--include-events", action="store_true", help="召回并展示 v2 SSE 事件时间线"
+    )
     parser.add_argument("--json", action="store_true", help="输出 JSON")
     return parser.parse_args()
 
 
 async def build_report(project: Path, args: argparse.Namespace) -> ChainReport:
-    if not args.request_id and not args.session_id and args.turn_id is None:
+    if (
+        not args.request_id
+        and not args.session_id
+        and args.turn_id is None
+        and args.trace_id is None
+        and args.conversation_id is None
+    ):
         return ChainReport(
             target=target_dict(args),
             status=EvidenceStatus("skipped", "skipped", "skipped"),
@@ -160,7 +201,10 @@ async def build_report(project: Path, args: argparse.Namespace) -> ChainReport:
             trace_nodes=[],
             messages=[],
             events=[],
-            errors=["缺少定位参数：请提供 --request-id、--session-id 或 --turn-id"],
+            errors=[
+                "缺少定位参数：请提供 --request-id、--session-id、--turn-id、"
+                "--trace-id 或 --conversation-id"
+            ],
             suggestions=[
                 "先从日志或前端请求中复制 request_id；只有短 ID 时也可以按前缀查询。"
             ],
@@ -212,136 +256,806 @@ def should_use_v2(project: Path, args: argparse.Namespace) -> bool:
     """识别 v2 请求，避免用 archive/backend 的旧表模型误查。"""
     if args.v2:
         return True
+    if args.trace_id is not None or args.conversation_id is not None:
+        return True
     return (project / "v2" / "agent" / "main.py").exists() and (
         args.turn_id is not None and not str(args.turn_id).isdigit()
     )
 
 
-async def build_v2_report(args: argparse.Namespace) -> ChainReport:
-    """通过 v2 Agent 只读接口分析 request_id/turn_id 和 Mongo trace。"""
-    base_url = args.v2_base_url.rstrip("/")
-    try:
-        listing = await asyncio.to_thread(
-            v2_get_json,
-            f"{base_url}/traces?{urlencode({'limit': max(args.limit, 20)})}",
-        )
-        items = listing.get("items") or []
-        target = next(
-            (
-                item
-                for item in items
-                if args.turn_id is not None
-                and str(item.get("turn_id")) == str(args.turn_id)
-            ),
-            None,
-        )
-        if target is None and args.request_id:
-            target = next(
-                (
-                    item
-                    for item in items
-                    if str(item.get("request_id", "")).startswith(args.request_id)
-                ),
-                None,
-            )
-        if target is None:
-            return ChainReport(
-                target=target_dict(args),
-                status=EvidenceStatus("not_applicable(v2)", "missing(v2)", "not_available(v2)"),
-                resolved={},
-                turns=[],
-                trace_nodes=[],
-                messages=[],
-                events=[],
-                errors=["v2 未找到匹配的 request_id/turn_id"],
-                suggestions=[
-                    "确认目标是 v2 Agent 的 turn_id 还是 request_id，并确认当前 --v2-base-url 指向同一服务。"
-                ],
-            )
+class V2ApiError(RuntimeError):
+    """保留 v2 HTTP 错误类别，避免把接口不可用伪装成空数据。"""
 
-        request_id = str(target.get("request_id"))
-        nodes_data = await asyncio.to_thread(
-            v2_get_json,
-            f"{base_url}/traces/{quote(request_id, safe='')}?limit=200",
+    def __init__(self, path: str, status_code: int | None, kind: str) -> None:
+        super().__init__(f"v2 API {kind}: {path}")
+        self.path = path
+        self.status_code = status_code
+        self.kind = kind
+
+
+async def build_v2_report(args: argparse.Namespace) -> ChainReport:
+    """按 trace_id、turn_id 或 conversation_id 只读召回 v2 证据。"""
+    base_url = v2_api_base_url(args.v2_base_url)
+    evidence = {
+        "trace_summary": "not_requested",
+        "trace_nodes": "not_requested",
+        "trace_events": "not_requested",
+        "conversation_messages": "not_requested",
+        "runtime_turn": "not_available(v2_api)",
+    }
+    try:
+        targets, resolution, list_status = await resolve_v2_targets(base_url, args)
+        if not targets:
+            evidence["trace_summary"] = "missing(v2)"
+            evidence["trace_nodes"] = "missing(v2)"
+            if args.include_events:
+                evidence["trace_events"] = "missing(v2)"
+            errors = [
+                "v2 未找到匹配的 trace_id、turn_id、request_id 或 conversation_id"
+            ]
+            if list_status:
+                errors.append(list_status)
+            return v2_empty_report(args, base_url, evidence, errors, resolution)
+
+        conversation_ids = sorted(
+            {
+                str(item.get("conversation_id"))
+                for item in targets
+                if item.get("conversation_id")
+            }
         )
-        nodes = [node_from_v2(args, request_id, target, item) for item in nodes_data.get("nodes", [])]
-        conversation_id = str(target.get("conversation_id") or "")
-        messages_data = {}
-        if conversation_id:
-            messages_data = await asyncio.to_thread(
-                v2_get_json,
-                f"{base_url}/conversations/{quote(conversation_id, safe='')}?limit=100",
+        if args.conversation_id:
+            conversation_ids = [args.conversation_id]
+        messages: list[MessageItem] = []
+        message_status = "missing(v2)"
+        if conversation_ids:
+            messages, message_status = await fetch_v2_messages(
+                base_url, conversation_ids[0], args.limit
             )
-        messages = [message_from_v2(target, item) for item in messages_data.get("items", [])]
-        turns = [
-            TurnItem(
-                source="v2",
-                id=target.get("turn_id"),
-                request_id=request_id,
-                session_id=conversation_id,
-                status=target.get("status"),
-                latency_ms=target.get("total_duration_ms"),
-                tool_calls_count=target.get("metrics", {}).get("tool_calls"),
-                token_total=target.get("metrics", {}).get("total_tokens"),
-                input_preview=next(
-                    (item.content for item in reversed(messages) if item.role == "user"),
-                    None,
-                ),
-                reply_preview=next(
-                    (
-                        item.content
-                        for item in reversed(messages)
-                        if item.role == "assistant"
-                    ),
-                    None,
-                ),
-                event_file=None,
-                event_seq_start=None,
-                event_seq_end=None,
+            evidence["conversation_messages"] = message_status
+
+        all_nodes: list[TraceNode] = []
+        all_events: list[EventItem] = []
+        turns: list[TurnItem] = []
+        trace_statuses: list[str] = []
+        event_statuses: list[str] = []
+        trace_errors: list[str] = []
+        trace_gaps: list[str] = []
+        for target in targets:
+            result = await fetch_v2_trace(base_url, target, args)
+            all_nodes.extend(result["nodes"])
+            all_events.extend(result["events"])
+            turns.append(
+                v2_turn_from_summary(
+                    result["summary"],
+                    result["trace_id"],
+                    messages,
+                    result["events"],
+                )
             )
-        ]
-        errors = collect_errors(nodes, [])
-        suggestions = build_v2_suggestions(target, nodes, messages)
+            trace_statuses.append(result["nodes_status"])
+            event_statuses.append(result["events_status"])
+            trace_errors.extend(result["errors"])
+            trace_gaps.extend(result["gaps"])
+
+        evidence["trace_summary"] = "ok(v2_api)"
+        evidence["trace_nodes"] = combine_v2_statuses(trace_statuses, "trace_nodes")
+        evidence["trace_events"] = combine_v2_statuses(event_statuses, "trace_events")
+        if args.conversation_id and not targets:
+            evidence["trace_summary"] = "missing(v2)"
+
+        errors = collect_errors(all_nodes, all_events)
+        errors = list(dict.fromkeys([*trace_errors, *errors]))[:20]
+        gaps = list(dict.fromkeys([*trace_gaps, *v2_message_gaps(messages, turns)]))
+        suggestions = build_v2_recall_suggestions(
+            turns, all_nodes, all_events, evidence, gaps
+        )
+        resolved = {
+            "conversation_ids": conversation_ids,
+            "trace_ids": sorted(
+                {str(item.get("trace_id")) for item in targets if item.get("trace_id")}
+            ),
+            "turn_ids": sorted(
+                {str(item.get("turn_id")) for item in targets if item.get("turn_id")}
+            ),
+            "request_ids": sorted(
+                {
+                    str(item.get("request_id"))
+                    for item in targets
+                    if item.get("request_id")
+                }
+            ),
+            "resolution": resolution,
+        }
+        overview = build_conversation_overview(
+            conversation_ids, messages, turns, targets
+        )
         return ChainReport(
-            target={**target_dict(args), "resolved_request_id": request_id, "v2_base_url": base_url},
-            status=EvidenceStatus("not_applicable(v2)", "ok(v2_api_mongo)", "not_available(v2)"),
-            resolved={
-                "request_ids": [request_id],
-                "session_ids": [conversation_id] if conversation_id else [],
-                "farm_ids": [],
-                "turn_ids": [str(target.get("turn_id"))],
-            },
+            target={**target_dict(args), "v2_base_url": base_url},
+            status=EvidenceStatus(
+                "not_applicable(v2)",
+                evidence["trace_nodes"],
+                evidence["trace_events"],
+            ),
+            resolved=resolved,
             turns=turns,
-            trace_nodes=nodes,
+            trace_nodes=sorted(all_nodes, key=lambda item: item.sort_key),
             messages=messages,
-            events=[],
+            events=sorted(
+                all_events, key=lambda item: (item.trace_id or "", item.seq or 0)
+            ),
             errors=errors,
             suggestions=suggestions,
+            conversation_overview=overview,
+            turn_overview=[turn_overview(item, turns, all_events) for item in turns],
+            sse_timeline=[event_dict(item) for item in all_events],
+            trace_timeline=[node_dict(item) for item in all_nodes],
+            business_outcome=build_business_outcome(
+                targets, turns, all_nodes, all_events
+            ),
+            evidence_gaps=gaps,
+            evidence_details=evidence,
         )
-    except Exception as exc:
-        return ChainReport(
-            target=target_dict(args),
-            status=EvidenceStatus("not_applicable(v2)", "error(v2_api)", "not_available(v2)"),
-            resolved={},
-            turns=[],
-            trace_nodes=[],
-            messages=[],
-            events=[],
-            errors=[f"v2 trace 查询失败: {preview(str(exc))}"],
-            suggestions=["确认 v2 Agent 正在运行，并检查 /health 与 /traces 接口。"],
+    except V2ApiError as exc:
+        evidence["trace_summary"] = v2_error_status(exc)
+        return v2_empty_report(
+            args,
+            base_url,
+            evidence,
+            [f"v2 trace 查询失败: {preview(str(exc))}"],
+            {"resolution": "error"},
         )
+    except Exception as exc:  # noqa: BLE001
+        evidence["trace_summary"] = "unavailable(code=v2_api_error)"
+        return v2_empty_report(
+            args,
+            base_url,
+            evidence,
+            [f"v2 trace 查询失败: {preview(str(exc))}"],
+            {"resolution": "error"},
+        )
+
+
+async def resolve_v2_targets(
+    base_url: str, args: argparse.Namespace
+) -> tuple[list[dict[str, Any]], str, str | None]:
+    """先解析正式 ID，再把旧 request_id 仅作为兼容别名处理。"""
+    if args.trace_id:
+        try:
+            summary = await v2_call(
+                base_url, f"/traces/{quote(args.trace_id, safe='')}/summary"
+            )
+            return [normalize_v2_summary(summary, args.trace_id)], "trace_id", None
+        except V2ApiError as exc:
+            if exc.status_code != 404:
+                raise
+            return [], "trace_id:not_found", v2_error_status(exc)
+    if args.conversation_id:
+        items, error = await v2_paginate(
+            base_url,
+            "/traces",
+            {"conversation_id": args.conversation_id},
+            args.limit,
+        )
+        return [normalize_v2_summary(item) for item in items], "conversation_id", error
+
+    items, error = await v2_paginate(base_url, "/traces", {}, args.limit)
+    if args.turn_id is not None:
+        matches = [
+            item for item in items if str(item.get("turn_id")) == str(args.turn_id)
+        ]
+        return [normalize_v2_summary(item) for item in matches], "turn_id", error
+    if args.request_id:
+        exact = [
+            item for item in items if str(item.get("request_id")) == args.request_id
+        ]
+        if exact:
+            return (
+                [normalize_v2_summary(item) for item in exact],
+                "request_id:exact",
+                error,
+            )
+        prefix = [
+            item
+            for item in items
+            if str(item.get("request_id") or "").startswith(args.request_id)
+        ]
+        return (
+            [normalize_v2_summary(item) for item in prefix],
+            "request_id:prefix",
+            error,
+        )
+    return [], "unsupported_v2_scope", error
+
+
+async def fetch_v2_trace(
+    base_url: str, target: dict[str, Any], args: argparse.Namespace
+) -> dict[str, Any]:
+    trace_id = str(target.get("trace_id") or target.get("request_id") or "")
+    summary = target
+    errors: list[str] = []
+    gaps: list[str] = []
+    try:
+        summary = normalize_v2_summary(
+            await v2_call(base_url, f"/traces/{quote(trace_id, safe='')}/summary"),
+            trace_id,
+        )
+    except V2ApiError as exc:
+        if exc.status_code == 404:
+            gaps.append("trace_summary=missing(v2)")
+        else:
+            errors.append(f"summary: {preview(str(exc))}")
+
+    nodes_data: dict[str, Any] = {}
+    nodes_status = "missing(v2)"
+    try:
+        nodes_data = await v2_call(
+            base_url,
+            f"/traces/{quote(trace_id, safe='')}/nodes",
+            {
+                "limit": 1000,
+                **({"include_payload": "true"} if args.include_payload else {}),
+            },
+        )
+        nodes_status = "ok(v2_api)"
+    except V2ApiError as exc:
+        if exc.status_code == 404:
+            try:
+                nodes_data = await v2_call(
+                    base_url, f"/traces/{quote(trace_id, safe='')}", {"limit": 1000}
+                )
+                nodes_status = "ok(v2_api_compat)"
+                gaps.append(
+                    "trace_nodes=formal_endpoint_not_implemented(v2_api); used_compat_detail"
+                )
+            except V2ApiError as compat_exc:
+                nodes_status = v2_error_status(compat_exc, missing=True)
+                gaps.append(f"trace_nodes={nodes_status}")
+        else:
+            nodes_status = v2_error_status(exc)
+            errors.append(f"nodes: {preview(str(exc))}")
+    nodes = [
+        node_from_v2(args, trace_id, summary, item)
+        for item in (nodes_data.get("nodes") or [])
+        if isinstance(item, dict)
+    ]
+
+    events: list[EventItem] = []
+    events_status = "not_requested"
+    if args.include_events:
+        events, events_status, event_gaps, event_errors = await fetch_v2_events(
+            base_url, trace_id, args
+        )
+        gaps.extend(event_gaps)
+        errors.extend(event_errors)
+    return {
+        "trace_id": trace_id,
+        "summary": summary,
+        "nodes": nodes,
+        "events": events,
+        "nodes_status": nodes_status,
+        "events_status": events_status,
+        "errors": errors,
+        "gaps": gaps,
+    }
+
+
+async def fetch_v2_events(
+    base_url: str, trace_id: str, args: argparse.Namespace
+) -> tuple[list[EventItem], str, list[str], list[str]]:
+    """timeline 优先，events 次之；两个正式端点都不可用时明确标记。"""
+    gaps: list[str] = []
+    errors: list[str] = []
+    params = {"limit": 1000}
+    if args.include_payload:
+        params["include_payload"] = "true"
+    try:
+        document = await v2_call(
+            base_url, f"/traces/{quote(trace_id, safe='')}/timeline", params
+        )
+        nodes, events = split_v2_timeline(document, trace_id)
+        return events, "ok(v2_api)", gaps, errors
+    except V2ApiError as timeline_exc:
+        if timeline_exc.status_code != 404:
+            return (
+                [],
+                v2_error_status(timeline_exc),
+                [],
+                [f"timeline: {preview(str(timeline_exc))}"],
+            )
+        gaps.append("trace_timeline=not_available(v2_api)")
+    try:
+        document = await v2_call(
+            base_url, f"/traces/{quote(trace_id, safe='')}/events", params
+        )
+        _, events = split_v2_timeline(document, trace_id)
+        gaps.append("trace_timeline=not_available(v2_api); used_events_endpoint")
+        return events, "ok(v2_api_events)", gaps, errors
+    except V2ApiError as events_exc:
+        if events_exc.status_code == 404:
+            gaps.append("trace_events=not_available(v2_api)")
+            return [], "not_available(v2_api)", gaps, errors
+        return (
+            [],
+            v2_error_status(events_exc),
+            gaps,
+            [f"events: {preview(str(events_exc))}"],
+        )
+
+
+async def fetch_v2_messages(
+    base_url: str, conversation_id: str, page_size: int
+) -> tuple[list[MessageItem], str]:
+    items, error = await v2_paginate(
+        base_url,
+        f"/conversations/{quote(conversation_id, safe='')}",
+        {},
+        page_size,
+        cursor_param="before",
+    )
+    if error:
+        return [], error
+    return [
+        message_from_v2({"conversation_id": conversation_id}, item) for item in items
+    ], "ok(v2_api)"
+
+
+async def v2_paginate(
+    base_url: str,
+    path: str,
+    params: dict[str, Any],
+    page_size: int,
+    *,
+    cursor_param: str = "cursor",
+) -> tuple[list[dict[str, Any]], str | None]:
+    items: list[dict[str, Any]] = []
+    cursor: str | None = None
+    seen_cursors: set[str] = set()
+    for _ in range(MAX_V2_PAGES):
+        query = {**params, "limit": clamp(page_size, 1, MAX_LIMIT)}
+        if cursor:
+            query[cursor_param] = cursor
+        try:
+            document = await v2_call(base_url, path, query)
+        except V2ApiError as exc:
+            if exc.status_code == 404:
+                return items, "missing(v2)"
+            return items, v2_error_status(exc)
+        page_items = document.get("items") or []
+        items.extend(item for item in page_items if isinstance(item, dict))
+        has_more = bool(document.get("has_more"))
+        next_cursor = document.get("next_cursor")
+        if cursor_param == "before" and not next_cursor and page_items:
+            next_cursor = page_items[-1].get("created_at")
+        if not has_more or not next_cursor or str(next_cursor) in seen_cursors:
+            return unique_v2_items(items), None
+        cursor = str(next_cursor)
+        seen_cursors.add(cursor)
+    return unique_v2_items(items), "partial(code=v2_pagination_limit)"
+
+
+async def v2_call(
+    base_url: str, path: str, params: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    url = v2_api_url(base_url, path, params or {})
+    return await asyncio.to_thread(v2_get_json, url)
 
 
 def v2_get_json(url: str) -> dict[str, Any]:
-    request = Request(url, headers={"Accept": "application/json"})
+    headers = {"Accept": "application/json"}
+    authorization = os.getenv("V2_AGENT_AUTHORIZATION") or os.getenv(
+        "AGENT_AUTHORIZATION"
+    )
+    if authorization:
+        headers["Authorization"] = authorization
+    request = Request(url, headers=headers)
     try:
         with urlopen(request, timeout=15) as response:
             payload = json.loads(response.read().decode("utf-8"))
-    except (HTTPError, URLError, TimeoutError) as exc:
-        raise RuntimeError(f"HTTP 请求失败: {type(exc).__name__}") from exc
+    except HTTPError as exc:
+        kind = "not_found" if exc.code == 404 else "http_error"
+        raise V2ApiError(url, exc.code, kind) from exc
+    except (URLError, TimeoutError) as exc:
+        raise V2ApiError(url, None, "unavailable") from exc
     if not isinstance(payload, dict):
-        raise RuntimeError("v2 响应不是 JSON 对象")
+        raise V2ApiError(url, None, "invalid_response")
     return payload
+
+
+def v2_api_base_url(value: str) -> str:
+    base = value.rstrip("/")
+    return base if base.endswith("/api/v2") else f"{base}/api/v2"
+
+
+def v2_api_url(base_url: str, path: str, params: dict[str, Any]) -> str:
+    query = urlencode(
+        {key: value for key, value in params.items() if value is not None}
+    )
+    return f"{base_url.rstrip('/')}/{path.lstrip('/')}" + (f"?{query}" if query else "")
+
+
+def normalize_v2_summary(
+    doc: dict[str, Any], trace_id: str | None = None
+) -> dict[str, Any]:
+    result = dict(doc)
+    resolved_trace_id = str(
+        doc.get("trace_id") or doc.get("request_id") or trace_id or ""
+    )
+    result["trace_id"] = resolved_trace_id
+    result["request_id"] = str(doc.get("request_id") or resolved_trace_id)
+    result["turn_id"] = doc.get("turn_id")
+    result["conversation_id"] = doc.get("conversation_id")
+    return result
+
+
+def unique_v2_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in items:
+        key = str(
+            item.get("trace_id")
+            or item.get("request_id")
+            or item.get("_id")
+            or item.get("mysqlId")
+            or (item.get("created_at"), item.get("role"), item.get("content"))
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(item)
+    return result
+
+
+def v2_error_status(exc: V2ApiError, *, missing: bool = False) -> str:
+    if exc.status_code == 404:
+        return "missing(v2)" if missing else "not_available(v2_api)"
+    if exc.status_code in {401, 403}:
+        return f"unavailable(code=v2_auth_{exc.status_code})"
+    if exc.status_code is None:
+        return "unavailable(code=v2_api_unavailable)"
+    return f"error(code=v2_api_http_{exc.status_code})"
+
+
+def combine_v2_statuses(statuses: list[str], evidence_name: str) -> str:
+    if not statuses:
+        return "missing(v2)"
+    if any(
+        status.startswith("error") or status.startswith("unavailable")
+        for status in statuses
+    ):
+        return next(
+            status
+            for status in statuses
+            if status.startswith("error") or status.startswith("unavailable")
+        )
+    if any(status == "not_available(v2_api)" for status in statuses):
+        return "not_available(v2_api)"
+    if any(status.startswith("ok") for status in statuses):
+        return "ok(v2_api)"
+    if any(status.startswith("partial") for status in statuses):
+        return next(status for status in statuses if status.startswith("partial"))
+    return f"missing(v2,source={evidence_name})"
+
+
+def split_v2_timeline(
+    document: dict[str, Any], trace_id: str
+) -> tuple[list[dict[str, Any]], list[EventItem]]:
+    raw_nodes = document.get("nodes") or document.get("trace_nodes") or []
+    raw_events = document.get("events") or document.get("sse_events") or []
+    timeline = document.get("timeline") or document.get("items") or []
+    if timeline:
+        for item in timeline:
+            if not isinstance(item, dict):
+                continue
+            if item.get("event_type") or item.get("event_id") or "seq" in item:
+                raw_events.append(item)
+            elif item.get("node_type") or item.get("node_name"):
+                raw_nodes.append(item)
+    events = [
+        event_from_v2(trace_id, item) for item in raw_events if isinstance(item, dict)
+    ]
+    return [item for item in raw_nodes if isinstance(item, dict)], events
+
+
+def event_from_v2(trace_id: str, doc: dict[str, Any]) -> EventItem:
+    data = doc.get("data") if "data" in doc else doc.get("payload")
+    return EventItem(
+        seq=as_int(doc.get("seq")),
+        event_type=doc.get("event_type") or doc.get("type"),
+        request_id=doc.get("request_id") or trace_id,
+        turn_id=doc.get("turn_id"),
+        payload=redact(data),
+        event_id=doc.get("event_id") or doc.get("id"),
+        trace_id=doc.get("trace_id") or trace_id,
+        conversation_id=doc.get("conversation_id"),
+        phase=doc.get("phase"),
+        status_before=doc.get("status_before"),
+        status_after=doc.get("status_after"),
+        terminal=doc.get("terminal"),
+        occurred_at=doc.get("occurred_at") or doc.get("created_at"),
+        span_id=doc.get("span_id"),
+    )
+
+
+def as_int(value: Any) -> int | None:
+    try:
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def v2_turn_from_summary(
+    summary: dict[str, Any],
+    trace_id: str,
+    messages: list[MessageItem],
+    events: list[EventItem],
+) -> TurnItem:
+    turn_id = summary.get("turn_id")
+    related = [
+        item
+        for item in messages
+        if item.turn_id is not None and str(item.turn_id) == str(turn_id)
+    ]
+    source_messages = related or messages
+    user_message = next(
+        (item for item in reversed(source_messages) if item.role == "user"), None
+    )
+    assistant_message = next(
+        (item for item in reversed(source_messages) if item.role == "assistant"), None
+    )
+    seqs = [item.seq for item in events if item.seq is not None]
+    metrics = summary.get("metrics") or {}
+    return TurnItem(
+        source="v2",
+        id=turn_id,
+        request_id=summary.get("request_id") or trace_id,
+        session_id=summary.get("conversation_id"),
+        status=summary.get("status"),
+        latency_ms=summary.get("total_duration_ms"),
+        tool_calls_count=metrics.get("tool_calls"),
+        token_total=metrics.get("total_tokens"),
+        input_preview=user_message.content if user_message else None,
+        reply_preview=assistant_message.content if assistant_message else None,
+        event_file=None,
+        event_seq_start=min(seqs) if seqs else None,
+        event_seq_end=max(seqs) if seqs else None,
+        trace_id=trace_id,
+        conversation_id=summary.get("conversation_id"),
+    )
+
+
+def event_dict(event: EventItem) -> dict[str, Any]:
+    return asdict(event)
+
+
+def node_dict(node: TraceNode) -> dict[str, Any]:
+    return asdict(node)
+
+
+def turn_overview(
+    turn: TurnItem, turns: list[TurnItem], events: list[EventItem]
+) -> dict[str, Any]:
+    turn_events = [item for item in events if str(item.turn_id) == str(turn.id)]
+    diagnostics = sse_diagnostics(turn_events)
+    return {
+        "trace_id": turn.trace_id or turn.request_id,
+        "turn_id": turn.id,
+        "conversation_id": turn.conversation_id or turn.session_id,
+        "status": turn.status,
+        "latency_ms": turn.latency_ms,
+        "tool_calls_count": turn.tool_calls_count,
+        "token_total": turn.token_total,
+        "input_preview": preview(turn.input_preview) if turn.input_preview else None,
+        "reply_preview": preview(turn.reply_preview) if turn.reply_preview else None,
+        "sse": diagnostics,
+    }
+
+
+def sse_diagnostics(events: list[EventItem]) -> dict[str, Any]:
+    seqs = sorted(item.seq for item in events if item.seq is not None)
+    gaps: list[int] = []
+    duplicates: list[int] = []
+    if seqs:
+        counts = Counter(seqs)
+        duplicates = sorted(seq for seq, count in counts.items() if count > 1)
+        expected = set(range(seqs[0], seqs[-1] + 1))
+        gaps = sorted(expected - set(seqs))
+    event_ids = [item.event_id for item in events if item.event_id]
+    done_events = [
+        item for item in events if item.event_type == "done" or item.terminal
+    ]
+    return {
+        "count": len(events),
+        "first_seq": seqs[0] if seqs else None,
+        "last_seq": seqs[-1] if seqs else None,
+        "seq_gaps": gaps,
+        "duplicate_seq": duplicates,
+        "duplicate_event_id": sorted(
+            event_id for event_id, count in Counter(event_ids).items() if count > 1
+        ),
+        "done_count": len([item for item in done_events if item.event_type == "done"]),
+        "terminal_count": len(done_events),
+    }
+
+
+def v2_message_gaps(messages: list[MessageItem], turns: list[TurnItem]) -> list[str]:
+    gaps: list[str] = []
+    if turns and not messages:
+        gaps.append("conversation_messages=missing(v2)")
+    if messages and any(item.turn_id is None for item in messages) and len(turns) > 1:
+        gaps.append(
+            "conversation_messages.turn_id=not_available(v2_api); cannot_exactly_bind_messages_to_turns"
+        )
+    if turns and any(item.reply_preview is None for item in turns):
+        gaps.append("assistant_message=missing(v2)")
+    return gaps
+
+
+def build_conversation_overview(
+    conversation_ids: list[str],
+    messages: list[MessageItem],
+    turns: list[TurnItem],
+    targets: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "conversation_ids": conversation_ids,
+        "message_count": len(messages),
+        "user_message_count": sum(item.role == "user" for item in messages),
+        "assistant_message_count": sum(item.role == "assistant" for item in messages),
+        "turn_count": len(turns),
+        "trace_count": len(targets),
+        "trace_ids": [item.get("trace_id") for item in targets],
+    }
+
+
+def build_business_outcome(
+    targets: list[dict[str, Any]],
+    turns: list[TurnItem],
+    nodes: list[TraceNode],
+    events: list[EventItem],
+) -> dict[str, Any]:
+    summaries = [
+        key
+        for target in targets
+        for key in ("business_committed", "reply_generated", "reply_persisted")
+        if key in target
+    ]
+    commit_events = [
+        item for item in events if item.event_type == "operation_committed"
+    ]
+    commit_nodes = [item for item in nodes if item.node_type == "business_commit"]
+    final_events = [
+        item for item in events if item.event_type in {"final_answer", "done"}
+    ]
+    explicit_commit = [
+        target.get("business_committed")
+        for target in targets
+        if "business_committed" in target
+    ]
+    explicit_reply = [
+        target.get("reply_generated")
+        for target in targets
+        if "reply_generated" in target
+    ]
+    return {
+        "business_committed": True
+        if any(explicit_commit) or commit_events or commit_nodes
+        else (False if explicit_commit and not any(explicit_commit) else None),
+        "reply_generated": True
+        if any(explicit_reply)
+        or final_events
+        or any(turn.reply_preview for turn in turns)
+        else (False if explicit_reply and not any(explicit_reply) else None),
+        "reply_persisted": next(
+            (
+                target.get("reply_persisted")
+                for target in targets
+                if "reply_persisted" in target
+            ),
+            None,
+        ),
+        "commit_evidence": "confirmed"
+        if explicit_commit or commit_events or commit_nodes
+        else "missing",
+        "reply_evidence": "confirmed"
+        if explicit_reply or final_events or any(turn.reply_preview for turn in turns)
+        else "missing",
+        "commit_event_count": len(commit_events),
+        "commit_node_count": len(commit_nodes),
+        "terminal_event_count": len(
+            [item for item in events if item.event_type == "done"]
+        ),
+        "source_fields": summaries,
+    }
+
+
+def build_v2_recall_suggestions(
+    turns: list[TurnItem],
+    nodes: list[TraceNode],
+    events: list[EventItem],
+    evidence: dict[str, str],
+    gaps: list[str],
+) -> list[str]:
+    suggestions: list[str] = []
+    if any(
+        status.startswith("unavailable") or status.startswith("error")
+        for status in evidence.values()
+    ):
+        suggestions.append(
+            "先确认 v2 Agent、Mongo 和鉴权环境一致，再重新召回缺失的数据源。"
+        )
+    if any(
+        node.status not in (None, "success") or node.error_message for node in nodes
+    ):
+        suggestions.append(
+            "从 Trace 时间线第一个错误节点向前追输入、上下文和上游工具结果。"
+        )
+    diagnostics = sse_diagnostics(events)
+    if (
+        diagnostics["seq_gaps"]
+        or diagnostics["duplicate_seq"]
+        or diagnostics["duplicate_event_id"]
+    ):
+        suggestions.append(
+            "SSE seq 或 event_id 存在不连续/重复，检查 Redis 重放、发布入口和断线恢复。"
+        )
+    if events and diagnostics["done_count"] != 1:
+        suggestions.append("本轮 done 事件不是唯一终态，检查取消、超时和错误收敛逻辑。")
+    if any((node.duration_ms or 0) > 5000 for node in nodes):
+        suggestions.append(
+            "存在超过 5s 的慢节点，分别检查排队、LLM、MCP 和审批等待耗时。"
+        )
+    if gaps:
+        suggestions.append(
+            "报告中的证据缺口不能用自然语言最终答复补全；需补齐对应 Trace/SSE/消息接口。"
+        )
+    if not suggestions:
+        suggestions.append(
+            "当前召回证据未显示明显系统错误，可继续核对工具结果与业务语义。"
+        )
+    return suggestions
+
+
+def v2_empty_report(
+    args: argparse.Namespace,
+    base_url: str,
+    evidence: dict[str, str],
+    errors: list[str],
+    resolution: dict[str, Any] | str,
+) -> ChainReport:
+    gaps = [
+        f"{key}={value}"
+        for key, value in evidence.items()
+        if value in {"missing(v2)", "not_available(v2_api)"}
+    ]
+    return ChainReport(
+        target={**target_dict(args), "v2_base_url": base_url},
+        status=EvidenceStatus(
+            "not_applicable(v2)",
+            evidence.get("trace_nodes", "missing(v2)"),
+            evidence.get("trace_events", "not_requested"),
+        ),
+        resolved={"resolution": resolution},
+        turns=[],
+        trace_nodes=[],
+        messages=[],
+        events=[],
+        errors=errors,
+        suggestions=[
+            "确认目标 ID、v2 Agent 地址和鉴权后重试；不可用接口不能当作空数据。"
+        ],
+        conversation_overview={},
+        turn_overview=[],
+        sse_timeline=[],
+        trace_timeline=[],
+        business_outcome={
+            "business_committed": None,
+            "reply_generated": None,
+            "reply_persisted": None,
+        },
+        evidence_gaps=gaps,
+        evidence_details=evidence,
+    )
 
 
 def node_from_v2(
@@ -368,21 +1082,32 @@ def node_from_v2(
         input_data=redact(doc.get("input_data")),
         output_data=redact(doc.get("output_data")),
         started_at=doc.get("start_time"),
-        sort_key=sort_key(request_id, doc.get("step_index"), doc.get("start_time"), None),
+        sort_key=sort_key(
+            request_id, doc.get("step_index"), doc.get("start_time"), None
+        ),
+        trace_id=doc.get("trace_id") or request_id,
+        turn_id=str(doc.get("turn_id") or target.get("turn_id") or "") or None,
+        conversation_id=doc.get("conversation_id") or target.get("conversation_id"),
+        span_id=doc.get("span_id"),
+        parent_span_id=doc.get("parent_span_id"),
+        phase=doc.get("phase"),
+        attempt=as_int(doc.get("attempt")),
     )
 
 
 def message_from_v2(target: dict[str, Any], doc: dict[str, Any]) -> MessageItem:
+    meta = coerce_meta(doc.get("meta"))
     return MessageItem(
         source="v2-mongo",
-        storage_id=None,
+        storage_id=str(doc.get("id") or doc.get("_id") or doc.get("mysql_id") or "")
+        or None,
         role=doc.get("role"),
         content=doc.get("content"),
-        created_at=doc.get("created_at"),
-        turn_id=None,
+        created_at=doc.get("created_at") or doc.get("createdAt"),
+        turn_id=doc.get("turn_id") or doc.get("turnId"),
         session_id=target.get("conversation_id"),
-        farm_id=None,
-        meta=None,
+        farm_id=doc.get("farm_id") or doc.get("farmId"),
+        meta=redact(meta) if meta else None,
         event_file=None,
         event_seq_range=None,
     )
@@ -397,9 +1122,10 @@ def build_v2_suggestions(
     last_llm = max(llm_nodes, key=lambda node: node.round_index or 0, default=None)
     last_tool_step = max((node.round_index or 0 for node in tool_nodes), default=0)
     if last_llm and isinstance(last_llm.output_data, dict):
-        if last_llm.output_data.get("tool_calls_count", 0) and (
-            last_llm.round_index or 0
-        ) > last_tool_step:
+        if (
+            last_llm.output_data.get("tool_calls_count", 0)
+            and (last_llm.round_index or 0) > last_tool_step
+        ):
             suggestions.append(
                 "最后一次 LLM 声明仍有 tool_call，但没有对应 tool_call trace；优先检查缺参分支、max_steps 截断或 make_plan 未记录。"
             )
@@ -408,7 +1134,9 @@ def build_v2_suggestions(
             "会话以当前 user 消息结束，没有对应 assistant 最终消息；当前 v2 trace 状态把未完成链路误判为 success。"
         )
     if any((node.duration_ms or 0) > 5000 for node in nodes):
-        suggestions.append("存在超过 5s 的慢节点：本轮主要耗时集中在 LLM，需检查 provider 响应和重复工具规划。")
+        suggestions.append(
+            "存在超过 5s 的慢节点：本轮主要耗时集中在 LLM，需检查 provider 响应和重复工具规划。"
+        )
     if not suggestions:
         suggestions.append("v2 trace 未显示明显错误，可继续核对最终回复与用户意图。")
     return suggestions
@@ -848,42 +1576,178 @@ def in_any_seq_range(
     return start is not None and seq >= start and (end is None or seq <= end)
 
 
+def finalize_report(report: ChainReport) -> ChainReport:
+    """为旧版查询补齐统一报告字段，确保 Markdown/JSON 结构稳定。"""
+    if not report.conversation_overview:
+        conversation_ids = sorted(
+            {
+                str(item.session_id)
+                for item in report.messages + report.turns
+                if item.session_id
+            }
+        )
+        report.conversation_overview = build_conversation_overview(
+            conversation_ids, report.messages, report.turns, []
+        )
+    if not report.turn_overview:
+        report.turn_overview = [
+            {
+                "trace_id": item.request_id,
+                "turn_id": item.id,
+                "conversation_id": item.session_id,
+                "status": item.status,
+                "latency_ms": item.latency_ms,
+                "tool_calls_count": item.tool_calls_count,
+                "token_total": item.token_total,
+                "input_preview": preview(item.input_preview)
+                if item.input_preview
+                else None,
+                "reply_preview": preview(item.reply_preview)
+                if item.reply_preview
+                else None,
+                "sse": {},
+            }
+            for item in report.turns
+        ]
+    if not report.sse_timeline:
+        report.sse_timeline = [event_dict(item) for item in report.events]
+    if not report.trace_timeline:
+        report.trace_timeline = [node_dict(item) for item in report.trace_nodes]
+    if not report.business_outcome:
+        report.business_outcome = build_business_outcome(
+            [], report.turns, report.trace_nodes, report.events
+        )
+    if not report.evidence_gaps:
+        report.evidence_gaps = build_evidence_gaps(report)
+    if not report.evidence_details:
+        report.evidence_details = {
+            "trace_nodes": report.status.mongo,
+            "trace_events": report.status.events,
+            "conversation_messages": "ok" if report.messages else "missing",
+        }
+    return report
+
+
+def build_evidence_gaps(report: ChainReport) -> list[str]:
+    gaps: list[str] = []
+    if not report.trace_nodes:
+        gaps.append(f"trace_nodes={report.status.mongo}")
+    if not report.messages:
+        gaps.append("conversation_messages=missing")
+    if not report.events:
+        gaps.append(f"events={report.status.events}")
+    return list(dict.fromkeys(gaps))
+
+
+def report_dict(report: ChainReport) -> dict[str, Any]:
+    """固定 JSON 字段；保留旧数组别名以兼容现有调试调用方。"""
+    details = report.evidence_details
+    evidence_status = {
+        "mysql": report.status.mysql,
+        "mongo": report.status.mongo,
+        "events": report.status.events,
+        "trace_summary": details.get(
+            "trace_summary", "ok" if report.turns else "missing"
+        ),
+        "trace_nodes": details.get("trace_nodes", report.status.mongo),
+        "trace_events": details.get("trace_events", report.status.events),
+        "conversation_messages": details.get(
+            "conversation_messages", "ok" if report.messages else "missing"
+        ),
+        "runtime_turn": "not_available(v2_api)"
+        if report.target.get("v2_base_url")
+        else "not_requested",
+    }
+    return {
+        "target": report.target,
+        "resolved_scope": report.resolved,
+        "evidence_status": evidence_status,
+        "conversation_overview": report.conversation_overview,
+        "turn_overview": report.turn_overview,
+        "sse_timeline": redact(report.sse_timeline),
+        "trace_timeline": redact(report.trace_timeline),
+        "business_outcome": report.business_outcome,
+        "errors": report.errors,
+        "evidence_gaps": report.evidence_gaps,
+        "suggestions": report.suggestions,
+        "turns": [redact(asdict(item)) for item in report.turns],
+        "trace_nodes": [redact(asdict(item)) for item in report.trace_nodes],
+        "messages": [redact(asdict(item)) for item in report.messages],
+        "events": [redact(asdict(item)) for item in report.events],
+    }
+
+
 def format_markdown(report: ChainReport, *, include_payload: bool) -> str:
-    lines = ["链路追踪分析", ""]
-    lines.append("目标:")
-    for key, value in report.target.items():
-        if value not in (None, False):
-            lines.append(f"- {key}: {value}")
-    if report.resolved:
-        lines.extend(["", "解析范围:"])
-        for key, value in report.resolved.items():
-            if value:
-                lines.append(f"- {key}: {value}")
+    lines = ["链路追踪分析", "", "目标:"]
+    lines.extend(
+        f"- {key}: {value}"
+        for key, value in report.target.items()
+        if value not in (None, False)
+    )
+    lines.extend(["", "解析范围:"])
+    lines.extend(f"- {key}: {value}" for key, value in report.resolved.items() if value)
     lines.extend(["", "证据状态:"])
-    lines.append(f"- MySQL: {report.status.mysql}")
-    lines.append(f"- Mongo: {report.status.mongo}")
-    lines.append(f"- JSONL events: {report.status.events}")
-    lines.append(
-        "- trace_nodes: "
-        f"mysql={count_source(report.trace_nodes, 'mysql')} "
-        f"mongo={count_source(report.trace_nodes, 'mongo')} "
-        f"v2={count_source(report.trace_nodes, 'v2-mongo')}"
+    lines.extend(
+        [
+            f"- MySQL: {report.status.mysql}",
+            f"- Mongo/Trace nodes: {report.status.mongo}",
+            f"- SSE events: {report.status.events}",
+            f"- messages: {len(report.messages)}",
+        ]
     )
-    lines.append(
-        "- messages: "
-        f"mysql={count_source(report.messages, 'mysql')} "
-        f"mongo={count_source(report.messages, 'mongo')} "
-        f"v2={count_source(report.messages, 'v2-mongo')}"
-    )
-    lines.extend(format_turns(report.turns))
-    lines.extend(format_nodes(report.trace_nodes, include_payload=include_payload))
-    lines.extend(format_audit_block(report))
-    lines.extend(format_messages(report.messages))
-    lines.extend(format_events(report.events))
+    lines.extend(["", "会话/Turn 概览:"])
+    if report.turn_overview:
+        for item in report.turn_overview:
+            lines.append(
+                f"- trace_id={item.get('trace_id')} turn_id={item.get('turn_id')} "
+                f"status={item.get('status')} latency={item.get('latency_ms') or '-'}ms"
+            )
+            if item.get("input_preview"):
+                lines.append(f"  input: {item['input_preview']}")
+            if item.get("reply_preview"):
+                lines.append(f"  reply: {item['reply_preview']}")
+    else:
+        lines.append("- 未命中 Turn")
+    lines.extend(["", "SSE 时间线:"])
+    if report.events:
+        for event in report.events:
+            state = (
+                f" {event.status_before}->{event.status_after}"
+                if event.status_before or event.status_after
+                else ""
+            )
+            lines.append(
+                f"- seq={event.seq} event_id={event.event_id or '-'} "
+                f"type={event.event_type}{state} terminal={event.terminal}"
+            )
+            if include_payload:
+                lines.append(f"  data={json_preview(event.payload)}")
+    else:
+        lines.append(f"- 无事件证据，状态={report.status.events}")
+    lines.extend(["", "Trace 时间线:"])
+    if report.trace_nodes:
+        for node in report.trace_nodes:
+            lines.append(
+                f"- [{node.source}] trace_id={node.trace_id or node.request_id} "
+                f"span_id={node.span_id or '-'} {node.node_type}.{node.node_name} "
+                f"status={node.status} duration={node.duration_ms or 0}ms"
+            )
+            if node.error_message:
+                lines.append(f"  error={preview(node.error_message)}")
+            if include_payload:
+                lines.append(f"  input={json_preview(node.input_data)}")
+                lines.append(f"  output={json_preview(node.output_data)}")
+    else:
+        lines.append("- 未命中 Trace 节点")
+    lines.extend(["", "业务结果:"])
+    for key, value in report.business_outcome.items():
+        lines.append(f"- {key}: {value}")
     lines.extend(["", "错误节点:"])
     lines.extend([f"- {item}" for item in report.errors] or ["- 未发现显式错误"])
+    lines.extend(["", "证据缺口:"])
+    lines.extend([f"- {item}" for item in report.evidence_gaps] or ["- 未发现"])
     lines.extend(["", "排查建议:"])
-    lines.extend([f"- {item}" for item in report.suggestions])
+    lines.extend([f"- {item}" for item in report.suggestions] or ["- 未提供"])
     return "\n".join(lines)
 
 
@@ -1342,8 +2206,12 @@ def target_dict(args: argparse.Namespace) -> dict[str, Any]:
         "request_id": args.request_id,
         "session_id": args.session_id,
         "turn_id": args.turn_id,
+        "trace_id": args.trace_id,
+        "conversation_id": args.conversation_id,
         "farm_id": args.farm_id,
         "limit": clamp(args.limit, 1, MAX_LIMIT),
+        "include_events": args.include_events,
+        "include_payload": args.include_payload,
     }
 
 

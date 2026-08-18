@@ -447,12 +447,15 @@ async def _call_llm_stream(
         model=MODEL,
         messages=llm_messages,
         response={
+            "content": full_content,
             "content_length": len(full_content),
+            "finish_reason": "tool_calls" if tool_calls else "stop",
             "tool_calls_count": len(tool_calls),
             "tool_calls": [
                 {
+                    "id": call.get("id"),
                     "name": call.get("name"),
-                    "argument_keys": sorted((call.get("arguments") or {}).keys()),
+                    "arguments": call.get("arguments") or {},
                 }
                 for call in tool_calls
             ],

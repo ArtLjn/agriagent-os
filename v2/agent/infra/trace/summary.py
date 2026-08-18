@@ -5,6 +5,7 @@ v2 uses MongoDB document dicts instead of SQLAlchemy TraceRecord objects.
 
 Core function: build_trace_request_summary(nodes) -> dict | None
 """
+
 from __future__ import annotations
 
 import json
@@ -42,6 +43,7 @@ def build_trace_request_summary(nodes: list[dict[str, Any]]) -> dict[str, Any] |
     return {
         "schema_version": TRACE_SUMMARY_SCHEMA_VERSION,
         "request_id": str(first.get("request_id", "")),
+        "trace_id": str(first.get("trace_id") or first.get("request_id", "")),
         "conversation_id": str(first.get("conversation_id", "")),
         "turn_id": str(first.get("turn_id", "")),
         "user_id": str(first.get("user_id", "")),
@@ -66,6 +68,7 @@ def summary_to_mongo_doc(summary: dict[str, Any]) -> dict[str, Any]:
         "_id": summary["request_id"],
         "schema_version": summary["schema_version"],
         "request_id": summary["request_id"],
+        "trace_id": summary.get("trace_id", summary["request_id"]),
         "conversation_id": summary.get("conversation_id"),
         "turn_id": summary.get("turn_id"),
         "user_id": summary.get("user_id"),
@@ -88,8 +91,13 @@ def summary_to_mongo_doc(summary: dict[str, Any]) -> dict[str, Any]:
 def summary_from_mongo_doc(doc: dict[str, Any]) -> dict[str, Any]:
     """Convert MongoDB summary document to API response dict."""
     return {
-        "schema_version": int(doc.get("schema_version") or TRACE_SUMMARY_SCHEMA_VERSION),
+        "schema_version": int(
+            doc.get("schema_version") or TRACE_SUMMARY_SCHEMA_VERSION
+        ),
         "request_id": str(doc.get("request_id") or doc.get("_id") or ""),
+        "trace_id": str(
+            doc.get("trace_id") or doc.get("request_id") or doc.get("_id") or ""
+        ),
         "conversation_id": doc.get("conversation_id"),
         "turn_id": doc.get("turn_id"),
         "user_id": doc.get("user_id"),
@@ -178,9 +186,7 @@ def _node_breakdown(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     result = []
     for item in grouped.values():
         item["avg_duration_ms"] = (
-            round(item["duration_ms_total"] / item["count"], 1)
-            if item["count"]
-            else 0
+            round(item["duration_ms_total"] / item["count"], 1) if item["count"] else 0
         )
         result.append(item)
     return result

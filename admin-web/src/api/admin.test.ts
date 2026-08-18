@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import apiClient from './client';
-import { getTraceDiagnostics } from './admin';
+import { getTimeline, getTraceDiagnostics } from './admin';
 
 vi.mock('./client', () => ({
   default: {
@@ -12,6 +12,56 @@ vi.mock('./client', () => ({
 const mockedApiClient = vi.mocked(apiClient, true);
 
 describe('admin api', () => {
+  it('通过正式 v2 timeline 接口读取节点和事件，并补充 summary', async () => {
+    mockedApiClient.get
+      .mockResolvedValueOnce({
+        data: {
+          trace_id: 'trace-1',
+          request_id: 'req-1',
+          conversation_id: 'conv-1',
+          turn_id: 'turn-1',
+          items: [
+            {
+              record_kind: 'node',
+              id: 'span-1',
+              node_type: 'llm',
+              node_name: 'planner',
+              duration_ms: 12,
+              status: 'completed',
+              token_usage: null,
+              start_time: null,
+            },
+            {
+              record_kind: 'event',
+              source: 'traceEvents',
+              event_id: 'evt-1',
+              trace_id: 'trace-1',
+              turn_id: 'turn-1',
+              seq: 2,
+              event_type: 'done',
+              terminal: true,
+              occurred_at: null,
+            },
+          ],
+          count: 2,
+          has_more: false,
+        },
+      })
+      .mockResolvedValueOnce({
+        data: { request_id: 'req-1', trace_id: 'trace-1', node_count: 1, total_duration_ms: 12 },
+      });
+
+    const result = await getTimeline('trace/1', { limit: 50, include_payload: false });
+
+    expect(mockedApiClient.get).toHaveBeenNthCalledWith(1, '/admin/traces/trace%2F1/timeline', {
+      params: { limit: 50, include_payload: false },
+    });
+    expect(mockedApiClient.get).toHaveBeenNthCalledWith(2, '/admin/traces/trace%2F1/summary');
+    expect(result.trace_id).toBe('trace-1');
+    expect(result.rounds[0].nodes).toHaveLength(1);
+    expect(result.events?.[0].event_id).toBe('evt-1');
+  });
+
   it('通过已有 diagnostics 接口读取 Reflection 诊断', async () => {
     mockedApiClient.get.mockResolvedValueOnce({
       data: {

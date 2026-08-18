@@ -1,7 +1,7 @@
 import type { TracePayload } from '../../utils/tracePayload';
 
 export interface GanttNode {
-  id?: number | null;
+  id?: number | string | null;
   node_type: string;
   node_name: string;
   duration_ms: number | null;

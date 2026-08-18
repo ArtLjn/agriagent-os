@@ -79,6 +79,18 @@ export interface DoneEvent {
   [key: string]: unknown;
 }
 
+export interface StreamTraceContext {
+  event_id?: string;
+  trace_id: string;
+  request_id?: string;
+  turn_id: string;
+  conversation_id: string;
+  seq?: number;
+  event_type?: string;
+  phase?: string;
+  terminal?: boolean;
+}
+
 // ── Stream Chunk（Playground 消费）──
 // 对齐 v2/agent/static/index.html 的 appendEvent 覆盖的事件类型。
 export type StreamChunk =
@@ -104,7 +116,7 @@ export type StreamChunk =
   | { type: 'verification_warning'; data: { issues: string[] } }
   | { type: 'write_committed_reply_failed'; data: { code: string; message: string } }
   | { type: 'retrying'; data: { code: string; category?: string; attempt: number; delay_ms: number } }
-  | { type: 'meta'; data: { turn_id: string; conversation_id: string; request_id?: string } }
+  | { type: 'meta'; data: StreamTraceContext }
   | { type: 'done'; data: DoneEvent }
   | { type: 'error'; data: { code: string; message: string; category?: string; phase?: string; tool_name?: string; retryable?: boolean; attempt?: number; stream_started?: boolean } };
 
@@ -125,10 +137,13 @@ export async function* parseSseStream(
     for (const block of blocks) {
       const lines = block.split('\n');
       let eventType = 'message';
+      let eventId: string | undefined;
       let dataStr = '';
       for (const line of lines) {
         if (line.startsWith('event: ')) {
           eventType = line.slice(7).trim();
+        } else if (line.startsWith('id: ')) {
+          eventId = line.slice(4).trim();
         } else if (line.startsWith('data: ')) {
           dataStr += line.slice(6);
         }
@@ -136,6 +151,7 @@ export async function* parseSseStream(
       if (!dataStr) continue;
       try {
         const data = JSON.parse(dataStr);
+        if (eventId && !data.event_id) data.event_id = eventId;
         yield { type: eventType, data };
       } catch {
         // 非 JSON data，跳过
@@ -147,7 +163,7 @@ export async function* parseSseStream(
 // ── 将 SSE 事件映射为 StreamChunk ──
 // 参考 v2/agent/static/index.html 的 appendEvent 实现，覆盖所有事件类型，
 // 让 Playground 能像 index.html 一样实时展示 thought/plan/action/observation 等。
-export function mapSseToChunk(event: SseEvent): StreamChunk | null {
+function mapSsePayloadToChunk(event: SseEvent): StreamChunk | null {
   const { type, data } = event;
   switch (type) {
     case 'meta':
@@ -156,7 +172,13 @@ export function mapSseToChunk(event: SseEvent): StreamChunk | null {
         data: {
           turn_id: String(data.turn_id ?? ''),
           conversation_id: String(data.conversation_id ?? ''),
+          trace_id: String(data.trace_id ?? ''),
           request_id: data.request_id ? String(data.request_id) : undefined,
+          event_id: data.event_id ? String(data.event_id) : undefined,
+          seq: typeof data.seq === 'number' ? data.seq : undefined,
+          event_type: typeof data.event_type === 'string' ? data.event_type : type,
+          phase: typeof data.phase === 'string' ? data.phase : undefined,
+          terminal: typeof data.terminal === 'boolean' ? data.terminal : undefined,
         },
       };
     case 'final_answer_start':
@@ -326,24 +348,62 @@ export function mapSseToChunk(event: SseEvent): StreamChunk | null {
   }
 }
 
+export function mapSseToChunk(event: SseEvent): StreamChunk | null {
+  return mapSsePayloadToChunk(event);
+}
+
+function traceContextFromEvent(event: SseEvent): StreamTraceContext | null {
+  const { data } = event;
+  const traceId = typeof data.trace_id === 'string' ? data.trace_id : '';
+  const turnId = typeof data.turn_id === 'string' ? data.turn_id : '';
+  const conversationId = typeof data.conversation_id === 'string' ? data.conversation_id : '';
+  if (!traceId || !turnId || !conversationId) return null;
+  return {
+    event_id: typeof data.event_id === 'string' ? data.event_id : undefined,
+    trace_id: traceId,
+    request_id: typeof data.request_id === 'string' ? data.request_id : undefined,
+    turn_id: turnId,
+    conversation_id: conversationId,
+    seq: typeof data.seq === 'number' ? data.seq : undefined,
+    event_type: typeof data.event_type === 'string' ? data.event_type : event.type,
+    phase: typeof data.phase === 'string' ? data.phase : undefined,
+    terminal: typeof data.terminal === 'boolean' ? data.terminal : undefined,
+  };
+}
+
 // ── 聊天（SSE 流式）──
 // userToken 可选：传入则用 dev-user token 覆盖 Authorization 头（用于 admin 模拟用户）
 export async function* streamChat(
   message: string,
   conversationId?: string,
   userToken?: string | null,
+  options: { client_request_id?: string; after_seq?: number } = {},
 ): AsyncGenerator<StreamChunk> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   const token = userToken || authStore.getToken();
   if (token) headers['Authorization'] = `Bearer ${token}`;
-  const resp = await fetch('/api/agent/chat', {
+  const query = options.after_seq === undefined ? '' : `?after_seq=${options.after_seq}`;
+  const resp = await fetch(`/api/agent/chat${query}`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ message, conversation_id: conversationId }),
+    body: JSON.stringify({
+      message,
+      conversation_id: conversationId,
+      client_request_id: options.client_request_id,
+    }),
   });
   if (!resp.ok || !resp.body) throw new Error(`stream error: ${resp.status}`);
+  let traceKey = '';
   for await (const event of parseSseStream(resp.body)) {
-    const chunk = mapSseToChunk(event);
+    const trace = traceContextFromEvent(event);
+    if (trace) {
+      const nextTraceKey = `${trace.trace_id}:${trace.turn_id}`;
+      if (nextTraceKey !== traceKey) {
+        traceKey = nextTraceKey;
+        yield { type: 'meta', data: trace };
+      }
+    }
+    const chunk = mapSsePayloadToChunk(event);
     if (chunk) yield chunk;
     // done 事件 yield 后再退出，让前端能感知整轮结束并刷新 trace
     if (event.type === 'done') return;

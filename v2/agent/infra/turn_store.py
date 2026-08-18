@@ -5,16 +5,33 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import time
+import uuid
 from collections.abc import AsyncIterator
+from datetime import datetime, timezone
 from typing import Any
 
 from agent.config import settings
 from agent.core.turn import Turn
 from agent.infra.redis_store import get_client, key
+from agent.infra.trace.collector import record_event
+from agent.infra.trace.context import trace_id_for_turn
+
+logger = logging.getLogger(__name__)
 
 # timeout/cancelled 是过程结果事件，允许随后发布唯一的 done 终态事件。
 _TERMINAL_EVENTS = {"done"}
+_EVENT_STATUS_AFTER = {
+    "queued": "queued",
+    "accepted": "accepted",
+    "started": "running",
+    "approval_required": "awaiting_approval",
+    "approval_result": "running",
+    "cancelled": "cancelled",
+    "timeout": "timeout",
+    "error": "failed",
+}
 
 
 def turn_key(turn_id: str) -> str:
@@ -79,10 +96,13 @@ async def save_turn(
     lease_token: str,
     queued: bool = False,
     queue_kind: str = "",
+    trace_id: str = "",
+    client_request_id: str = "",
 ) -> None:
     client = get_client()
     if client is None:
         raise RuntimeError("redis coordination is disabled")
+    stable_trace_id = trace_id or trace_id_for_turn(turn.turn_id)
     await client.hset(
         turn_key(turn.turn_id),
         mapping={
@@ -94,6 +114,10 @@ async def save_turn(
             "token_id": turn.token_id,
             "scope": turn.scope,
             "conversation_id": turn.conversation_id,
+            "trace_id": stable_trace_id,
+            # request_id 只是兼容别名；幂等使用独立的 client_request_id，不能使用 Trace 主键。
+            "request_id": stable_trace_id,
+            "client_request_id": client_request_id,
             "memory_key": turn.memory_key or "",
             "user_input": turn.user_input,
             "scope_hash": scope_hash,
@@ -211,15 +235,82 @@ async def publish_event(turn_id: str, event: dict[str, Any]) -> int:
         claimed = await client.hsetnx(turn_key(turn_id), "terminal_event", event_type)
         if not claimed:
             return int(await client.hget(turn_key(turn_id), "last_event_seq") or 0)
+    state = await client.hgetall(turn_key(turn_id))
+    trace_id = str(
+        event.get("trace_id") or state.get("trace_id") or trace_id_for_turn(turn_id)
+    )
+    request_id = str(event.get("request_id") or state.get("request_id") or trace_id)
+    conversation_id = str(
+        event.get("conversation_id")
+        or data.get("conversation_id")
+        or state.get("conversation_id")
+        or ""
+    )
+    phase = str(event.get("phase") or data.get("phase") or state.get("phase") or "")
+    raw_step = (
+        event.get("step_index")
+        or event.get("step")
+        or data.get("step_index")
+        or data.get("step")
+        or state.get("step_index")
+        or 0
+    )
+    try:
+        step = int(raw_step)
+    except (TypeError, ValueError):
+        step = 0
+    status_before = str(
+        event.get("status_before")
+        or data.get("status_before")
+        or state.get("status")
+        or ""
+    )
+    status_after = str(
+        event.get("status_after")
+        or data.get("status_after")
+        or data.get("status")
+        or _EVENT_STATUS_AFTER.get(event_type, status_before)
+    )
+    occurred_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    event_id = str(event.get("event_id") or f"evt_{uuid.uuid4().hex}")
     seq = int(await client.incr(seq_key))
+    envelope = {
+        "seq": seq,
+        "event_id": event_id,
+        "trace_id": trace_id,
+        "request_id": request_id,
+        "turn_id": turn_id,
+        "conversation_id": conversation_id,
+        "type": event_type,
+        "event_type": event_type,
+        "data": data,
+        "occurred_at": occurred_at,
+        "phase": phase,
+        "step": step,
+        "step_index": step,
+        "terminal": terminal,
+        "status_before": status_before,
+        "status_after": status_after,
+    }
     await client.xadd(
         event_key(turn_id),
         {
             "seq": str(seq),
+            "event_id": event_id,
+            "trace_id": trace_id,
+            "request_id": request_id,
             "turn_id": turn_id,
+            "conversation_id": conversation_id,
             "type": event_type,
+            "event_type": event_type,
             "data": json.dumps(data, ensure_ascii=False),
+            "occurred_at": occurred_at,
+            "phase": phase,
+            "step": str(step),
+            "step_index": str(step),
             "terminal": "1" if terminal else "0",
+            "status_before": status_before,
+            "status_after": status_after,
         },
         maxlen=settings.redis.event_stream_maxlen,
         approximate=False,
@@ -227,6 +318,13 @@ async def publish_event(turn_id: str, event: dict[str, Any]) -> int:
     await client.expire(event_key(turn_id), settings.redis.turn_state_ttl_seconds)
     await client.expire(seq_key, settings.redis.turn_state_ttl_seconds)
     await update_turn(turn_id, last_event_seq=seq)
+    try:
+        # 收集器交接是同步且有界的；SSE 热路径不等待 Mongo 持久化。
+        record_event(envelope)
+    except Exception:  # noqa: BLE001
+        logger.debug(
+            "sse trace event handoff failed turn_id=%s", turn_id, exc_info=True
+        )
     return seq
 
 
@@ -234,18 +332,41 @@ async def read_events(turn_id: str, after_seq: int = 0) -> list[dict[str, Any]]:
     client = get_client()
     if client is None:
         return []
+    state = await client.hgetall(turn_key(turn_id))
     rows = await client.xrange(event_key(turn_id), min="-", max="+")
     events: list[dict[str, Any]] = []
-    for _, fields in rows:
+    for stream_id, fields in rows:
         seq = int(fields.get("seq", "0"))
         if seq <= after_seq:
             continue
         events.append(
             {
                 "seq": seq,
+                "event_id": fields.get(
+                    "event_id", f"evt_legacy_{str(stream_id).replace('-', '_')}"
+                ),
+                "trace_id": fields.get(
+                    "trace_id", state.get("trace_id") or trace_id_for_turn(turn_id)
+                ),
+                "request_id": fields.get(
+                    "request_id", state.get("request_id") or state.get("trace_id", "")
+                ),
+                "turn_id": fields.get("turn_id", turn_id),
+                "conversation_id": fields.get(
+                    "conversation_id", state.get("conversation_id", "")
+                ),
                 "type": fields.get("type", ""),
+                "event_type": fields.get("event_type", fields.get("type", "")),
                 "data": json.loads(fields.get("data", "{}")),
+                "occurred_at": fields.get("occurred_at", ""),
+                "phase": fields.get("phase", ""),
+                "step": int(fields.get("step", fields.get("step_index", "0")) or 0),
+                "step_index": int(
+                    fields.get("step_index", fields.get("step", "0")) or 0
+                ),
                 "terminal": fields.get("terminal") == "1",
+                "status_before": fields.get("status_before", ""),
+                "status_after": fields.get("status_after", ""),
             }
         )
     return events
@@ -294,28 +415,73 @@ async def stream_events(
                     if event["terminal"]:
                         return
                 if published_seq > next_seq:
-                    yield {
-                        "seq": published_seq,
-                        **done_event,
-                        "terminal": True,
-                    }
+                    yield _synthetic_event(
+                        turn_id,
+                        seq=published_seq,
+                        event_type="done",
+                        data=done_event["data"],
+                        state=state,
+                        event_id=f"evt_done_{turn_id}",
+                    )
                 return
-            yield {
-                "seq": max(next_seq, int(state.get("last_event_seq", "0") or 0)) + 1,
-                **done_event,
-                "terminal": True,
-            }
+            yield _synthetic_event(
+                turn_id,
+                seq=max(next_seq, int(state.get("last_event_seq", "0") or 0)) + 1,
+                event_type="done",
+                data=done_event["data"],
+                state=state,
+                event_id=f"evt_done_{turn_id}",
+            )
             return
         await asyncio.sleep(poll_interval)
-    yield {
-        "seq": next_seq,
-        "type": "stream_timeout",
-        "data": {
+    yield _synthetic_event(
+        turn_id,
+        seq=next_seq,
+        event_type="stream_timeout",
+        data={
             "code": "stream_timeout",
             "message": "事件流等待超时，Turn 仍未发布终态。",
             "turn_id": turn_id,
         },
-        "terminal": False,
+        event_id=f"evt_stream_timeout_{turn_id}_{next_seq}",
+    )
+
+
+def _synthetic_event(
+    turn_id: str,
+    *,
+    seq: int,
+    event_type: str,
+    data: dict[str, Any],
+    state: dict[str, str] | None = None,
+    event_id: str,
+) -> dict[str, Any]:
+    """为旧 Turn 状态或流等待超时生成明确的、非持久化事件 envelope。"""
+    state = state or {}
+    trace_id = state.get("trace_id") or trace_id_for_turn(turn_id)
+    occurred_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    step = int(state.get("step_index", "0") or 0)
+    return {
+        "seq": seq,
+        "event_id": event_id,
+        "trace_id": trace_id,
+        "request_id": state.get("request_id") or trace_id,
+        "turn_id": turn_id,
+        "conversation_id": state.get("conversation_id", ""),
+        "type": event_type,
+        "event_type": event_type,
+        "data": data,
+        "occurred_at": occurred_at,
+        "phase": state.get("phase", ""),
+        "step": step,
+        "step_index": step,
+        "terminal": event_type == "done",
+        "status_before": state.get("status", ""),
+        "status_after": str(
+            data.get("status")
+            if isinstance(data, dict) and data.get("status")
+            else _EVENT_STATUS_AFTER.get(event_type, state.get("status", ""))
+        ),
     }
 
 

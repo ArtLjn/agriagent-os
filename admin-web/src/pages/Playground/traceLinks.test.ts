@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildTraceMonitorUrl, selectLatestTraceRequestId } from './traceLinks';
+import { buildTraceMonitorUrl, selectLatestTraceId } from './traceLinks';
 
 describe('buildTraceMonitorUrl', () => {
-  it('有 request_id 时同时携带 request_id 和 conversation_id', () => {
+  it('有 trace_id 时携带正式 trace_id 和 conversation_id', () => {
     expect(
-      buildTraceMonitorUrl({ conversationId: 'sess-1', requestId: 'req-1' }),
-    ).toBe('/dev/traces?request_id=req-1&conversation_id=sess-1');
+      buildTraceMonitorUrl({ conversationId: 'sess-1', traceId: 'trace-1' }),
+    ).toBe('/dev/traces?trace_id=trace-1&conversation_id=sess-1');
   });
 
   it('没有 request_id 时仍按 conversation_id 跳转链路页', () => {
@@ -16,17 +16,17 @@ describe('buildTraceMonitorUrl', () => {
   });
 });
 
-describe('selectLatestTraceRequestId', () => {
-  it('返回 trace 列表中第一条有效 request_id', () => {
+describe('selectLatestTraceId', () => {
+  it('返回 trace 列表中第一条有效 trace_id', () => {
     expect(
-      selectLatestTraceRequestId([
-        { request_id: '   ' },
-        { request_id: 'req-2' },
+      selectLatestTraceId([
+        { trace_id: '   ' },
+        { trace_id: 'trace-2' },
       ]),
-    ).toBe('req-2');
+    ).toBe('trace-2');
   });
 
-  it('没有有效 request_id 时返回 null', () => {
-    expect(selectLatestTraceRequestId([{ request_id: ' ' }])).toBeNull();
+  it('没有有效 trace_id 时返回 null', () => {
+    expect(selectLatestTraceId([{ trace_id: ' ' }])).toBeNull();
   });
 });

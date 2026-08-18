@@ -36,10 +36,20 @@ import json
 from typing import Any
 
 
-def sse_event(event_type: str, data: dict[str, Any] | None = None) -> str:
+def sse_event(
+    event_type: str,
+    data: dict[str, Any] | None = None,
+    *,
+    event_id: str = "",
+) -> str:
     """Format a single SSE message: `event: TYPE\\ndata: JSON\\n\\n`."""
     payload = data or {}
-    return f"event: {event_type}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+    event_id_line = f"id: {event_id}\n" if event_id else ""
+    return (
+        f"event: {event_type}\n"
+        f"{event_id_line}"
+        f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+    )
 
 
 # Convenience constructors.

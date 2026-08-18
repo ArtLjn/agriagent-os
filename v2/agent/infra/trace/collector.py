@@ -42,6 +42,8 @@ _BATCH_SIZE = 20
 _FLUSH_INTERVAL = 5.0  # seconds
 
 _queue: deque[dict[str, Any]] = deque(maxlen=2000)
+# SSE 事件投影独立于 traceRecords；Mongo 不可用或投影重试时仍保持有界。
+_event_queue: deque[dict[str, Any]] = deque(maxlen=5000)
 _flush_task: asyncio.Task | None = None
 _running = False
 
@@ -54,6 +56,10 @@ def _summary_collection_name() -> str:
     return settings.mongodb.collections.get(
         "trace_request_summaries", "traceRequestSummaries"
     )
+
+
+def _event_collection_name() -> str:
+    return settings.mongodb.collections.get("trace_events", "traceEvents")
 
 
 def _get_collection():
@@ -79,6 +85,18 @@ def _get_summary_collection():
     if chat_coll is None:
         return None
     return chat_coll.database[_summary_collection_name()]
+
+
+def _get_event_collection():
+    """延迟初始化持久化 SSE 事件集合。"""
+    if not settings.mongodb.enabled:
+        return None
+    from agent.infra.chat_store import get_collection as _get_chat_collection
+
+    chat_coll = _get_chat_collection()
+    if chat_coll is None:
+        return None
+    return chat_coll.database[_event_collection_name()]
 
 
 def _truncate(value: Any) -> Any:
@@ -121,6 +139,7 @@ def record(
         duration_ms = int((end_time - start_time) * 1000)
 
     trace_data = {
+        "trace_id": trace.trace_id,
         "request_id": trace.request_id,
         "conversation_id": trace.conversation_id,
         "turn_id": trace.turn_id,
@@ -142,28 +161,148 @@ def record(
     _queue.append(trace_data)
 
 
+def record_event(event: dict[str, Any]) -> dict[str, Any]:
+    """接收 SSE Trace 事件，不阻断事件发布且不伪造已落库状态。
+
+    当前只把标准化事件放入有限内存缓冲；函数返回时尚未执行 Mongo 写入，
+    所以返回值明确标记 ``persisted=False``。调用方不得据此宣称事件已持久化。
+    """
+    trace = get_trace()
+    trace_id = str(event.get("trace_id") or (trace.trace_id if trace else ""))
+    event_id = str(event.get("event_id") or "")
+    if not trace_id or not event_id:
+        missing = "trace_id" if not trace_id else "event_id"
+        return {
+            "accepted": False,
+            "persisted": False,
+            "status": f"missing_{missing}",
+        }
+
+    record_data = {
+        "record_kind": "sse_event",
+        "trace_id": trace_id,
+        "request_id": str(
+            event.get("request_id") or (trace.request_id if trace else trace_id)
+        ),
+        "user_id": str(event.get("user_id") or (trace.user_id if trace else "")),
+        "farm_uid": str(event.get("farm_uid") or (trace.farm_uid if trace else "")),
+        "conversation_id": str(
+            event.get("conversation_id") or (trace.conversation_id if trace else "")
+        ),
+        "turn_id": str(event.get("turn_id") or (trace.turn_id if trace else "")),
+        "event_id": event_id,
+        "event_type": str(event.get("type") or ""),
+        "seq": int(event.get("seq") or 0),
+        "phase": str(event.get("phase") or ""),
+        "step_index": int(event.get("step_index") or event.get("step") or 0),
+        "terminal": bool(event.get("terminal")),
+        "status_before": str(event.get("status_before") or ""),
+        "status_after": str(event.get("status_after") or ""),
+        "occurred_at": event.get("occurred_at"),
+        "data": _truncate(event.get("data") or {}),
+        "created_at": datetime.now(),
+    }
+    queue_was_full = (
+        _event_queue.maxlen is not None and len(_event_queue) >= _event_queue.maxlen
+    )
+    _event_queue.append(record_data)
+    if queue_was_full:
+        logger.warning(
+            "trace event queue full; oldest event evicted: trace_id=%s event_id=%s",
+            trace_id,
+            event_id,
+        )
+        return {
+            "accepted": True,
+            "persisted": False,
+            "status": "queued_with_eviction",
+            "storage": "traceEvents",
+            "dropped": True,
+        }
+    return {
+        "accepted": True,
+        "persisted": False,
+        "status": "not_yet_persisted",
+        "storage": "traceEvents",
+    }
+
+
 async def flush_now() -> int:
-    """立即将队列中的 trace 写入 MongoDB，并刷新预计算摘要。"""
-    if not _queue:
-        return 0
-    coll = _get_collection()
-    if coll is None:
-        _queue.clear()
-        return 0
+    """立即刷新 trace 节点和 SSE 事件，不阻断主链路。"""
+    count = 0
+    if _queue:
+        coll = _get_collection()
+        if coll is None:
+            _queue.clear()
+        else:
+            items = list(_queue)
+            _queue.clear()
+            try:
+                result = await coll.insert_many(items, ordered=False)
+                count += len(result.inserted_ids)
+                logger.debug(
+                    "trace records flushed: count=%d", len(result.inserted_ids)
+                )
+                await _refresh_summaries(items)
+            except Exception:
+                logger.exception("trace records flush failed (non-fatal)")
 
-    items = list(_queue)
-    _queue.clear()
+    count += await _flush_events()
+    return count
+
+
+async def _flush_events() -> int:
+    """幂等投影 SSE 事件；失败事件留在有界队列中等待下一次 flush。"""
+    if not _event_queue:
+        return 0
     try:
-        result = await coll.insert_many(items, ordered=False)
-        count = len(result.inserted_ids)
-        logger.debug("trace flushed: %d records", count)
-
-        # Refresh pre-computed summaries for affected request_ids
-        await _refresh_summaries(items)
-        return count
-    except Exception as exc:
-        logger.warning("trace flush failed (non-fatal): %s", exc)
+        coll = _get_event_collection()
+    except Exception:
+        logger.exception("trace event collection unavailable (non-fatal)")
         return 0
+    if coll is None:
+        return 0
+
+    items = list(_event_queue)
+    _event_queue.clear()
+    failed: list[dict[str, Any]] = []
+    count = 0
+    for item in items:
+        trace_id = str(item.get("trace_id") or "")
+        event_id = str(item.get("event_id") or "")
+        if not trace_id or not event_id:
+            failed.append(item)
+            logger.error(
+                "trace event projection skipped: missing identity trace_id=%s event_id=%s",
+                trace_id,
+                event_id,
+            )
+            continue
+        try:
+            result = await coll.update_one(
+                {"trace_id": trace_id, "event_id": event_id},
+                {"$set": item},
+                upsert=True,
+            )
+            if getattr(result, "acknowledged", True) is False:
+                raise RuntimeError("mongo_write_not_acknowledged")
+            count += 1
+        except Exception:
+            failed.append(item)
+            logger.exception(
+                "trace event projection failed (non-fatal): trace_id=%s event_id=%s seq=%s",
+                trace_id,
+                event_id,
+                item.get("seq"),
+            )
+
+    # Mongo 等待期间新入队的事件要保留在失败事件之后。
+    pending = failed + list(_event_queue)
+    _event_queue.clear()
+    _event_queue.extend(pending)
+    if count:
+        logger.debug("trace events flushed: count=%d", count)
+    return count
 
 
 async def _refresh_summaries(new_items: list[dict[str, Any]]) -> None:
@@ -210,7 +349,7 @@ async def _flush_loop() -> None:
     while _running:
         try:
             await asyncio.sleep(_FLUSH_INTERVAL)
-            if _queue:
+            if _queue or _event_queue:
                 await flush_now()
         except asyncio.CancelledError:
             break
@@ -222,14 +361,67 @@ async def _flush_loop() -> None:
 async def start_trace_system() -> None:
     """启动 trace 后台 flush worker。"""
     global _flush_task, _running
-    coll = _get_collection()
-    if coll is not None:
+    index_specs = [
+        (
+            _get_collection(),
+            _collection_name(),
+            [("request_id", 1), ("step_index", 1)],
+            {},
+        ),
+        (
+            _get_collection(),
+            _collection_name(),
+            [("trace_id", 1), ("step_index", 1)],
+            {},
+        ),
+        (
+            _get_summary_collection(),
+            _summary_collection_name(),
+            [("conversation_id", 1), ("created_at", -1)],
+            {},
+        ),
+        (
+            _get_summary_collection(),
+            _summary_collection_name(),
+            [("turn_id", 1)],
+            {},
+        ),
+        (
+            _get_event_collection(),
+            _event_collection_name(),
+            [("trace_id", 1), ("event_id", 1)],
+            {"unique": True},
+        ),
+        (
+            _get_event_collection(),
+            _event_collection_name(),
+            [("trace_id", 1), ("seq", 1)],
+            {"unique": True},
+        ),
+        (
+            _get_event_collection(),
+            _event_collection_name(),
+            [("turn_id", 1), ("occurred_at", 1)],
+            {},
+        ),
+    ]
+    seen: set[tuple[str, tuple[tuple[str, int], ...]]] = set()
+    for coll, collection_name, keys, options in index_specs:
+        if coll is None:
+            continue
+        identity = (collection_name, tuple(keys))
+        if identity in seen:
+            continue
+        seen.add(identity)
         try:
-            await coll.database[_collection_name()].create_index(
-                [("request_id", 1), ("step_index", 1)], background=True
-            )
+            await coll.create_index(keys, background=True, **options)
         except Exception:
-            pass
+            logger.exception(
+                "trace index initialization failed: collection=%s keys=%s options=%s",
+                collection_name,
+                keys,
+                options,
+            )
     _running = True
     _flush_task = asyncio.create_task(_flush_loop())
     logger.info(
@@ -247,9 +439,14 @@ async def stop_trace_system() -> None:
             await _flush_task
         except asyncio.CancelledError:
             pass
-    if _queue:
+    if _queue or _event_queue:
         await flush_now()
-    logger.info("trace system stopped, remaining data flushed")
+    logger.info(
+        "trace system stopped, flush attempted: trace_records_pending=%d "
+        "trace_events_pending=%d",
+        len(_queue),
+        len(_event_queue),
+    )
 
 
 def trace_llm_call(
@@ -260,11 +457,11 @@ def trace_llm_call(
     token_usage: dict | None = None,
     error: str | None = None,
 ) -> None:
-    """便捷方法：记录 LLM 调用。"""
+    """记录完整的模型输入和输出，供 Trace Drawer 复盘单次模型调用。"""
     record(
         node_type="llm_call",
         node_name=model,
-        input_data={"message_count": len(messages)},
+        input_data={"message_count": len(messages), "messages": messages},
         output_data=response,
         duration_ms=duration_ms,
         token_usage=token_usage,

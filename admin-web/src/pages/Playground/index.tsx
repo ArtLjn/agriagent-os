@@ -13,6 +13,7 @@ import {
   type DevUser,
   type PendingAction,
   type PendingPlan,
+  type StreamTraceContext,
 } from '../../api/agent';
 import { MarkdownContent } from '../../components/MarkdownContent';
 import { palette } from '../../styles/theme';
@@ -25,7 +26,7 @@ import {
   hasAutomaticCompression,
 } from './traceMetrics';
 import { copyAsyncText } from './clipboard';
-import { buildTraceMonitorUrl, selectLatestTraceRequestId } from './traceLinks';
+import { buildTraceMonitorUrl, selectLatestTraceId } from './traceLinks';
 import { LlmContextInspector, LlmContextTriggerButton } from './LlmContextInspector';
 import { QuickPrompts } from './QuickPrompts';
 import { ExecutionTimeline } from './ExecutionTimeline';
@@ -57,6 +58,7 @@ interface ChatSessionState {
   messages: Message[];
   loading: boolean;
   traceLoading: boolean;
+  trace?: StreamTraceContext | null;
   timeline: TraceTimeline | null;
   llmContextTimeline: TraceTimeline | null;
 }
@@ -78,6 +80,7 @@ function emptySessionState(): ChatSessionState {
     messages: [],
     loading: false,
     traceLoading: false,
+    trace: null,
     timeline: null,
     llmContextTimeline: null,
   };
@@ -263,12 +266,16 @@ function ChatBubble({
 }
 
 /* ── Trace 查询 ── */
-async function fetchSessionTimeline(convId: string): Promise<TraceTimeline | null> {
+async function fetchSessionTimeline(
+  convId: string,
+  traceId?: string | null,
+): Promise<TraceTimeline | null> {
   try {
+    if (traceId) return await getTimeline(traceId, { include_payload: true });
     const listRes = await listTraces({ conversation_id: convId, limit: 1 });
     if (!listRes.items || listRes.items.length === 0) return null;
-    const requestId = listRes.items[0].request_id;
-    return await getTimeline(requestId);
+    const latestTraceId = listRes.items[0].trace_id ?? listRes.items[0].request_id;
+    return await getTimeline(latestTraceId, { include_payload: true });
   } catch {
     return null;
   }
@@ -282,10 +289,10 @@ async function fetchSessionLlmContextTimeline(
   try {
     const listRes = await listTraces({ conversation_id: convId, limit: 12 });
     for (const item of listRes.items ?? []) {
-      if (!item.request_id) continue;
-      const candidate = item.request_id === latestTimeline?.request_id
+      if (!item.trace_id) continue;
+      const candidate = item.trace_id === latestTimeline?.trace_id
         ? latestTimeline
-        : await getTimeline(item.request_id);
+        : await getTimeline(item.trace_id, { include_payload: true });
       if (extractLatestLlmContextSnapshot(candidate)) return candidate;
     }
   } catch {
@@ -317,8 +324,8 @@ export default function Playground() {
   const compressed = hasAutomaticCompression(traceMetrics);
   const conversationRows = buildConversationRows(sessions, conversations);
   const timelineNodeCount = timeline?.rounds.reduce((sum, round) => sum + round.nodes.length, 0) ?? 0;
-  const currentRequestId = timeline?.request_id;
-  const llmContextRequestId = llmContextTimeline?.request_id;
+  const currentRequestId = timeline?.trace_id;
+  const llmContextRequestId = llmContextTimeline?.trace_id;
   // dev user token：模拟用户时注入到 streamChat 的 Authorization 头
   const activeUserToken = selectedDevUser?.token ?? null;
 
@@ -394,6 +401,7 @@ export default function Playground() {
       updateSession(sid, (state) => ({
         ...state,
         loading: false,
+        trace: null,
         messages: resolved,
         timeline: null,
         llmContextTimeline: null,
@@ -432,7 +440,7 @@ export default function Playground() {
     } catch {
       // 历史消息读取失败时，使用当前本地状态继续导出。
     }
-    const timeline = state.timeline ?? await fetchSessionTimeline(sid);
+    const timeline = state.timeline ?? await fetchSessionTimeline(sid, state.trace?.trace_id);
     const debugExport = buildSessionDebugExport({
       sessionId: sid,
       simulateUserId: selectedDevUser?.user_id ?? null,
@@ -475,23 +483,23 @@ export default function Playground() {
 
   const openTraceMonitor = useCallback(async (sid: string) => {
     const state = sessions[sid];
-    const requestIdFromTimeline = state?.timeline?.request_id;
-    if (requestIdFromTimeline) {
-      window.open(buildTraceMonitorUrl({ conversationId: sid, requestId: requestIdFromTimeline }), '_blank');
+    const traceId = state?.timeline?.trace_id ?? state?.trace?.trace_id;
+    if (traceId) {
+      window.open(buildTraceMonitorUrl({ conversationId: sid, traceId }), '_blank');
       return;
     }
     try {
       const listRes = await listTraces({ conversation_id: sid, limit: 1 });
-      const requestId = selectLatestTraceRequestId(listRes.items);
-      window.open(buildTraceMonitorUrl({ conversationId: sid, requestId }), '_blank');
+      const latestTraceId = selectLatestTraceId(listRes.items);
+      window.open(buildTraceMonitorUrl({ conversationId: sid, traceId: latestTraceId }), '_blank');
     } catch {
       window.open(buildTraceMonitorUrl({ conversationId: sid }), '_blank');
     }
   }, [sessions]);
 
-  const refreshSessionTimeline = useCallback(async (sid: string) => {
+  const refreshSessionTimeline = useCallback(async (sid: string, traceId?: string | null) => {
     updateSession(sid, (state) => ({ ...state, traceLoading: true }));
-    const latestTimeline = await fetchSessionTimeline(sid);
+    const latestTimeline = await fetchSessionTimeline(sid, traceId);
     const latestLlmContextTimeline = await fetchSessionLlmContextTimeline(sid, latestTimeline);
     updateSession(sid, (state) => ({
       ...state,
@@ -536,13 +544,22 @@ export default function Playground() {
       messages: [...state.messages, userMessage, assistantMessage],
       loading: true,
       traceLoading: false,
+      trace: null,
       timeline: null,
       llmContextTimeline: null,
     }));
     scrollToBottom();
 
     try {
-      for await (const chunk of streamChat(userMsg, targetSessionId, activeUserToken)) {
+      const clientRequestId = `${targetSessionId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      let streamedTrace: StreamTraceContext | null = null;
+      for await (const chunk of streamChat(userMsg, targetSessionId, activeUserToken, {
+        client_request_id: clientRequestId,
+      })) {
+        if (chunk.type === 'meta') {
+          streamedTrace = chunk.data;
+          updateSession(targetSessionId, (state) => ({ ...state, trace: chunk.data }));
+        }
         const executionEvent = executionEventFromChunk(chunk);
         if (executionEvent) {
           updateSession(targetSessionId, (state) => ({
@@ -595,7 +612,7 @@ export default function Playground() {
         }
       }
 
-      await refreshSessionTimeline(targetSessionId);
+      await refreshSessionTimeline(targetSessionId, streamedTrace?.trace_id);
 
       await loadConversations();
       return true;
@@ -1059,7 +1076,7 @@ export default function Playground() {
               size="small"
               type="link"
               onClick={() => {
-                window.open(buildTraceMonitorUrl({ conversationId: sessionId, requestId: timeline?.request_id }), '_blank');
+                window.open(buildTraceMonitorUrl({ conversationId: sessionId, traceId: timeline?.trace_id }), '_blank');
               }}
               style={{ color: ACCENT, padding: 0, flexShrink: 0 }}
             >

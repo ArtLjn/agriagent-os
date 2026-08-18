@@ -5,8 +5,11 @@ Provides:
 - get_trace_nodes: get all trace nodes for a request_id, ordered by step_index + created_at
 - get_trace_summary: get pre-computed or build-on-demand request summary
 """
+
 from __future__ import annotations
 
+import asyncio
+import inspect
 import logging
 from collections import OrderedDict
 from datetime import datetime
@@ -51,8 +54,113 @@ def _get_summary_collection():
     return chat_coll.database[_summary_collection_name()]
 
 
+def _events_collection_name() -> str:
+    return settings.mongodb.collections.get("trace_events", "traceEvents")
+
+
+def _get_events_collection():
+    """延迟初始化可选的 SSE Trace 事件集合。"""
+    if not settings.mongodb.enabled:
+        return None
+    from agent.infra.chat_store import get_collection as _get_chat_collection
+
+    chat_coll = _get_chat_collection()
+    if chat_coll is None:
+        return None
+    return chat_coll.database[_events_collection_name()]
+
+
+async def _resolve_collection(
+    getter, collection_name: str
+) -> tuple[Any, str, str | None]:
+    """解析 Mongo 集合，并保留集合不可用的具体原因。"""
+    if not settings.mongodb.enabled:
+        return None, "not_configured", "mongo_not_configured"
+    if not settings.mongodb.uri or not settings.mongodb.database:
+        return None, "not_configured", "mongo_config_missing"
+    try:
+        collection = getter()
+    except Exception:
+        logger.exception("trace collection initialization failed: %s", collection_name)
+        return None, "unavailable", "mongo_unavailable"
+    if collection is None:
+        return None, "unavailable", "mongo_unavailable"
+
+    # Motor 延迟创建集合句柄；查询集合名才能区分“集合不存在”和“集合为空”。
+    database = getattr(collection, "database", None)
+    list_names = getattr(database, "list_collection_names", None)
+    if callable(list_names):
+        try:
+            names = list_names()
+            if inspect.isawaitable(names):
+                names = await names
+            if collection_name not in names:
+                return None, "missing", "mongo_collection_missing"
+        except Exception:
+            logger.exception(
+                "trace collection availability check failed: %s", collection_name
+            )
+            return None, "unavailable", "mongo_unavailable"
+    return collection, "available", None
+
+
+def _trace_selector(trace_id: str, user_id: str, farm_uid: str) -> dict[str, Any]:
+    """迁移期间同时匹配正式 trace_id 和旧 request_id 字段。"""
+    return {
+        "user_id": user_id,
+        "farm_uid": farm_uid,
+        "$or": [
+            {"trace_id": trace_id},
+            {"request_id": trace_id},
+            {"_id": trace_id},
+        ],
+    }
+
+
+def _evidence(source: str, status: str, code: str | None = None) -> dict[str, Any]:
+    result: dict[str, Any] = {"source": source, "status": status}
+    if code:
+        result["code"] = code
+    return result
+
+
+def _empty_query_result(
+    *,
+    trace_id: str | None = None,
+    source: str,
+    source_status: str,
+    code: str | None,
+) -> dict[str, Any]:
+    evidence_status = source_status
+    if source == "traceEvents" and source_status in {"missing", "not_configured"}:
+        evidence_status = "not_available"
+    result: dict[str, Any] = {
+        "evidence_status": evidence_status,
+        "evidence": _evidence(source, source_status, code),
+    }
+    if trace_id is not None:
+        result.update({"trace_id": trace_id, "request_id": trace_id})
+    return result
+
+
+def _merge_evidence_status(statuses: list[str]) -> str:
+    if any(status == "unavailable" for status in statuses):
+        return "unavailable"
+    if any(
+        status in {"missing", "not_configured", "not_available"} for status in statuses
+    ):
+        return "partial"
+    normalized = ["available" if status == "ok" else status for status in statuses]
+    if any(status == "available" for status in normalized):
+        return (
+            "ok" if all(status == "available" for status in normalized) else "partial"
+        )
+    return "empty"
+
+
 async def list_traces(
     conversation_id: str | None = None,
+    turn_id: str | None = None,
     limit: int = 20,
     cursor: str | None = None,
     *,
@@ -74,32 +182,57 @@ async def list_traces(
             "has_more": bool
         }
     """
-    coll = _get_trace_collection()
-    if coll is None:
-        return {"items": [], "next_cursor": None, "has_more": False}
-
-    summary_coll = _get_summary_collection()
+    summary_coll, summary_status, summary_code = await _resolve_collection(
+        _get_summary_collection, _summary_collection_name()
+    )
+    coll, coll_status, coll_code = await _resolve_collection(
+        _get_trace_collection, _trace_collection_name()
+    )
 
     # ── Try pre-computed summaries first ──────────────────────────────
     if summary_coll is not None:
         try:
             result = await _list_from_summary_collection(
-                summary_coll, conversation_id, limit, cursor, user_id, farm_uid
+                summary_coll, conversation_id, turn_id, limit, cursor, user_id, farm_uid
             )
             if result["items"]:
+                result["evidence_status"] = "ok"
+                result["evidence"] = _evidence("traceRequestSummaries", "available")
                 return result
         except Exception as exc:
-            logger.warning("trace summary collection read failed, fallback to aggregation: %s", exc)
+            logger.warning(
+                "trace summary collection read failed, fallback to aggregation: %s", exc
+            )
 
     # ── Fallback: on-demand aggregation from raw records ───────────────
-    return await _list_from_raw_records(
-        coll, conversation_id, limit, cursor, user_id, farm_uid
-    )
+    if coll is not None:
+        return await _list_from_raw_records(
+            coll, conversation_id, turn_id, limit, cursor, user_id, farm_uid
+        )
+
+    # 迁移期间可能只有 Summary 可用，不能把它误报为 traceRecords 故障。
+    result = {"items": [], "next_cursor": None, "has_more": False}
+    if summary_status not in {"missing", "empty"}:
+        result.update(
+            _empty_query_result(
+                source="traceRequestSummaries",
+                source_status=summary_status,
+                code=summary_code,
+            )
+        )
+    else:
+        result.update(
+            _empty_query_result(
+                source="traceRecords", source_status=coll_status, code=coll_code
+            )
+        )
+    return result
 
 
 async def _list_from_summary_collection(
     summary_coll,
     conversation_id: str | None,
+    turn_id: str | None,
     limit: int,
     cursor: str | None,
     user_id: str,
@@ -112,19 +245,17 @@ async def _list_from_summary_collection(
     }
     if conversation_id:
         filter_doc["conversation_id"] = conversation_id
+    if turn_id:
+        filter_doc["turn_id"] = turn_id
     if cursor:
         filter_doc["_id"] = {"$lt": cursor}
 
-    cursor_obj = (
-        summary_coll.find(filter_doc)
-        .sort("_id", -1)
-        .limit(limit + 1)
-    )
+    cursor_obj = summary_coll.find(filter_doc).sort("_id", -1).limit(limit + 1)
     docs = await cursor_obj.to_list(length=limit + 1)
 
     has_more = len(docs) > limit
     items = [_summary_doc_to_api(doc) for doc in docs[:limit]]
-    next_cursor = docs[limit]["_id"] if has_more and len(docs) > limit else None
+    next_cursor = docs[limit - 1]["_id"] if has_more else None
 
     return {"items": items, "next_cursor": next_cursor, "has_more": has_more}
 
@@ -132,6 +263,7 @@ async def _list_from_summary_collection(
 async def _list_from_raw_records(
     coll,
     conversation_id: str | None,
+    turn_id: str | None,
     limit: int,
     cursor: str | None,
     user_id: str,
@@ -144,13 +276,15 @@ async def _list_from_raw_records(
     }
     if conversation_id:
         filter_doc["conversation_id"] = conversation_id
+    if turn_id:
+        filter_doc["turn_id"] = turn_id
 
     # Get distinct request_ids with their latest timestamp
     pipeline: list[dict[str, Any]] = [
         {"$match": filter_doc},
         {
             "$group": {
-                "_id": "$request_id",
+                "_id": {"$ifNull": ["$trace_id", "$request_id"]},
                 "conversation_id": {"$first": "$conversation_id"},
                 "turn_id": {"$first": "$turn_id"},
                 "latest_time": {"$max": "$created_at"},
@@ -184,7 +318,13 @@ async def _list_from_raw_records(
         results = await coll.aggregate(pipeline).to_list(length=limit + 1)
     except Exception as exc:
         logger.warning("trace aggregation failed: %s", exc)
-        return {"items": [], "next_cursor": None, "has_more": False}
+        return {
+            "items": [],
+            "next_cursor": None,
+            "has_more": False,
+            "evidence_status": "unavailable",
+            "evidence": _evidence("traceRecords", "unavailable", "mongo_query_failed"),
+        }
 
     has_more = len(results) > limit
     results = results[:limit]
@@ -192,21 +332,25 @@ async def _list_from_raw_records(
     items = []
     for r in results:
         request_id = r["_id"]
-        nodes = await coll.find(
-            {"request_id": request_id, "user_id": user_id, "farm_uid": farm_uid}
-        ).to_list(length=500)
+        nodes = await coll.find(_trace_selector(request_id, user_id, farm_uid)).to_list(
+            length=500
+        )
         summary = _build_summary_from_nodes(nodes, request_id)
         if summary:
             items.append(summary)
 
     next_cursor = items[-1]["request_id"] if has_more and items else None
-    return {"items": items, "next_cursor": next_cursor, "has_more": has_more}
+    result = {"items": items, "next_cursor": next_cursor, "has_more": has_more}
+    result["evidence_status"] = "ok" if items else "empty"
+    result["evidence"] = _evidence("traceRecords", "available")
+    return result
 
 
 async def get_trace_nodes(
     request_id: str,
     limit: int = 200,
     *,
+    include_payload: bool = False,
     user_id: str,
     farm_uid: str,
 ) -> dict[str, Any]:
@@ -222,36 +366,201 @@ async def get_trace_nodes(
             "has_more": bool
         }
     """
-    coll = _get_trace_collection()
-    if coll is None:
-        return {"request_id": request_id, "nodes": [], "count": 0, "has_more": False}
-
-    cursor = (
-        coll.find(
-            {
-                "request_id": request_id,
-                "user_id": user_id,
-                "farm_uid": farm_uid,
-            }
-        )
-        .sort([("step_index", 1), ("created_at", 1)])
-        .limit(limit + 1)
+    coll, coll_status, coll_code = await _resolve_collection(
+        _get_trace_collection, _trace_collection_name()
     )
-    docs = await cursor.to_list(length=limit + 1)
+    if coll is None:
+        result = {"request_id": request_id, "nodes": [], "count": 0, "has_more": False}
+        result.update(
+            _empty_query_result(
+                trace_id=request_id,
+                source="traceRecords",
+                source_status=coll_status,
+                code=coll_code,
+            )
+        )
+        return result
+
+    try:
+        cursor = (
+            coll.find(_trace_selector(request_id, user_id, farm_uid))
+            .sort([("step_index", 1), ("created_at", 1)])
+            .limit(limit + 1)
+        )
+        docs = await cursor.to_list(length=limit + 1)
+    except Exception:
+        logger.exception("trace node query failed: trace_id=%s", request_id)
+        return {
+            "request_id": request_id,
+            "trace_id": request_id,
+            "nodes": [],
+            "count": 0,
+            "has_more": False,
+            "evidence_status": "unavailable",
+            "evidence": _evidence("traceRecords", "unavailable", "mongo_query_failed"),
+        }
     has_more = len(docs) > limit
     docs = docs[:limit]
 
     if not docs:
-        return {"request_id": request_id, "nodes": [], "count": 0, "has_more": False}
+        result = {
+            "request_id": request_id,
+            "trace_id": request_id,
+            "nodes": [],
+            "count": 0,
+            "has_more": False,
+        }
+        result.update(
+            _empty_query_result(
+                trace_id=request_id,
+                source="traceRecords",
+                source_status="empty",
+                code=None,
+            )
+        )
+        return result
 
-    nodes = [_node_doc_to_api(doc) for doc in docs]
+    nodes = [_node_doc_to_api(doc, include_payload=include_payload) for doc in docs]
     return {
         "request_id": request_id,
+        "trace_id": docs[0].get("trace_id", request_id),
         "conversation_id": docs[0].get("conversation_id", ""),
         "turn_id": docs[0].get("turn_id", ""),
         "nodes": nodes,
         "count": len(nodes),
         "has_more": has_more,
+        "evidence_status": "ok",
+        "evidence": _evidence("traceRecords", "available"),
+    }
+
+
+async def get_trace_events(
+    trace_id: str,
+    *,
+    after_seq: int | None = None,
+    limit: int = 200,
+    include_payload: bool = False,
+    user_id: str,
+    farm_uid: str,
+) -> dict[str, Any]:
+    """读取一轮 Trace 的可选持久化 SSE 事件账本。"""
+    coll, coll_status, coll_code = await _resolve_collection(
+        _get_events_collection, _events_collection_name()
+    )
+    if coll is None:
+        result = {"events": [], "count": 0, "has_more": False}
+        result.update(
+            _empty_query_result(
+                trace_id=trace_id,
+                source="traceEvents",
+                source_status=coll_status,
+                code=coll_code,
+            )
+        )
+        return result
+
+    filter_doc = _trace_selector(trace_id, user_id, farm_uid)
+    if after_seq is not None:
+        filter_doc["seq"] = {"$gt": after_seq}
+    try:
+        cursor = (
+            coll.find(filter_doc)
+            .sort([("seq", 1), ("occurred_at", 1)])
+            .limit(limit + 1)
+        )
+        docs = await cursor.to_list(length=limit + 1)
+    except Exception:
+        logger.exception("trace event query failed: trace_id=%s", trace_id)
+        return {
+            "trace_id": trace_id,
+            "events": [],
+            "count": 0,
+            "has_more": False,
+            "evidence_status": "unavailable",
+            "evidence": _evidence("traceEvents", "unavailable", "mongo_query_failed"),
+        }
+
+    has_more = len(docs) > limit
+    docs = docs[:limit]
+    if not docs:
+        result = {"trace_id": trace_id, "events": [], "count": 0, "has_more": False}
+        result.update(
+            _empty_query_result(
+                trace_id=trace_id,
+                source="traceEvents",
+                source_status="empty",
+                code=None,
+            )
+        )
+        return result
+
+    events = [_event_doc_to_api(doc, include_payload=include_payload) for doc in docs]
+    first = docs[0]
+    return {
+        "trace_id": first.get("trace_id", trace_id),
+        "request_id": first.get("request_id", first.get("trace_id", trace_id)),
+        "conversation_id": first.get("conversation_id", ""),
+        "turn_id": first.get("turn_id", ""),
+        "events": events,
+        "count": len(events),
+        "has_more": has_more,
+        "evidence_status": "ok",
+        "evidence": _evidence("traceEvents", "available"),
+    }
+
+
+async def get_trace_timeline(
+    trace_id: str,
+    *,
+    limit: int = 400,
+    include_payload: bool = False,
+    user_id: str,
+    farm_uid: str,
+) -> dict[str, Any]:
+    """将 Trace 节点和持久化 SSE 事件合并为时间线。"""
+    nodes_result, events_result = await asyncio.gather(
+        get_trace_nodes(
+            trace_id,
+            limit=limit + 1,
+            include_payload=include_payload,
+            user_id=user_id,
+            farm_uid=farm_uid,
+        ),
+        get_trace_events(
+            trace_id,
+            limit=limit + 1,
+            include_payload=include_payload,
+            user_id=user_id,
+            farm_uid=farm_uid,
+        ),
+    )
+    records = [*nodes_result.get("nodes", []), *events_result.get("events", [])]
+    records.sort(key=_timeline_sort_key)
+    has_more = (
+        len(records) > limit
+        or bool(nodes_result.get("has_more"))
+        or bool(events_result.get("has_more"))
+    )
+    records = records[:limit]
+    statuses = [
+        str(nodes_result.get("evidence_status", "empty")),
+        str(events_result.get("evidence_status", "empty")),
+    ]
+    evidence_status = _merge_evidence_status(statuses)
+    return {
+        "trace_id": trace_id,
+        "request_id": trace_id,
+        "conversation_id": nodes_result.get("conversation_id")
+        or events_result.get("conversation_id", ""),
+        "turn_id": nodes_result.get("turn_id") or events_result.get("turn_id", ""),
+        "items": records,
+        "count": len(records),
+        "has_more": has_more,
+        "evidence_status": evidence_status,
+        "evidence": {
+            "nodes": nodes_result.get("evidence"),
+            "events": events_result.get("evidence"),
+        },
     }
 
 
@@ -270,7 +579,15 @@ async def get_trace_summary(
     if summary_coll is not None:
         try:
             doc = await summary_coll.find_one(
-                {"_id": request_id, "user_id": user_id, "farm_uid": farm_uid}
+                {
+                    "user_id": user_id,
+                    "farm_uid": farm_uid,
+                    "$or": [
+                        {"_id": request_id},
+                        {"request_id": request_id},
+                        {"trace_id": request_id},
+                    ],
+                }
             )
             if doc:
                 return _summary_doc_to_full_api(doc)
@@ -282,9 +599,9 @@ async def get_trace_summary(
     if coll is None:
         return None
 
-    nodes = await coll.find(
-        {"request_id": request_id, "user_id": user_id, "farm_uid": farm_uid}
-    ).to_list(length=500)
+    nodes = await coll.find(_trace_selector(request_id, user_id, farm_uid)).to_list(
+        length=500
+    )
     if not nodes:
         return None
 
@@ -323,6 +640,7 @@ def _build_summary_from_nodes(
 
     return {
         "request_id": request_id,
+        "trace_id": first.get("trace_id", request_id),
         "conversation_id": first.get("conversation_id", ""),
         "turn_id": first.get("turn_id", ""),
         "user_id": first.get("user_id", ""),
@@ -406,9 +724,7 @@ def _build_node_breakdown(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     result = []
     for item in grouped.values():
         item["avg_duration_ms"] = (
-            round(item["duration_ms_total"] / item["count"], 1)
-            if item["count"]
-            else 0
+            round(item["duration_ms_total"] / item["count"], 1) if item["count"] else 0
         )
         result.append(item)
     return result
@@ -494,14 +810,19 @@ def _status_reason(root_error: dict[str, Any] | None, status: str) -> str | None
 # ── Doc conversion helpers ──────────────────────────────────────────
 
 
-def _node_doc_to_api(doc: dict[str, Any]) -> dict[str, Any]:
+def _node_doc_to_api(
+    doc: dict[str, Any], *, include_payload: bool = False
+) -> dict[str, Any]:
     """Convert a MongoDB trace record doc to API response format."""
-    return {
+    result = {
+        "record_kind": "node",
+        "source": "traceRecords",
+        "trace_id": doc.get("trace_id", doc.get("request_id", "")),
+        "span_id": doc.get("span_id"),
+        "parent_span_id": doc.get("parent_span_id"),
         "step_index": int(doc.get("step_index") or 0),
         "node_type": doc.get("node_type", ""),
         "node_name": doc.get("node_name", ""),
-        "input_data": doc.get("input_data"),
-        "output_data": doc.get("output_data"),
         "start_time": _format_datetime(doc.get("start_time")),
         "end_time": _format_datetime(doc.get("end_time")),
         "duration_ms": int(doc.get("duration_ms") or 0),
@@ -509,12 +830,55 @@ def _node_doc_to_api(doc: dict[str, Any]) -> dict[str, Any]:
         "status": doc.get("status", "success"),
         "error_message": doc.get("error_message"),
     }
+    if include_payload:
+        result["input_data"] = doc.get("input_data")
+        result["output_data"] = doc.get("output_data")
+    return result
+
+
+def _event_doc_to_api(doc: dict[str, Any], *, include_payload: bool) -> dict[str, Any]:
+    """转换持久化 SSE 事件文档，默认不暴露 payload。"""
+    result: dict[str, Any] = {
+        "record_kind": "event",
+        "source": "traceEvents",
+        "event_id": str(doc.get("event_id", doc.get("_id", ""))),
+        "trace_id": doc.get("trace_id", doc.get("request_id", "")),
+        "turn_id": doc.get("turn_id", ""),
+        "seq": int(doc.get("seq") or 0),
+        "event_type": doc.get("event_type", doc.get("type", "")),
+        "phase": doc.get("phase"),
+        "step_index": doc.get("step_index"),
+        "attempt": doc.get("attempt"),
+        "status_before": doc.get("status_before"),
+        "status_after": doc.get("status_after"),
+        "terminal": bool(doc.get("terminal", False)),
+        "occurred_at": _format_datetime(
+            doc.get("occurred_at") or doc.get("created_at")
+        ),
+        "payload_meta": doc.get("payload_meta"),
+    }
+    if include_payload:
+        result["data"] = doc.get("data")
+    return result
+
+
+def _timeline_sort_key(record: dict[str, Any]) -> tuple:
+    timestamp = (
+        record.get("occurred_at") or record.get("start_time") or record.get("end_time")
+    )
+    return (
+        _coerce_datetime(timestamp) or datetime.max,
+        int(record.get("seq") or 0),
+        int(record.get("step_index") or 0),
+        str(record.get("event_id") or record.get("span_id") or ""),
+    )
 
 
 def _summary_doc_to_api(doc: dict[str, Any]) -> dict[str, Any]:
     """Convert a summary doc to list-item API format."""
     return {
-        "request_id": doc.get("request_id", doc.get("_id", "")),
+        "request_id": doc.get("request_id", doc.get("trace_id", doc.get("_id", ""))),
+        "trace_id": doc.get("trace_id", doc.get("request_id", doc.get("_id", ""))),
         "conversation_id": doc.get("conversation_id", ""),
         "turn_id": doc.get("turn_id", ""),
         "user_id": doc.get("user_id", ""),
@@ -571,5 +935,7 @@ def _format_datetime(value: Any) -> str | None:
 __all__ = [
     "list_traces",
     "get_trace_nodes",
+    "get_trace_events",
+    "get_trace_timeline",
     "get_trace_summary",
 ]

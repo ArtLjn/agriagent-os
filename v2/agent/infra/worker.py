@@ -27,6 +27,7 @@ from agent.infra.trace import (
     init_trace,
     trace_turn_outcome,
 )
+from agent.infra.trace.context import trace_id_for_turn
 from agent.infra.turn_store import (
     create_approval,
     dispatch_key,
@@ -135,9 +136,12 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
     init_trace(
         conversation_id=turn.conversation_id,
         turn_id=turn.turn_id,
+        trace_id=state.get("trace_id", ""),
+        request_id=state.get("request_id", ""),
         user_id=turn.user_id,
         farm_uid=turn.farm_uid,
     )
+    trace_id = state.get("trace_id") or trace_id_for_turn(turn.turn_id)
 
     async def approval_waiter(turn_id: str) -> tuple[bool, str]:
         return await wait_approval(turn_id)
@@ -192,6 +196,8 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
                 role="assistant",
                 content=final_answer,
                 turn_id=turn.turn_id,
+                trace_id=trace_id,
+                message_kind="final_answer",
                 user_id=turn.user_id,
                 farm_id=turn.farm_id,
             )
@@ -238,6 +244,16 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
             turn.turn_id,
             {"type": "done", "data": {"status": "timeout", "turn_id": turn.turn_id}},
         )
+        await append_message(
+            conversation_id=turn.conversation_id,
+            role="assistant",
+            content=timeout_answer,
+            turn_id=turn.turn_id,
+            trace_id=trace_id,
+            message_kind="error_answer",
+            user_id=turn.user_id,
+            farm_id=turn.farm_id,
+        )
     except Exception as exc:
         logger.exception("turn worker failed turn_id=%s", turn.turn_id)
         error_info = turn.record_error(
@@ -269,6 +285,16 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
         await publish_event(
             turn.turn_id,
             {"type": "done", "data": {"status": "failed", "turn_id": turn.turn_id}},
+        )
+        await append_message(
+            conversation_id=turn.conversation_id,
+            role="assistant",
+            content=failure_answer,
+            turn_id=turn.turn_id,
+            trace_id=trace_id,
+            message_kind="error_answer",
+            user_id=turn.user_id,
+            farm_id=turn.farm_id,
         )
     finally:
         renew_stop.set()

@@ -22,6 +22,7 @@ from agent.infra.coordination import (
     scope_hash,
 )
 from agent.infra.sse import sse_event
+from agent.infra.trace.context import trace_id_for_turn
 from agent.infra.turn_store import (
     claim_idempotency,
     dispatch_turn,
@@ -68,6 +69,7 @@ async def chat(
         agent_token=identity["agent_token"],
         memory_key=scope_hash(identity["user_id"], identity["farm_id"], conv_id),
     )
+    trace_id = trace_id_for_turn(turn.turn_id)
     try:
         admission = None
         claimed, existing = await claim_idempotency(
@@ -93,6 +95,7 @@ async def chat(
             if turn_state is None:
                 raise HTTPException(404, {"code": "turn_not_found"})
             turn.turn_id = existing_turn_id
+            trace_id = turn_state.get("trace_id") or trace_id_for_turn(existing_turn_id)
             await update_turn(existing_turn_id, reconnect_count=1)
             admission = None
         else:
@@ -108,12 +111,16 @@ async def chat(
                 lease_token=admission.lease.token,
                 queued=admission.queued,
                 queue_kind=admission.queue_kind,
+                trace_id=trace_id,
+                client_request_id=request_id,
             )
             await append_message(
                 conversation_id=conv_id,
                 role="user",
                 content=req.message,
                 turn_id=turn.turn_id,
+                trace_id=trace_id,
+                message_kind="prompt",
                 user_id=identity["user_id"],
                 farm_id=identity["farm_id"],
             )
@@ -165,9 +172,28 @@ async def chat(
 
     async def event_stream():
         async for event in stream_events(turn.turn_id, after_seq=after_seq):
+            payload = {**event["data"], "seq": event["seq"]}
+            for field in (
+                "event_id",
+                "trace_id",
+                "request_id",
+                "turn_id",
+                "conversation_id",
+                "event_type",
+                "occurred_at",
+                "phase",
+                "step",
+                "step_index",
+                "terminal",
+                "status_before",
+                "status_after",
+            ):
+                if field in event:
+                    payload[field] = event[field]
             yield sse_event(
                 event["type"],
-                {**event["data"], "seq": event["seq"]},
+                payload,
+                event_id=event.get("event_id", ""),
             )
 
     return StreamingResponse(

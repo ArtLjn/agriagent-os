@@ -8,10 +8,12 @@
     role: "user" | "assistant",
     content: <str>,
     createdAt: "YYYY-MM-DD HH:MM:SS.ffffff",
-    turnId: <int>,                   # 可选，archive 旧数据用
+    turnId: <str>,                   # v2 Turn 关联
+    traceId: <str>,                  # v2 Trace 关联
+    messageKind: <str>,              # prompt | final_answer | error_answer
   }
 
-只做单条消息追加 + 简单查询；不做 trace/agent_records，那些 v2 MVP 暂不落库。
+只做单条消息追加 + 简单查询；Trace 节点和 SSE 事件由独立集合负责。
 """
 
 from __future__ import annotations
@@ -33,6 +35,7 @@ _DEFAULT_FARM_ID = 1
 
 _client: AsyncIOMotorClient | None = None
 _collection: AsyncIOMotorCollection | None = None
+_indexes_initialized = False
 
 
 def _collection_name() -> str:
@@ -63,15 +66,29 @@ def get_collection() -> AsyncIOMotorCollection | None:
         )
         db = _client[settings.mongodb.database]
         _collection = db[_collection_name()]
-        # 索引：按 conversationId 倒序查最近消息（archive 也是这样查）。
-        # 不在启动时阻塞建索引，第一次写入时 MongoDB 自动建（如已有则跳过）。
-        try:
-            _collection.create_index(
-                [("conversationId", -1), ("_id", -1)], background=True
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("create_index failed (non-fatal): %s", exc)
     return _collection
+
+
+async def ensure_indexes() -> None:
+    """异步初始化消息集合索引，避免在同步连接初始化中遗留协程。"""
+    global _indexes_initialized
+    if _indexes_initialized:
+        return
+    coll = get_collection()
+    if coll is None:
+        return
+    try:
+        await coll.create_index(
+            [("farmId", 1), ("conversationId", 1), ("createdAt", 1), ("_id", 1)],
+            name="idx_messages_conversation_created",
+        )
+        await coll.create_index(
+            [("conversationId", 1), ("turnId", 1), ("createdAt", 1)],
+            name="idx_messages_turn_created",
+        )
+        _indexes_initialized = True
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("conversation message index init failed (non-fatal): %s", exc)
 
 
 async def append_message(
@@ -80,6 +97,8 @@ async def append_message(
     role: str,
     content: str,
     turn_id: str | None = None,
+    trace_id: str | None = None,
+    message_kind: str | None = None,
     meta: dict[str, Any] | None = None,
     user_id: str | None = None,
     farm_id: int | None = None,
@@ -88,6 +107,7 @@ async def append_message(
     coll = get_collection()
     if coll is None:
         return None
+    await ensure_indexes()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
     doc: dict[str, Any] = {
         "farmId": farm_id if farm_id is not None else _DEFAULT_FARM_ID,
@@ -101,6 +121,10 @@ async def append_message(
         doc["userId"] = user_id
     if turn_id is not None:
         doc["turnId"] = turn_id
+    if trace_id is not None:
+        doc["traceId"] = trace_id
+    if message_kind is not None:
+        doc["messageKind"] = message_kind
     if meta:
         doc["meta"] = meta
     try:
@@ -122,6 +146,7 @@ async def load_recent(
     coll = get_collection()
     if coll is None:
         return []
+    await ensure_indexes()
     try:
         filter_doc: dict[str, Any] = {"conversationId": conversation_id}
         if farm_id is not None:
@@ -131,7 +156,15 @@ async def load_recent(
         cursor = (
             coll.find(
                 filter_doc,
-                projection={"_id": 0, "role": 1, "content": 1, "createdAt": 1},
+                projection={
+                    "_id": 0,
+                    "role": 1,
+                    "content": 1,
+                    "createdAt": 1,
+                    "turnId": 1,
+                    "traceId": 1,
+                    "messageKind": 1,
+                },
             )
             .sort("_id", -1)
             .limit(limit)
@@ -143,6 +176,9 @@ async def load_recent(
                 "role": d["role"],
                 "content": d["content"],
                 "createdAt": d.get("createdAt"),
+                "turn_id": d.get("turnId"),
+                "trace_id": d.get("traceId"),
+                "message_kind": d.get("messageKind"),
             }
             for d in docs
         ]
@@ -158,6 +194,7 @@ async def check_connection() -> None:
         logger.info("mongodb disabled in config; chat history will not persist")
         return
     try:
+        await ensure_indexes()
         count = await coll.count_documents({"farmId": _DEFAULT_FARM_ID})
         logger.info(
             "mongodb connection ok: %s collection=%s existing_messages=%d",
@@ -170,11 +207,12 @@ async def check_connection() -> None:
 
 
 async def close() -> None:
-    global _client, _collection
+    global _client, _collection, _indexes_initialized
     if _client is not None:
         _client.close()
     _client = None
     _collection = None
+    _indexes_initialized = False
 
 
 async def list_conversations(
@@ -277,6 +315,7 @@ async def get_conversation(
             "count": 0,
             "has_more": False,
         }
+    await ensure_indexes()
 
     filter_doc: dict[str, Any] = {
         "conversationId": conversation_id,
@@ -291,7 +330,16 @@ async def get_conversation(
         cursor = (
             coll.find(
                 filter_doc,
-                projection={"_id": 0, "role": 1, "content": 1, "createdAt": 1},
+                projection={
+                    "_id": 1,
+                    "role": 1,
+                    "content": 1,
+                    "createdAt": 1,
+                    "turnId": 1,
+                    "traceId": 1,
+                    "messageKind": 1,
+                    "meta": 1,
+                },
             )
             .sort("_id", 1)  # oldest first
             .limit(limit + 1)
@@ -305,6 +353,11 @@ async def get_conversation(
                 "role": d["role"],
                 "content": d["content"],
                 "created_at": d.get("createdAt"),
+                "message_id": str(d.get("_id")) if d.get("_id") is not None else None,
+                "turn_id": d.get("turnId"),
+                "trace_id": d.get("traceId"),
+                "message_kind": d.get("messageKind"),
+                "meta": d.get("meta") or {},
             }
             for d in docs
         ]

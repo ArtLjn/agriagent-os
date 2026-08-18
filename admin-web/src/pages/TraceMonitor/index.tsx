@@ -18,6 +18,7 @@ import type { Dayjs } from 'dayjs';
 import {
   listTraceRequests,
   getTimeline,
+  getTraceSummary,
   deleteTracesBefore,
   type TraceRequestSummary,
   type TraceTimeline,
@@ -45,8 +46,10 @@ const PANEL_BG = '#0d1117';
 
 interface TraceItem {
   request_id: string;
+  trace_id: string;
+  conversation_id: string;
   session_id: string | null;
-  farm_id: number;
+  farm_uid: string;
   node_count: number;
   total_duration_ms: number;
   created_at: string | null;
@@ -68,11 +71,13 @@ interface TraceSessionGroup {
 const toTraceItems = (records: TraceRequestSummary[]): TraceItem[] =>
   records.map((record) => ({
     request_id: record.request_id,
-    session_id: record.session_id,
-    farm_id: record.farm_id,
+    trace_id: record.trace_id ?? record.request_id,
+    conversation_id: record.conversation_id ?? record.session_id ?? '',
+    session_id: record.conversation_id || record.session_id || null,
+    farm_uid: record.farm_uid ?? String(record.farm_id ?? ''),
     node_count: record.node_count,
     total_duration_ms: record.total_duration_ms,
-    created_at: record.created_at,
+    created_at: record.started_at ?? record.created_at ?? null,
     summary: record,
     timeline: null,
     timelineLoading: true,
@@ -81,7 +86,7 @@ const toTraceItems = (records: TraceRequestSummary[]): TraceItem[] =>
 const aggregateSessionGroups = (items: TraceItem[]): TraceSessionGroup[] => {
   const groups = new Map<string, TraceItem[]>();
   items.forEach((item) => {
-    const key = item.session_id || `request:${item.request_id}`;
+    const key = item.session_id || `conversation:${item.conversation_id}`;
     const arr = groups.get(key) || [];
     arr.push(item);
     groups.set(key, arr);
@@ -195,6 +200,11 @@ function TraceRequestOverview({ item }: { item: TraceItem }) {
           <Tag color={statusTagColor(summary.status)}>{summary.status ?? 'success'}</Tag>
         </div>
         <div style={metricGridStyle}>
+          <Metric label="trace_id" value={item.trace_id} />
+          <Metric label="request_id / run_id" value={item.request_id} />
+          <Metric label="conversation_id" value={item.conversation_id} />
+          <Metric label="turn_id" value={summary.turn_id} />
+          <Metric label="farm_uid" value={item.farm_uid} />
           <Metric label="status_reason" value={summary.status_reason} />
           <Metric label="node_count" value={summary.node_count} />
           <Metric label="error_count" value={summary.error_count ?? 0} />
@@ -984,7 +994,7 @@ function NodeHeader({ node }: { node: TraceNodeDetail }) {
             </span>
           </div>
           <div style={{ color: TEXT_DIM, fontFamily: 'monospace', fontSize: 12 }}>
-            request_id: {node.request_id}
+            trace_id: {node.request_id}
           </div>
         </div>
         <div style={{ textAlign: 'right' }}>
@@ -1036,6 +1046,7 @@ function TracePayloadSummary({
   }
   if (mode === 'input') {
     if (isContextInputPayload(payload)) return <ContextInputSummary inputData={payload} />;
+    if (nodeType === 'llm_call') return <LlmInputSummary inputData={payload} />;
     return <GenericPayloadSummary title={title} payload={payload} />;
   }
   if (isContextTracePayload(payload)) return <ContextTraceSummary outputData={payload} showRaw={false} />;
@@ -1052,9 +1063,36 @@ function TracePayloadSummary({
   return <GenericPayloadSummary title={title} payload={payload} />;
 }
 
+function LlmInputSummary({ inputData }: { inputData: Record<string, unknown> }) {
+  const messages = asRecordList(inputData.messages);
+  return (
+    <section style={summaryPanelStyle}>
+      <div style={sectionTitleStyle}>模型输入</div>
+      <div style={metricGridStyle}>
+        <Metric label="message_count" value={inputData.message_count ?? messages.length} />
+      </div>
+      {messages.length > 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+          {messages.map((message, index) => (
+            <div key={`${displayValue(message.role)}-${index}`} style={sourceCardStyle}>
+              <Tag color="blue">{displayValue(message.role)}</Tag>
+              <div style={{ ...previewStyle, marginTop: 8, whiteSpace: 'pre-wrap' }}>
+                {displayValue(message.content ?? message.text ?? message)}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ ...previewStyle, marginTop: 10 }}>未记录 messages</div>
+      )}
+    </section>
+  );
+}
+
 function LlmTraceSummary({ outputData }: { outputData: Record<string, unknown> }) {
   const error = asRecord(outputData.error);
   const toolCalls = asRecordList(outputData.tool_calls);
+  const content = outputData.content ?? outputData.reply ?? outputData.text;
   return (
     <section style={summaryPanelStyle}>
       <div style={{ ...sectionTitleStyle, justifyContent: 'space-between' }}>
@@ -1071,6 +1109,11 @@ function LlmTraceSummary({ outputData }: { outputData: Record<string, unknown> }
       </div>
       {hasTracePayload(outputData.reply_preview) && (
         <div style={{ ...previewStyle, marginTop: 10 }}>{displayValue(outputData.reply_preview)}</div>
+      )}
+      {hasTracePayload(content) && (
+        <div style={{ ...previewStyle, marginTop: 10, whiteSpace: 'pre-wrap' }}>
+          {displayValue(content)}
+        </div>
       )}
       {toolCalls.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
@@ -1402,10 +1445,10 @@ function formatAuditTraceBlock(item: TraceItem, timeline: TraceTimeline): string
   const result = finalReply.reply_preview ?? finalReply.reply ?? item.summary.status_reason ?? item.summary.status;
 
   return [
-    `[审计追踪] ${displayAuditValue(item.request_id)} final_response`,
+    `[审计追踪] ${displayAuditValue(item.trace_id)} final_response`,
     `工单 ID: ${displayAuditValue(item.session_id ?? item.request_id)}`,
     `Run ID: ${displayAuditValue(item.request_id)}`,
-    `Trace ID: ${displayAuditValue(item.request_id)}`,
+    `Trace ID: ${displayAuditValue(item.trace_id)}`,
     `边界: ${boundary}`,
     `SOP: ${outputGuardNode ? 'Output Guard 已记录' : '未记录'}`,
     `工具: ${firstToolResultName(finalContext.tool_results)}`,
@@ -1723,9 +1766,9 @@ export default function TraceMonitor() {
   const initialFilters = useMemo(() => {
     const params = new URLSearchParams(location.search);
     return {
-      request_id: params.get('request_id') ?? '',
-      session_id: params.get('session_id') ?? '',
-      farm_id: params.get('farm_id') ?? '',
+      trace_id: params.get('trace_id') ?? params.get('request_id') ?? '',
+      conversation_id: params.get('conversation_id') ?? params.get('session_id') ?? '',
+      turn_id: params.get('turn_id') ?? '',
     };
   }, [location.search]);
   const [items, setItems] = useState<TraceItem[]>([]);
@@ -1739,15 +1782,16 @@ export default function TraceMonitor() {
   const [cleanupDate, setCleanupDate] = useState<Dayjs | null>(null);
   const [cleanupModalOpen, setCleanupModalOpen] = useState(false);
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+  const [pageCursors, setPageCursors] = useState<Record<number, string | null>>({});
   const sessionGroups = useMemo(() => aggregateSessionGroups(items), [items]);
   const didInitialFetch = useRef(false);
 
-  const loadTimeline = useCallback(async (requestId: string) => {
+  const loadTimeline = useCallback(async (traceId: string) => {
     try {
-      const res = await getTimeline(requestId);
+      const res = await getTimeline(traceId);
       setItems((prev) =>
         prev.map((item) =>
-          item.request_id === requestId
+          item.trace_id === traceId
             ? {
                 ...item,
                 summary: res.summary ?? item.summary,
@@ -1760,7 +1804,7 @@ export default function TraceMonitor() {
     } catch {
       setItems((prev) =>
         prev.map((item) =>
-          item.request_id === requestId
+          item.trace_id === traceId
             ? { ...item, timeline: null, timelineLoading: false }
             : item
         )
@@ -1772,23 +1816,43 @@ export default function TraceMonitor() {
     async (p = page, ps = pageSize) => {
       setLoading(true);
       try {
-        const params: Record<string, unknown> = {
-          limit: ps,
-          offset: (p - 1) * ps,
-        };
-        if (filters.request_id.trim()) params.request_id = filters.request_id.trim();
-        if (filters.session_id.trim()) params.session_id = filters.session_id.trim();
-        if (filters.farm_id.trim()) params.farm_id = Number(filters.farm_id.trim());
-
-        const res = await listTraceRequests(params);
-        const aggregated = toTraceItems(res.items);
+        const traceId = filters.trace_id.trim();
+        const conversationId = filters.conversation_id.trim();
+        const turnId = filters.turn_id.trim();
+        let aggregated: TraceItem[];
+        let hasMore = false;
+        let nextCursor: string | null = null;
+        if (traceId) {
+          let summary: TraceRequestSummary | null = null;
+          try {
+            summary = await getTraceSummary(traceId);
+          } catch {
+            // 摘要接口在旧服务或测试 mock 中不可用时，继续使用正式列表接口兜底。
+          }
+          if (!summary) {
+            const fallback = await listTraceRequests({ limit: ps, cursor: p > 1 ? pageCursors[p - 1] : null });
+            summary = fallback.items.find((item) => (item.trace_id ?? item.request_id) === traceId) ?? null;
+          }
+          aggregated = summary ? toTraceItems([summary]) : [];
+        } else {
+          const res = await listTraceRequests({
+            conversation_id: conversationId || undefined,
+            turn_id: turnId || undefined,
+            limit: ps,
+            cursor: p > 1 ? pageCursors[p - 1] : null,
+          });
+          aggregated = toTraceItems(res.items);
+          hasMore = res.has_more ?? false;
+          nextCursor = res.next_cursor ?? null;
+        }
         setItems(aggregated);
-        setTotal(res.total);
+        setPageCursors((prev) => ({ ...prev, [p + 1]: nextCursor }));
+        setTotal(traceId ? aggregated.length : hasMore ? p * ps + 1 : (p - 1) * ps + aggregated.length);
         setPage(p);
         setPageSize(ps);
-        if (filters.request_id.trim() && aggregated.some((item) => item.request_id === filters.request_id.trim())) {
-          setExpandedCards(new Set([filters.request_id.trim()]));
-          loadTimeline(filters.request_id.trim());
+        if (traceId && aggregated.some((item) => item.trace_id === traceId)) {
+          setExpandedCards(new Set([traceId]));
+          loadTimeline(traceId);
         } else {
           setExpandedCards(new Set());
         }
@@ -1798,7 +1862,7 @@ export default function TraceMonitor() {
         setLoading(false);
       }
     },
-    [filters, page, pageSize, loadTimeline]
+    [filters, page, pageSize, pageCursors, loadTimeline]
   );
 
   useEffect(() => {
@@ -1918,16 +1982,16 @@ export default function TraceMonitor() {
     }
   };
 
-  const toggleCard = (requestId: string) => {
+  const toggleCard = (traceId: string) => {
     setExpandedCards((prev) => {
       const next = new Set(prev);
-      if (next.has(requestId)) {
-        next.delete(requestId);
+      if (next.has(traceId)) {
+        next.delete(traceId);
       } else {
-        next.add(requestId);
-        const item = items.find((i) => i.request_id === requestId);
+        next.add(traceId);
+        const item = items.find((i) => i.trace_id === traceId);
         if (item && !item.timeline) {
-          loadTimeline(requestId);
+          loadTimeline(traceId);
         }
       }
       return next;
@@ -1943,24 +2007,24 @@ export default function TraceMonitor() {
       {/* 筛选区 */}
       <Space style={{ marginBottom: 16 }} wrap>
         <Input
-          placeholder="Request ID"
-          value={filters.request_id}
-          onChange={(e) => setFilters((f) => ({ ...f, request_id: e.target.value }))}
+          placeholder="Trace ID"
+          value={filters.trace_id}
+          onChange={(e) => setFilters((f) => ({ ...f, trace_id: e.target.value }))}
           style={{ width: 200, background: CARD, borderColor: BORDER, color: TEXT }}
           allowClear
         />
         <Input
-          placeholder="Session ID"
-          value={filters.session_id}
-          onChange={(e) => setFilters((f) => ({ ...f, session_id: e.target.value }))}
+          placeholder="Conversation ID"
+          value={filters.conversation_id}
+          onChange={(e) => setFilters((f) => ({ ...f, conversation_id: e.target.value }))}
           style={{ width: 200, background: CARD, borderColor: BORDER, color: TEXT }}
           allowClear
         />
         <Input
-          placeholder="Farm ID"
-          value={filters.farm_id}
-          onChange={(e) => setFilters((f) => ({ ...f, farm_id: e.target.value }))}
-          style={{ width: 120, background: CARD, borderColor: BORDER, color: TEXT }}
+          placeholder="Turn ID"
+          value={filters.turn_id}
+          onChange={(e) => setFilters((f) => ({ ...f, turn_id: e.target.value }))}
+          style={{ width: 200, background: CARD, borderColor: BORDER, color: TEXT }}
           allowClear
         />
         <Button type="primary" icon={<SearchOutlined />} onClick={() => fetchData(1)} loading={loading}>
@@ -1985,10 +2049,10 @@ export default function TraceMonitor() {
               }}
             >
               <span style={{ color: TEXT, fontWeight: 600 }}>
-                Session 组次
+                Conversation 组次
               </span>
               <span>
-                <span style={{ color: TEXT_DIM }}>Session: </span>
+                <span style={{ color: TEXT_DIM }}>Conversation: </span>
                 <span style={{ fontFamily: 'monospace', color: ACCENT }}>
                   {group.session_id ? `${group.session_id.slice(0, 24)}...` : '未绑定'}
                 </span>
@@ -2012,7 +2076,7 @@ export default function TraceMonitor() {
 
             {group.items.map((item) => (
               <div
-                key={item.request_id}
+                key={item.trace_id}
                 style={{
                   background: CARD,
                   border: `1px solid ${BORDER}`,
@@ -2022,12 +2086,12 @@ export default function TraceMonitor() {
               >
                 {/* Trace 头部信息 - 可点击折叠/展开 */}
                 <div
-                  onClick={() => toggleCard(item.request_id)}
+                  onClick={() => toggleCard(item.trace_id)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     padding: '12px 16px',
-                    borderBottom: expandedCards.has(item.request_id)
+                    borderBottom: expandedCards.has(item.trace_id)
                       ? `1px solid ${BORDER}`
                       : 'none',
                     gap: 24,
@@ -2037,16 +2101,16 @@ export default function TraceMonitor() {
                   }}
                 >
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                    <span style={{ color: TEXT_DIM }}>Request ID:</span>
+                    <span style={{ color: TEXT_DIM }}>Trace ID:</span>
                     <span style={{ fontFamily: 'monospace', color: ACCENT }}>
-                      {item.request_id}
+                      {item.trace_id}
                     </span>
-                    <Tooltip title="复制 Request ID">
+                    <Tooltip title="复制 Trace ID">
                       <CopyOutlined
                         onClick={(e) => {
                           e.stopPropagation();
-                          void navigator.clipboard.writeText(item.request_id).then(() => {
-                            message.success('已复制 Request ID');
+                          void navigator.clipboard.writeText(item.trace_id).then(() => {
+                            message.success('已复制 Trace ID');
                           }).catch(() => {
                             message.error('复制失败');
                           });
@@ -2057,15 +2121,21 @@ export default function TraceMonitor() {
                   </span>
                   {item.session_id && (
                     <span>
-                      <span style={{ color: TEXT_DIM }}>Session: </span>
+                      <span style={{ color: TEXT_DIM }}>Conversation: </span>
                       <span style={{ fontFamily: 'monospace', color: TEXT_DIM }}>
                         {item.session_id.slice(0, 16)}...
                       </span>
                     </span>
                   )}
                   <span>
-                    <span style={{ color: TEXT_DIM }}>Farm: </span>
-                    <span style={{ color: TEXT }}>{item.farm_id}</span>
+                    <span style={{ color: TEXT_DIM }}>Run ID: </span>
+                    <span style={{ fontFamily: 'monospace', color: TEXT_DIM }}>
+                      {item.request_id}
+                    </span>
+                  </span>
+                  <span>
+                    <span style={{ color: TEXT_DIM }}>Farm UID: </span>
+                    <span style={{ color: TEXT }}>{item.farm_uid || '-'}</span>
                   </span>
                   <span>
                     <span style={{ color: TEXT_DIM }}>节点: </span>
@@ -2084,7 +2154,7 @@ export default function TraceMonitor() {
                     </span>
                   )}
                   <span style={{ marginLeft: 'auto', color: TEXT_DIM, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {expandedCards.has(item.request_id) && item.timeline && (
+                  {expandedCards.has(item.trace_id) && item.timeline && (
                       <>
                         <Button
                           size="small"
@@ -2108,13 +2178,13 @@ export default function TraceMonitor() {
                       {formatTraceTime(item.created_at)}
                     </span>
                     <span style={{ color: ACCENT }}>
-                      {expandedCards.has(item.request_id) ? '收起 ▲' : '展开 ▼'}
+                      {expandedCards.has(item.trace_id) ? '收起 ▲' : '展开 ▼'}
                     </span>
                   </span>
                 </div>
 
                 {/* Gantt 图 - 展开时显示 */}
-                {expandedCards.has(item.request_id) && (
+                {expandedCards.has(item.trace_id) && (
                 <div style={{ padding: 16 }}>
                   <TraceRequestOverview item={item} />
                   {item.timelineLoading ? (
@@ -2123,31 +2193,31 @@ export default function TraceMonitor() {
                     </div>
                   ) : item.timeline ? (
                     <GanttTimeline
-                      rounds={item.timeline.rounds.map((r) => ({
-                        round_index: r.round_index,
-                        nodes: r.nodes.map((n) => ({
-                          node_type: n.node_type,
-                          node_name: n.node_name,
-                          id: n.id,
-                          duration_ms: n.duration_ms,
-                          status: n.status,
-                          start_time: n.start_time,
-                          end_time: n.end_time,
-                          input_data: n.input_data,
-                          output_data: n.output_data,
-                          error_message: n.error_message,
-                          error_code: n.error_code,
-                          recover: n.recover,
-                        })),
-                      }))}
-                      onNodeClick={(roundIdx, nodeIdx, node) =>
-                        handleNodeClick(item.request_id, roundIdx, nodeIdx, node)
-                      }
+                        rounds={item.timeline.rounds.map((r) => ({
+                          round_index: r.round_index,
+                          nodes: r.nodes.map((n) => ({
+                            node_type: n.node_type,
+                            node_name: n.node_name,
+                            id: n.id,
+                            duration_ms: n.duration_ms,
+                            status: n.status,
+                            start_time: n.start_time,
+                            end_time: n.end_time,
+                            input_data: n.input_data,
+                            output_data: n.output_data,
+                            error_message: n.error_message,
+                            error_code: n.error_code,
+                            recover: n.recover,
+                          })),
+                        }))}
+                        onNodeClick={(roundIdx, nodeIdx, node) =>
+                          handleNodeClick(item.trace_id, roundIdx, nodeIdx, node)
+                        }
                     />
                   ) : (
                     <div style={{ color: TEXT_DIM, textAlign: 'center', padding: 24 }}>
                       <div style={{ marginBottom: 8 }}>暂无 Timeline 数据（可能该 Trace 已过期或未记录链路）</div>
-                      <Button size="small" onClick={() => loadTimeline(item.request_id)}>
+                      <Button size="small" onClick={() => loadTimeline(item.trace_id)}>
                         重试加载
                       </Button>
                     </div>

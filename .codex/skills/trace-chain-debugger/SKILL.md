@@ -11,7 +11,7 @@ description: Use when debugging farm-manager Agent request chains, trace evidenc
 
 ## 快速流程
 
-1. 先确认用户给的是 `request_id`、`session_id`、`turn_id`，还是一段报错日志。短 ID（如 `0744f155`）先按 request_id 前缀查。
+1. 先确认用户给的是 `trace_id`、`request_id`、`conversation_id`、`session_id`、`turn_id`，还是一段报错日志。短 ID（如 `0744f155`）只对兼容的旧 request_id 使用前缀查询。
 2. 在项目根目录运行脚本。旧版 archive/backend 链路仍使用：
 
 ```bash
@@ -25,12 +25,93 @@ python .codex/skills/trace-chain-debugger/scripts/analyze_trace_chain.py \
   --project . --v2 --turn-id a93fdbf47d7a
 ```
 
-脚本会先通过 v2 `/traces` 列表把 `turn_id` 解析为真正的 `request_id`，再读取 trace 节点和会话消息。
+脚本会先通过 v2 `/traces` 列表把 `turn_id` 解析为对应的 `trace_id`（当前兼容响应可能仍叫 `request_id`），再读取 trace 节点和会话消息。
 不要把 v2 的 `turn_id` 当成旧版 MySQL `agent_turns.id`。
 
 3. 如果项目有多个开发环境，必须让脚本使用与后端进程一致的配置环境。优先确认 `FARM_MANAGER_ENV` 或 `APP_ENV` 是 `dev` 还是 `prod`；必要时用 `DATABASE__URL`、`MONGODB__URI`、`MONGODB__DATABASE` 等环境变量临时覆盖，但不要把密码或完整连接串输出给用户。
 4. 需要看 trace 输入输出摘要时加 `--include-payload`。需要会话最近多轮时用 `--session-id <id> --limit 10`。
 5. 报告里优先看：`解析范围`、`错误节点`、`耗时热点`、`证据状态`、`排查建议`。Mongo 不可用时保留 MySQL/JSONL 结论，并说明降级。
+
+## v2 调试召回模式
+
+v2 的正式链路主键和召回边界见 `references/v2-trace-recall-design.md` 以及
+`v2/docs/spec/2026-08-18-agent-trace-observability-and-recall-design.md`。
+
+### 单轮 Turn
+
+目标是还原一轮从接入、排队、Worker、LLM、Tool、审批、业务提交、最终答复到 `done` 的完整证据链。
+
+优先级：`trace_id` > `turn_id` > 精确 `request_id` > 短 `request_id` 前缀。
+
+目标接口顺序：
+
+```text
+GET /api/v2/traces?turn_id=<turn_id>
+GET /api/v2/traces/{trace_id}/summary
+GET /api/v2/traces/{trace_id}/timeline
+GET /api/v2/conversations/{conversation_id}
+```
+
+单轮报告必须检查：
+
+- `queued/accepted/started/meta` 是否存在；
+- SSE `seq` 是否连续、`event_id` 是否重复；
+- `approval_required -> approval_result` 是否闭合；
+- `tool_started -> tool_finished -> observation` 是否闭合；
+- `operation_committed` 是否有真实业务结果；
+- `final_answer` 和 assistant 消息是否存在；
+- `done` 是否唯一且状态正确；
+- 第一个 error 节点及其上游输入。
+
+### 整段会话
+
+目标是还原 `conversation_id` 内多轮消息、Turn、Trace、工具结果和状态演进：
+
+```text
+GET /api/v2/conversations/{conversation_id}  # 分页读取消息
+GET /api/v2/traces?conversation_id=<conversation_id>  # 分页读取每轮摘要
+GET /api/v2/traces/{trace_id}/timeline  # 逐轮读取合并时间线
+```
+
+合并键固定为：
+
+```text
+conversation_id -> turn_id -> trace_id -> event_id/seq -> span_id
+```
+
+会话报告必须识别：上一轮工具结果是否进入下一轮上下文、是否出现重复 Turn/幂等重放、业务写入但没有最终答复、以及只有自然语言成功声明而无业务提交证据的情况。
+
+### v2 接口命名
+
+正式命名使用 `trace_id`：
+
+```text
+GET /api/v2/traces
+GET /api/v2/traces/{trace_id}
+GET /api/v2/traces/{trace_id}/summary
+GET /api/v2/traces/{trace_id}/nodes
+GET /api/v2/traces/{trace_id}/events
+GET /api/v2/traces/{trace_id}/timeline
+```
+
+当前已存在的 `/api/v2/traces/{request_id}` 和 `.../summary` 是兼容入口。文档和报告统一输出 `trace_id`，不能把 v2 字符串 `turn_id` 当作旧版数字 `agent_turns.id`。
+
+### CLI 参数
+
+当前可执行的 v2 单轮命令：
+
+```bash
+python .codex/skills/trace-chain-debugger/scripts/analyze_trace_chain.py \
+  --project . --v2 --turn-id <turn_id>
+```
+
+当前支持参数：`--trace-id`、`--conversation-id`、`--include-events`、`--include-payload`、`--json`。`traceEvents` 集合未创建或不可用时必须报告 `not_available(v2_api)`/`unavailable`，不能静默转为空事件。
+
+### 报告口径
+
+固定输出：`目标`、`解析范围`、`证据状态`、`会话/Turn 概览`、`SSE 时间线`、`Trace 时间线`、`业务结果`、`错误节点`、`证据缺口`、`排查建议`。
+
+证据状态必须区分：`confirmed`、`inferred`、`missing`、`unavailable`、`not_implemented`。数据源不可用不等于没有数据；没有 assistant 消息也不能仅凭最终自然语言回复推断执行成功。
 
 ## 多环境配置
 
@@ -61,7 +142,7 @@ FARM_MANAGER_ENV=prod backend/.venv/bin/python .codex/skills/trace-chain-debugge
 - MySQL `trace_records` 缺表但 Mongo 有 `traceRecords`：这是 trace 存储切到 Mongo 或 MySQL 文档表清理后的常见状态，不要把整个链路判为丢失。
 - MySQL 有 trace、Mongo 为空且 Mongo 状态 ok：检查 dual-write、补偿队列、`traceRecords` collection。
 - Mongo 有 trace、MySQL 为空：检查 `storage.trace=mongo`、MySQL 表是否被清理或缺失。
-- `conversationMessages.meta.trace_request_id` 是消息到 trace 的关键回链；`meta.event_file` 和 `meta.event_seq_range` 是 JSONL 事件回链。
+- `conversationMessages.traceId`、`conversationMessages.turnId` 是消息到 Trace 的正式回链；旧数据的 `meta.trace_request_id` 只作为兼容证据。`meta.event_file` 和 `meta.event_seq_range` 是 JSONL 事件回链。
 - 多环境开发时，MySQL/Mongo 未命中不等于证据丢失；先确认脚本和后端是否使用同一个 `FARM_MANAGER_ENV`、`APP_ENV`、`database.url`、`mongodb.uri`、`mongodb.database`。
 - 第一个 error 节点通常是根因入口，沿时间线向前看输入、上下文和上一轮工具结果。
 - 慢节点超过 5 秒时，优先排查外部网络、LLM provider、Mongo server selection 或 MySQL 慢查询。
@@ -69,3 +150,4 @@ FARM_MANAGER_ENV=prod backend/.venv/bin/python .codex/skills/trace-chain-debugge
 ## 参考资料
 
 需要确认项目表、collection 和字段映射时读取 `references/farm-manager-trace-map.md`。
+需要确认 v2 Trace 接口、SSE 事件和整段/单轮召回方式时读取 `references/v2-trace-recall-design.md`。

@@ -3,11 +3,12 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import TraceMonitor from './index';
-import { getTimeline, listTraceRequests, listTraces } from '../../api/admin';
+import { getTimeline, getTraceSummary, listTraceRequests, listTraces } from '../../api/admin';
 
 vi.mock('../../api/admin', () => ({
   deleteTracesBefore: vi.fn(),
   getTimeline: vi.fn(),
+  getTraceSummary: vi.fn(),
   listTraceRequests: vi.fn(),
   listTraces: vi.fn(),
 }));
@@ -61,10 +62,12 @@ vi.mock('../../components/GanttTimeline', () => ({
 const mockedListTraces = vi.mocked(listTraces);
 const mockedListTraceRequests = vi.mocked(listTraceRequests);
 const mockedGetTimeline = vi.mocked(getTimeline);
+const mockedGetTraceSummary = vi.mocked(getTraceSummary);
 
 describe('TraceMonitor query 初始化', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockedGetTraceSummary.mockResolvedValue(null);
     mockedListTraceRequests.mockResolvedValue({
       total: 1,
       items: [
@@ -94,9 +97,7 @@ describe('TraceMonitor query 初始化', () => {
     await waitFor(() => {
       expect(mockedListTraceRequests).toHaveBeenCalledWith({
         limit: 20,
-        offset: 0,
-        request_id: 'req-1',
-        session_id: 'sess-1',
+        cursor: null,
       });
     });
     await waitFor(() => {
@@ -104,6 +105,54 @@ describe('TraceMonitor query 初始化', () => {
     });
     expect(screen.getByDisplayValue('req-1')).toBeInTheDocument();
     expect(screen.getByDisplayValue('sess-1')).toBeInTheDocument();
+  });
+
+  it('点击 LLM 节点后在右侧 Drawer 展示模型输入和文本输出', async () => {
+    mockedGetTraceSummary.mockResolvedValueOnce({
+      request_id: 'req-llm',
+      trace_id: 'req-llm',
+      session_id: 'sess-llm',
+      node_count: 1,
+      total_duration_ms: 20,
+    });
+    mockedGetTimeline.mockResolvedValueOnce({
+      request_id: 'req-llm',
+      rounds: [
+        {
+          round_index: 0,
+          nodes: [
+            {
+              node_type: 'llm_call',
+              node_name: 'qwen3.6-flash',
+              duration_ms: 20,
+              status: 'success',
+              token_usage: null,
+              start_time: null,
+              input_data: {
+                message_count: 1,
+                messages: [{ role: 'user', content: '查询天气' }],
+              },
+              output_data: {
+                content: '杭州今天 28 度。',
+                finish_reason: 'stop',
+                tool_calls: [],
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/dev/traces?request_id=req-llm']}>
+        <TraceMonitor />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: '打开节点 qwen3.6-flash' }));
+
+    expect(await screen.findByText('查询天气')).toBeInTheDocument();
+    expect(screen.getByText('杭州今天 28 度。')).toBeInTheDocument();
   });
 
   it('空创建时间显示占位符而不是 1970', async () => {
@@ -128,7 +177,7 @@ describe('TraceMonitor query 初始化', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/req-empty-time/)).toBeInTheDocument();
+      expect(screen.getAllByText(/req-empty-time/).length).toBeGreaterThan(0);
     });
     expect(screen.queryByText(/1970/)).not.toBeInTheDocument();
     expect(mockedListTraces).not.toHaveBeenCalled();

@@ -5,7 +5,7 @@ import type { TracePayload } from '../utils/tracePayload';
 // vite proxy: /api/admin/traces* → http://localhost:8000/api/v2/traces*
 
 export interface TraceRootError {
-  node_id?: number | null;
+  node_id?: number | string | null;
   node_type?: string | null;
   node_name?: string | null;
   code?: string | null;
@@ -41,8 +41,15 @@ export interface TraceNodeBreakdownItem {
 /** v2 agent trace 列表项（请求级 summary）*/
 export interface TraceRequestSummary {
   request_id: string;
-  conversation_id: string;
+  trace_id?: string;
+  conversation_id?: string;
   turn_id?: string;
+  user_id?: string;
+  farm_uid?: string;
+  /** 旧页面字段，仅用于兼容历史响应。 */
+  session_id?: string | null;
+  farm_id?: number;
+  created_at?: string | null;
   node_count: number;
   total_duration_ms: number;
   status?: string;
@@ -57,7 +64,15 @@ export interface TraceRequestSummary {
 
 /** v2 agent trace node（get_trace_nodes 返回）*/
 export interface TraceNode {
-  id?: number | null;
+  record_kind?: 'node';
+  source?: 'traceRecords';
+  id?: number | string | null;
+  span_id?: string | null;
+  parent_span_id?: string | null;
+  trace_id?: string;
+  request_id?: string;
+  conversation_id?: string;
+  turn_id?: string;
   step_index?: number;
   node_type: string;
   node_name: string;
@@ -66,12 +81,33 @@ export interface TraceNode {
   token_usage: Record<string, unknown> | null;
   start_time: string | null;
   end_time?: string | null;
-  error_message: string | null;
+  error_message?: string | null;
   error_code?: string | null;
   recover?: string | null;
-  input_data: TracePayload;
-  output_data: TracePayload;
+  input_data?: TracePayload;
+  output_data?: TracePayload;
 }
+
+export interface TraceEvent {
+  record_kind: 'event';
+  source: 'traceEvents';
+  event_id: string;
+  trace_id: string;
+  turn_id: string;
+  seq: number;
+  event_type: string;
+  phase?: string | null;
+  step_index?: number | null;
+  attempt?: number | null;
+  status_before?: string | null;
+  status_after?: string | null;
+  terminal: boolean;
+  occurred_at: string | null;
+  payload_meta?: Record<string, unknown> | null;
+  data?: TracePayload;
+}
+
+export type TraceTimelineItem = TraceNode | TraceEvent;
 
 export interface TraceRound {
   round_index: number;
@@ -81,13 +117,20 @@ export interface TraceRound {
 /** 前端统一 timeline 结构：v2 返回的是 flat nodes，这里包成单 round 以兼容 GanttTimeline */
 export interface TraceTimeline {
   request_id: string;
+  trace_id?: string;
+  conversation_id?: string;
+  turn_id?: string;
+  items?: TraceTimelineItem[];
+  events?: TraceEvent[];
+  evidence_status?: string;
+  evidence?: Record<string, unknown>;
   summary?: TraceRequestSummary | null;
   rounds: TraceRound[];
 }
 
 /** 节点详情（前端从 timeline node 派生，用于 Drawer 展示）*/
 export interface TraceNodeDetail {
-  id: number;
+  id: number | string;
   request_id: string;
   round_index: number;
   node_type: string;
@@ -106,24 +149,29 @@ export interface TraceNodeDetail {
 
 export interface ListTracesParams {
   conversation_id?: string;
+  turn_id?: string;
   limit?: number;
   cursor?: string | null;
 }
 
 export interface ListTracesResponse {
   items: TraceRequestSummary[];
-  next_cursor: string | null;
-  has_more: boolean;
+  next_cursor?: string | null;
+  has_more?: boolean;
+  /** 旧分页响应兼容字段，v2 cursor API 不保证返回。 */
+  total?: number;
 }
 
-/** v2 get_trace_nodes 返回结构 */
-interface TraceNodesResponse {
+interface TraceTimelineResponse {
+  trace_id: string;
   request_id: string;
   conversation_id: string;
-  turn_id?: string;
-  nodes: TraceNode[];
+  turn_id: string;
+  items: TraceTimelineItem[];
   count: number;
   has_more: boolean;
+  evidence_status?: string;
+  evidence?: Record<string, unknown>;
 }
 
 /**
@@ -142,30 +190,43 @@ export async function listTraceRequests(params?: ListTracesParams): Promise<List
   return listTraces(params);
 }
 
-/**
- * 获取 timeline：并发拉取 nodes + summary，合并为前端统一的 TraceTimeline。
- * v2 后端没有 /timeline 端点，需要前端合并。
- */
-export async function getTimeline(requestId: string): Promise<TraceTimeline> {
-  const [nodesResp, summaryResp] = await Promise.all([
-    apiClient.get<TraceNodesResponse>(`/admin/traces/${encodeURIComponent(requestId)}`),
+/** 获取正式 v2 Trace timeline；兼容层只负责把 items 适配给旧 Gantt 组件。 */
+export async function getTimeline(
+  traceId: string,
+  params: { limit?: number; include_payload?: boolean } = {},
+): Promise<TraceTimeline> {
+  const response = await apiClient.get<TraceTimelineResponse>(
+    `/admin/traces/${encodeURIComponent(traceId)}/timeline`,
+    { params: { limit: params.limit ?? 400, include_payload: params.include_payload ?? true } },
+  );
+  const data = response.data;
+  const items = data.items ?? [];
+  const nodes = items.filter((item): item is TraceNode => item.record_kind !== 'event');
+  const events = items.filter((item): item is TraceEvent => item.record_kind === 'event');
+  const [summaryResp] = await Promise.all([
     apiClient.get<TraceRequestSummary | null>(
-      `/admin/traces/${encodeURIComponent(requestId)}/summary`,
+      `/admin/traces/${encodeURIComponent(traceId)}/summary`,
     ).catch(() => null),
   ]);
-
-  const nodes = nodesResp.data.nodes ?? [];
-  // v2 返回 flat nodes 列表，按 step_index 分组成单 round 以兼容 GanttTimeline
-  const rounds: TraceRound[] = [{
-    round_index: 0,
-    nodes,
-  }];
-
   return {
-    request_id: requestId,
+    request_id: data.request_id || data.trace_id,
+    trace_id: data.trace_id,
+    conversation_id: data.conversation_id,
+    turn_id: data.turn_id,
+    items,
+    events,
+    evidence_status: data.evidence_status,
+    evidence: data.evidence,
     summary: summaryResp?.data ?? null,
-    rounds,
+    rounds: [{ round_index: 0, nodes }],
   };
+}
+
+export async function getTraceSummary(traceId: string): Promise<TraceRequestSummary | null> {
+  const response = await apiClient.get<TraceRequestSummary | null>(
+    `/admin/traces/${encodeURIComponent(traceId)}/summary`,
+  );
+  return response.data;
 }
 
 /** 从 timeline node 派生 TraceNodeDetail（前端不再单独请求 node 详情端点）*/
@@ -175,17 +236,17 @@ export function deriveNodeDetail(
   node: TraceNode,
 ): TraceNodeDetail {
   return {
-    id: node.id ?? 0,
+    id: node.id ?? node.span_id ?? 0,
     request_id: requestId,
     round_index: roundIndex,
     node_type: node.node_type,
     node_name: node.node_name,
-    input_data: node.input_data,
-    output_data: node.output_data,
+    input_data: node.input_data ?? null,
+    output_data: node.output_data ?? null,
     duration_ms: node.duration_ms,
     token_usage: node.token_usage,
     status: node.status,
-    error_message: node.error_message,
+    error_message: node.error_message ?? null,
     error_code: node.error_code,
     recover: node.recover,
     start_time: node.start_time,

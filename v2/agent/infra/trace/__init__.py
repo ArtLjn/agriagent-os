@@ -21,6 +21,7 @@
 from agent.infra.trace.context import (
     TraceInfo,
     init_trace,
+    trace_id_for_turn,
     get_trace,
     clear_trace,
     get_step_index,
@@ -29,6 +30,7 @@ from agent.infra.trace.context import (
 )
 from agent.infra.trace.collector import (
     record,
+    record_event,
     flush_now,
     start_trace_system,
     stop_trace_system,
@@ -46,12 +48,14 @@ from agent.infra.trace.summary import (
 __all__ = [
     "TraceInfo",
     "init_trace",
+    "trace_id_for_turn",
     "get_trace",
     "clear_trace",
     "get_step_index",
     "increment_step",
     "set_step_index",
     "record",
+    "record_event",
     "flush_now",
     "start_trace_system",
     "stop_trace_system",

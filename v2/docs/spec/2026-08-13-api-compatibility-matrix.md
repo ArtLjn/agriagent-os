@@ -301,6 +301,11 @@ worker:  worker_name,date_range, summary{entry_count,total_payable,total_paid,to
 
 客户端至少应处理：`queued`、`accepted`、`meta`、`tool_call`、`tool_result`、`approval_required`、`operation_committed`、`write_committed_reply_failed`、`final_answer`、`error`、`done`。
 
+Trace/SSE 的正式字段、状态机、接口命名和整段/单轮召回方式，以
+[`2026-08-18-agent-trace-observability-and-recall-design.md`](./2026-08-18-agent-trace-observability-and-recall-design.md)
+为准。当前 `/api/v2/traces/{request_id}` 是兼容入口，目标命名使用
+`/api/v2/traces/{trace_id}/nodes`、`events` 和 `timeline`。
+
 `client_request_id` 用于重试幂等；`after_seq` 用于断线后从 Redis 事件流继续消费。HITL 审批必须调用 `/approve`，不能仅依据自然语言回复判断写入成功。
 
 ## 7. 旧版非核心接口完整清单

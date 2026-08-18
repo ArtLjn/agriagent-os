@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 from types import SimpleNamespace
 
@@ -12,6 +13,7 @@ from agent.config import settings
 from agent.core import react
 from agent.core.turn import StopReason, Turn, TurnPhase
 from agent.infra import sse, turn_store
+from agent.infra import trace as trace_infra
 from agent.skills.base import McpSkill, OperationSkill, Skill, SkillResult
 from agent.skills.registry import SkillRegistry, SkillRegistryError
 
@@ -176,6 +178,152 @@ def test_sse_error_and_observation_keep_structured_error_context() -> None:
 
 def test_done_is_the_only_terminal_event_marker() -> None:
     assert turn_store._TERMINAL_EVENTS == {"done"}
+
+
+def test_trace_id_is_stable_and_request_id_remains_compatible() -> None:
+    first = trace_infra.init_trace(turn_id="turn-trace-1")
+    trace_infra.clear_trace()
+    second = trace_infra.init_trace(turn_id="turn-trace-1")
+
+    try:
+        assert first.trace_id == "trace_turn-trace-1"
+        assert second.trace_id == first.trace_id
+        assert first.request_id == first.trace_id
+        assert second.request_id == second.trace_id
+    finally:
+        trace_infra.clear_trace()
+
+
+def test_record_event_reports_not_yet_persisted() -> None:
+    trace_infra.collector._event_queue.clear()  # type: ignore[attr-defined]
+    result = trace_infra.record_event(
+        {
+            "event_id": "evt-1",
+            "trace_id": "trace-turn-1",
+            "turn_id": "turn-1",
+            "conversation_id": "conversation-1",
+            "type": "started",
+            "seq": 1,
+            "terminal": False,
+        }
+    )
+
+    assert result == {
+        "accepted": True,
+        "persisted": False,
+        "status": "not_yet_persisted",
+        "storage": "traceEvents",
+    }
+    trace_infra.collector._event_queue.clear()  # type: ignore[attr-defined]
+
+
+class _EnvelopeRedis:
+    def __init__(self) -> None:
+        self.state = {
+            "trace_id": "trace_turn-envelope",
+            "request_id": "trace_turn-envelope",
+            "conversation_id": "conversation-envelope",
+        }
+        self.sequence = 0
+        self.rows: list[tuple[str, dict[str, str]]] = []
+
+    async def hsetnx(self, _key: str, field: str, value: str) -> bool:
+        if field in self.state:
+            return False
+        self.state[field] = value
+        return True
+
+    async def hget(self, _key: str, field: str) -> str | None:
+        return self.state.get(field)
+
+    async def hgetall(self, _key: str) -> dict[str, str]:
+        return dict(self.state)
+
+    async def incr(self, _key: str) -> int:
+        self.sequence += 1
+        return self.sequence
+
+    async def xadd(self, _key: str, fields: dict[str, str], **_kwargs) -> str:
+        stream_id = f"{fields['seq']}-0"
+        self.rows.append((stream_id, dict(fields)))
+        return stream_id
+
+    async def xrange(self, _key: str, **_kwargs) -> list[tuple[str, dict[str, str]]]:
+        return list(self.rows)
+
+    async def expire(self, *_args) -> bool:
+        return True
+
+
+@pytest.mark.asyncio
+async def test_publish_event_envelope_replays_with_stable_ids(monkeypatch) -> None:
+    redis = _EnvelopeRedis()
+    handed_off: list[dict] = []
+
+    async def fake_update(_turn_id: str, **fields) -> None:
+        redis.state.update({name: str(value) for name, value in fields.items()})
+
+    monkeypatch.setattr(turn_store, "get_client", lambda: redis)
+    monkeypatch.setattr(turn_store, "update_turn", fake_update)
+    monkeypatch.setattr(turn_store, "record_event", handed_off.append)
+
+    assert (
+        await turn_store.publish_event(
+            "turn-envelope",
+            {
+                "type": "started",
+                "data": {"phase": "reasoning", "step": 2},
+            },
+        )
+        == 1
+    )
+    assert (
+        await turn_store.publish_event(
+            "turn-envelope", {"type": "error", "data": {"code": "x"}}
+        )
+        == 2
+    )
+    assert (
+        await turn_store.publish_event(
+            "turn-envelope", {"type": "done", "data": {"status": "failed"}}
+        )
+        == 3
+    )
+    assert (
+        await turn_store.publish_event(
+            "turn-envelope", {"type": "done", "data": {"status": "failed"}}
+        )
+        == 3
+    )
+
+    events = await turn_store.read_events("turn-envelope")
+    replay = await turn_store.read_events("turn-envelope", after_seq=1)
+    assert [event["seq"] for event in events] == [1, 2, 3]
+    assert [event["event_id"] for event in replay] == [
+        event["event_id"] for event in events[1:]
+    ]
+    assert all(event["trace_id"] == "trace_turn-envelope" for event in events)
+    assert all(event["conversation_id"] == "conversation-envelope" for event in events)
+    assert [event["event_type"] for event in events] == ["started", "error", "done"]
+    assert [event["status_after"] for event in events] == [
+        "running",
+        "failed",
+        "failed",
+    ]
+    assert [event["terminal"] for event in events] == [False, False, True]
+    assert len({event["event_id"] for event in events}) == 3
+    assert len(handed_off) == 3
+    assert handed_off[-1]["event_id"] == events[-1]["event_id"]
+
+
+def test_sse_event_includes_standard_event_id_line() -> None:
+    payload = json.loads(
+        sse.sse_event("started", {"seq": 1}, event_id="evt-1")
+        .split("data: ", 1)[1]
+        .strip()
+    )
+    assert "id: evt-1" in sse.sse_event("started", {"seq": 1}, event_id="evt-1")
+    assert payload == {"seq": 1}
 
 
 @pytest.mark.asyncio
@@ -657,18 +805,16 @@ async def test_stream_timeout_is_explicit(monkeypatch) -> None:
         event async for event in turn_store.stream_events("turn-1", max_wait_seconds=0)
     ]
 
-    assert events == [
-        {
-            "seq": 0,
-            "type": "stream_timeout",
-            "data": {
-                "code": "stream_timeout",
-                "message": "事件流等待超时，Turn 仍未发布终态。",
-                "turn_id": "turn-1",
-            },
-            "terminal": False,
-        }
-    ]
+    assert len(events) == 1
+    assert events[0]["seq"] == 0
+    assert events[0]["type"] == "stream_timeout"
+    assert events[0]["data"] == {
+        "code": "stream_timeout",
+        "message": "事件流等待超时，Turn 仍未发布终态。",
+        "turn_id": "turn-1",
+    }
+    assert events[0]["terminal"] is False
+    assert events[0]["event_id"] == "evt_stream_timeout_turn-1_0"
 
 
 @pytest.mark.asyncio

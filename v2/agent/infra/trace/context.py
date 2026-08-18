@@ -2,6 +2,7 @@
 
 参考 archive/backend/app/infra/trace_context.py，适配 v2 的 MongoDB 架构。
 """
+
 from __future__ import annotations
 
 import contextvars
@@ -14,6 +15,7 @@ from dataclasses import dataclass
 class TraceInfo:
     """一次对话请求的追踪上下文。"""
 
+    trace_id: str
     request_id: str
     conversation_id: str
     created_at: float
@@ -26,21 +28,23 @@ class TraceInfo:
 _trace_ctx: contextvars.ContextVar[TraceInfo | None] = contextvars.ContextVar(
     "trace_ctx", default=None
 )
-_step_ctx: contextvars.ContextVar[int] = contextvars.ContextVar(
-    "trace_step", default=0
-)
+_step_ctx: contextvars.ContextVar[int] = contextvars.ContextVar("trace_step", default=0)
 
 
 def init_trace(
     conversation_id: str = "",
     turn_id: str = "",
+    trace_id: str = "",
     request_id: str = "",
     user_id: str = "",
     farm_uid: str = "",
 ) -> TraceInfo:
     """初始化追踪上下文。"""
+    stable_trace_id = trace_id or trace_id_for_turn(turn_id)
     trace = TraceInfo(
-        request_id=request_id or uuid.uuid4().hex[:8],
+        trace_id=stable_trace_id,
+        # request_id 是旧调用方仍在使用的兼容字段，不接受 client_request_id。
+        request_id=request_id or stable_trace_id,
         conversation_id=conversation_id,
         created_at=time.time(),
         turn_id=turn_id,
@@ -50,6 +54,11 @@ def init_trace(
     _trace_ctx.set(trace)
     _step_ctx.set(0)
     return trace
+
+
+def trace_id_for_turn(turn_id: str = "") -> str:
+    """为 Turn 生成可重复的 trace_id，避免重连或 Worker 重试创建新链路。"""
+    return f"trace_{turn_id}" if turn_id else f"trace_{uuid.uuid4().hex}"
 
 
 def get_trace() -> TraceInfo | None:
