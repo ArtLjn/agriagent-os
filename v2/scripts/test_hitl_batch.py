@@ -12,6 +12,7 @@
   2. gate 行为测试：hitl.gate() 正确设置 pending_approval
   3. approve 行为测试：approve(True) 恢复 running，approve(False) 设为 rejected
 """
+
 from __future__ import annotations
 
 import sys
@@ -22,9 +23,9 @@ _PARENT = str(Path(__file__).resolve().parent.parent)
 if _PARENT not in sys.path:
     sys.path.insert(0, _PARENT)
 
-from agent.core import hitl  # noqa: E402
-from agent.core.turn import Turn  # noqa: E402
-from agent.skills import loader as skill_loader  # noqa: E402
+from agent.core import hitl
+from agent.core.turn import Turn
+from agent.skills import loader as skill_loader
 
 
 def _make_turn() -> Turn:
@@ -42,7 +43,7 @@ class RiskClassificationTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.skills = skill_loader.load_all()
+        cls.skills = skill_loader.load_aggregate_skills()
         cls.skill_index = {s.name: s for s in cls.skills}
 
     def _get_skill(self, name: str):
@@ -68,7 +69,9 @@ class RiskClassificationTests(unittest.TestCase):
         s = self._get_skill("manage_crop_cycle")
         self.assertEqual(s.dynamic_risk_level({"operation": "query"}), "read")
         self.assertEqual(s.dynamic_risk_level({"operation": "create"}), "write_confirm")
-        self.assertEqual(s.dynamic_risk_level({"operation": "advance"}), "write_confirm")
+        self.assertEqual(
+            s.dynamic_risk_level({"operation": "advance"}), "write_confirm"
+        )
         self.assertEqual(s.dynamic_risk_level({"operation": "update"}), "write_confirm")
         self.assertEqual(s.dynamic_risk_level({"operation": "delete"}), "write_high")
         print("  ✓ [2/12] manage_crop_cycle 风险分类正确")
@@ -109,31 +112,54 @@ class RiskClassificationTests(unittest.TestCase):
 
     def test_07_default_risk_is_read(self):
         """所有 manage-* skill 的默认 risk_level（无 operation 参数）应该是 read"""
-        for name in ["manage_farm_logs", "manage_crop_cycle", "manage_cost",
-                      "manage_workers", "manage_debt", "manage_work_orders"]:
+        for name in [
+            "manage_farm_logs",
+            "manage_crop_cycle",
+            "manage_cost",
+            "manage_workers",
+            "manage_debt",
+            "manage_work_orders",
+        ]:
             s = self._get_skill(name)
-            self.assertEqual(s.risk_level, "read",
-                             f"{name}.risk_level 应为 read（默认），实际为 {s.risk_level}")
+            self.assertEqual(
+                s.dynamic_risk_level({}),
+                "read",
+                f"{name} 无 operation 时应安全默认为 read",
+            )
         print("  ✓ [7/12] 所有 manage-* skill 默认 risk_level=read")
 
     def test_08_unknown_operation_is_read(self):
         """未知 operation 应该返回 read（安全默认）"""
-        for name in ["manage_farm_logs", "manage_crop_cycle", "manage_cost",
-                      "manage_workers", "manage_debt", "manage_work_orders"]:
+        for name in [
+            "manage_farm_logs",
+            "manage_crop_cycle",
+            "manage_cost",
+            "manage_workers",
+            "manage_debt",
+            "manage_work_orders",
+        ]:
             s = self._get_skill(name)
             risk = s.dynamic_risk_level({"operation": "unknown_op"})
-            self.assertEqual(risk, "read",
-                             f"{name} 未知 operation 应返回 read，实际为 {risk}")
+            self.assertEqual(
+                risk, "read", f"{name} 未知 operation 应返回 read，实际为 {risk}"
+            )
         print("  ✓ [8/12] 未知 operation 安全降级为 read")
 
     def test_09_missing_operation_is_read(self):
         """缺少 operation 参数应该返回 read（安全默认）"""
-        for name in ["manage_farm_logs", "manage_crop_cycle", "manage_cost",
-                      "manage_workers", "manage_debt", "manage_work_orders"]:
+        for name in [
+            "manage_farm_logs",
+            "manage_crop_cycle",
+            "manage_cost",
+            "manage_workers",
+            "manage_debt",
+            "manage_work_orders",
+        ]:
             s = self._get_skill(name)
             risk = s.dynamic_risk_level({})
-            self.assertEqual(risk, "read",
-                             f"{name} 无 operation 应返回 read，实际为 {risk}")
+            self.assertEqual(
+                risk, "read", f"{name} 无 operation 应返回 read，实际为 {risk}"
+            )
         print("  ✓ [9/12] 缺少 operation 参数安全降级为 read")
 
 
@@ -213,7 +239,9 @@ def main():
     # 先打印 skill 注册情况
     skills = skill_loader.load_all()
     write_skills = [s for s in skills if "manage" in s.name]
-    print(f"已加载 {len(skills)} 个 skill，其中 {len(write_skills)} 个 manage-* write skill：")
+    print(
+        f"已加载 {len(skills)} 个 skill，其中 {len(write_skills)} 个 manage-* write skill："
+    )
     for s in write_skills:
         print(f"  - {s.name}: risk_level={s.risk_level}")
     print()

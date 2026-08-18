@@ -18,6 +18,8 @@ TOP_LEVEL_FIELDS = {
     "mcp_tool",
     "risk_level",
     "finalize_after_success",
+    "execution",
+    "completion",
     "description",
     "triggers",
     "operations",
@@ -34,6 +36,8 @@ OPERATION_FIELDS = {
     "finalize_after_success",
     "expose_to_model",
     "approval_followup",
+    "execution",
+    "completion",
 }
 RISK_LEVELS = {"read", "write_confirm", "write_high", "mixed"}
 
@@ -80,6 +84,8 @@ def validate_metadata(meta: dict[str, Any], source: str = "skill.md") -> list[st
         meta["finalize_after_success"], bool
     ):
         errors.append(f"{source}: finalize_after_success 必须是布尔值")
+    _validate_execution(meta.get("execution"), source, errors)
+    _validate_completion(meta.get("completion"), source, errors)
     if (
         not isinstance(meta.get("description"), str)
         or not meta.get("description", "").strip()
@@ -136,9 +142,15 @@ def validate_metadata(meta: dict[str, Any], source: str = "skill.md") -> list[st
             errors.append(f"{path}.risk_level 必须是 read/write_confirm/write_high")
         if "mcp_tool" in config and not isinstance(config["mcp_tool"], str):
             errors.append(f"{path}.mcp_tool 必须是字符串")
-        for boolean_field in ("inject_operation", "finalize_after_success", "expose_to_model"):
+        for boolean_field in (
+            "inject_operation",
+            "finalize_after_success",
+            "expose_to_model",
+        ):
             if boolean_field in config and not isinstance(config[boolean_field], bool):
                 errors.append(f"{path}.{boolean_field} 必须是布尔值")
+        _validate_execution(config.get("execution"), path, errors)
+        _validate_completion(config.get("completion"), path, errors)
         followup = config.get("approval_followup")
         if followup is not None:
             if not isinstance(followup, dict):
@@ -181,6 +193,49 @@ def validate_metadata(meta: dict[str, Any], source: str = "skill.md") -> list[st
                 f"{path}.required 未包含在 parameters: {sorted(required_not_exposed)}"
             )
     return errors
+
+
+def _validate_execution(execution: Any, source: str, errors: list[str]) -> None:
+    """校验 Skill/operation 的执行能力声明。"""
+    if execution is None:
+        return
+    if not isinstance(execution, dict):
+        errors.append(f"{source}: execution 必须是对象")
+        return
+    mode = execution.get("mode", "serial")
+    if mode not in {
+        "serial",
+        "parallel_safe",
+        "serial_after_observation",
+        "internal_followup",
+    }:
+        errors.append(f"{source}: execution.mode 不受支持: {mode}")
+    max_concurrency = execution.get("max_concurrency", 1)
+    if (
+        not isinstance(max_concurrency, int)
+        or isinstance(max_concurrency, bool)
+        or max_concurrency < 1
+    ):
+        errors.append(f"{source}: execution.max_concurrency 必须是正整数")
+    if "requires_observation" in execution and not isinstance(
+        execution["requires_observation"], bool
+    ):
+        errors.append(f"{source}: execution.requires_observation 必须是布尔值")
+    depends_on = execution.get("depends_on", [])
+    if not _is_string_list(depends_on):
+        errors.append(f"{source}: execution.depends_on 必须是字符串列表")
+
+
+def _validate_completion(completion: Any, source: str, errors: list[str]) -> None:
+    """校验成功后的收尾能力声明。"""
+    if completion is None:
+        return
+    if not isinstance(completion, dict):
+        errors.append(f"{source}: completion 必须是对象")
+        return
+    value = completion.get("finalize_after_success")
+    if value is not None and not isinstance(value, bool):
+        errors.append(f"{source}: completion.finalize_after_success 必须是布尔值")
 
 
 def validate_directory(skills_dir: Path) -> list[str]:

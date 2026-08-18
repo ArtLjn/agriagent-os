@@ -15,17 +15,85 @@ business MCP tools 通过 get_http_request() 读取这些 headers 做农场隔�
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
+import random
 from collections.abc import Callable
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Self
 from urllib.parse import urlparse
 
 import httpx
 from fastmcp import Client
 from fastmcp.client.transports.http import StreamableHttpTransport
 
+from agent.infra.error_policy import ClassifiedError, classify_exception
+
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class McpCallError(RuntimeError):
+    """MCP 调用最终失败时保留分类和重试次数。"""
+
+    tool_name: str
+    classified: ClassifiedError
+    attempt: int
+
+    def __post_init__(self) -> None:
+        super().__init__(self.classified.message)
+
+
+def _mcp_retry_delay(attempt: int) -> float:
+    """返回有界指数退避加抖动，避免多个 Turn 同时重放。"""
+    return min(0.2 * (2**attempt), 2.0) + random.uniform(0.0, 0.05)
+
+
+async def call_mcp_with_retry(
+    client: Any,
+    tool_name: str,
+    arguments: dict[str, Any],
+    *,
+    risk_level: str,
+    max_retries: int = 1,
+    idempotency_key: str | None = None,
+    allow_idempotent_write_retry: bool = False,
+) -> dict[str, Any]:
+    """按 Skill 风险等级调用 MCP，禁止未声明契约的写操作重试。
+
+    业务返回的 ``retryable=false`` 错误直接交给 Runtime 形成 Observation；
+    只有传输/Provider 异常且被统一分类为瞬时错误时才会重试。
+    """
+    is_read = risk_level == "read"
+    can_retry = is_read or (allow_idempotent_write_retry and bool(idempotency_key))
+    retry_limit = max(0, max_retries) if can_retry else 0
+
+    for attempt in range(retry_limit + 1):
+        try:
+            result = await client.call_tool(tool_name, arguments)
+        except Exception as exc:
+            classified = classify_exception(exc)
+            if attempt < retry_limit and classified.retryable:
+                await asyncio.sleep(_mcp_retry_delay(attempt))
+                continue
+            raise McpCallError(tool_name, classified, attempt) from exc
+
+        if isinstance(result, dict) and result.get("error"):
+            if result.get("retryable") is True and attempt < retry_limit:
+                await asyncio.sleep(_mcp_retry_delay(attempt))
+                continue
+            return {
+                **result,
+                "attempt": int(result.get("attempt") or attempt),
+                "category": result.get(
+                    "category", "transient" if result.get("retryable") else "permanent"
+                ),
+            }
+        return result
+
+    raise AssertionError("MCP retry loop exited without a result")
+
 
 # Business server URL — configurable via env for docker / remote setups.
 BUSINESS_MCP_URL = os.environ.get("BUSINESS_MCP_URL")
@@ -92,7 +160,7 @@ class BusinessClient:
         self._headers = headers or {}
         self._client: Client | None = None
 
-    async def __aenter__(self) -> "BusinessClient":
+    async def __aenter__(self) -> Self:
         logger.info("connecting to business MCP server: %s", self.url)
         transport_kwargs: dict[str, Any] = {"headers": self._headers}
         if _is_loopback_url(self.url):

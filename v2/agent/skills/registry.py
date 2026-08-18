@@ -57,6 +57,7 @@ class SkillRegistry:
             cls._validate_skill(skill)
             by_name[skill.name] = skill
         cls._validate_followups(loaded, by_name)
+        cls._validate_dependencies(loaded, by_name)
         return cls(_skills=loaded, _by_name=by_name)
 
     @staticmethod
@@ -97,6 +98,79 @@ class SkillRegistry:
             raise SkillRegistryError(
                 "mcp_tool_missing", skill.name, "MCP Skill must declare mcp_tool"
             )
+        execution = skill._meta.get("execution") or {}
+        if not isinstance(execution, dict):
+            raise SkillRegistryError(
+                "invalid_execution_policy",
+                skill.name,
+                "execution must be an object",
+            )
+        mode = execution.get("mode", "serial")
+        if mode not in {
+            "serial",
+            "parallel_safe",
+            "serial_after_observation",
+            "internal_followup",
+        }:
+            raise SkillRegistryError(
+                "invalid_execution_mode",
+                skill.name,
+                f"unsupported execution mode: {mode}",
+            )
+        max_concurrency = execution.get("max_concurrency", 1)
+        if (
+            not isinstance(max_concurrency, int)
+            or isinstance(max_concurrency, bool)
+            or max_concurrency < 1
+        ):
+            raise SkillRegistryError(
+                "invalid_max_concurrency",
+                skill.name,
+                "max_concurrency must be a positive integer",
+            )
+        requires_observation = execution.get("requires_observation", False)
+        if not isinstance(requires_observation, bool):
+            raise SkillRegistryError(
+                "invalid_execution_policy",
+                skill.name,
+                "requires_observation must be boolean",
+            )
+        depends_on = execution.get("depends_on", [])
+        if not isinstance(depends_on, list) or not all(
+            isinstance(item, str) and item for item in depends_on
+        ):
+            raise SkillRegistryError(
+                "invalid_execution_dependencies",
+                skill.name,
+                "depends_on must be a list of non-empty strings",
+            )
+        if mode == "parallel_safe" and skill.risk_level != "read":
+            raise SkillRegistryError(
+                "parallel_write_forbidden",
+                skill.name,
+                "parallel_safe requires risk_level=read",
+            )
+        if mode == "internal_followup" and skill.exposed:
+            raise SkillRegistryError(
+                "internal_followup_exposed",
+                skill.name,
+                "internal_followup skill must not be exposed",
+            )
+        completion = skill._meta.get("completion") or {}
+        if not isinstance(completion, dict):
+            raise SkillRegistryError(
+                "invalid_completion_policy",
+                skill.name,
+                "completion must be an object",
+            )
+        if "finalize_after_success" in completion and not isinstance(
+            completion["finalize_after_success"], bool
+        ):
+            raise SkillRegistryError(
+                "invalid_completion_policy",
+                skill.name,
+                "completion.finalize_after_success must be boolean",
+            )
 
     @staticmethod
     def _validate_followups(
@@ -120,6 +194,46 @@ class SkillRegistry:
                     target.name,
                     "approval follow-up must not be exposed to the model",
                 )
+
+    @staticmethod
+    def _validate_dependencies(
+        skills: tuple[Skill, ...], by_name: dict[str, Skill]
+    ) -> None:
+        """校验 Registry 内可解析的 Tool 依赖，保留资源键的扩展空间。"""
+        graph = {
+            skill.name: [
+                dependency for dependency in skill.depends_on if dependency in by_name
+            ]
+            for skill in skills
+        }
+        for skill in skills:
+            if skill.name in skill.depends_on:
+                raise SkillRegistryError(
+                    "execution_dependency_self",
+                    skill.name,
+                    "skill cannot depend on itself",
+                )
+
+        visiting: set[str] = set()
+        visited: set[str] = set()
+
+        def visit(name: str) -> None:
+            if name in visiting:
+                raise SkillRegistryError(
+                    "execution_dependency_cycle",
+                    name,
+                    "execution dependencies contain a cycle",
+                )
+            if name in visited:
+                return
+            visiting.add(name)
+            for dependency in graph.get(name, []):
+                visit(dependency)
+            visiting.remove(name)
+            visited.add(name)
+
+        for skill in skills:
+            visit(skill.name)
 
     def all(self) -> tuple[Skill, ...]:
         """返回所有已加载 Skill，包括仅供 Runtime 驱动的后继动作。"""

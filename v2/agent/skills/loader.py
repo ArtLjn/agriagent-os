@@ -73,13 +73,21 @@ class SkillLoader:
             if entry.is_dir() and not entry.name.startswith(("_", "."))
         ]
 
-    def load_all(self) -> list[Skill]:
+    def load_sources(self) -> list[Skill]:
+        """加载目录中的聚合 Skill，供配置审计等旧调用方使用。"""
         skills: list[Skill] = []
         for skill_dir in self._discover_skill_dirs():
             result = _load_skill(skill_dir)
             if result is not None:
-                operation_skills = result.operation_skills()
-                skills.extend(operation_skills or [result])
+                skills.append(result)
+        return skills
+
+    def load_all(self) -> list[Skill]:
+        """加载 Runtime 使用的展开 Skill，包括隐藏的 follow-up。"""
+        skills: list[Skill] = []
+        for result in self.load_sources():
+            operation_skills = result.operation_skills()
+            skills.extend(operation_skills or [result])
         return skills
 
 
@@ -161,8 +169,13 @@ def load_registry() -> SkillRegistry:
 
 
 def load_all() -> list[Skill]:
-    """兼容旧调用方；新代码应使用 :func:`load_registry`。"""
+    """返回 Runtime 使用的展开 Skill；新代码应使用 :func:`load_registry`。"""
     return list(load_registry().all())
+
+
+def load_aggregate_skills() -> list[Skill]:
+    """返回未展开的聚合 Skill，仅用于配置/风险审计。"""
+    return SkillLoader(_SKILLS_DIR).load_sources()
 
 
 def to_openai_tools(

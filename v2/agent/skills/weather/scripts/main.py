@@ -26,7 +26,11 @@ class WeatherSkill(Skill):
                 params = {**params, "location": resolved}
         if params:
             _patch_action_args(ctx.turn, self.name, params)
-        result = await ctx.business_client.call_tool(self.mcp_tool, params)
+        result = await ctx.call_mcp_tool(
+            self.mcp_tool,
+            params,
+            risk_level="read",
+        )
         if isinstance(result, dict) and result.get("error") == "unknown_location":
             result = await _retry_unknown_location(result, params, ctx)
         return _as_skill_result(result)
@@ -38,7 +42,11 @@ async def _retry_unknown_location(
     """按 Skill 约定搜索城市并用首个完整地点重试天气查询。"""
     keyword = str(params.get("location") or ctx.turn.user_input or "").strip()
     search_params = {"keyword": keyword}
-    search_result = await ctx.business_client.call_tool("search_cities", search_params)
+    search_result = await ctx.call_mcp_tool(
+        "search_cities",
+        search_params,
+        risk_level="read",
+    )
     if isinstance(search_result, dict) and search_result.get("error"):
         return search_result
 
@@ -60,7 +68,11 @@ async def _retry_unknown_location(
 
     retry_params = {**params, "location": full_name}
     _patch_action_args(ctx.turn, "get_weather", retry_params)
-    return await ctx.business_client.call_tool("get_weather", retry_params)
+    return await ctx.call_mcp_tool(
+        "get_weather",
+        retry_params,
+        risk_level="read",
+    )
 
 
 def _as_skill_result(result: Any) -> SkillResult:

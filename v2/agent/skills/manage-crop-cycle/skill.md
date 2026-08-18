@@ -33,8 +33,20 @@ operations:
   advance: {tool_name: advance_crop_cycle, description: 将指定茬口推进到下一个生长阶段。, risk_level: write_confirm, parameters: [cycle_id], required: [cycle_id]}
   update: {tool_name: update_crop_cycle, description: 修改指定茬口的名称、作物模板、日期、地块、面积或备注。, risk_level: write_confirm, parameters: [cycle_id, name, crop_template_id, start_date, field_name, total_area_mu, season, batch_note], required: [cycle_id]}
   delete: {tool_name: delete_crop_cycle, description: 删除指定种植茬口。, risk_level: write_high, parameters: [cycle_id], required: [cycle_id]}
-  templates: {tool_name: list_crop_templates, description: 查询当前农场可用的作物模板。创建茬口前可先调用本工具取得 crop_template_id。, risk_level: read, parameters: [skip, limit], required: []}
-  system_templates: {tool_name: list_system_crop_templates, description: 查询系统提供的作物模板，可按分类筛选。, risk_level: read, parameters: [skip, limit, category], required: []}
+  templates:
+    tool_name: list_crop_templates
+    description: 查询当前农场可用的作物模板。创建茬口前可先调用本工具取得 crop_template_id。
+    risk_level: read
+    execution: {mode: parallel_safe, max_concurrency: 4}
+    parameters: [skip, limit]
+    required: []
+  system_templates:
+    tool_name: list_system_crop_templates
+    description: 查询系统提供的作物模板，可按分类筛选。
+    risk_level: read
+    execution: {mode: parallel_safe, max_concurrency: 4}
+    parameters: [skip, limit, category]
+    required: []
 parameters:
   type: object
   properties:
@@ -78,9 +90,11 @@ parameters:
     skip:
       type: integer
       description: 分页偏移（query/templates/system_templates，默认 0）
+      default: 0
     limit:
       type: integer
       description: 分页大小（query/templates/system_templates，默认 20）
+      default: 20
     category:
       type: string
       description: 分类过滤（system_templates 可选）

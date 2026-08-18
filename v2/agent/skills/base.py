@@ -61,19 +61,66 @@ class Skill:
     @property
     def finalize_after_success(self) -> bool:
         """成功执行后是否应立即进入无工具最终回答。"""
+        completion = self._meta.get("completion") or {}
+        if isinstance(completion, dict) and "finalize_after_success" in completion:
+            return completion["finalize_after_success"] is True
         return self._meta.get("finalize_after_success") is True
 
     @property
     def parallel_safe(self) -> bool:
         """判断只读 Skill 是否可以与同轮同伴共享一次推理步骤。
 
-        写操作默认串行；如果只读操作共享状态，可在元数据中用 ``serial``
-        显式关闭并行执行。
+        并行能力必须由 skill.md 显式声明；缺少 execution 配置时默认串行。
         """
+        return (
+            self.execution_mode == "parallel_safe"
+            and self.risk_level == "read"
+            and not self.finalize_after_success
+            and not self.requires_observation
+            and not self.depends_on
+        )
+
+    @property
+    def execution_mode(self) -> str:
+        """返回声明的执行模式；未声明时 fail-closed 为串行。"""
         execution = self._meta.get("execution") or {}
-        if isinstance(execution, dict) and execution.get("mode") == "serial":
-            return False
-        return self.risk_level == "read" and not self.finalize_after_success
+        if not isinstance(execution, dict):
+            return "serial"
+        return str(execution.get("mode") or "serial")
+
+    @property
+    def max_concurrency(self) -> int:
+        """返回单个 Skill 的并发上限。"""
+        execution = self._meta.get("execution") or {}
+        value = (
+            execution.get("max_concurrency", 1) if isinstance(execution, dict) else 1
+        )
+        return (
+            value
+            if isinstance(value, int) and not isinstance(value, bool) and value > 0
+            else 1
+        )
+
+    @property
+    def requires_observation(self) -> bool:
+        """声明该 Skill 是否必须等待上一批 Observation。"""
+        execution = self._meta.get("execution") or {}
+        return bool(
+            execution.get("requires_observation", False)
+            if isinstance(execution, dict)
+            else False
+        )
+
+    @property
+    def depends_on(self) -> tuple[str, ...]:
+        """返回执行策略声明的依赖名称。"""
+        execution = self._meta.get("execution") or {}
+        depends_on = (
+            execution.get("depends_on", []) if isinstance(execution, dict) else []
+        )
+        if not isinstance(depends_on, list):
+            return ()
+        return tuple(str(item) for item in depends_on if isinstance(item, str) and item)
 
     @property
     def exposed(self) -> bool:
@@ -116,7 +163,20 @@ class Skill:
 
     def enrich_params(self, params: dict[str, Any], ctx) -> dict[str, Any]:
         """返回调用参数副本；业务语义解析由模型根据工具 schema 完成。"""
-        return dict(params)
+        return self._with_schema_defaults(params)
+
+    def _with_schema_defaults(self, params: dict[str, Any]) -> dict[str, Any]:
+        """物化 schema 默认值，确保重复调用比较的是有效参数。"""
+        enriched = dict(params)
+        properties = self.parameters_schema.get("properties") or {}
+        for name, schema in properties.items():
+            if (
+                name not in enriched
+                and isinstance(schema, dict)
+                and "default" in schema
+            ):
+                enriched[name] = deepcopy(schema["default"])
+        return enriched
 
     def _operation_config(self, operation: str | None) -> dict[str, Any]:
         """读取统一 operations 配置。"""
@@ -195,7 +255,11 @@ class McpSkill(Skill):
         missing = self.missing_required_params(enriched)
         if missing:
             return SkillResult(error=self.missing_params_prompt(missing))
-        result = await ctx.business_client.call_tool(self.mcp_tool, enriched)
+        result = await ctx.call_mcp_tool(
+            self.mcp_tool,
+            enriched,
+            risk_level=self.dynamic_risk_level(enriched),
+        )
         if isinstance(result, dict) and result.get("error"):
             message = str(result.get("message") or result["error"])
             return SkillResult(data=result, error=message)
@@ -217,6 +281,28 @@ class OperationSkill(McpSkill):
             source_config.get("description") or source.description
         )
         self._meta["risk_level"] = source_config.get("risk_level") or source.risk_level
+        source_execution = source._meta.get("execution")
+        operation_execution = source_config.get("execution")
+        if isinstance(source_execution, dict) or isinstance(operation_execution, dict):
+            self._meta["execution"] = {
+                **(source_execution if isinstance(source_execution, dict) else {}),
+                **(
+                    operation_execution if isinstance(operation_execution, dict) else {}
+                ),
+            }
+        source_completion = source._meta.get("completion")
+        operation_completion = source_config.get("completion")
+        if isinstance(source_completion, dict) or isinstance(
+            operation_completion, dict
+        ):
+            self._meta["completion"] = {
+                **(source_completion if isinstance(source_completion, dict) else {}),
+                **(
+                    operation_completion
+                    if isinstance(operation_completion, dict)
+                    else {}
+                ),
+            }
         if "finalize_after_success" in source_config:
             self._meta["finalize_after_success"] = source_config[
                 "finalize_after_success"
@@ -252,7 +338,7 @@ class OperationSkill(McpSkill):
         self._operation_config_meta = source_config
 
     def enrich_params(self, params: dict[str, Any], ctx) -> dict[str, Any]:
-        return dict(params)
+        return self._with_schema_defaults(params)
 
     @property
     def exposed(self) -> bool:
@@ -275,7 +361,11 @@ class OperationSkill(McpSkill):
         call_args = dict(enriched)
         if self._inject_operation:
             call_args["operation"] = self.operation
-        result = await ctx.business_client.call_tool(self.mcp_tool, call_args)
+        result = await ctx.call_mcp_tool(
+            self.mcp_tool,
+            call_args,
+            risk_level=self.dynamic_risk_level(enriched),
+        )
         if isinstance(result, dict) and result.get("error"):
             message = str(result.get("message") or result["error"])
             return SkillResult(data=result, error=message)

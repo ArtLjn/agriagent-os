@@ -76,12 +76,14 @@ def _is_retryable(exc: Exception) -> bool:
     return classify_exception(exc).retryable
 
 
-def _stream_error_message(exc: Exception) -> str:
+def _stream_error_message(exc: Exception, *, stream_started: bool = False) -> str:
     """将 Provider 故障转换为可直接展示给用户的短提示。"""
     classified = classify_exception(exc)
     if classified.retryable:
         status_code = getattr(exc, "status_code", None)
         suffix = f"（HTTP {status_code}）" if isinstance(status_code, int) else ""
+        if stream_started:
+            return f"网络中断{suffix}，模型输出已停止，请重新发送消息。"
         return f"模型服务暂时不可用{suffix}，已自动重试，请稍后重新发送消息。"
     return str(exc)
 
@@ -142,11 +144,17 @@ def _log_cache_metrics(usage: Any) -> None:
     """解析 LLM usage 对象，记录 prompt cache 命中率到日志。"""
     if usage is None:
         return
-    total = getattr(usage, "prompt_tokens", 0) or 0
+    try:
+        total = int(getattr(usage, "prompt_tokens", 0) or 0)
+    except (TypeError, ValueError):
+        return
     if total == 0:
         return
     details = getattr(usage, "prompt_tokens_details", None)
-    cached = getattr(details, "cached_tokens", 0) if details else 0
+    try:
+        cached = int(getattr(details, "cached_tokens", 0) or 0) if details else 0
+    except (TypeError, ValueError):
+        cached = 0
     hit_rate = (cached / total * 100) if total > 0 else 0
     logger.info(
         "LLM cache: hit=%d/%d (%.1f%%)",
@@ -341,13 +349,15 @@ async def chat_stream(
                     "LLM stream failed mid-stream (no retry, already yielded)"
                 )
                 classified = classify_exception(exc)
+                payload = error_payload(
+                    classified,
+                    attempt=attempt,
+                    stream_started=True,
+                )
                 yield {
                     "type": "error",
-                    "data": error_payload(
-                        classified,
-                        attempt=attempt,
-                        stream_started=True,
-                    ),
+                    "message": _stream_error_message(exc, stream_started=True),
+                    "data": payload,
                 }
                 return
 
@@ -375,13 +385,20 @@ async def chat_stream(
             # 不可重试或重试次数用完
             logger.exception("LLM stream failed (no more retries)")
             classified = classify_exception(exc)
+            payload = error_payload(classified, attempt=attempt)
             yield {
                 "type": "error",
-                "data": error_payload(classified, attempt=attempt),
+                "message": payload["message"],
+                "data": payload,
             }
             return
 
     # 理论上不会走到这里
     if last_exc:
         classified = classify_exception(last_exc)
-        yield {"type": "error", "data": error_payload(classified, attempt=MAX_RETRIES)}
+        payload = error_payload(classified, attempt=MAX_RETRIES)
+        yield {
+            "type": "error",
+            "message": payload["message"],
+            "data": payload,
+        }

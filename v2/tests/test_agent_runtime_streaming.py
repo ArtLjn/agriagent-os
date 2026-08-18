@@ -12,7 +12,7 @@ from agent.config import settings
 from agent.core import react
 from agent.core.turn import StopReason, Turn, TurnPhase
 from agent.infra import sse, turn_store
-from agent.skills.base import McpSkill, Skill, SkillResult
+from agent.skills.base import McpSkill, OperationSkill, Skill, SkillResult
 from agent.skills.registry import SkillRegistry, SkillRegistryError
 
 
@@ -22,6 +22,7 @@ class _ReadSkill(Skill):
             "name": name,
             "description": name,
             "risk_level": "read",
+            "execution": {"mode": "parallel_safe"},
             "parameters": {"type": "object", "properties": {}, "required": []},
         }
         self.delay = delay
@@ -68,6 +69,43 @@ def test_skill_registry_rejects_mcp_skill_without_tool_name() -> None:
 
     with pytest.raises(SkillRegistryError, match="mcp_tool_missing.*missing-mcp-tool"):
         SkillRegistry.from_skills([skill])
+
+
+def test_parallel_safe_requires_explicit_read_only_capability() -> None:
+    default_skill = Skill()
+    default_skill._meta = {
+        "name": "default-serial",
+        "description": "默认串行",
+        "risk_level": "read",
+        "parameters": {"type": "object", "properties": {}, "required": []},
+    }
+    assert default_skill.parallel_safe is False
+
+    write_skill = _ReadSkill("parallel-write")
+    write_skill._meta["risk_level"] = "write_confirm"
+    with pytest.raises(SkillRegistryError, match="parallel_write_forbidden"):
+        SkillRegistry.from_skills([write_skill])
+
+
+def test_operation_execution_policy_overrides_aggregate_defaults() -> None:
+    source = _ReadSkill("aggregate")
+    source._meta["execution"] = {"mode": "serial"}
+    source._meta["operations"] = {
+        "query": {
+            "tool_name": "query_aggregate",
+            "description": "查询聚合结果",
+            "risk_level": "read",
+            "execution": {"mode": "parallel_safe", "max_concurrency": 3},
+            "parameters": [],
+            "required": [],
+        }
+    }
+
+    operation = OperationSkill(source, "query")
+
+    assert operation.execution_mode == "parallel_safe"
+    assert operation.max_concurrency == 3
+    assert operation.parallel_safe is True
 
 
 def test_runtime_keeps_registry_as_the_skill_lookup(monkeypatch) -> None:
@@ -189,6 +227,76 @@ async def test_read_only_tool_calls_run_in_parallel() -> None:
 
 
 @pytest.mark.asyncio
+async def test_doom_loop_stops_before_next_llm_call_with_final_answer() -> None:
+    turn = Turn(user_input="重复调用")
+    tracker = react.verify.CallTracker()
+    for _ in range(3):
+        tracker.record("get_weather", {"location": "苏州"})
+
+    events = [
+        event
+        async for event in react._run_single_reasoning_step(
+            turn=turn,
+            tools_schema=[],
+            tracker=tracker,
+            plan_box={"plan": None},
+            skill_index={},
+            skill_ctx=SimpleNamespace(),
+            approval_waiter=_approve,
+        )
+    ]
+
+    assert turn.status == "failed"
+    assert turn.stop_reason == StopReason.DOOM_LOOP_DETECTED
+    assert [event["type"] for event in events][-4:] == [
+        "error",
+        "final_answer_start",
+        "final_answer_delta",
+        "final_answer",
+    ]
+    assert not any(event["type"] == "context_usage" for event in events)
+
+
+@pytest.mark.asyncio
+async def test_long_running_skill_emits_heartbeat(monkeypatch) -> None:
+    monkeypatch.setattr(react, "HEARTBEAT_INTERVAL_SECONDS", 0.01)
+    skill = _ReadSkill("slow-heartbeat", delay=0.03)
+    events = [
+        event
+        async for event in react._run_skill_call(
+            turn=Turn(user_input="等待查询"),
+            skill=skill,
+            args={},
+            skill_ctx=SimpleNamespace(),
+            rationale="慢查询",
+            state=react._SkillExecState(),
+            tool_call_id="heartbeat-call",
+        )
+    ]
+
+    heartbeats = [event for event in events if event["type"] == "heartbeat"]
+    assert heartbeats
+    assert heartbeats[0]["data"]["stage"] == "skill:slow-heartbeat"
+
+
+@pytest.mark.asyncio
+async def test_duplicate_tool_call_path_also_emits_doom_loop_final_answer() -> None:
+    turn = Turn(user_input="重复工具")
+    tracker = react.verify.CallTracker()
+    for _ in range(3):
+        tracker.record("query_workers", {})
+
+    events = [
+        event
+        async for event in react._check_duplication(turn, tracker, "query_workers", {})
+    ]
+
+    assert turn.stop_reason == StopReason.DOOM_LOOP_DETECTED
+    assert any(event["type"] == "doom_loop_warning" for event in events)
+    assert events[-1]["type"] == "final_answer"
+
+
+@pytest.mark.asyncio
 async def test_serial_read_only_calls_do_not_run_in_parallel() -> None:
     first = _ReadSkill("serial-first", delay=0.05)
     second = _ReadSkill("serial-second", delay=0.05)
@@ -216,6 +324,36 @@ async def test_serial_read_only_calls_do_not_run_in_parallel() -> None:
 
     assert time.monotonic() - started >= 0.09
     assert [event["type"] for event in events].count("tool_started") == 2
+
+
+@pytest.mark.asyncio
+async def test_mixed_batch_reorders_parallel_and_serial_results() -> None:
+    serial = _ReadSkill("serial-result")
+    serial._meta["execution"] = {"mode": "serial"}
+    parallel = _ReadSkill("parallel-result")
+    turn = Turn(user_input="混合批次")
+
+    _ = [
+        event
+        async for event in react._dispatch_tool_calls(
+            tool_calls=[
+                {"id": "serial-call", "name": serial.name, "arguments": {}},
+                {"id": "parallel-call", "name": parallel.name, "arguments": {}},
+            ],
+            rationale="混合调度",
+            skill_index={serial.name: serial, parallel.name: parallel},
+            skill_ctx=SimpleNamespace(),
+            approval_waiter=_approve,
+            turn=turn,
+            tracker=react.verify.CallTracker(),
+            plan_box={"plan": None},
+        )
+    ]
+
+    assert [message["tool_call_id"] for message in turn.messages] == [
+        "serial-call",
+        "parallel-call",
+    ]
 
 
 @pytest.mark.asyncio
@@ -346,6 +484,47 @@ async def test_parallel_tool_failure_does_not_cancel_other_results() -> None:
         "failed-call",
         "succeeded-call",
     ]
+
+
+@pytest.mark.asyncio
+async def test_non_retryable_tool_error_stops_before_max_steps() -> None:
+    failed = _ReadSkill("permanent-failure", error="参数无效")
+    turn = Turn(user_input="触发不可重试错误")
+
+    events = [
+        event
+        async for event in react._dispatch_tool_calls(
+            tool_calls=[{"id": "failed-call", "name": failed.name, "arguments": {}}],
+            rationale="错误收口",
+            skill_index={failed.name: failed},
+            skill_ctx=SimpleNamespace(),
+            approval_waiter=_approve,
+            turn=turn,
+            tracker=react.verify.CallTracker(),
+            plan_box={"plan": None},
+        )
+    ]
+
+    assert turn.stop_reason == StopReason.TOOL_FAILED
+    assert turn.error != "max_steps_reached"
+    assert turn.final_answer
+    assert [event["type"] for event in events][-4:] == [
+        "error",
+        "final_answer_start",
+        "final_answer_delta",
+        "final_answer",
+    ]
+
+
+def test_changed_observation_does_not_trigger_doom_loop() -> None:
+    tracker = react.verify.CallTracker()
+    tracker.record("query", {})
+    tracker.record_observation("query", {}, {"count": 1})
+    tracker.record("query", {})
+    tracker.record_observation("query", {}, {"count": 2})
+    tracker.record("query", {})
+
+    assert react.verify.detect_doom_loop(tracker.calls) is None
 
 
 @pytest.mark.asyncio

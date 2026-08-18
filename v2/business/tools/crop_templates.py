@@ -5,14 +5,92 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from business.db import session_scope
 from business.mcp_app import mcp
 from business.services import crop_service
 from business.tools._headers import get_farm_id_from_headers
 
 
-def _error(code: str, message: str) -> dict:
-    return {"error": code, "message": message}
+def _error(code: str, message: str, **context: object) -> dict:
+    result = {
+        "error": code,
+        "code": code,
+        "message": message,
+        "retryable": False,
+    }
+    if context:
+        result["context"] = context
+    return result
+
+
+def _validate_stages(stages: object) -> tuple[list[dict] | None, dict | None]:
+    """在 MCP 边界校验阶段，避免裸 KeyError 穿透到 Agent。"""
+    if not isinstance(stages, list) or not stages:
+        return None, _error("missing_stages", "create 操作必须提供生长阶段")
+
+    normalized: list[dict] = []
+    for index, raw_stage in enumerate(stages):
+        field = f"stages[{index}]"
+        if not isinstance(raw_stage, Mapping):
+            return None, _error(
+                "invalid_stage",
+                f"{field} 必须是对象",
+                field=field,
+            )
+
+        name = raw_stage.get("name")
+        if not isinstance(name, str) or not name.strip():
+            return None, _error(
+                "invalid_stage_name",
+                f"{field}.name 必须是非空字符串",
+                field=f"{field}.name",
+            )
+
+        duration_days = raw_stage.get("duration_days")
+        if (
+            isinstance(duration_days, bool)
+            or not isinstance(duration_days, int)
+            or not 1 <= duration_days <= 3650
+        ):
+            return None, _error(
+                "invalid_stage_duration",
+                f"{field}.duration_days 必须是 1-3650 的整数",
+                field=f"{field}.duration_days",
+            )
+
+        order_index = raw_stage.get("order_index")
+        if (
+            isinstance(order_index, bool)
+            or not isinstance(order_index, int)
+            or order_index < 0
+        ):
+            return None, _error(
+                "invalid_stage_order",
+                f"{field}.order_index 必须是非负整数",
+                field=f"{field}.order_index",
+            )
+
+        key_tasks = raw_stage.get("key_tasks")
+        if key_tasks is not None and (
+            not isinstance(key_tasks, str) or len(key_tasks) > 500
+        ):
+            return None, _error(
+                "invalid_stage_tasks",
+                f"{field}.key_tasks 必须是不超过 500 个字符的文本",
+                field=f"{field}.key_tasks",
+            )
+
+        normalized.append(
+            {
+                "name": name.strip(),
+                "duration_days": duration_days,
+                "order_index": order_index,
+                "key_tasks": key_tasks,
+            }
+        )
+    return normalized, None
 
 
 @mcp.tool
@@ -37,14 +115,15 @@ def manage_crop_templates(
         if op == "create":
             if not name:
                 return _error("missing_name", "create 操作必须提供模板名称")
-            if not stages:
-                return _error("missing_stages", "create 操作必须提供生长阶段")
+            normalized_stages, validation_error = _validate_stages(stages)
+            if validation_error is not None:
+                return validation_error
             duplicate = crop_service.find_exact_duplicate(
                 db,
                 farm_id=farm_id,
                 name=name,
                 variety=variety,
-                stages=stages,
+                stages=normalized_stages,
             )
             if duplicate is not None:
                 existing = crop_service.get_crop_template(db, duplicate.id, farm_id)
@@ -55,7 +134,7 @@ def manage_crop_templates(
                 name=name,
                 variety=variety,
                 category=category,
-                stages=stages,
+                stages=normalized_stages,
             )
             return {**created, "already_exists": False}
         if op == "import_system":

@@ -108,6 +108,7 @@ class Turn:
     final_answer: str | None = None
     committed_result: dict[str, Any] | None = None
     finalization_pending: bool = False
+    finalization_request: dict[str, Any] | None = None
     events: list[dict[str, Any]] = field(default_factory=list)
     # events are SSE-flavored: {"type": "thought|action|observation|...",
     #                            "data": {...}, "ts": float}

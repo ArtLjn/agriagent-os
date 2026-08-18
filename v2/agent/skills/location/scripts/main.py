@@ -63,7 +63,11 @@ class SearchCitiesSkill(Skill):
             params = {**params, "keyword": ctx.turn.user_input}
         if params:
             _patch_action_args(ctx.turn, self.name, params)
-        result = await ctx.business_client.call_tool(self.mcp_tool, params)
+        result = await ctx.call_mcp_tool(
+            self.mcp_tool,
+            params,
+            risk_level="read",
+        )
         return SkillResult(data=result)
 
 

@@ -33,7 +33,7 @@ Redis Worker 生命周期
 3. action 事件在 Skill 执行完成后才真正发送，耗时调用期间没有“正在执行”消息。
 4. final_answer_delta 已定义但没有接通主链路。
 5. max_steps 只是安全预算，却被当成失败收口机制；达到预算时可能只有错误和 done，没有用户可读答复。
-6. doom_loop 只告警不终止，重复调用会继续消耗预算。
+6. 当前已有 doom_loop 局部检测，但重复调用、不可重试 Tool 错误和 MCP 断流尚未统一进入 Finalizer，部分链路仍可能继续消耗预算。
 7. System Reminder 要求模型调用 final_answer，但 final_answer 不是注册给模型的 Tool，形成协议冲突。
 8. loader.load_all 实际已经承担 Skill Registry 职责，却只返回列表，调用方再手动构造 skill_index。
 
@@ -383,6 +383,74 @@ completion:
 
 缺少 execution 配置时按 serial 处理，不因迁移而意外并行写操作。
 
+### 6.2.1 Skill YAML 并行契约
+
+`execution` 是 Skill 能力声明，不是模型提示词。Runtime 必须在 Registry 构建时将它解析成不可变的 `ExecutionPolicy`；模型不能通过参数或自然语言改变该策略。
+
+顶层 Skill 的标准写法如下：
+
+~~~yaml
+execution:
+  mode: serial                 # serial | parallel_safe | serial_after_observation | internal_followup
+  max_concurrency: 1           # 仅 parallel_safe 有效；必须为正整数
+  requires_observation: false  # true 时不得与依赖它的调用同批执行
+  depends_on: []               # Tool 名称或资源键，首期只允许声明性校验
+completion:
+  finalize_after_success: false
+~~~
+
+约束如下：
+
+| 配置 | 约束 | 运行时语义 |
+|---|---|---|
+| 缺少 `execution` | 合法 | 等价于 `mode: serial` |
+| `read + parallel_safe` | 合法 | 可进入同一批次的有界并行队列 |
+| `write_confirm/write_high + parallel_safe` | 启动失败 | 禁止把写操作声明为并行安全 |
+| `mixed + parallel_safe` | 启动失败 | 必须拆成 operation 级 Skill |
+| `serial_after_observation` | 合法 | 必须等待前一批 Observation 后再执行 |
+| `internal_followup` | 合法 | 不暴露给模型，只能由 Runtime 驱动 |
+| `max_concurrency` | 缺省为 1，并受全局 `max_parallel_skills` 再次限制 | 实际上限为两者较小值 |
+| `depends_on` | 引用未知 Tool、自己依赖自己或形成环 | Registry 启动校验失败 |
+
+聚合 MCP Skill 的 operation 必须支持局部覆盖，覆盖优先级为：
+
+~~~text
+operation.execution / operation.completion
+  > skill.execution / skill.completion
+  > Runtime 默认值（serial / finalize_after_success=false）
+~~~
+
+例如作物茬口查询可以明确声明只读并行，写操作保持串行：
+
+~~~yaml
+operations:
+  templates:
+    tool_name: list_crop_templates
+    risk_level: read
+    execution:
+      mode: parallel_safe
+      max_concurrency: 4
+      requires_observation: false
+      depends_on: []
+  system_templates:
+    tool_name: list_system_crop_templates
+    risk_level: read
+    execution:
+      mode: parallel_safe
+      max_concurrency: 4
+      requires_observation: false
+      depends_on: []
+  create:
+    tool_name: create_crop_cycle
+    risk_level: write_confirm
+    execution:
+      mode: serial
+~~~
+
+`system_templates` 不默认声明 `finalize_after_success`：同一查询既可能是用户最终要看的结果，也可能只是后续导入/创建的前置事实。是否可以在查询成功后收尾，必须由任务范围或明确的 completion 能力决定，不能仅根据 `read` 或 `parallel_safe` 推断。
+
+`OperationSkill` 必须把 operation 的 `execution` 和 `completion` 投影到最终能力对象；只复制 `risk_level` 而忽略并行元数据属于 Registry 契约错误。Registry 对所有最终暴露的 operation 执行一次统一校验，并在失败时返回包含 `code`、Skill 名称和 operation 名称的启动错误。
+
 ### 6.3 Registry 构建校验
 
 必须检查：
@@ -599,6 +667,57 @@ emit progress(code=step_budget_exhausted)
 
 摘要收尾不得重新暴露业务写 Tool。若没有可靠 Observation，答复必须明确“尚未完成”，不能推断业务成功。
 
+### 9.4 重复调用和无进展收口
+
+重复调用不是普通的 Tool 重试，而是 ReAct Loop 没有产生新进展。Runtime 必须在执行前、且在参数 enrich 和默认值展开之后，记录一次 `ProgressLedger`：
+
+~~~json
+{
+  "call_key": "list_system_crop_templates|{\"category\":null,\"limit\":50,\"skip\":0}",
+  "observation_fingerprint": "sha256:...",
+  "tool_name": "list_system_crop_templates",
+  "attempt": 3,
+  "progress": "unchanged"
+}
+~~~
+
+其中：
+
+- `call_key` 使用稳定 JSON、排序后的字段和业务默认值；不能让 `{}` 与服务端默认分页参数绕过重复检测。
+- `observation_fingerprint` 忽略时间、耗时、请求 ID、Trace ID 等易变字段；相同调用但结果确实变化时，不得误判为死循环。
+- `progress=advanced` 表示得到新事实或业务状态发生变化；`unchanged` 表示相同请求得到等价结果；`blocked` 表示结构化错误明确不可继续。
+
+处理规则：
+
+1. 首次调用正常执行并把结果作为 Observation 写入消息历史。
+2. 第二次相同调用只产生一次 `verification_warning`，Observation 必须明确提示“已有结果，先基于现有结果回答；只有改变业务参数或补充信息后才能再次查询”。
+3. 达到默认阈值 3 次，Runtime 立即设置 `StopReason.DOOM_LOOP_DETECTED`，取消该 Turn 尚未开始的工具任务，不再请求下一次 LLM。
+4. doom 收口必须保留最后一次 Observation，并由 Finalizer 生成用户可读答复；不得用“请换一个 Skill”把决策再次交给模型，也不得继续跑到 `max_steps`。
+5. 不同参数只有在参数确实改变查询范围时才算新进展；仅改变无效分页、空参数或等价默认值不能绕过阈值。若无法证明参数语义等价，宁可按不同调用执行，但仍受 `no_progress` 和总步数保护。
+
+doom、不可重试错误和 `max_steps` 的区别必须在 Trace、Redis 状态和 SSE 中保持一致：
+
+| 情况 | `stop_reason` | 是否再次请求 LLM | 最终答复重点 |
+|---|---|---:|---|
+| 相同调用和结果达到阈值 | `doom_loop_detected` | 否 | 已尝试的 Tool、次数、最后结果和缺失信息 |
+| 参数/业务永久错误 | `tool_failed` 或具体错误原因 | 仅在存在声明的安全 fallback 时 | Tool 返回的明确原因 |
+| MCP/LLM 瞬时错误 | 重试耗尽后的具体原因 | 只允许有界重试 | 重试次数和最终故障 |
+| 达到步数上限且没有更具体原因 | `step_budget_exhausted` | 只允许一次无 Tool 收尾 | 尚未完成，不能推断成功 |
+
+统一终态序列为：
+
+~~~text
+warning/observation（可选）
+  -> finalizing
+  -> error（失败终态需要）
+  -> final_answer_start
+  -> final_answer_delta*
+  -> final_answer
+  -> done(status=...)
+~~~
+
+`TurnFinalizer` 是唯一负责发出 `final_answer` 和 `done` 的组件。现有 `_emit_doom_loop_terminal`、Pipeline 异常兜底和 Worker 超时处理迁移后只能提交 `FinalizationRequest`，不能各自拼接终态事件。
+
 final_answer 不是模型 Tool。模型正常完成的定义是返回无 tool_calls 的文本。Prompt 和 Reminder 必须使用“返回最终文本”或“停止调用工具并回答”，不能要求模型调用不存在的 final_answer Tool。
 
 ## 10. 错误、重试和消息交付
@@ -628,6 +747,8 @@ Tool 错误要进入模型 Observation，但 Runtime 错误和终态错误不能
 ~~~
 
 TurnFinalizer 是唯一可以发出 final_answer 和 done 的组件。Worker 的异常兜底只能调用 Finalizer，不能自己拼另一套终态事件。
+
+Tool 结果的 `retryable=false` 不能只停留在事件字段中。普通 Tool 后处理必须根据结果分类：可恢复错误进入 Observation 供模型调整；不可恢复错误进入 `FinalizationRequest`；只有 Registry 声明的 fallback 才允许继续执行替代 Tool。模型不能因为看到了一个错误，就自由选择另一个写操作。
 
 ## 11. 实施范围
 
@@ -715,8 +836,11 @@ v2/tests/
 
 - [x] Turn 具备显式 `TurnPhase` 和 `StopReason`，并保留 `status/error` 兼容字段。
 - [x] 无 Tool Call 时产生 final_answer 和 done(completed)。
-- [ ] Doom Loop 达到阈值后停止继续调用，并产生 doom_loop_detected。
+- [x] Doom Loop 达到阈值后停止继续调用，并产生 doom_loop_detected。
 - [x] 达到 max_steps 后产生用户可读最终答复，不出现只有 error 没有答复的路径。
+- [ ] doom_loop、不可重试 Tool 错误和 max_steps 不互相覆盖，最终 `stop_reason` 保留最具体的终止原因。
+- [ ] 同一 Tool 的等价默认参数和相同 Observation 达到阈值后，不再发起下一次 LLM 调用。
+- [ ] doom、Tool 错误、超时和 max_steps 都经过同一个 Finalizer，终态事件只产生一次。
 - [x] final_answer 不作为公开 Tool Schema。
 - [x] LLM、Tool、审批、Context 和 Turn 超时均产生结构化停止原因和终态。
 - [x] Business 已提交但 LLM 收尾失败时仍返回结构化成功答复。
@@ -728,7 +852,7 @@ v2/tests/
 - [x] Tool 执行前立即产生 tool_started。
 - [x] Tool 完成后产生对应 tool_finished，包含 tool_call_id、耗时和结果/错误。
 - [x] 最终答复使用 final_answer_delta，并最终产生一次完整 final_answer。
-- [ ] 长时间无下游事件时持续产生 heartbeat 或明确 waiting 状态。
+- [x] 长时间无下游事件时持续产生 heartbeat 或明确 waiting 状态。
 - [x] after_seq 重连不重复执行 Turn，事件序号连续可解释。
 - [x] 事件流等待超时不会静默断开，必须得到 stream_timeout 或 Turn 终态。
 
@@ -740,6 +864,8 @@ v2/tests/
 - [x] Tool Result 按原始 Tool Call 顺序写入，且每个 tool_call_id 唯一对应。
 - [x] 一个只读 Tool 失败时，其他独立 Tool 的结果仍被记录并返回。
 - [x] 未声明 parallel_safe 的 Skill 默认串行。
+- [ ] `execution` 缺失、operation 级覆盖、`depends_on` 和 `max_concurrency` 的 Registry 校验有 focused tests。
+- [ ] 只有显式 `parallel_safe` 的只读 operation 能进入并行队列；mixed、写操作和不明风险默认串行或启动失败。
 - [x] 写操作、HITL follow-up 和同一资源更新不会并行提交。
 - [x] Turn 并发限制与 Skill 并发限制分别有指标和配置。
 
@@ -749,9 +875,10 @@ v2/tests/
 - [x] 错误分类至少覆盖瞬时错误、永久错误、模型错误和资源错误，并由分类结果决定恢复策略。
 - [x] LLM 尚未产生流式输出、且错误属于瞬时错误时，使用有界异步指数退避和抖动重试。
 - [x] LLM 已开始输出后断流默认不重试当前流，避免客户端收到重复增量；重试或终止原因必须可观测。
-- [ ] MCP 只读调用允许有限重试；写操作只有在幂等键和业务契约明确支持时才允许重试。
-- [ ] 参数缺失、未知 Tool、认证失败、审批冲突和业务不可重试错误不能盲目重试，并返回带上下文的结构化错误。
+- [x] MCP 只读调用允许有限重试；写操作只有在幂等键和业务契约明确支持时才允许重试。
+- [x] 参数缺失、未知 Tool、认证失败、审批冲突和业务不可重试错误不能盲目重试，并返回带上下文的结构化错误。
 - [ ] 可恢复 Tool 错误进入 Observation 供模型调整；Runtime 崩溃、资源耗尽和终态错误必须进入 TurnFinalizer。
+- [ ] 不可重试 Tool 错误不会被重复喂回模型直到 `max_steps`，除非存在 Registry 声明的安全 fallback。
 - [x] `timeout`/`cancelled` 可作为过程事件发布，`done` 是唯一终态事件标记，避免终态事件被重复去重。
 - [ ] fallback 只能来自 Skill/Registry 声明的安全替代关系，不能由模型自由改用其他写操作。
 - [x] 重试耗尽、资源错误和关键路径持续失败具备明确的用户答复、运行告警或人工升级策略。
@@ -776,6 +903,8 @@ v2/tests/test_tool_batch_executor.py
 v2/tests/test_react_loop_termination.py
 v2/tests/test_agent_stream_events.py
 v2/tests/test_turn_finalizer.py
+v2/tests/test_skill_execution_policy.py
+v2/tests/test_react_loop_no_progress.py
 v2/tests/test_agent_run_loop_integration.py
 ~~~
 
@@ -836,6 +965,7 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=v2 \
 - 增加 execution.mode；
 - 默认全部 Skill 按 serial；
 - 只把经过验证的只读 Skill 标记为 parallel_safe；
+- 补齐 operation 级 execution/completion 投影和 Registry 启动校验；
 - 先支持同一 assistant response，不修改 Plan 语义；
 - 增加并发和失败隔离测试。
 
@@ -851,6 +981,16 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=v2 \
 
 风险：HITL follow-up、Plan 执行和普通 Tool 执行共享执行逻辑，拆分时必须保留同一套审批、Trace 和事件行为。
 
+### 阶段五：无进展和错误终止收口
+
+- 抽取稳定参数和 Observation 指纹计算；
+- 将重复检测从“发警告”升级为 `FinalizationRequest`；
+- 普通 Tool 错误按 retryable/category 分流，不允许不可重试错误循环消耗步数；
+- 让 doom、错误、超时、取消和 max_steps 共用 Finalizer；
+- 增加“不会退化成 max_steps”的回归测试和真实 MCP/SSE 证据。
+
+风险：Observation 中包含分页、时间或请求标识等易变字段时，指纹不稳定会放行真正的死循环；指纹实现必须按 Skill 结果契约排除非业务字段，并保留原始结果用于 Trace。
+
 ## 16. 完成判定
 
 只有同时满足以下条件，才能标记为 implemented：
@@ -861,5 +1001,6 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=v2 \
 4. max_steps、doom、超时、取消、审批和异常都有用户可读终态；
 5. Business 已提交与最终答复生成失败可以区分；
 6. Runtime、Trace、Redis 状态、聊天持久化和前端事件没有互相矛盾的终态；
-7. 现有并发 Harness 和 HITL 设计的边界仍然成立；
-8. 完成 focused tests、lint、复杂度检查和真实 Agent/MCP/SSE 验收。
+7. parallel_safe 只由显式 YAML 能力声明授予，operation 覆盖和默认串行规则有运行时证据；
+8. 现有并发 Harness 和 HITL 设计的边界仍然成立；
+9. 完成 focused tests、lint、复杂度检查和真实 Agent/MCP/SSE 验收。
