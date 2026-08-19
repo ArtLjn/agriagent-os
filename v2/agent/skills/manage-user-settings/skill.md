@@ -23,22 +23,36 @@ operations:
   update:
     tool_name: update_user_settings
     description: |
-      更新当前登录用户的天气默认位置或助手回复风格。
-      调用前必须已经从用户请求中提取至少一个要修改的非空字段和值，字段只能是 default_city、default_lat、default_lon、assistant_role；如果用户只说“修改设置”但没有提供任何字段和值，禁止调用本工具，直接向用户询问要修改哪项设置。
-      如果用户要更新城市，必须先调用 location Skill 的 search_cities(keyword=城市或区县名称) 查询支持的城市；从同一条 cities 结果读取 full_name、lat、lon，再把它们分别作为 default_city、default_lat、default_lon。禁止猜测或手填城市坐标，也不要把 search_cities 的 keyword 直接传给本工具。
-      如果只更新坐标，default_lat 和 default_lon 必须同时提供，且必须来自用户明确提供或同一条 search_cities 结果；只提供其中一个时先向用户追问另一个坐标。
-      调用前还必须向用户确认将要修改的字段和值。
+      更新当前登录用户的默认城市及其坐标。调用前必须先调用 location Skill 的 search_cities(keyword=城市或区县名称)，从同一条 cities 结果读取 full_name、lat、lon，并分别传入 default_city、default_lat、default_lon。
+      这三个字段都是必填项；禁止猜测坐标、只传城市、只传坐标或把 search_cities 的 keyword 直接传入。调用前必须向用户展示完整城市和坐标并取得确认。
     risk_level: write_confirm
     parameters: [default_city, default_lat, default_lon, assistant_role]
-    required: []
-    required_any: [default_city, default_lat, default_lon, assistant_role]
+    required: [default_city, default_lat, default_lon]
+  update_coordinates:
+    tool_name: update_user_settings_coordinates
+    description: |
+      更新当前登录用户的默认坐标。只有用户明确提供纬度和经度，或已经通过 location Skill 的 search_cities 得到同一条城市结果时使用；default_lat 和 default_lon 必须同时传入。
+      这是局部更新，只传坐标，不修改默认城市。调用前必须向用户展示坐标并取得确认；实际 MCP operation 字段固定传 update。
+    risk_level: write_confirm
+    parameters: [operation, default_lat, default_lon]
+    required: [operation, default_lat, default_lon]
+    inject_operation: false
+  update_style:
+    tool_name: update_user_settings_style
+    description: |
+      更新当前登录用户的助手回复风格。assistant_role 必须是 warm、professional 或 concise；实际 MCP operation 字段固定传 update。
+      调用前必须向用户展示将使用的风格并取得确认。
+    risk_level: write_confirm
+    parameters: [operation, assistant_role]
+    required: [operation, assistant_role]
+    inject_operation: false
 parameters:
   type: object
   properties:
     operation:
       type: string
-      enum: [query, update]
-      description: query=查看当前设置，update=修改当前设置。
+      enum: [query, update, update_coordinates, update_style]
+      description: query=查看当前设置，update=更新城市及其坐标，update_coordinates=更新坐标，update_style=更新回复风格。
     default_city:
       type: string
       maxLength: 50
@@ -65,20 +79,23 @@ parameters:
 管理当前登录用户的个人偏好设置，支持查询和更新：
 
 - `query` — 查询当前用户设置（read）
-- `update` — 更新当前用户设置（write_confirm）
+- `update` — 更新默认城市及其坐标（write_confirm）
+- `update_coordinates` — 仅更新默认坐标（write_confirm）
+- `update_style` — 更新助手回复风格（write_confirm）
 
 ## 何时使用
 
 - “我的用户设置是什么” → operation=query
-- “把默认城市改成苏州” → operation=update, default_city="苏州"
-- “以后回答简洁一点” → operation=update, assistant_role="concise"
+- “把默认城市改成苏州” → 先调用 `search_cities`，再使用 `update_user_settings`，同时传 `default_city`、`default_lat`、`default_lon`
+- “把默认坐标改成 31.299487, 120.581823” → 使用 `update_user_settings_coordinates`，传 `operation="update"`、`default_lat`、`default_lon`
+- “以后回答简洁一点” → 使用 `update_user_settings_style`，传 `operation="update"`、`assistant_role="concise"`
 
 ## 缺参策略
 
-- update 至少需要提供一个要修改的字段；没有字段时追问具体要修改的设置。
+- 不要调用一个同时承载所有更新形态的通用空参数工具；按用户意图选择城市、坐标或风格对应的更新工具。没有明确字段和值时先追问。
 - 可更新的内容只有：默认城市（`default_city`）、默认纬度（`default_lat`）、默认经度（`default_lon`）、助手回复风格（`assistant_role`）。不要传入 `user_id`、`keyword` 或其他字段。
-- 用户说“把默认城市改成苏州”时，先调用 `search_cities(keyword="苏州")`；从返回的 `cities` 选择与用户意图匹配的结果，读取该项的 `full_name`、`lat`、`lon`，再更新 `default_city`、`default_lat`、`default_lon`。有多个同名结果时先让用户选择，不要擅自选择。
-- 只修改默认城市时也建议同步传入该城市查询结果的坐标，避免城市与坐标不一致；不要凭记忆填写坐标。
+- 用户说“把默认城市改成苏州”时，先调用 `search_cities(keyword="苏州")`；从返回的 `cities` 选择与用户意图匹配的结果，读取该项的 `full_name`、`lat`、`lon`，再调用 `update_user_settings` 并同时传 `default_city`、`default_lat`、`default_lon`。有多个同名结果时先让用户选择，不要擅自选择。
+- 城市更新不得只传城市名称；必须同步传入同一条 `search_cities` 结果的坐标，避免城市与坐标不一致；不要凭记忆填写坐标。
 - 用户明确给出一对坐标时，可只更新 `default_lat`、`default_lon`；坐标必须成对传入，不能只更新其中一个。
 - 只有用户明确要求修改回复风格时才更新 `assistant_role`，可选值为 `warm`、`professional`、`concise`。
 - 未被修改的字段不要传 `null` 或旧值，保持局部更新。
@@ -94,7 +111,7 @@ parameters:
    - `lon` → `default_lon`
 4. 结果为空或有多个无法确认的匹配时，向用户澄清，不调用更新。
 5. 先向用户展示将要更新的城市和坐标并取得确认，再调用：
-   `update_user_settings(operation="update", default_city=..., default_lat=..., default_lon=...)`
+   `update_user_settings(default_city=..., default_lat=..., default_lon=...)`
 
 例如用户说“把默认城市改成苏州”，应先查 `search_cities(keyword="苏州")`，不能直接猜坐标；确认后再提交城市、纬度和经度三个字段。
 
