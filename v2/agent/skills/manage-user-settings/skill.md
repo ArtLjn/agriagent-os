@@ -26,6 +26,7 @@ operations:
     risk_level: write_confirm
     parameters: [default_city, default_lat, default_lon, assistant_role]
     required: []
+    required_any: [default_city, default_lat, default_lon, assistant_role]
 parameters:
   type: object
   properties:

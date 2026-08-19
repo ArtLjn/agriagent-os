@@ -2000,16 +2000,16 @@ def _find_latest_action_data(turn: Turn, tool_name: str) -> dict | None:
 
 def _missing_params_result(skill: Skill, missing: list[str]) -> dict:
     """构造只给模型看的缺失信息，禁止把内部字段名直接回复给用户。"""
-    properties = skill.parameters_schema.get("properties") or {}
-    details = [
-        str((properties.get(name) or {}).get("description") or name) for name in missing
-    ]
+    required_any = skill.required_any_params()
+    missing_fields = [name for name in missing if name != "__required_any__"]
+    for name in required_any:
+        if "__required_any__" in missing and name not in missing_fields:
+            missing_fields.append(name)
     return {
         "error": "missing_information",
-        "missing": missing,
+        "missing": missing_fields,
         "message": (
-            "当前请求缺少完成业务动作所需的信息："
-            + "；".join(details)
+            skill.missing_params_prompt(missing)
             + "。请停止调用工具，直接用自然、简短的中文向用户询问这些业务信息；"
             "不要提及参数名、operation、tool 或 MCP。"
         ),

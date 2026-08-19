@@ -31,6 +31,7 @@ OPERATION_FIELDS = {
     "risk_level",
     "parameters",
     "required",
+    "required_any",
     "mcp_tool",
     "inject_operation",
     "finalize_after_success",
@@ -191,6 +192,21 @@ def validate_metadata(meta: dict[str, Any], source: str = "skill.md") -> list[st
         if required_not_exposed:
             errors.append(
                 f"{path}.required 未包含在 parameters: {sorted(required_not_exposed)}"
+            )
+        required_any = config.get("required_any", [])
+        if not _is_string_list(required_any):
+            errors.append(f"{path}.required_any 必须是字符串列表")
+            required_any = []
+        unknown_required_any = set(required_any) - set(properties)
+        if unknown_required_any:
+            errors.append(
+                f"{path}.required_any 未定义参数: {sorted(unknown_required_any)}"
+            )
+        required_any_not_exposed = set(required_any) - set(config.get("parameters", []))
+        if required_any_not_exposed:
+            errors.append(
+                f"{path}.required_any 未包含在 parameters: "
+                f"{sorted(required_any_not_exposed)}"
             )
     return errors
 

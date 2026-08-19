@@ -13,6 +13,8 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar
 
+_REQUIRED_ANY_MARKER = "__required_any__"
+
 if TYPE_CHECKING:
     from agent.skills.context import SkillContext
 
@@ -199,15 +201,39 @@ class Skill:
         for name in [*required, *conditional]:
             if name not in missing and params.get(name) in (None, ""):
                 missing.append(name)
+        required_any = self.required_any_params(operation)
+        if required_any and not any(
+            params.get(name) not in (None, "") for name in required_any
+        ):
+            missing.append(_REQUIRED_ANY_MARKER)
         return missing
+
+    def required_any_params(self, operation: str | None = None) -> list[str]:
+        """返回条件约束中至少需要提供一个的参数名。"""
+        operation_config = self._operation_config(operation)
+        if not operation_config:
+            operation_config = getattr(self, "_operation_config_meta", {})
+        required_any = operation_config.get("required_any") or []
+        if not isinstance(required_any, list):
+            return []
+        return [name for name in required_any if isinstance(name, str) and name]
 
     def missing_params_prompt(self, missing: list[str]) -> str:
         """生成业务信息缺失说明，不暴露内部 operation。"""
         properties = self.parameters_schema.get("properties") or {}
-        details = [
+        details: list[str] = []
+        if _REQUIRED_ANY_MARKER in missing:
+            required_any = self.required_any_params()
+            choices = [
+                str((properties.get(name) or {}).get("description") or name)
+                for name in required_any
+            ]
+            details.append("至少提供以下一项：" + "、".join(choices))
+        details.extend(
             str((properties.get(name) or {}).get("description") or "必要业务信息")
             for name in missing
-        ]
+            if name != _REQUIRED_ANY_MARKER
+        )
         return "缺少完成该业务动作所需的信息：" + "；".join(details)
 
     @property
