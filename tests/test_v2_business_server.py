@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
 from business import server
+from business.mcp_app import mcp
 
 
 def test_business_server_exposes_mcp_without_redirect() -> None:
@@ -30,6 +32,7 @@ def test_business_api_v2_endpoints() -> None:
         "/api/v2/auth/login",
         "/api/v2/auth/register",
         "/api/v2/users/me",
+        "/api/v2/users/me/settings",
         "/api/v2/farms/my",
         "/api/v2/dashboard",
         "/api/v2/workers",
@@ -44,6 +47,13 @@ def test_business_api_v2_endpoints() -> None:
     ]
     for p in required:
         assert p in paths, f"Missing endpoint: {p}"
+
+
+@pytest.mark.asyncio
+async def test_business_mcp_registers_user_settings_tool() -> None:
+    tools = await mcp.list_tools()
+
+    assert any(tool.name == "manage_user_settings" for tool in tools)
 
 
 def test_business_api_returns_structured_auth_error() -> None:

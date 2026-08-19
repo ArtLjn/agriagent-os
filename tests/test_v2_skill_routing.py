@@ -28,6 +28,25 @@ def test_aggregate_manage_tools_are_not_exposed_to_model():
     assert "create_worker" in names
 
 
+def test_user_settings_skill_exposes_query_and_update_operations():
+    names = {skill.name for skill in load_all()}
+
+    assert "manage_user_settings" not in names
+    assert "get_user_settings" in names
+    assert "update_user_settings" in names
+
+    query = _loaded("get_user_settings")
+    update = _loaded("update_user_settings")
+    assert query.risk_level == "read"
+    assert update.risk_level == "write_confirm"
+    assert set(update.parameters_schema["properties"]) == {
+        "default_city",
+        "default_lat",
+        "default_lon",
+        "assistant_role",
+    }
+
+
 def test_operation_skill_schema_does_not_expose_internal_operation():
     skill = _loaded("create_crop_cycle")
     schema = skill.parameters_schema

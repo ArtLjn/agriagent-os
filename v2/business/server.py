@@ -19,7 +19,7 @@ from fastapi import FastAPI
 from starlette.middleware import Middleware
 
 # Import tool registration side-effects (each module decorates @mcp.tool).
-from business.tools import farm, location, logs, weather  # noqa: F401
+from business.tools import farm, location, logs, user_settings, weather  # noqa: F401
 from business.tools import (  # noqa: F401
     cost,
     crop_cycle,
@@ -86,9 +86,7 @@ def setup_logging() -> None:
 
 def create_app() -> FastAPI:
     """创建同时承载 REST 与 MCP 的 ASGI 应用。"""
-    mcp_app = mcp.http_app(
-        path="/mcp", middleware=[Middleware(McpAuthMiddleware)]
-    )
+    mcp_app = mcp.http_app(path="/mcp", middleware=[Middleware(McpAuthMiddleware)])
     app = FastAPI(
         title="Farm Manager Business API",
         version="2.0.0",
