@@ -1090,6 +1090,14 @@ async def _emit_missing_params(
     turn.emit("observation", ev["data"])
     yield ev
     turn.messages.append(context.tool_result_message(tool_call_id, tool_name, result))
+    # 缺参是确定性的用户澄清分支，不能再把内部结果交回模型反复选工具。
+    turn.finalization_request = {
+        "code": str(result.get("error") or "missing_required_params"),
+        "message": message,
+        "answer": skill.missing_params_prompt(missing),
+        "tool_name": tool_name,
+        "result": result,
+    }
 
 
 async def _check_duplication(
@@ -1144,10 +1152,12 @@ async def _finalize_requested_error(
     code = str(request.get("code") or "tool_failed")
     message = str(request.get("message") or "工具执行失败")
     tool_name = str(request.get("tool_name") or "")
-    answer = (
-        f"调用 {tool_name or '业务工具'} 未完成：{message}。"
-        "该错误不可重试，已停止继续调用工具，请补充信息后重试。"
-    )
+    answer = str(request.get("answer") or "")
+    if not answer:
+        answer = (
+            f"调用 {tool_name or '业务工具'} 未完成：{message}。"
+            "该错误不可重试，已停止继续调用工具，请补充信息后重试。"
+        )
     async for ev in _emit_failure_terminal(
         turn,
         code=code,
