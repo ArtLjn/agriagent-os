@@ -22,7 +22,10 @@ operations:
     required: []
   update:
     tool_name: update_user_settings
-    description: 更新当前登录用户的天气默认位置或助手回复风格；调用前必须向用户确认将要修改的字段和值。
+    description: |
+      更新当前登录用户的天气默认位置或助手回复风格。
+      调用前必须已经从用户请求中提取至少一个要修改的非空字段和值，字段只能是 default_city、default_lat、default_lon、assistant_role；如果用户只说“修改设置”但没有提供任何字段和值，禁止调用本工具，直接向用户询问要修改哪项设置。
+      调用前还必须向用户确认将要修改的字段和值。
     risk_level: write_confirm
     parameters: [default_city, default_lat, default_lon, assistant_role]
     required: []
