@@ -108,6 +108,67 @@ def test_explicit_unknown_location_is_not_replaced_by_default_coords(
     )
 
 
+def test_user_default_location_is_preferred_when_location_is_omitted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        weather_api.farm_crud_service,
+        "get_farm_by_id",
+        lambda *_args, **_kwargs: SimpleNamespace(location="北京"),
+    )
+    monkeypatch.setattr(
+        weather_api.user_service,
+        "get_user_settings",
+        lambda user_id: {
+            "user_id": user_id,
+            "default_city": "江苏省苏州市",
+            "default_lat": 31.299487,
+            "default_lon": 120.581823,
+        },
+    )
+    monkeypatch.setattr(
+        weather_api.location_service,
+        "find_coords",
+        lambda *_args: (_ for _ in ()).throw(
+            AssertionError("已有用户默认坐标时不应再次猜测坐标")
+        ),
+    )
+
+    assert weather_api._resolve_location(object(), 1, None, None, None, "user-1") == (
+        "江苏省苏州市",
+        31.299487,
+        120.581823,
+    )
+
+
+def test_explicit_location_overrides_user_default_location(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        weather_api.farm_crud_service,
+        "get_farm_by_id",
+        lambda *_args, **_kwargs: SimpleNamespace(location="北京"),
+    )
+    monkeypatch.setattr(
+        weather_api.user_service,
+        "get_user_settings",
+        lambda *_args: {
+            "default_city": "江苏省苏州市",
+            "default_lat": 31.299487,
+            "default_lon": 120.581823,
+        },
+    )
+    monkeypatch.setattr(
+        weather_api.location_service,
+        "find_coords",
+        lambda city: (39.9042, 116.4074) if city == "北京市" else None,
+    )
+
+    assert weather_api._resolve_location(
+        object(), 1, "北京市", None, None, "user-1"
+    ) == ("北京市", 39.9042, 116.4074)
+
+
 @pytest.mark.asyncio
 async def test_fetch_weather_merges_official_alerts_without_blocking_forecast(
     monkeypatch: pytest.MonkeyPatch,
@@ -142,7 +203,9 @@ async def test_weather_skill_searches_unknown_location_and_retries() -> None:
     calls: list[tuple[str, dict]] = []
 
     class Business:
-        async def call_tool(self, name: str, arguments: dict) -> dict:
+        async def call_mcp_tool(
+            self, name: str, arguments: dict, *, risk_level: str
+        ) -> dict:
             calls.append((name, arguments))
             if name == "get_weather" and arguments.get("location") == "火星":
                 return {
@@ -154,9 +217,11 @@ async def test_weather_skill_searches_unknown_location_and_retries() -> None:
             return {"location": "江苏省苏州市", "warnings": []}
 
     skill = next(skill for skill in load_all() if skill.name == "get_weather")
+    business = Business()
     ctx = SimpleNamespace(
         turn=SimpleNamespace(user_input="火星天气怎么样", events=[]),
-        business_client=Business(),
+        business_client=business,
+        call_mcp_tool=business.call_mcp_tool,
     )
 
     result = await skill.execute({"location": "火星", "days": 7}, ctx)
@@ -172,13 +237,17 @@ async def test_weather_skill_searches_unknown_location_and_retries() -> None:
 @pytest.mark.asyncio
 async def test_weather_skill_exposes_business_error() -> None:
     class Business:
-        async def call_tool(self, name: str, arguments: dict) -> dict:
+        async def call_mcp_tool(
+            self, name: str, arguments: dict, *, risk_level: str
+        ) -> dict:
             return {"error": "fetch_failed", "message": "天气源暂时不可用"}
 
     skill = next(skill for skill in load_all() if skill.name == "get_weather")
+    business = Business()
     ctx = SimpleNamespace(
         turn=SimpleNamespace(user_input="查询天气", events=[]),
-        business_client=Business(),
+        business_client=business,
+        call_mcp_tool=business.call_mcp_tool,
     )
 
     result = await skill.execute({}, ctx)

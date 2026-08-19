@@ -8,7 +8,12 @@ from sqlalchemy.orm import Session
 from business.api.deps import get_current_user
 from business.config import settings
 from business.db import get_db
-from business.services import farm_crud_service, location_service, weather_service
+from business.services import (
+    farm_crud_service,
+    location_service,
+    user_service,
+    weather_service,
+)
 
 router = APIRouter(prefix="/weather", tags=["weather"])
 
@@ -19,11 +24,27 @@ def _resolve_location(
     location: str | None,
     lat: float | None,
     lon: float | None,
+    user_id: str | None = None,
 ) -> tuple[str, float | None, float | None]:
+    user_settings = user_service.get_user_settings(user_id) if user_id else None
     farm = farm_crud_service.get_farm_by_id(db, farm_id)
-    resolved_location = location or (farm.location if farm else None) or "北京"
     if lat is not None and lon is not None:
-        return resolved_location, lat, lon
+        return location or (farm.location if farm else None) or "北京", lat, lon
+
+    explicit_location = bool(location and location.strip())
+    default_city = (user_settings or {}).get("default_city")
+    resolved_location = (
+        location
+        if explicit_location
+        else default_city or (farm.location if farm else None) or "北京"
+    )
+
+    if not explicit_location and user_settings:
+        default_lat = user_settings.get("default_lat")
+        default_lon = user_settings.get("default_lon")
+        if default_lat is not None and default_lon is not None:
+            return resolved_location, default_lat, default_lon
+
     coords = location_service.find_coords(resolved_location)
     if coords is not None:
         return resolved_location, coords[0], coords[1]
@@ -44,7 +65,7 @@ async def get_weather(
     db: Session = Depends(get_db),
 ) -> dict:
     resolved_location, resolved_lat, resolved_lon = _resolve_location(
-        db, user["farm_id"], location, lat, lon
+        db, user["farm_id"], location, lat, lon, user["user_id"]
     )
     return await weather_service._fetch_weather_async(
         location=resolved_location,
@@ -63,7 +84,7 @@ async def get_weather_now(
     db: Session = Depends(get_db),
 ) -> dict:
     resolved_location, resolved_lat, resolved_lon = _resolve_location(
-        db, user["farm_id"], location, lat, lon
+        db, user["farm_id"], location, lat, lon, user["user_id"]
     )
     return await weather_service._fetch_weather_async(
         location=resolved_location,
