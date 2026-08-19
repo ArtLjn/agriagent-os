@@ -235,6 +235,105 @@ async def test_weather_skill_searches_unknown_location_and_retries() -> None:
 
 
 @pytest.mark.asyncio
+async def test_weather_skill_uses_user_default_location_when_omitted() -> None:
+    calls: list[tuple[str, dict]] = []
+
+    class Business:
+        async def call_mcp_tool(
+            self, name: str, arguments: dict, *, risk_level: str
+        ) -> dict:
+            calls.append((name, arguments))
+            if name == "manage_user_settings":
+                return {
+                    "configured": True,
+                    "settings": {
+                        "default_city": "江苏省徐州市睢宁县",
+                        "default_lat": 33.9141,
+                        "default_lon": 117.936,
+                    },
+                }
+            return {"location": arguments["location"], "warnings": []}
+
+    skill = next(skill for skill in load_all() if skill.name == "get_weather")
+    business = Business()
+    ctx = SimpleNamespace(
+        turn=SimpleNamespace(user_input="天气如何", events=[]),
+        business_client=business,
+        call_mcp_tool=business.call_mcp_tool,
+    )
+
+    result = await skill.execute({}, ctx)
+
+    assert result.ok
+    assert calls == [
+        ("manage_user_settings", {"operation": "query"}),
+        ("get_weather", {"location": "江苏省徐州市睢宁县"}),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_weather_skill_falls_back_when_user_default_is_unavailable() -> None:
+    calls: list[tuple[str, dict]] = []
+
+    class Business:
+        async def call_mcp_tool(
+            self, name: str, arguments: dict, *, risk_level: str
+        ) -> dict:
+            calls.append((name, arguments))
+            if name == "manage_user_settings":
+                return {"configured": False, "settings": {}}
+            return {"location": "苏州", "warnings": []}
+
+    skill = next(skill for skill in load_all() if skill.name == "get_weather")
+    business = Business()
+    ctx = SimpleNamespace(
+        turn=SimpleNamespace(user_input="天气如何", events=[]),
+        business_client=business,
+        call_mcp_tool=business.call_mcp_tool,
+    )
+
+    result = await skill.execute({}, ctx)
+
+    assert result.ok
+    assert calls == [
+        ("manage_user_settings", {"operation": "query"}),
+        ("get_weather", {}),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_weather_skill_resolves_explicit_city_when_model_omits_location() -> None:
+    calls: list[tuple[str, dict]] = []
+
+    class Business:
+        async def call_mcp_tool(
+            self, name: str, arguments: dict, *, risk_level: str
+        ) -> dict:
+            calls.append((name, arguments))
+            if name == "search_cities":
+                return {"cities": [{"full_name": "北京市东城区"}]}
+            if name == "manage_user_settings":
+                raise AssertionError("明确城市不应读取默认位置")
+            return {"location": arguments["location"], "warnings": []}
+
+    skill = next(skill for skill in load_all() if skill.name == "get_weather")
+    business = Business()
+    ctx = SimpleNamespace(
+        turn=SimpleNamespace(user_input="查询北京市明天天气", events=[]),
+        business_client=business,
+        call_mcp_tool=business.call_mcp_tool,
+    )
+
+    result = await skill.execute({}, ctx)
+
+    assert result.ok
+    assert calls == [
+        ("search_cities", {"keyword": "北京市", "limit": 10}),
+        ("get_weather", {"location": "北京市东城区"}),
+    ]
+
+
+@pytest.mark.asyncio
 async def test_weather_skill_exposes_business_error() -> None:
     class Business:
         async def call_mcp_tool(

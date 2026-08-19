@@ -1,12 +1,13 @@
-"""weather skill — 自定义 execute（location 兜底）。
+"""weather skill — 自定义 execute（用户默认位置和 location 兜底）。
 
 元数据（name/description/parameters_schema）由 skill.md 定义。
-本文件只保留自定义逻辑：LLM 不传 location 时复用本轮已解析的位置。
-如果 Business 返回 unknown_location，则自动搜索城市并重试一次。
+本文件负责在 LLM 不传 location 时解析当前用户的默认位置，避免 MCP
+误用农场位置；如果 Business 返回 unknown_location，则自动搜索城市并重试一次。
 """
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from agent.skills.base import Skill, SkillResult
@@ -18,10 +19,13 @@ class WeatherSkill(Skill):
 
     async def execute(self, params: dict[str, Any], ctx: SkillContext) -> SkillResult:
         params = dict(params)
-        # 未指定地点时保留空参数，让 Business 按农场默认位置查询。
-        # 用户原话不是地点，不能把“查询天气如何”直接传给天气服务。
+        # 用户明确指定地点时必须保持原值；只有未指定地点才解析默认位置。
         if not params.get("location"):
             resolved = _resolve_location_from_history(ctx.turn)
+            if not resolved:
+                resolved = await _resolve_location_from_user_input(ctx)
+            if not resolved:
+                resolved = await _resolve_user_default_location(ctx)
             if resolved:
                 params = {**params, "location": resolved}
         if params:
@@ -83,6 +87,100 @@ def _as_skill_result(result: Any) -> SkillResult:
             error=str(result.get("message") or result.get("error")),
         )
     return SkillResult(data=result)
+
+
+async def _resolve_user_default_location(ctx: SkillContext) -> str | None:
+    """读取当前用户默认城市，失败时保留 Business 的兼容兜底。"""
+    result = await ctx.call_mcp_tool(
+        "manage_user_settings",
+        {"operation": "query"},
+        risk_level="read",
+    )
+    if not isinstance(result, dict) or result.get("error"):
+        return None
+    settings = result.get("settings")
+    if not isinstance(settings, dict):
+        return None
+    default_city = settings.get("default_city")
+    return str(default_city).strip() if default_city else None
+
+
+async def _resolve_location_from_user_input(ctx: SkillContext) -> str | None:
+    """补偿模型漏传 location 的情况，优先从用户原话解析明确城市。"""
+    keyword = _extract_location_candidate(ctx.turn.user_input)
+    if not keyword:
+        return None
+    result = await ctx.call_mcp_tool(
+        "search_cities",
+        {"keyword": keyword, "limit": 10},
+        risk_level="read",
+    )
+    if not isinstance(result, dict) or result.get("error"):
+        return None
+    cities = result.get("cities") or []
+    full_name = next(
+        (
+            str(city.get("full_name"))
+            for city in cities
+            if isinstance(city, dict) and city.get("full_name")
+        ),
+        "",
+    )
+    return full_name or None
+
+
+def _extract_location_candidate(user_input: str) -> str:
+    """去掉常见天气意图词，保留可交给 location Skill 的地点词。"""
+    candidate = str(user_input or "").strip()
+    noise = (
+        "帮我查一下",
+        "帮我看看",
+        "我想知道",
+        "告诉我",
+        "查询",
+        "查一下",
+        "查查",
+        "请问",
+        "看一下",
+        "天气预报",
+        "天气",
+        "预报",
+        "气温",
+        "温度",
+        "预警",
+        "未来几天",
+        "最近",
+        "今天",
+        "明天",
+        "后天",
+        "这周",
+        "本周",
+        "下周",
+        "农场这边",
+        "农场",
+        "这边",
+        "怎么样",
+        "如何",
+        "怎样",
+        "什么",
+        "有没有",
+        "会不会",
+        "是否",
+        "下雨",
+        "有雨",
+        "降雨",
+        "大风",
+        "高温",
+        "多少",
+        "是多少",
+        "情况",
+        "吗",
+        "呢",
+        "的",
+    )
+    for item in sorted(noise, key=len, reverse=True):
+        candidate = candidate.replace(item, "")
+    return re.sub(r"[\s，。！？、,.!?？:：；;（）()]+", "", candidate)
 
 
 def _resolve_location_from_history(turn) -> str | None:
