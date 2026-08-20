@@ -81,6 +81,25 @@ export interface CurrentUser {
   avatar_url?: string | null;
   role?: string;
   status?: string;
+  farm?: {
+    id: number;
+    uid: string;
+    name: string;
+    location: string | null;
+  } | null;
+}
+
+export interface UserSettings {
+  user_id?: string;
+  default_city?: string | null;
+  default_lat?: number | null;
+  default_lon?: number | null;
+  assistant_role?: 'professional' | 'warm' | 'concise';
+}
+
+export interface UpdateProfileRequest {
+  nickname?: string;
+  avatar_url?: string | null;
 }
 
 export interface ListUsersParams {
@@ -99,6 +118,15 @@ export interface ListQuotaOverviewParams {
 export const usersApi = {
   getCurrent: () =>
     apiClient.get<CurrentUser>("/users/me"),
+
+  updateCurrent: (data: UpdateProfileRequest) =>
+    apiClient.patch<CurrentUser>("/users/me", data),
+
+  getSettings: () =>
+    apiClient.get<UserSettings>("/users/me/settings"),
+
+  updateSettings: (data: UserSettings) =>
+    apiClient.patch<UserSettings>("/users/me/settings", data),
 
   list: (params?: ListUsersParams) =>
     apiClient.get<UserListResponse>("/admin/users", { params }),

@@ -50,6 +50,9 @@ async def trace_nodes_formal(
     trace_id: str,
     limit: int = Query(default=200, ge=1, le=1000),
     include_payload: bool = Query(default=False),
+    include_resource_spans: bool = Query(default=False),
+    span_kind: str | None = Query(default=None),
+    node_type: str | None = Query(default=None),
     authorization: str | None = Header(default=None),
 ) -> dict:
     """使用正式 trace_id 查询内部执行节点。"""
@@ -59,6 +62,9 @@ async def trace_nodes_formal(
             trace_id,
             limit=limit,
             include_payload=include_payload,
+            include_resource_spans=include_resource_spans,
+            span_kind=span_kind,
+            node_type=node_type,
             user_id=identity["user_id"],
             farm_uid=identity["farm_uid"],
         )
@@ -100,6 +106,7 @@ async def trace_timeline(
     trace_id: str,
     limit: int = Query(default=400, ge=1, le=2000),
     include_payload: bool = Query(default=False),
+    include_resource_spans: bool = Query(default=False),
     authorization: str | None = Header(default=None),
 ) -> dict:
     """查询按时间合并的 Trace 节点和 SSE 事件。"""
@@ -109,6 +116,7 @@ async def trace_timeline(
             trace_id,
             limit=limit,
             include_payload=include_payload,
+            include_resource_spans=include_resource_spans,
             user_id=identity["user_id"],
             farm_uid=identity["farm_uid"],
         )
@@ -124,6 +132,9 @@ async def trace_nodes(
     request_id: str,
     limit: int = Query(default=200, ge=1, le=1000),
     include_payload: bool = Query(default=False),
+    include_resource_spans: bool = Query(default=False),
+    span_kind: str | None = Query(default=None),
+    node_type: str | None = Query(default=None),
     authorization: str | None = Header(default=None),
 ) -> dict:
     """Get all trace nodes for a request."""
@@ -133,6 +144,9 @@ async def trace_nodes(
             request_id,
             limit=limit,
             include_payload=include_payload,
+            include_resource_spans=include_resource_spans,
+            span_kind=span_kind,
+            node_type=node_type,
             user_id=identity["user_id"],
             farm_uid=identity["farm_uid"],
         )

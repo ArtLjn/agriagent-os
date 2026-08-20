@@ -29,11 +29,16 @@ import asyncio
 import logging
 import time
 from collections import deque
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from agent.config import settings
-from agent.infra.trace.context import get_trace, get_step_index
+from agent.infra.trace.context import (
+    current_parent_span_id,
+    get_trace,
+    get_step_index,
+    new_span_id,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +129,15 @@ def record(
     token_usage: dict | None = None,
     error_message: str | None = None,
     status: str | None = None,
+    span_id: str | None = None,
+    parent_span_id: str | None = None,
+    span_kind: str = "internal",
+    layer: str = "agent",
+    phase: str | None = None,
+    attempt: int = 1,
+    attributes: dict[str, Any] | None = None,
+    resource: dict[str, Any] | None = None,
+    step_index: int | None = None,
 ) -> None:
     """记录一条 trace。无上下文时静默跳过。"""
     trace = get_trace()
@@ -138,25 +152,46 @@ def record(
     if duration_ms is None:
         duration_ms = int((end_time - start_time) * 1000)
 
+    root_span_id = getattr(trace, "root_span_id", None) or "root"
+    resolved_span_id = span_id or new_span_id()
+    resolved_parent_span_id = parent_span_id
+    if resolved_parent_span_id is None and resolved_span_id != root_span_id:
+        resolved_parent_span_id = current_parent_span_id()
+
     trace_data = {
+        "schema_version": 2,
         "trace_id": trace.trace_id,
         "request_id": trace.request_id,
         "conversation_id": trace.conversation_id,
         "turn_id": trace.turn_id,
         "user_id": trace.user_id,
         "farm_uid": trace.farm_uid,
-        "step_index": get_step_index(),
+        "span_id": resolved_span_id,
+        "parent_span_id": resolved_parent_span_id,
+        "span_kind": span_kind,
+        "layer": layer,
+        "step_index": get_step_index() if step_index is None else step_index,
+        "phase": phase,
+        "attempt": max(1, attempt),
         "node_type": node_type,
         "node_name": node_name,
         "input_data": _truncate(input_data) if input_data is not None else None,
         "output_data": _truncate(output_data) if output_data is not None else None,
-        "start_time": datetime.fromtimestamp(start_time),
-        "end_time": datetime.fromtimestamp(end_time),
+        # Trace 节点和 SSE 事件必须共享 UTC 时间基准，否则合并时间线会把
+        # 本地无时区时间与 UTC 时间按字面值比较，导致真实执行顺序错乱。
+        "start_time": datetime.fromtimestamp(start_time, tz=timezone.utc),
+        "end_time": datetime.fromtimestamp(end_time, tz=timezone.utc),
         "duration_ms": duration_ms,
         "token_usage": token_usage,
         "status": status or ("error" if error_message else "success"),
         "error_message": error_message,
-        "created_at": datetime.now(),
+        "attributes": _truncate(attributes or {}),
+        "resource": _truncate(resource or {}),
+        "sampling": {
+            "level": int(getattr(trace, "sampling_level", 1)),
+            "redacted": False,
+        },
+        "created_at": datetime.now(timezone.utc),
     }
     _queue.append(trace_data)
 
@@ -179,6 +214,7 @@ def record_event(event: dict[str, Any]) -> dict[str, Any]:
         }
 
     record_data = {
+        "schema_version": 2,
         "record_kind": "sse_event",
         "trace_id": trace_id,
         "request_id": str(
@@ -190,7 +226,10 @@ def record_event(event: dict[str, Any]) -> dict[str, Any]:
             event.get("conversation_id") or (trace.conversation_id if trace else "")
         ),
         "turn_id": str(event.get("turn_id") or (trace.turn_id if trace else "")),
+        "span_id": event.get("span_id"),
+        "parent_span_id": event.get("parent_span_id"),
         "event_id": event_id,
+        "event_name": str(event.get("event_name") or event.get("type") or ""),
         "event_type": str(event.get("type") or ""),
         "seq": int(event.get("seq") or 0),
         "phase": str(event.get("phase") or ""),
@@ -200,7 +239,8 @@ def record_event(event: dict[str, Any]) -> dict[str, Any]:
         "status_after": str(event.get("status_after") or ""),
         "occurred_at": event.get("occurred_at"),
         "data": _truncate(event.get("data") or {}),
-        "created_at": datetime.now(),
+        "projection_status": "queued",
+        "created_at": datetime.now(timezone.utc),
     }
     queue_was_full = (
         _event_queue.maxlen is not None and len(_event_queue) >= _event_queue.maxlen
@@ -272,6 +312,7 @@ async def _flush_events() -> int:
         event_id = str(item.get("event_id") or "")
         if not trace_id or not event_id:
             failed.append(item)
+            item["projection_status"] = "dropped"
             logger.error(
                 "trace event projection skipped: missing identity trace_id=%s event_id=%s",
                 trace_id,
@@ -279,15 +320,17 @@ async def _flush_events() -> int:
             )
             continue
         try:
+            persisted_item = {**item, "projection_status": "persisted"}
             result = await coll.update_one(
                 {"trace_id": trace_id, "event_id": event_id},
-                {"$set": item},
+                {"$set": persisted_item},
                 upsert=True,
             )
             if getattr(result, "acknowledged", True) is False:
                 raise RuntimeError("mongo_write_not_acknowledged")
             count += 1
         except Exception:
+            item["projection_status"] = "retrying"
             failed.append(item)
             logger.exception(
                 "trace event projection failed (non-fatal): trace_id=%s event_id=%s seq=%s",
@@ -456,6 +499,7 @@ def trace_llm_call(
     duration_ms: int | None = None,
     token_usage: dict | None = None,
     error: str | None = None,
+    attempt: int = 1,
 ) -> None:
     """记录完整的模型输入和输出，供 Trace Drawer 复盘单次模型调用。"""
     record(
@@ -466,6 +510,14 @@ def trace_llm_call(
         duration_ms=duration_ms,
         token_usage=token_usage,
         error_message=error,
+        phase="reasoning",
+        attempt=attempt,
+        attributes={
+            "provider": "configured_llm",
+            "model": model,
+            "message_count": len(messages),
+            "tool_calls_count": len((response or {}).get("tool_calls") or []),
+        },
     )
 
 
@@ -475,6 +527,7 @@ def trace_tool_call(
     result: Any = None,
     duration_ms: int | None = None,
     error: str | None = None,
+    attempt: int = 1,
 ) -> None:
     """便捷方法：记录工具调用。"""
     record(
@@ -484,6 +537,158 @@ def trace_tool_call(
         output_data=result,
         duration_ms=duration_ms,
         error_message=error,
+        phase="tool_executing",
+        attempt=attempt,
+        attributes={"tool_name": tool_name},
+    )
+
+
+def trace_skill_router(
+    *,
+    registry_count: int,
+    exposed_tool_count: int,
+    selected_tools: list[str] | None = None,
+    candidate_tools: list[str] | None = None,
+    selected_tool_calls: list[dict[str, Any]] | None = None,
+    selection_status: str = "selected",
+    decision_source: str = "llm_tool_call",
+    duration_ms: int | None = None,
+    router_mode: str = "llm_tool_binding",
+    step_index: int | None = None,
+) -> None:
+    """记录 LLM 返回后的真实 Skill 选择结果。"""
+    resolved_selected_tools = list(dict.fromkeys(selected_tools or []))
+    record(
+        node_type="skill_router",
+        node_name="skill_router.r1",
+        input_data={
+            "registry_skill_count": registry_count,
+            "exposed_tool_count": exposed_tool_count,
+            "candidate_tools": candidate_tools or [],
+            "router_mode": router_mode,
+        },
+        output_data={
+            "schema_version": 2,
+            "selection_status": selection_status,
+            "selected_tools": resolved_selected_tools,
+            "selected_tool_calls": selected_tool_calls or [],
+            "decision_source": decision_source,
+            "candidate_count": exposed_tool_count,
+        },
+        duration_ms=duration_ms,
+        phase="reasoning",
+        step_index=step_index,
+        attributes={
+            "registry_skill_count": registry_count,
+            "exposed_tool_count": exposed_tool_count,
+            "selected_tool_count": len(resolved_selected_tools),
+            "selection_status": selection_status,
+            "decision_source": decision_source,
+            "router_mode": router_mode,
+        },
+    )
+
+
+def trace_catalog_recall(
+    *,
+    registry_count: int,
+    exposed_tool_count: int,
+    candidate_tools: list[str],
+    duration_ms: int | None = None,
+    router_mode: str = "llm_tool_binding",
+) -> None:
+    """记录 LLM 决策前的 Skill 候选目录快照。"""
+    record(
+        node_type="catalog_recall",
+        node_name="skill_catalog.load",
+        input_data={
+            "registry_skill_count": registry_count,
+            "exposed_tool_count": exposed_tool_count,
+            "router_mode": router_mode,
+        },
+        output_data={
+            "candidate_tools": candidate_tools,
+            "candidate_count": len(candidate_tools),
+            "selection_status": "pending",
+            "decision_source": "skill_registry",
+        },
+        duration_ms=duration_ms,
+        phase="setup",
+        attributes={
+            "registry_skill_count": registry_count,
+            "exposed_tool_count": exposed_tool_count,
+            "candidate_count": len(candidate_tools),
+            "router_mode": router_mode,
+        },
+    )
+
+
+def trace_context_build(
+    *,
+    message_count: int,
+    history_count: int,
+    memory_block_count: int,
+    duration_ms: int | None = None,
+    compressed: bool = False,
+) -> None:
+    """记录模型实际上下文装配的摘要，不重复保存对话全文。"""
+    record(
+        node_type="context_build",
+        node_name="context.build_initial_messages",
+        input_data={
+            "history_count": history_count,
+            "memory_block_count": memory_block_count,
+        },
+        output_data={
+            "message_count": message_count,
+            "compressed": compressed,
+        },
+        duration_ms=duration_ms,
+        phase="setup",
+        attributes={
+            "history_count": history_count,
+            "memory_block_count": memory_block_count,
+            "message_count": message_count,
+            "compressed": compressed,
+        },
+    )
+
+
+def trace_approval(
+    *,
+    tool_name: str,
+    risk_level: str,
+    decision: str,
+    duration_ms: int,
+    reason: str = "",
+) -> None:
+    """记录 HITL 等待和决议，不把审批正文重复写入 Trace。"""
+    record(
+        node_type="approval",
+        node_name=tool_name,
+        input_data={"tool_name": tool_name, "risk_level": risk_level},
+        output_data={"decision": decision, "reason": reason},
+        duration_ms=duration_ms,
+        phase="awaiting_approval",
+        status="error" if decision in {"rejected", "expired", "cancelled"} else "success",
+        error_message=reason if decision in {"rejected", "expired", "cancelled"} else None,
+        attributes={
+            "tool_name": tool_name,
+            "risk_level": risk_level,
+            "decision": decision,
+        },
+    )
+
+
+def trace_queue_wait(duration_ms: int) -> None:
+    """记录 Worker 从入队到执行的等待时间。"""
+    record(
+        node_type="queue_wait",
+        node_name="redis.dispatch",
+        duration_ms=duration_ms,
+        phase="setup",
+        attributes={"queue_wait_ms": duration_ms},
+        resource={"system": "redis", "operation": "xreadgroup"},
     )
 
 
@@ -497,12 +702,33 @@ def trace_commit_state(result: dict[str, Any], *, reply_generated: bool) -> None
             "reply_generated": reply_generated,
             "result": result,
         },
+        phase="finalizing",
+        attributes={
+            "business_committed": True,
+            "reply_generated": reply_generated,
+        },
     )
 
 
 def trace_turn_outcome(status: str, error: str | None = None) -> None:
     """记录 turn 最终状态，避免异常路径在请求摘要中伪装成 success。"""
     failed = bool(error) or status == "failed"
+    trace = get_trace()
+    if trace is not None:
+        record(
+            node_type="trace_root",
+            node_name="turn",
+            start_time=trace.created_at,
+            end_time=time.time(),
+            duration_ms=int((time.time() - trace.created_at) * 1000),
+            span_id=getattr(trace, "root_span_id", None) or "root",
+            parent_span_id=None,
+            span_kind="root",
+            layer="agent",
+            phase="terminal",
+            step_index=0,
+            attributes={"turn_id": trace.turn_id},
+        )
     record(
         node_type="turn",
         node_name="outcome",
@@ -513,4 +739,9 @@ def trace_turn_outcome(status: str, error: str | None = None) -> None:
         },
         error_message=error,
         status="error" if failed else "success",
+        parent_span_id=(getattr(trace, "root_span_id", None) or "root")
+        if trace
+        else None,
+        phase="terminal",
+        attributes={"stop_status": status},
     )

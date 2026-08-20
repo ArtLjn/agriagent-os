@@ -16,7 +16,7 @@ from agent.config import settings
 from agent.core.turn import Turn
 from agent.infra.redis_store import get_client, key
 from agent.infra.trace.collector import record_event
-from agent.infra.trace.context import trace_id_for_turn
+from agent.infra.trace.context import current_span_id, get_trace, trace_id_for_turn
 
 logger = logging.getLogger(__name__)
 
@@ -273,14 +273,26 @@ async def publish_event(turn_id: str, event: dict[str, Any]) -> int:
     )
     occurred_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     event_id = str(event.get("event_id") or f"evt_{uuid.uuid4().hex}")
+    trace_context = get_trace()
+    span_id = str(
+        event.get("span_id")
+        or current_span_id()
+        or (trace_context.root_span_id if trace_context else "")
+        or ""
+    )
     seq = int(await client.incr(seq_key))
     envelope = {
         "seq": seq,
         "event_id": event_id,
         "trace_id": trace_id,
         "request_id": request_id,
+        "user_id": state.get("user_id", ""),
+        "farm_uid": state.get("farm_uid", ""),
+        "farm_id": state.get("farm_id", ""),
         "turn_id": turn_id,
         "conversation_id": conversation_id,
+        "span_id": span_id,
+        "parent_span_id": event.get("parent_span_id"),
         "type": event_type,
         "event_type": event_type,
         "data": data,
@@ -299,8 +311,13 @@ async def publish_event(turn_id: str, event: dict[str, Any]) -> int:
             "event_id": event_id,
             "trace_id": trace_id,
             "request_id": request_id,
+            "user_id": state.get("user_id", ""),
+            "farm_uid": state.get("farm_uid", ""),
+            "farm_id": state.get("farm_id", ""),
             "turn_id": turn_id,
             "conversation_id": conversation_id,
+            "span_id": span_id,
+            "parent_span_id": str(event.get("parent_span_id") or ""),
             "type": event_type,
             "event_type": event_type,
             "data": json.dumps(data, ensure_ascii=False),
@@ -355,6 +372,8 @@ async def read_events(turn_id: str, after_seq: int = 0) -> list[dict[str, Any]]:
                 "conversation_id": fields.get(
                     "conversation_id", state.get("conversation_id", "")
                 ),
+                "span_id": fields.get("span_id") or state.get("span_id", ""),
+                "parent_span_id": fields.get("parent_span_id") or None,
                 "type": fields.get("type", ""),
                 "event_type": fields.get("event_type", fields.get("type", "")),
                 "data": json.loads(fields.get("data", "{}")),

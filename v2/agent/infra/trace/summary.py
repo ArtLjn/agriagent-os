@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import json
 from collections import OrderedDict
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
-TRACE_SUMMARY_SCHEMA_VERSION = 1
+TRACE_SUMMARY_SCHEMA_VERSION = 2
 
 _FAILED_STATUSES = {"failed", "error", "timeout", "cancelled"}
 _BLOCKED_STATUSES = {"blocked"}
@@ -49,6 +49,8 @@ def build_trace_request_summary(nodes: list[dict[str, Any]]) -> dict[str, Any] |
         "user_id": str(first.get("user_id", "")),
         "farm_uid": str(first.get("farm_uid", "")),
         "node_count": len(ordered),
+        "logical_span_count": metrics["logical_span_count"],
+        "resource_span_count": metrics["resource_span_count"],
         "total_duration_ms": metrics["total_duration_ms"],
         "created_at": _format_datetime(ended_at or started_at),
         "started_at": _format_datetime(started_at),
@@ -74,6 +76,8 @@ def summary_to_mongo_doc(summary: dict[str, Any]) -> dict[str, Any]:
         "user_id": summary.get("user_id"),
         "farm_uid": summary.get("farm_uid"),
         "node_count": summary["node_count"],
+        "logical_span_count": summary.get("logical_span_count", 0),
+        "resource_span_count": summary.get("resource_span_count", 0),
         "total_duration_ms": summary["total_duration_ms"],
         "created_at": _parse_datetime(summary.get("created_at")),
         "started_at": _parse_datetime(summary.get("started_at")),
@@ -84,7 +88,7 @@ def summary_to_mongo_doc(summary: dict[str, Any]) -> dict[str, Any]:
         "root_error": summary.get("root_error"),
         "metrics": summary.get("metrics") or {},
         "node_breakdown": summary.get("node_breakdown") or [],
-        "updated_at": datetime.now(),
+        "updated_at": datetime.now(timezone.utc),
     }
 
 
@@ -103,6 +107,8 @@ def summary_from_mongo_doc(doc: dict[str, Any]) -> dict[str, Any]:
         "user_id": doc.get("user_id"),
         "farm_uid": doc.get("farm_uid"),
         "node_count": int(doc.get("node_count") or 0),
+        "logical_span_count": int(doc.get("logical_span_count") or 0),
+        "resource_span_count": int(doc.get("resource_span_count") or 0),
         "total_duration_ms": int(doc.get("total_duration_ms") or 0),
         "created_at": _format_datetime(doc.get("created_at")),
         "started_at": _format_datetime(doc.get("started_at")),
@@ -119,6 +125,8 @@ def summary_from_mongo_doc(doc: dict[str, Any]) -> dict[str, Any]:
 def _metrics(nodes: list[dict[str, Any]]) -> dict[str, Any]:
     metrics: dict[str, Any] = {
         "total_duration_ms": 0,
+        "logical_span_count": 0,
+        "resource_span_count": 0,
         "llm_duration_ms": 0,
         "tool_duration_ms": 0,
         "rag_duration_ms": 0,
@@ -131,11 +139,24 @@ def _metrics(nodes: list[dict[str, Any]]) -> dict[str, Any]:
         "llm_calls": 0,
         "tool_calls": 0,
         "skill_calls": 0,
+        "mcp_calls": 0,
+        "mcp_duration_ms": 0,
+        "router_calls": 0,
+        "context_builds": 0,
+        "catalog_recalls": 0,
     }
+    root_duration_ms = 0
     for node in nodes:
         duration = int(node.get("duration_ms") or 0)
-        metrics["total_duration_ms"] += duration
         node_type = str(node.get("node_type") or "")
+        if node_type == "trace_root":
+            root_duration_ms = max(root_duration_ms, duration)
+        else:
+            metrics["total_duration_ms"] += duration
+        if node.get("layer") == "resource":
+            metrics["resource_span_count"] += 1
+        else:
+            metrics["logical_span_count"] += 1
         if node_type in {"llm", "llm_call"}:
             metrics["llm_calls"] += 1
             metrics["llm_duration_ms"] += duration
@@ -145,12 +166,21 @@ def _metrics(nodes: list[dict[str, Any]]) -> dict[str, Any]:
             metrics["tool_duration_ms"] += duration
         elif node_type in {"rag", "context_build"}:
             metrics["rag_duration_ms"] += duration
+            if node_type == "context_build":
+                metrics["context_builds"] += 1
         elif node_type == "memory":
             metrics["memory_duration_ms"] += duration
         elif node_type in {"planner", "routing", "prompt_render"}:
             metrics["planner_duration_ms"] += duration
+        elif node_type == "skill_router":
+            metrics["router_calls"] += 1
+        elif node_type == "catalog_recall":
+            metrics["catalog_recalls"] += 1
         elif node_type in {"reflection", "reflection_check"}:
             metrics["reflection_duration_ms"] += duration
+        elif node_type == "mcp_call":
+            metrics["mcp_calls"] += 1
+            metrics["mcp_duration_ms"] += duration
 
         usage = _json_value(node.get("token_usage"))
         if isinstance(usage, dict):
@@ -161,6 +191,8 @@ def _metrics(nodes: list[dict[str, Any]]) -> dict[str, Any]:
                 usage.get("completion_tokens", usage.get("output_tokens"))
             )
             metrics["total_tokens"] += _int_value(usage.get("total_tokens"))
+    if root_duration_ms:
+        metrics["total_duration_ms"] = root_duration_ms
     return metrics
 
 
@@ -272,7 +304,7 @@ def _last_time(nodes: list[dict[str, Any]]) -> datetime | None:
 
 def _node_sort_key(node: dict[str, Any]) -> tuple:
     return (
-        _node_time(node) or datetime.min,
+        _node_time(node) or datetime.min.replace(tzinfo=timezone.utc),
         int(node.get("step_index") or 0),
         str(node.get("node_name") or ""),
     )
@@ -296,13 +328,19 @@ def _coerce_datetime(value: Any) -> datetime | None:
     if value is None:
         return None
     if isinstance(value, datetime):
-        return value.replace(tzinfo=None) if value.tzinfo else value
+        resolved = value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+        return resolved.astimezone(timezone.utc)
     if isinstance(value, str):
         try:
             parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
         except ValueError:
             return None
-        return parsed.replace(tzinfo=None) if parsed.tzinfo else parsed
+        resolved = (
+            parsed.replace(tzinfo=timezone.utc)
+            if parsed.tzinfo is None
+            else parsed
+        )
+        return resolved.astimezone(timezone.utc)
     return None
 
 
@@ -312,7 +350,7 @@ def _parse_datetime(value: Any) -> datetime | None:
 
 def _format_datetime(value: Any) -> str | None:
     resolved = _coerce_datetime(value)
-    return resolved.isoformat() if resolved is not None else None
+    return resolved.isoformat().replace("+00:00", "Z") if resolved is not None else None
 
 
 def _json_value(value: Any) -> Any:

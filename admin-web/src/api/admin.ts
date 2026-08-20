@@ -27,6 +27,12 @@ export interface TraceMetrics {
   llm_calls?: number;
   tool_calls?: number;
   skill_calls?: number;
+  logical_span_count?: number;
+  resource_span_count?: number;
+  mcp_calls?: number;
+  mcp_duration_ms?: number;
+  router_calls?: number;
+  context_builds?: number;
   [key: string]: unknown;
 }
 
@@ -69,6 +75,13 @@ export interface TraceNode {
   id?: number | string | null;
   span_id?: string | null;
   parent_span_id?: string | null;
+  span_kind?: 'root' | 'internal' | 'client' | string;
+  layer?: 'agent' | 'resource' | string;
+  phase?: string | null;
+  attempt?: number | null;
+  attributes?: Record<string, unknown>;
+  resource?: Record<string, unknown>;
+  sampling?: Record<string, unknown>;
   trace_id?: string;
   request_id?: string;
   conversation_id?: string;
@@ -94,6 +107,8 @@ export interface TraceEvent {
   event_id: string;
   trace_id: string;
   turn_id: string;
+  span_id?: string | null;
+  parent_span_id?: string | null;
   seq: number;
   event_type: string;
   phase?: string | null;
@@ -104,6 +119,7 @@ export interface TraceEvent {
   terminal: boolean;
   occurred_at: string | null;
   payload_meta?: Record<string, unknown> | null;
+  projection_status?: string | null;
   data?: TracePayload;
 }
 
@@ -145,6 +161,16 @@ export interface TraceNodeDetail {
   recover?: string | null;
   start_time: string | null;
   end_time: string | null;
+  trace_id?: string;
+  span_id?: string | null;
+  parent_span_id?: string | null;
+  span_kind?: string;
+  layer?: string;
+  phase?: string | null;
+  attempt?: number | null;
+  attributes?: Record<string, unknown>;
+  resource?: Record<string, unknown>;
+  sampling?: Record<string, unknown>;
 }
 
 export interface ListTracesParams {
@@ -193,11 +219,20 @@ export async function listTraceRequests(params?: ListTracesParams): Promise<List
 /** 获取正式 v2 Trace timeline；兼容层只负责把 items 适配给旧 Gantt 组件。 */
 export async function getTimeline(
   traceId: string,
-  params: { limit?: number; include_payload?: boolean } = {},
+  params: {
+    limit?: number;
+    include_payload?: boolean;
+    include_resource_spans?: boolean;
+  } = {},
 ): Promise<TraceTimeline> {
+  const query: Record<string, unknown> = {
+    limit: params.limit ?? 400,
+    include_payload: params.include_payload ?? true,
+  };
+  if (params.include_resource_spans) query.include_resource_spans = true;
   const response = await apiClient.get<TraceTimelineResponse>(
     `/admin/traces/${encodeURIComponent(traceId)}/timeline`,
-    { params: { limit: params.limit ?? 400, include_payload: params.include_payload ?? true } },
+    { params: query },
   );
   const data = response.data;
   const items = data.items ?? [];
@@ -251,6 +286,16 @@ export function deriveNodeDetail(
     recover: node.recover,
     start_time: node.start_time,
     end_time: node.end_time ?? null,
+    trace_id: node.trace_id,
+    span_id: node.span_id,
+    parent_span_id: node.parent_span_id,
+    span_kind: node.span_kind,
+    layer: node.layer,
+    phase: node.phase,
+    attempt: node.attempt,
+    attributes: node.attributes,
+    resource: node.resource,
+    sampling: node.sampling,
   };
 }
 

@@ -4,6 +4,7 @@
  */
 export const NODE_TYPE_COLORS: Record<string, string> = {
   routing: '#f0883e',        // 橙色 — 路由决策
+  catalog_recall: '#f0883e', // 橙色 — Skill 候选
   prompt_render: '#1890ff',  // 蓝色 — Prompt 渲染
   llm_call: '#722ed1',       // 紫色 — LLM 调用
   skill_call: '#52c41a',     // 绿色 — Skill 执行
@@ -21,6 +22,7 @@ const NODE_TYPE_ALIASES: Record<string, string> = {
 
 export const NODE_TYPE_LABELS: Record<string, string> = {
   routing: '路由决策',
+  catalog_recall: 'Skill 候选',
   prompt_render: 'Prompt 渲染',
   llm_call: 'LLM 调用',
   skill_call: 'Skill 执行',

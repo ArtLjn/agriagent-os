@@ -12,7 +12,7 @@ import asyncio
 import inspect
 import logging
 from collections import OrderedDict
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from agent.config import settings
@@ -115,6 +115,34 @@ def _trace_selector(trace_id: str, user_id: str, farm_uid: str) -> dict[str, Any
             {"_id": trace_id},
         ],
     }
+
+
+def _node_selector(
+    trace_id: str,
+    user_id: str,
+    farm_uid: str,
+    *,
+    include_resource_spans: bool,
+    span_kind: str | None,
+    node_type: str | None,
+) -> dict[str, Any]:
+    """构造节点查询；旧节点没有 layer 时按 Agent 逻辑节点兼容。"""
+    selector = _trace_selector(trace_id, user_id, farm_uid)
+    clauses: list[dict[str, Any]] = [selector]
+    if not include_resource_spans:
+        clauses.append(
+            {
+                "$or": [
+                    {"layer": {"$exists": False}},
+                    {"layer": {"$ne": "resource"}},
+                ]
+            }
+        )
+    if span_kind:
+        clauses.append({"span_kind": span_kind})
+    if node_type:
+        clauses.append({"node_type": node_type})
+    return {"$and": clauses}
 
 
 def _evidence(source: str, status: str, code: str | None = None) -> dict[str, Any]:
@@ -351,6 +379,9 @@ async def get_trace_nodes(
     limit: int = 200,
     *,
     include_payload: bool = False,
+    include_resource_spans: bool = False,
+    span_kind: str | None = None,
+    node_type: str | None = None,
     user_id: str,
     farm_uid: str,
 ) -> dict[str, Any]:
@@ -383,7 +414,16 @@ async def get_trace_nodes(
 
     try:
         cursor = (
-            coll.find(_trace_selector(request_id, user_id, farm_uid))
+            coll.find(
+                _node_selector(
+                    request_id,
+                    user_id,
+                    farm_uid,
+                    include_resource_spans=include_resource_spans,
+                    span_kind=span_kind,
+                    node_type=node_type,
+                )
+            )
             .sort([("step_index", 1), ("created_at", 1)])
             .limit(limit + 1)
         )
@@ -514,6 +554,7 @@ async def get_trace_timeline(
     *,
     limit: int = 400,
     include_payload: bool = False,
+    include_resource_spans: bool = False,
     user_id: str,
     farm_uid: str,
 ) -> dict[str, Any]:
@@ -523,6 +564,7 @@ async def get_trace_timeline(
             trace_id,
             limit=limit + 1,
             include_payload=include_payload,
+            include_resource_spans=include_resource_spans,
             user_id=user_id,
             farm_uid=farm_uid,
         ),
@@ -646,6 +688,8 @@ def _build_summary_from_nodes(
         "user_id": first.get("user_id", ""),
         "farm_uid": first.get("farm_uid", ""),
         "node_count": len(ordered),
+        "logical_span_count": metrics.get("logical_span_count", 0),
+        "resource_span_count": metrics.get("resource_span_count", 0),
         "total_duration_ms": metrics["total_duration_ms"],
         "status": status,
         "error_count": error_count,
@@ -660,6 +704,8 @@ def _build_summary_from_nodes(
 def _compute_metrics(nodes: list[dict[str, Any]]) -> dict[str, Any]:
     metrics: dict[str, Any] = {
         "total_duration_ms": 0,
+        "logical_span_count": 0,
+        "resource_span_count": 0,
         "llm_duration_ms": 0,
         "tool_duration_ms": 0,
         "rag_duration_ms": 0,
@@ -672,11 +718,24 @@ def _compute_metrics(nodes: list[dict[str, Any]]) -> dict[str, Any]:
         "llm_calls": 0,
         "tool_calls": 0,
         "skill_calls": 0,
+        "mcp_calls": 0,
+        "mcp_duration_ms": 0,
+        "router_calls": 0,
+        "context_builds": 0,
+        "catalog_recalls": 0,
     }
+    root_duration_ms = 0
     for node in nodes:
         duration = int(node.get("duration_ms") or 0)
-        metrics["total_duration_ms"] += duration
         node_type = str(node.get("node_type") or "")
+        if node_type == "trace_root":
+            root_duration_ms = max(root_duration_ms, duration)
+        else:
+            metrics["total_duration_ms"] += duration
+        if node.get("layer") == "resource":
+            metrics["resource_span_count"] += 1
+        else:
+            metrics["logical_span_count"] += 1
         if node_type in {"llm_call", "llm"}:
             metrics["llm_calls"] += 1
             metrics["llm_duration_ms"] += duration
@@ -686,12 +745,21 @@ def _compute_metrics(nodes: list[dict[str, Any]]) -> dict[str, Any]:
             metrics["tool_duration_ms"] += duration
         elif node_type in {"rag", "context_build"}:
             metrics["rag_duration_ms"] += duration
+            if node_type == "context_build":
+                metrics["context_builds"] += 1
         elif node_type == "memory":
             metrics["memory_duration_ms"] += duration
         elif node_type in {"planner", "routing", "prompt_render"}:
             metrics["planner_duration_ms"] += duration
+        elif node_type == "skill_router":
+            metrics["router_calls"] += 1
+        elif node_type == "catalog_recall":
+            metrics["catalog_recalls"] += 1
         elif node_type in {"reflection", "reflection_check"}:
             metrics["reflection_duration_ms"] += duration
+        elif node_type == "mcp_call":
+            metrics["mcp_calls"] += 1
+            metrics["mcp_duration_ms"] += duration
 
         usage = node.get("token_usage")
         if isinstance(usage, dict):
@@ -699,6 +767,8 @@ def _compute_metrics(nodes: list[dict[str, Any]]) -> dict[str, Any]:
             metrics["completion_tokens"] += int(usage.get("completion_tokens") or 0)
             metrics["total_tokens"] += int(usage.get("total_tokens") or 0)
 
+    if root_duration_ms:
+        metrics["total_duration_ms"] = root_duration_ms
     return metrics
 
 
@@ -818,9 +888,16 @@ def _node_doc_to_api(
         "record_kind": "node",
         "source": "traceRecords",
         "trace_id": doc.get("trace_id", doc.get("request_id", "")),
+        "request_id": doc.get("request_id", doc.get("trace_id", "")),
+        "conversation_id": doc.get("conversation_id", ""),
+        "turn_id": doc.get("turn_id", ""),
         "span_id": doc.get("span_id"),
         "parent_span_id": doc.get("parent_span_id"),
+        "span_kind": doc.get("span_kind", "internal"),
+        "layer": doc.get("layer", "agent"),
         "step_index": int(doc.get("step_index") or 0),
+        "phase": doc.get("phase"),
+        "attempt": int(doc.get("attempt") or 1),
         "node_type": doc.get("node_type", ""),
         "node_name": doc.get("node_name", ""),
         "start_time": _format_datetime(doc.get("start_time")),
@@ -829,6 +906,9 @@ def _node_doc_to_api(
         "token_usage": doc.get("token_usage"),
         "status": doc.get("status", "success"),
         "error_message": doc.get("error_message"),
+        "attributes": doc.get("attributes") or {},
+        "resource": doc.get("resource") or {},
+        "sampling": doc.get("sampling") or {},
     }
     if include_payload:
         result["input_data"] = doc.get("input_data")
@@ -843,6 +923,8 @@ def _event_doc_to_api(doc: dict[str, Any], *, include_payload: bool) -> dict[str
         "source": "traceEvents",
         "event_id": str(doc.get("event_id", doc.get("_id", ""))),
         "trace_id": doc.get("trace_id", doc.get("request_id", "")),
+        "span_id": doc.get("span_id"),
+        "parent_span_id": doc.get("parent_span_id"),
         "turn_id": doc.get("turn_id", ""),
         "seq": int(doc.get("seq") or 0),
         "event_type": doc.get("event_type", doc.get("type", "")),
@@ -856,6 +938,7 @@ def _event_doc_to_api(doc: dict[str, Any], *, include_payload: bool) -> dict[str
             doc.get("occurred_at") or doc.get("created_at")
         ),
         "payload_meta": doc.get("payload_meta"),
+        "projection_status": doc.get("projection_status", "persisted"),
     }
     if include_payload:
         result["data"] = doc.get("data")
@@ -867,7 +950,7 @@ def _timeline_sort_key(record: dict[str, Any]) -> tuple:
         record.get("occurred_at") or record.get("start_time") or record.get("end_time")
     )
     return (
-        _coerce_datetime(timestamp) or datetime.max,
+        _coerce_datetime(timestamp) or datetime.max.replace(tzinfo=timezone.utc),
         int(record.get("seq") or 0),
         int(record.get("step_index") or 0),
         str(record.get("event_id") or record.get("span_id") or ""),
@@ -884,6 +967,8 @@ def _summary_doc_to_api(doc: dict[str, Any]) -> dict[str, Any]:
         "user_id": doc.get("user_id", ""),
         "farm_uid": doc.get("farm_uid", ""),
         "node_count": int(doc.get("node_count") or 0),
+        "logical_span_count": int(doc.get("logical_span_count") or 0),
+        "resource_span_count": int(doc.get("resource_span_count") or 0),
         "total_duration_ms": int(doc.get("total_duration_ms") or 0),
         "status": doc.get("status", "success"),
         "error_count": int(doc.get("error_count") or 0),
@@ -917,11 +1002,17 @@ def _coerce_datetime(value: Any) -> datetime | None:
     if value is None:
         return None
     if isinstance(value, datetime):
-        return value.replace(tzinfo=None) if value.tzinfo else value
+        resolved = value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+        return resolved.astimezone(timezone.utc)
     if isinstance(value, str):
         try:
             parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-            return parsed.replace(tzinfo=None) if parsed.tzinfo else parsed
+            resolved = (
+                parsed.replace(tzinfo=timezone.utc)
+                if parsed.tzinfo is None
+                else parsed
+            )
+            return resolved.astimezone(timezone.utc)
         except ValueError:
             return None
     return None
@@ -929,7 +1020,7 @@ def _coerce_datetime(value: Any) -> datetime | None:
 
 def _format_datetime(value: Any) -> str | None:
     resolved = _coerce_datetime(value)
-    return resolved.isoformat() if resolved is not None else None
+    return resolved.isoformat().replace("+00:00", "Z") if resolved is not None else None
 
 
 __all__ = [

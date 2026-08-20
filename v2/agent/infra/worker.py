@@ -25,6 +25,7 @@ from agent.infra.trace import (
     clear_trace,
     flush_now,
     init_trace,
+    trace_queue_wait,
     trace_turn_outcome,
 )
 from agent.infra.trace.context import trace_id_for_turn
@@ -98,8 +99,10 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
         return
     state = current_state
     owns_lease = await owns_turn_lease(lease)
+    queue_wait_ms: int | None = None
     if state.get("queued") == "1" and state.get("status") in {"accepted", "queued"}:
         queue_entered_at = float(state.get("queue_entered_at") or time.time())
+        queue_wait_ms = max(0, int((time.time() - queue_entered_at) * 1000))
         if time.time() - queue_entered_at > settings.redis.queue_wait_timeout_seconds:
             await update_turn(
                 turn.turn_id,
@@ -141,6 +144,8 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
         user_id=turn.user_id,
         farm_uid=turn.farm_uid,
     )
+    if queue_wait_ms is not None:
+        trace_queue_wait(queue_wait_ms)
     trace_id = state.get("trace_id") or trace_id_for_turn(turn.turn_id)
 
     async def approval_waiter(turn_id: str) -> tuple[bool, str]:

@@ -164,6 +164,59 @@ def _log_cache_metrics(usage: Any) -> None:
     )
 
 
+def _normalize_usage(usage: Any) -> dict[str, int] | None:
+    """将 OpenAI 兼容网关的 usage 对象统一为 Trace 字段。"""
+    if usage is None:
+        return None
+
+    def read(*names: str) -> int | None:
+        for name in names:
+            value = (
+                usage.get(name)
+                if isinstance(usage, dict)
+                else getattr(usage, name, None)
+            )
+            if value is None:
+                continue
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                continue
+        return None
+
+    normalized: dict[str, int] = {}
+    fields = {
+        "prompt_tokens": ("prompt_tokens", "input_tokens"),
+        "completion_tokens": ("completion_tokens", "output_tokens"),
+        "total_tokens": ("total_tokens",),
+        "reasoning_tokens": ("reasoning_tokens",),
+        "cached_tokens": ("cached_tokens",),
+    }
+    for target, names in fields.items():
+        value = read(*names)
+        if value is not None:
+            normalized[target] = value
+
+    prompt_details = (
+        usage.get("prompt_tokens_details")
+        if isinstance(usage, dict)
+        else getattr(usage, "prompt_tokens_details", None)
+    )
+    if isinstance(prompt_details, dict):
+        cached = prompt_details.get("cached_tokens")
+    elif prompt_details is not None:
+        cached = getattr(prompt_details, "cached_tokens", None)
+    else:
+        cached = None
+    if "cached_tokens" not in normalized and cached is not None:
+        try:
+            normalized["cached_tokens"] = int(cached)
+        except (TypeError, ValueError):
+            pass
+
+    return normalized or None
+
+
 def chat(
     messages: list[dict[str, Any]],
     tools: list[dict[str, Any]] | None = None,
@@ -211,11 +264,15 @@ def chat(
                         }
                     )
             _log_cache_metrics(getattr(resp, "usage", None))
-            return {
+            result = {
                 "content": msg.content or "",
                 "tool_calls": tool_calls,
                 "finish_reason": choice.finish_reason,
             }
+            token_usage = _normalize_usage(getattr(resp, "usage", None))
+            if token_usage:
+                result["token_usage"] = token_usage
+            return result
         except Exception as exc:
             last_exc = exc
             if attempt < MAX_RETRIES and _is_retryable(exc):
@@ -334,11 +391,15 @@ async def chat_stream(
             )
 
             _log_cache_metrics(stream_usage)
-            yield {
+            done_event = {
                 "type": "done",
                 "content": full_content,
                 "tool_calls": tool_calls,
             }
+            token_usage = _normalize_usage(stream_usage)
+            if token_usage:
+                done_event["token_usage"] = token_usage
+            yield done_event
             return  # 成功完成，退出重试循环
 
         except Exception as exc:

@@ -15,14 +15,26 @@ export interface LocationOption {
   coordinate_source?: string;
 }
 
+interface LocationSearchItem extends Omit<LocationOption, 'display_name'> {
+  display_name?: string;
+}
+
 interface LocationSearchResponse {
-  items?: LocationOption[];
+  items?: LocationSearchItem[];
   total?: number;
+}
+
+function normalizeLocation(item: LocationSearchItem): LocationOption | null {
+  const displayName = item.display_name?.trim() || item.name?.trim() || item.full_name?.trim();
+  if (!displayName) return null;
+  return { ...item, display_name: displayName };
 }
 
 export async function searchLocations(q: string, limit: number = 20): Promise<LocationOption[]> {
   const res = await apiClient.get<LocationSearchResponse>('/locations/search', {
     params: { keyword: q, limit },
   });
-  return res.data.items ?? [];
+  return (res.data.items ?? [])
+    .map(normalizeLocation)
+    .filter((item): item is LocationOption => item !== null);
 }

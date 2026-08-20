@@ -5,6 +5,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { listCycles } from '../../api/cycles';
 import { operationsApi } from '../../api/operations';
+import { usersApi } from '../../api/users';
 import Operations from './index';
 
 vi.mock('../../api/cycles', () => ({
@@ -18,10 +19,6 @@ vi.mock('../../api/crops', () => ({
 
 vi.mock('../../api/costs', () => ({
   createRecord: vi.fn(),
-}));
-
-vi.mock('../../api/agent', () => ({
-  listAppSkills: vi.fn(),
 }));
 
 vi.mock('../../api/locations', () => ({
@@ -47,8 +44,15 @@ vi.mock('../../api/operations', () => ({
     getUnsettledLaborSummary: vi.fn(),
     listDebts: vi.fn(),
     listCostCategories: vi.fn(),
+  },
+}));
+
+vi.mock('../../api/users', () => ({
+  usersApi: {
+    getCurrent: vi.fn(),
     getSettings: vi.fn(),
-    checkVersion: vi.fn(),
+    updateCurrent: vi.fn(),
+    updateSettings: vi.fn(),
   },
 }));
 
@@ -105,6 +109,35 @@ describe('Operations 页面查询参数', () => {
     vi.mocked(operationsApi.listOperationTypes).mockResolvedValue(axiosResponse([]));
     vi.mocked(operationsApi.listWorkerSummaries).mockResolvedValue(axiosResponse({ items: [], total: 0 }));
     vi.mocked(operationsApi.getUnsettledLaborSummary).mockResolvedValue(axiosResponse({}));
+    vi.mocked(usersApi.getCurrent).mockResolvedValue(axiosResponse({
+      id: 'user-1',
+      phone: '13800000000',
+      nickname: '管理员',
+      role: 'admin',
+      status: 'active',
+      farm: { id: 1, uid: 'farm-1', name: '管理员农场', location: '苏州' },
+    }));
+    vi.mocked(usersApi.getSettings).mockResolvedValue(axiosResponse({
+      user_id: 'user-1',
+      default_city: '苏州市虎丘区',
+      default_lat: 31.3,
+      default_lon: 120.4,
+      assistant_role: 'warm',
+    }));
+  });
+
+  it('用户设置页只调用当前用户和用户设置 v2 接口', async () => {
+    render(
+      <MemoryRouter initialEntries={['/operations?tab=settings']}>
+        <Operations />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(usersApi.getCurrent).toHaveBeenCalledTimes(1);
+      expect(usersApi.getSettings).toHaveBeenCalledTimes(1);
+    });
+    expect(await screen.findByDisplayValue('管理员')).toBeInTheDocument();
   });
 
   it('从地块入口进入时默认打开种植与作业并按茬口查询种植单元', async () => {

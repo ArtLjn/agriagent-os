@@ -28,6 +28,37 @@ class _TextStream:
         raise StopAsyncIteration
 
 
+class _UsageStream:
+    def __init__(self) -> None:
+        self._chunks = [
+            SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        delta=SimpleNamespace(content="回答", tool_calls=None)
+                    )
+                ],
+                usage=None,
+            ),
+            SimpleNamespace(
+                choices=[],
+                usage=SimpleNamespace(
+                    prompt_tokens=120,
+                    completion_tokens=18,
+                    total_tokens=138,
+                    prompt_tokens_details=SimpleNamespace(cached_tokens=32),
+                ),
+            ),
+        ]
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if self._chunks:
+            return self._chunks.pop(0)
+        raise StopAsyncIteration
+
+
 def _tool_schema(required: list[str]) -> list[dict]:
     return [
         {
@@ -127,6 +158,28 @@ async def test_stream_retries_provider_502_before_first_token(monkeypatch):
 
     assert calls == 2
     assert events[-1] == {"type": "done", "content": "天气正常", "tool_calls": []}
+
+
+@pytest.mark.asyncio
+async def test_stream_forwards_provider_usage_in_done_event(monkeypatch):
+    class Completions:
+        async def create(self, **_kwargs):
+            return _UsageStream()
+
+    monkeypatch.setattr(
+        llm,
+        "_async_client",
+        SimpleNamespace(chat=SimpleNamespace(completions=Completions())),
+    )
+
+    events = [event async for event in llm.chat_stream([])]
+
+    assert events[-1]["token_usage"] == {
+        "prompt_tokens": 120,
+        "completion_tokens": 18,
+        "total_tokens": 138,
+        "cached_tokens": 32,
+    }
 
 
 def test_provider_502_uses_friendly_message_after_retries() -> None:

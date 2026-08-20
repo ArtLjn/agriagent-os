@@ -196,7 +196,6 @@ def validate_metadata(meta: dict[str, Any], source: str = "skill.md") -> list[st
         required_any = config.get("required_any", [])
         if not _is_string_list(required_any):
             errors.append(f"{path}.required_any 必须是字符串列表")
-            required_any = []
         unknown_required_any = set(required_any) - set(properties)
         if unknown_required_any:
             errors.append(

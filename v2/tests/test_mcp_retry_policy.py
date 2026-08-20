@@ -27,6 +27,12 @@ class _FlakyClient:
 @pytest.mark.asyncio
 async def test_read_mcp_call_retries_transient_failure_once(monkeypatch) -> None:
     client = _FlakyClient(failures=1)
+    records: list[dict] = []
+    monkeypatch.setattr(
+        mcp_client,
+        "record",
+        lambda **kwargs: records.append(kwargs),
+    )
     monkeypatch.setattr(mcp_client, "_mcp_retry_delay", lambda _attempt: 0)
 
     result = await mcp_client.call_mcp_with_retry(
@@ -38,6 +44,9 @@ async def test_read_mcp_call_retries_transient_failure_once(monkeypatch) -> None
 
     assert result == {"status": "ok"}
     assert client.calls == 2
+    assert [item["attempt"] for item in records] == [1, 2]
+    assert all(item["node_type"] == "mcp_call" for item in records)
+    assert all(item["layer"] == "resource" for item in records)
 
 
 @pytest.mark.asyncio

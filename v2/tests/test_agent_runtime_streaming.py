@@ -223,6 +223,9 @@ class _EnvelopeRedis:
             "trace_id": "trace_turn-envelope",
             "request_id": "trace_turn-envelope",
             "conversation_id": "conversation-envelope",
+            "user_id": "user-envelope",
+            "farm_uid": "farm-envelope",
+            "farm_id": "1",
         }
         self.sequence = 0
         self.rows: list[tuple[str, dict[str, str]]] = []
@@ -304,6 +307,8 @@ async def test_publish_event_envelope_replays_with_stable_ids(monkeypatch) -> No
     ]
     assert all(event["trace_id"] == "trace_turn-envelope" for event in events)
     assert all(event["conversation_id"] == "conversation-envelope" for event in events)
+    assert all(event["user_id"] == "user-envelope" for event in handed_off)
+    assert all(event["farm_uid"] == "farm-envelope" for event in handed_off)
     assert [event["event_type"] for event in events] == ["started", "error", "done"]
     assert [event["status_after"] for event in events] == [
         "running",
@@ -710,6 +715,8 @@ async def _reject(_: str) -> tuple[bool, str]:
 
 @pytest.mark.asyncio
 async def test_llm_stream_forwards_deltas_and_final_result(monkeypatch) -> None:
+    trace_calls = []
+
     async def fake_stream(messages, tools):
         yield {
             "type": "retrying",
@@ -723,9 +730,20 @@ async def test_llm_stream_forwards_deltas_and_final_result(monkeypatch) -> None:
             "arguments_delta": "{}",
             "index": 0,
         }
-        yield {"type": "done", "tool_calls": []}
+        yield {
+            "type": "done",
+            "tool_calls": [],
+            "token_usage": {
+                "prompt_tokens": 120,
+                "completion_tokens": 18,
+                "total_tokens": 138,
+            },
+        }
 
     monkeypatch.setattr(react, "chat_stream", fake_stream)
+    monkeypatch.setattr(
+        react, "trace_llm_call", lambda **kwargs: trace_calls.append(kwargs)
+    )
     items = [item async for item in react._call_llm_stream([], [])]
 
     assert items[0] == {
@@ -744,6 +762,7 @@ async def test_llm_stream_forwards_deltas_and_final_result(monkeypatch) -> None:
         "arguments_delta": "{}",
     }
     assert isinstance(items[-1], react._LlmResult)
+    assert trace_calls[0]["token_usage"]["total_tokens"] == 138
 
 
 @pytest.mark.asyncio

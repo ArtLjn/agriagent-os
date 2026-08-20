@@ -9,7 +9,7 @@ import json
 import os
 import sys
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote, urlencode
+from urllib.parse import quote, urlencode, urlparse
 from urllib.request import Request, urlopen
 from collections import Counter
 from dataclasses import asdict, dataclass, field
@@ -21,6 +21,7 @@ PREVIEW_LIMIT = 220
 DEFAULT_LIMIT = 5
 MAX_LIMIT = 50
 MAX_V2_PAGES = 100
+_AUTO_AUTH_CACHE: dict[str, str] = {}
 SENSITIVE_KEYS = {
     "authorization",
     "api_key",
@@ -273,6 +274,138 @@ class V2ApiError(RuntimeError):
         self.kind = kind
 
 
+def _is_loopback_url(url: str) -> bool:
+    return urlparse(url).hostname in {"127.0.0.1", "localhost", "::1"}
+
+
+def _bearer_value(value: str) -> str:
+    value = value.strip()
+    return value if value.lower().startswith("bearer ") else f"Bearer {value}"
+
+
+def _configured_authorization() -> str | None:
+    authorization = os.getenv("V2_AGENT_AUTHORIZATION") or os.getenv(
+        "AGENT_AUTHORIZATION"
+    )
+    if authorization:
+        return _bearer_value(authorization)
+    token = os.getenv("V2_AGENT_TOKEN") or os.getenv("AGENT_TOKEN")
+    return _bearer_value(token) if token else None
+
+
+def _auto_auth_enabled() -> bool:
+    value = os.getenv("V2_AGENT_AUTO_AUTH", "1").strip().lower()
+    return value not in {"0", "false", "no", "off"}
+
+
+def _auth_error(url: str, kind: str, status_code: int | None = None) -> V2ApiError:
+    return V2ApiError(url, status_code, f"auth_{kind}")
+
+
+def _extract_access_token(payload: dict[str, Any]) -> str | None:
+    token = payload.get("access_token") or payload.get("token")
+    return token if isinstance(token, str) and token.strip() else None
+
+
+def _v2_request_json(
+    url: str,
+    *,
+    method: str = "GET",
+    payload: dict[str, Any] | None = None,
+    authorization: str | None = None,
+) -> dict[str, Any]:
+    headers = {"Accept": "application/json"}
+    if authorization:
+        headers["Authorization"] = authorization
+    body = None
+    if payload is not None:
+        headers["Content-Type"] = "application/json"
+        body = json.dumps(payload).encode("utf-8")
+    request = Request(url, data=body, headers=headers, method=method)
+    try:
+        with urlopen(request, timeout=15) as response:
+            result = json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        kind = "not_found" if exc.code == 404 else "http_error"
+        raise V2ApiError(url, exc.code, kind) from exc
+    except (URLError, TimeoutError) as exc:
+        raise V2ApiError(url, None, "unavailable") from exc
+    if not isinstance(result, dict):
+        raise V2ApiError(url, None, "invalid_response")
+    return result
+
+
+def _fetch_auto_authorization(base_url: str) -> str:
+    login_url = v2_api_url(base_url, "/auth/login", {})
+    phone = os.getenv("V2_AGENT_PHONE") or os.getenv("V2_AGENT_LOGIN_PHONE")
+    password = os.getenv("V2_AGENT_PASSWORD") or os.getenv("V2_AGENT_LOGIN_PASSWORD")
+    if bool(phone) != bool(password):
+        raise _auth_error(login_url, "credentials_incomplete")
+    if phone and password:
+        try:
+            payload = _v2_request_json(
+                login_url,
+                method="POST",
+                payload={"phone": phone, "password": password},
+            )
+        except V2ApiError as exc:
+            raise _auth_error(login_url, "login_failed", exc.status_code) from exc
+        token = _extract_access_token(payload)
+        if token is None:
+            raise _auth_error(login_url, "token_missing")
+        return _bearer_value(token)
+
+    if not _is_loopback_url(base_url):
+        raise _auth_error(login_url, "credentials_required")
+
+    dev_users_url = v2_api_url(base_url, "/dev-users", {})
+    try:
+        payload = _v2_request_json(dev_users_url)
+    except V2ApiError as exc:
+        raise _auth_error(
+            dev_users_url, "dev_users_unavailable", exc.status_code
+        ) from exc
+    users = payload.get("users")
+    if not isinstance(users, list):
+        raise _auth_error(dev_users_url, "dev_users_invalid")
+    selector = os.getenv("V2_AGENT_USER_PHONE")
+    candidates = [
+        user
+        for user in users
+        if isinstance(user, dict)
+        and (not selector or str(user.get("phone") or "") == selector)
+    ]
+    if len(candidates) != 1:
+        raise _auth_error(dev_users_url, "dev_user_ambiguous")
+    token = _extract_access_token(candidates[0]) or candidates[0].get("token")
+    if not isinstance(token, str) or not token.strip():
+        raise _auth_error(dev_users_url, "dev_user_token_missing")
+    return _bearer_value(token)
+
+
+def _resolve_v2_authorization(
+    base_url: str, *, force_refresh: bool = False
+) -> tuple[str | None, bool]:
+    explicit = _configured_authorization()
+    if explicit:
+        return explicit, False
+    if not _auto_auth_enabled():
+        return None, False
+    phone = os.getenv("V2_AGENT_PHONE") or os.getenv("V2_AGENT_LOGIN_PHONE")
+    password = os.getenv("V2_AGENT_PASSWORD") or os.getenv("V2_AGENT_LOGIN_PASSWORD")
+    if not (phone or password) and not _is_loopback_url(base_url):
+        return None, False
+    if not force_refresh and base_url in _AUTO_AUTH_CACHE:
+        return _AUTO_AUTH_CACHE[base_url], True
+    authorization = _fetch_auto_authorization(base_url)
+    _AUTO_AUTH_CACHE[base_url] = authorization
+    return authorization, True
+
+
+def _clear_auto_authorization(base_url: str) -> None:
+    _AUTO_AUTH_CACHE.pop(base_url, None)
+
+
 async def build_v2_report(args: argparse.Namespace) -> ChainReport:
     """按 trace_id、turn_id 或 conversation_id 只读召回 v2 证据。"""
     base_url = v2_api_base_url(args.v2_base_url)
@@ -391,7 +524,7 @@ async def build_v2_report(args: argparse.Namespace) -> ChainReport:
             sse_timeline=[event_dict(item) for item in all_events],
             trace_timeline=[node_dict(item) for item in all_nodes],
             business_outcome=build_business_outcome(
-                targets, turns, all_nodes, all_events
+                targets, turns, all_nodes, all_events, messages
             ),
             evidence_gaps=gaps,
             evidence_details=evidence,
@@ -638,28 +771,23 @@ async def v2_call(
     base_url: str, path: str, params: dict[str, Any] | None = None
 ) -> dict[str, Any]:
     url = v2_api_url(base_url, path, params or {})
-    return await asyncio.to_thread(v2_get_json, url)
-
-
-def v2_get_json(url: str) -> dict[str, Any]:
-    headers = {"Accept": "application/json"}
-    authorization = os.getenv("V2_AGENT_AUTHORIZATION") or os.getenv(
-        "AGENT_AUTHORIZATION"
-    )
-    if authorization:
-        headers["Authorization"] = authorization
-    request = Request(url, headers=headers)
+    authorization, automatic = _resolve_v2_authorization(base_url)
     try:
-        with urlopen(request, timeout=15) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except HTTPError as exc:
-        kind = "not_found" if exc.code == 404 else "http_error"
-        raise V2ApiError(url, exc.code, kind) from exc
-    except (URLError, TimeoutError) as exc:
-        raise V2ApiError(url, None, "unavailable") from exc
-    if not isinstance(payload, dict):
-        raise V2ApiError(url, None, "invalid_response")
-    return payload
+        if authorization:
+            return await asyncio.to_thread(v2_get_json, url, authorization)
+        return await asyncio.to_thread(v2_get_json, url)
+    except V2ApiError as exc:
+        if not (automatic and exc.status_code == 401):
+            raise
+        _clear_auto_authorization(base_url)
+        refreshed, _ = _resolve_v2_authorization(base_url, force_refresh=True)
+        if not refreshed:
+            raise
+        return await asyncio.to_thread(v2_get_json, url, refreshed)
+
+
+def v2_get_json(url: str, authorization: str | None = None) -> dict[str, Any]:
+    return _v2_request_json(url, authorization=authorization)
 
 
 def v2_api_base_url(value: str) -> str:
@@ -692,12 +820,20 @@ def unique_v2_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
     seen: set[str] = set()
     for item in items:
+        # Trace/turn/conversation 是消息的关联键，不能作为消息唯一键：
+        # 同一轮天然同时包含 user 和 assistant 两条消息。优先使用消息
+        # 存储 ID，再用角色+时间+内容兜底，避免把整轮对话折叠成一条。
         key = str(
-            item.get("trace_id")
-            or item.get("request_id")
+            item.get("message_id")
+            or item.get("id")
             or item.get("_id")
             or item.get("mysqlId")
-            or (item.get("created_at"), item.get("role"), item.get("content"))
+            or (
+                item.get("trace_id") or item.get("request_id") or item.get("turn_id"),
+                item.get("created_at") or item.get("createdAt"),
+                item.get("role"),
+                item.get("content"),
+            )
         )
         if key in seen:
             continue
@@ -913,7 +1049,9 @@ def build_business_outcome(
     turns: list[TurnItem],
     nodes: list[TraceNode],
     events: list[EventItem],
+    messages: list[MessageItem] | None = None,
 ) -> dict[str, Any]:
+    messages = messages or []
     summaries = [
         key
         for target in targets
@@ -937,6 +1075,12 @@ def build_business_outcome(
         for target in targets
         if "reply_generated" in target
     ]
+    assistant_messages = [item for item in messages if item.role == "assistant"]
+    explicit_persisted = [
+        target.get("reply_persisted")
+        for target in targets
+        if "reply_persisted" in target
+    ]
     return {
         "business_committed": True
         if any(explicit_commit) or commit_events or commit_nodes
@@ -947,18 +1091,17 @@ def build_business_outcome(
         or any(turn.reply_preview for turn in turns)
         else (False if explicit_reply and not any(explicit_reply) else None),
         "reply_persisted": next(
-            (
-                target.get("reply_persisted")
-                for target in targets
-                if "reply_persisted" in target
-            ),
-            None,
+            iter(explicit_persisted),
+            True if assistant_messages else None,
         ),
         "commit_evidence": "confirmed"
         if explicit_commit or commit_events or commit_nodes
         else "missing",
         "reply_evidence": "confirmed"
         if explicit_reply or final_events or any(turn.reply_preview for turn in turns)
+        else "missing",
+        "reply_persistence_evidence": "confirmed"
+        if explicit_persisted or assistant_messages
         else "missing",
         "commit_event_count": len(commit_events),
         "commit_node_count": len(commit_nodes),

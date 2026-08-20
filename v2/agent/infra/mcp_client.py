@@ -19,6 +19,7 @@ import asyncio
 import logging
 import os
 import random
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Self
@@ -29,6 +30,7 @@ from fastmcp import Client
 from fastmcp.client.transports.http import StreamableHttpTransport
 
 from agent.infra.error_policy import ClassifiedError, classify_exception
+from agent.infra.trace.collector import record
 
 logger = logging.getLogger(__name__)
 
@@ -70,15 +72,72 @@ async def call_mcp_with_retry(
     retry_limit = max(0, max_retries) if can_retry else 0
 
     for attempt in range(retry_limit + 1):
+        started = time.perf_counter()
         try:
             result = await client.call_tool(tool_name, arguments)
         except Exception as exc:
             classified = classify_exception(exc)
+            record(
+                node_type="mcp_call",
+                node_name=tool_name,
+                input_data=arguments,
+                output_data={
+                    "error": classified.message,
+                    "code": classified.code,
+                },
+                duration_ms=int((time.perf_counter() - started) * 1000),
+                error_message=classified.message,
+                status="error",
+                phase="tool_executing",
+                attempt=attempt + 1,
+                layer="resource",
+                span_kind="client",
+                attributes={
+                    "tool_name": tool_name,
+                    "risk_level": risk_level,
+                    "retryable": classified.retryable,
+                    "category": classified.category.value,
+                },
+                resource={
+                    "system": "business_mcp",
+                    "operation": "call_tool",
+                },
+            )
             if attempt < retry_limit and classified.retryable:
                 await asyncio.sleep(_mcp_retry_delay(attempt))
                 continue
             raise McpCallError(tool_name, classified, attempt) from exc
 
+        result_error = result.get("error") if isinstance(result, dict) else None
+        result_category = (
+            str(result.get("category") or "") if isinstance(result, dict) else ""
+        )
+        result_retryable = bool(
+            result.get("retryable") is True if isinstance(result, dict) else False
+        )
+        record(
+            node_type="mcp_call",
+            node_name=tool_name,
+            input_data=arguments,
+            output_data=result,
+            duration_ms=int((time.perf_counter() - started) * 1000),
+            error_message=str(result_error) if result_error else None,
+            status="error" if result_error else "success",
+            phase="tool_executing",
+            attempt=attempt + 1,
+            layer="resource",
+            span_kind="client",
+            attributes={
+                "tool_name": tool_name,
+                "risk_level": risk_level,
+                "retryable": result_retryable,
+                "category": result_category,
+            },
+            resource={
+                "system": "business_mcp",
+                "operation": "call_tool",
+            },
+        )
         if isinstance(result, dict) and result.get("error"):
             if result.get("retryable") is True and attempt < retry_limit:
                 await asyncio.sleep(_mcp_retry_delay(attempt))

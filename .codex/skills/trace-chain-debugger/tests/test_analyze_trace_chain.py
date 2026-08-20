@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import os
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
 
@@ -39,6 +41,76 @@ def args_for(**overrides):
 
 
 class V2RecallTest(unittest.TestCase):
+    def tearDown(self):
+        MODULE._AUTO_AUTH_CACHE.clear()
+
+    def test_auto_auth_logs_in_with_environment_credentials(self):
+        calls = []
+
+        def fake_request(url, **kwargs):
+            calls.append((url, kwargs))
+            return {"access_token": "jwt-from-login"}
+
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "V2_AGENT_PHONE": "13800138000",
+                    "V2_AGENT_PASSWORD": "secret123",
+                },
+                clear=True,
+            ),
+            patch.object(MODULE, "_v2_request_json", side_effect=fake_request),
+        ):
+            authorization, automatic = MODULE._resolve_v2_authorization(
+                "http://agent.test/api/v2"
+            )
+
+        self.assertEqual(authorization, "Bearer jwt-from-login")
+        self.assertTrue(automatic)
+        self.assertEqual(calls[0][1]["method"], "POST")
+        self.assertEqual(
+            calls[0][1]["payload"],
+            {"phone": "13800138000", "password": "secret123"},
+        )
+
+    def test_loopback_auto_auth_selects_unique_dev_user(self):
+        def fake_request(url, **kwargs):
+            self.assertTrue(url.endswith("/dev-users"))
+            return {"users": [{"phone": "13800138000", "token": "dev-jwt"}]}
+
+        with (
+            patch.dict(os.environ, {"V2_AGENT_AUTO_AUTH": "1"}, clear=True),
+            patch.object(MODULE, "_v2_request_json", side_effect=fake_request),
+        ):
+            authorization, automatic = MODULE._resolve_v2_authorization(
+                "http://127.0.0.1:8000/api/v2"
+            )
+
+        self.assertEqual(authorization, "Bearer dev-jwt")
+        self.assertTrue(automatic)
+
+    def test_explicit_authorization_has_priority_over_auto_auth(self):
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "V2_AGENT_AUTHORIZATION": "Bearer explicit-jwt",
+                    "V2_AGENT_PHONE": "13800138000",
+                    "V2_AGENT_PASSWORD": "secret123",
+                },
+                clear=True,
+            ),
+            patch.object(MODULE, "_fetch_auto_authorization") as fetch,
+        ):
+            authorization, automatic = MODULE._resolve_v2_authorization(
+                "http://127.0.0.1:8000/api/v2"
+            )
+
+        self.assertEqual(authorization, "Bearer explicit-jwt")
+        self.assertFalse(automatic)
+        fetch.assert_not_called()
+
     def test_conversation_recall_paginates_and_fetches_each_timeline(self):
         def fake_get_json(url: str):
             parsed = urlparse(url)

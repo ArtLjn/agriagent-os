@@ -141,29 +141,6 @@ export interface CostCategory {
   is_default: boolean;
 }
 
-export interface UserSettings {
-  display_name: string;
-  default_city?: string | null;
-  default_lat?: number | null;
-  default_lon?: number | null;
-  assistant_role?: 'professional' | 'warm' | 'concise';
-}
-
-export interface FeedbackStats {
-  total?: number;
-  good?: number;
-  bad?: number;
-  [key: string]: unknown;
-}
-
-export interface VersionCheck {
-  latest_version: string;
-  latest_version_code: number;
-  download_url: string;
-  changelog: string;
-  force_update: boolean;
-}
-
 export const operationsApi = {
   listUnits: async (cycleId?: number): Promise<PlantingUnit[]> => {
     const res = await apiClient.get<PaginatedList<PlantingUnit>>('/planting-units', { params: { cycle_id: cycleId } });
@@ -243,12 +220,4 @@ export const operationsApi = {
   deleteCostCategory: (categoryId: number) =>
     apiClient.delete<{ deleted: number }>(`/cost-categories/${categoryId}`),
 
-  getSettings: () =>
-    apiClient.get<UserSettings>('/users/me/settings'),
-  updateSettings: (data: Partial<UserSettings>) =>
-    apiClient.patch<UserSettings>('/users/me/settings', data),
-  getFeedbackStats: () =>
-    apiClient.get<FeedbackStats>('/agent/feedback/stats'),
-  checkVersion: (currentVersionCode: number) =>
-    apiClient.get<VersionCheck>('/api/app/version', { params: { current_version_code: currentVersionCode } }),
 };

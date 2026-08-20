@@ -15,7 +15,7 @@ description: Use when debugging farm-manager Agent request chains, trace evidenc
 2. 在项目根目录运行脚本。旧版 archive/backend 链路仍使用：
 
 ```bash
-backend/.venv/bin/python .codex/skills/trace-chain-debugger/scripts/analyze_trace_chain.py --project . --request-id 0744f155
+v2/.venv/bin/python .codex/skills/trace-chain-debugger/scripts/analyze_trace_chain.py --project . --request-id 0744f155
 ```
 
 v2 Agent 使用字符串 `turn_id`，并把 trace 存在 MongoDB 的 `traceRecords`；使用 v2 兼容模式：
@@ -31,6 +31,27 @@ python .codex/skills/trace-chain-debugger/scripts/analyze_trace_chain.py \
 3. 如果项目有多个开发环境，必须让脚本使用与后端进程一致的配置环境。优先确认 `FARM_MANAGER_ENV` 或 `APP_ENV` 是 `dev` 还是 `prod`；必要时用 `DATABASE__URL`、`MONGODB__URI`、`MONGODB__DATABASE` 等环境变量临时覆盖，但不要把密码或完整连接串输出给用户。
 4. 需要看 trace 输入输出摘要时加 `--include-payload`。需要会话最近多轮时用 `--session-id <id> --limit 10`。
 5. 报告里优先看：`解析范围`、`错误节点`、`耗时热点`、`证据状态`、`排查建议`。Mongo 不可用时保留 MySQL/JSONL 结论，并说明降级。
+
+### v2 自动鉴权
+
+v2 查询会自动按以下顺序获取用户 Bearer Token，令牌只保存在当前进程内存中，不写文件、不打印：
+
+1. 复用 `V2_AGENT_AUTHORIZATION`、`AGENT_AUTHORIZATION`、`V2_AGENT_TOKEN` 或 `AGENT_TOKEN`；
+2. 如果设置 `V2_AGENT_PHONE` 与 `V2_AGENT_PASSWORD`，调用 `POST /api/v2/auth/login` 自动登录；
+3. 如果目标是本机 Agent 且没有登录凭据，调用开发专用 `/api/v2/dev-users`；只有匹配到唯一用户时才自动选择。多用户环境请设置 `V2_AGENT_USER_PHONE`。
+
+示例：
+
+```bash
+export V2_AGENT_PHONE="13800138000"
+read -r -s V2_AGENT_PASSWORD
+export V2_AGENT_PASSWORD
+
+python .codex/skills/trace-chain-debugger/scripts/analyze_trace_chain.py \
+  --project . --v2 --trace-id <trace_id> --include-events
+```
+
+`V2_AGENT_AUTO_AUTH=0` 可以关闭自动鉴权。生产或非本机地址不会调用 `/dev-users`；应通过环境变量提供显式 Authorization 或登录凭据。鉴权失败会保留 `401/403`、登录失败和开发用户歧义等状态，不会伪装成空 Trace。
 
 ## v2 调试召回模式
 

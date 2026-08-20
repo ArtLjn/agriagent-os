@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import timezone
 from types import SimpleNamespace
 
 import pytest
 
 from agent.infra.trace import collector
+from agent.infra.trace.context import clear_trace, init_trace
 
 
 class _FakeEventCollection:
@@ -75,11 +77,72 @@ def test_trace_llm_call_keeps_model_input_and_output(monkeypatch) -> None:
         model="qwen3.6-flash",
         messages=messages,
         response=response,
+        token_usage={
+            "prompt_tokens": 120,
+            "completion_tokens": 18,
+            "total_tokens": 138,
+        },
     )
 
     node = collector._queue[-1]
     assert node["input_data"]["messages"] == messages
     assert node["output_data"] == response
+    assert node["token_usage"]["total_tokens"] == 138
+
+
+def test_trace_nodes_form_parent_child_contract() -> None:
+    collector._queue.clear()
+    trace = init_trace(
+        conversation_id="conversation-1",
+        turn_id="turn-1",
+        trace_id="trace-1",
+    )
+    try:
+        collector.record(
+            "skill_router",
+            "skill_router.r1",
+            input_data={"candidate_count": 2},
+            output_data={"selected_tools": ["get_weather"]},
+            phase="setup",
+        )
+        collector.record("tool_call", "get_weather", phase="tool_executing")
+
+        router, tool = list(collector._queue)[-2:]
+        assert router["span_id"]
+        assert router["parent_span_id"] == trace.root_span_id
+        assert tool["span_id"]
+        assert tool["parent_span_id"] == trace.root_span_id
+        assert router["span_kind"] == "internal"
+        assert router["layer"] == "agent"
+    finally:
+        clear_trace()
+        collector._queue.clear()
+
+
+def test_trace_record_times_are_utc_aware(monkeypatch) -> None:
+    collector._queue.clear()
+    monkeypatch.setattr(
+        collector,
+        "get_trace",
+        lambda: SimpleNamespace(
+            trace_id="trace-utc",
+            request_id="trace-utc",
+            conversation_id="conversation-utc",
+            turn_id="turn-utc",
+            user_id="user-utc",
+            farm_uid="farm-utc",
+            sampling_level=1,
+            root_span_id="root-utc",
+        ),
+    )
+
+    collector.record("llm_call", "model", start_time=1.0, end_time=2.0)
+    node = collector._queue[-1]
+
+    assert node["start_time"].tzinfo == timezone.utc
+    assert node["end_time"].tzinfo == timezone.utc
+    assert node["created_at"].tzinfo == timezone.utc
+    collector._queue.clear()
 
 
 @pytest.mark.asyncio
@@ -97,6 +160,7 @@ async def test_flush_now_projects_events_when_trace_queue_is_empty(monkeypatch) 
     assert len(event_coll.docs) == 1
     assert event_coll.docs[("trace-1", "evt-1")]["user_id"] == "user-1"
     assert event_coll.docs[("trace-1", "evt-1")]["farm_uid"] == "farm-1"
+    assert event_coll.docs[("trace-1", "evt-1")]["projection_status"] == "persisted"
     assert not collector._event_queue
 
 

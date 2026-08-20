@@ -53,7 +53,11 @@ from agent.infra.trace import (
     get_trace,
     increment_step,
     trace_commit_state,
+    trace_catalog_recall,
+    trace_context_build,
+    trace_approval,
     trace_llm_call,
+    trace_skill_router,
     trace_tool_call,
 )
 from agent.skills import loader as skill_loader
@@ -227,6 +231,7 @@ def _setup_turn_runtime(
     turn: Turn,
 ) -> tuple[SkillRegistry, list[dict], SkillRegistry, verify.CallTracker, dict]:
     """加载 skills、构建 tools schema、初始化 tracker。"""
+    router_started = time.perf_counter()
     memory_key = turn.memory_key or turn.conversation_id
     turn.memory_snapshot = memory.snapshot(memory_key)
     # 兼容旧调用方对 load_all 的注入，再在 Runtime 边界统一构建 Registry。
@@ -239,8 +244,26 @@ def _setup_turn_runtime(
         len(registry.all()),
         [f"{s.name}({s.kind},{s.risk_level})" for s in registry.all()],
     )
+    candidate_tools = [
+        str(tool.get("function", {}).get("name"))
+        for tool in tools_schema
+        if isinstance(tool, dict) and isinstance(tool.get("function"), dict)
+    ]
+    trace_catalog_recall(
+        registry_count=len(registry.all()),
+        exposed_tool_count=len(tools_schema),
+        candidate_tools=candidate_tools,
+        duration_ms=int((time.perf_counter() - router_started) * 1000),
+    )
+    context_started = time.perf_counter()
     turn.messages = context.build_initial_messages(
         turn.user_input, turn.memory_snapshot
+    )
+    trace_context_build(
+        message_count=len(turn.messages),
+        history_count=len(turn.memory_snapshot.get("messages") or []),
+        memory_block_count=len(turn.memory_snapshot.get("long_term") or {}),
+        duration_ms=int((time.perf_counter() - context_started) * 1000),
     )
     return registry, tools_schema, registry, verify.CallTracker(), {"plan": None}
 
@@ -316,6 +339,38 @@ async def _run_single_reasoning_step(
         async for ev in _handle_llm_error(turn, exc):
             yield ev
         return
+
+    selected_tool_calls = [
+        {
+            "id": call.get("id"),
+            "name": call.get("name"),
+            "arguments": call.get("arguments") or {},
+        }
+        for call in llm_result.tool_calls
+    ]
+    candidate_tools = [
+        str(tool.get("function", {}).get("name"))
+        for tool in tools_schema
+        if isinstance(tool, dict) and isinstance(tool.get("function"), dict)
+    ]
+    trace_skill_router(
+        registry_count=len(skill_index.all())
+        if isinstance(skill_index, SkillRegistry)
+        else len(skill_index),
+        exposed_tool_count=len(tools_schema),
+        candidate_tools=candidate_tools,
+        selected_tools=[
+            str(call.get("name"))
+            for call in llm_result.tool_calls
+            if call.get("name")
+        ],
+        selected_tool_calls=selected_tool_calls,
+        selection_status="selected" if llm_result.tool_calls else "none",
+        decision_source=(
+            "llm_tool_call" if llm_result.tool_calls else "llm_no_tool_call"
+        ),
+        step_index=turn.step_count,
+    )
 
     # ── 写入已提交但收尾轮仍请求工具 ──
     if turn.finalization_pending and llm_result.tool_calls:
@@ -395,6 +450,7 @@ async def _call_llm_stream(
     _llm_start = time.time()
     full_content = ""
     tool_calls: list[dict] = []
+    token_usage: dict | None = None
 
     stream = chat_stream(llm_messages, tools=tools_schema)
     next_token = asyncio.create_task(stream.__anext__())
@@ -426,6 +482,7 @@ async def _call_llm_stream(
                 }
             elif token["type"] == "done":
                 tool_calls = token.get("tool_calls", [])
+                token_usage = token.get("token_usage")
             elif token["type"] == "retrying":
                 yield {"type": "retrying", "data": token.get("data", {})}
             elif token["type"] == "error":
@@ -461,6 +518,7 @@ async def _call_llm_stream(
             ],
         },
         duration_ms=_llm_ms,
+        token_usage=token_usage,
     )
     log_event(
         logger,
@@ -1090,14 +1148,6 @@ async def _emit_missing_params(
     turn.emit("observation", ev["data"])
     yield ev
     turn.messages.append(context.tool_result_message(tool_call_id, tool_name, result))
-    # 缺参是确定性的用户澄清分支，不能再把内部结果交回模型反复选工具。
-    turn.finalization_request = {
-        "code": str(result.get("error") or "missing_required_params"),
-        "message": message,
-        "answer": skill.missing_params_prompt(missing),
-        "tool_name": tool_name,
-        "result": result,
-    }
 
 
 async def _check_duplication(
@@ -1152,12 +1202,10 @@ async def _finalize_requested_error(
     code = str(request.get("code") or "tool_failed")
     message = str(request.get("message") or "工具执行失败")
     tool_name = str(request.get("tool_name") or "")
-    answer = str(request.get("answer") or "")
-    if not answer:
-        answer = (
-            f"调用 {tool_name or '业务工具'} 未完成：{message}。"
-            "该错误不可重试，已停止继续调用工具，请补充信息后重试。"
-        )
+    answer = (
+        f"调用 {tool_name or '业务工具'} 未完成：{message}。"
+        "该错误不可重试，已停止继续调用工具，请补充信息后重试。"
+    )
     async for ev in _emit_failure_terminal(
         turn,
         code=code,
@@ -1257,6 +1305,7 @@ async def _apply_approval_gate(
     turn.emit("approval_required", ev["data"])
     yield ev
 
+    approval_started = time.perf_counter()
     decision, reason = await approval_waiter(turn.turn_id)
     if reason == "approval_expired":
         turn.record_error(
@@ -1295,6 +1344,13 @@ async def _apply_approval_gate(
         else "approved"
         if decision
         else "rejected"
+    )
+    trace_approval(
+        tool_name=skill.name,
+        risk_level=risk,
+        decision=decision_name,
+        reason=reason,
+        duration_ms=int((time.perf_counter() - approval_started) * 1000),
     )
     ev = sse.approval_result(decision_name, reason)
     turn.emit("approval_result", ev["data"])
@@ -2010,16 +2066,16 @@ def _find_latest_action_data(turn: Turn, tool_name: str) -> dict | None:
 
 def _missing_params_result(skill: Skill, missing: list[str]) -> dict:
     """构造只给模型看的缺失信息，禁止把内部字段名直接回复给用户。"""
-    required_any = skill.required_any_params()
-    missing_fields = [name for name in missing if name != "__required_any__"]
-    for name in required_any:
-        if "__required_any__" in missing and name not in missing_fields:
-            missing_fields.append(name)
+    properties = skill.parameters_schema.get("properties") or {}
+    details = [
+        str((properties.get(name) or {}).get("description") or name) for name in missing
+    ]
     return {
         "error": "missing_information",
-        "missing": missing_fields,
+        "missing": missing,
         "message": (
-            skill.missing_params_prompt(missing)
+            "当前请求缺少完成业务动作所需的信息："
+            + "；".join(details)
             + "。请停止调用工具，直接用自然、简短的中文向用户询问这些业务信息；"
             "不要提及参数名、operation、tool 或 MCP。"
         ),

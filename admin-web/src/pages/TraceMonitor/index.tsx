@@ -994,7 +994,7 @@ function NodeHeader({ node }: { node: TraceNodeDetail }) {
             </span>
           </div>
           <div style={{ color: TEXT_DIM, fontFamily: 'monospace', fontSize: 12 }}>
-            trace_id: {node.request_id}
+            trace_id: {node.trace_id ?? node.request_id}
           </div>
         </div>
         <div style={{ textAlign: 'right' }}>
@@ -1012,6 +1012,10 @@ function NodeHeader({ node }: { node: TraceNodeDetail }) {
         <Metric label="error_code" value={node.error_code} />
         <Metric label="recover" value={node.recover} />
         <Metric label="tokens" value={tokenUsage?.total_tokens ?? tokenUsage?.prompt_tokens} />
+        <Metric label="phase" value={node.phase} />
+        <Metric label="span" value={node.span_id} />
+        <Metric label="parent" value={node.parent_span_id} />
+        <Metric label="layer" value={node.layer} />
       </div>
       {node.error_message && (
         <div style={{ ...previewStyle, marginTop: 12, borderColor: '#7c2d12', background: '#1f130c', color: '#ffb86c' }}>
@@ -1380,9 +1384,16 @@ function nodeDetailPayload(node: TraceNodeDetail): Record<string, unknown> {
   return {
     id: node.id,
     request_id: node.request_id,
+    trace_id: node.trace_id,
     round_index: node.round_index,
     node_type: node.node_type,
     node_name: node.node_name,
+    span_id: node.span_id,
+    parent_span_id: node.parent_span_id,
+    span_kind: node.span_kind,
+    layer: node.layer,
+    phase: node.phase,
+    attempt: node.attempt,
     status: node.status,
     duration_ms: node.duration_ms,
     start_time: node.start_time,
@@ -1393,6 +1404,9 @@ function nodeDetailPayload(node: TraceNodeDetail): Record<string, unknown> {
     error_message: node.error_message,
     input_data: node.input_data,
     output_data: node.output_data,
+    attributes: node.attributes,
+    resource: node.resource,
+    sampling: node.sampling,
   };
 }
 
@@ -1880,19 +1894,29 @@ export default function TraceMonitor() {
     const detail: TraceNodeDetail = {
       id: nodeData.id ?? 0,
       request_id: requestId,
+      trace_id: nodeData.trace_id,
       round_index: _roundIndex,
       node_type: nodeData.node_type,
       node_name: nodeData.node_name,
       input_data: nodeData.input_data ?? null,
       output_data: nodeData.output_data ?? null,
       duration_ms: nodeData.duration_ms,
-      token_usage: null,
+      token_usage: nodeData.token_usage ?? null,
       status: nodeData.status,
       error_message: nodeData.error_message ?? null,
       error_code: nodeData.error_code ?? null,
       recover: nodeData.recover ?? null,
       start_time: nodeData.start_time,
       end_time: nodeData.end_time ?? null,
+      span_id: nodeData.span_id,
+      parent_span_id: nodeData.parent_span_id,
+      span_kind: nodeData.span_kind,
+      layer: nodeData.layer,
+      phase: nodeData.phase,
+      attempt: nodeData.attempt,
+      attributes: nodeData.attributes,
+      resource: nodeData.resource,
+      sampling: nodeData.sampling,
     };
     setNodeDetail(detail);
     setDrawerOpen(true);
@@ -2205,9 +2229,20 @@ export default function TraceMonitor() {
                             end_time: n.end_time,
                             input_data: n.input_data,
                             output_data: n.output_data,
+                            token_usage: n.token_usage,
                             error_message: n.error_message,
                             error_code: n.error_code,
                             recover: n.recover,
+                            trace_id: n.trace_id,
+                            span_id: n.span_id,
+                            parent_span_id: n.parent_span_id,
+                            span_kind: n.span_kind,
+                            layer: n.layer,
+                            phase: n.phase,
+                            attempt: n.attempt,
+                            attributes: n.attributes,
+                            resource: n.resource,
+                            sampling: n.sampling,
                           })),
                         }))}
                         onNodeClick={(roundIdx, nodeIdx, node) =>

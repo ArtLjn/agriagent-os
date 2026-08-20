@@ -40,4 +40,25 @@ describe('locations api', () => {
       lon: 120.4342,
     });
   });
+
+  it('兼容 v2 返回的 name/full_name 字段，避免下拉显示 undefined', async () => {
+    mockedApiClient.get.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            name: '睢宁县',
+            full_name: '江苏省徐州市睢宁县',
+            province: '江苏省',
+            city: '徐州市',
+            lat: 33.9126,
+            lon: 117.9414,
+          },
+        ],
+      },
+    });
+
+    const result = await searchLocations('睢宁');
+
+    expect(result[0].display_name).toBe('睢宁县');
+  });
 });

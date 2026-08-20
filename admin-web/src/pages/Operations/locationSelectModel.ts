@@ -1,6 +1,6 @@
 import type { DefaultOptionType } from 'antd/es/select';
 import type { LocationOption } from '../../api/locations';
-import type { UserSettings } from '../../api/operations';
+import type { UserSettings } from '../../api/users';
 
 type SettingsLocationFields = {
   default_city: string;

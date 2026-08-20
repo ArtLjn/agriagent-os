@@ -58,12 +58,20 @@ class FakeDatabase:
 
 def _matches(document: dict, filter_doc: dict) -> bool:
     for key, expected in filter_doc.items():
+        if key == "$and":
+            if not all(_matches(document, branch) for branch in expected):
+                return False
+            continue
         if key == "$or":
             if not any(_matches(document, branch) for branch in expected):
                 return False
             continue
         actual = document.get(key)
         if isinstance(expected, dict):
+            if "$exists" in expected and (key in document) != expected["$exists"]:
+                return False
+            if "$ne" in expected and actual == expected["$ne"]:
+                return False
             if "$gt" in expected and not (
                 actual is not None and actual > expected["$gt"]
             ):
@@ -191,6 +199,89 @@ async def test_timeline_merges_nodes_and_events_without_payload_by_default(
     ]
     assert "data" not in result["items"][0]
     assert result["evidence_status"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_timeline_normalizes_utc_and_naive_timestamps(
+    monkeypatch, mongodb_enabled
+) -> None:
+    nodes = FakeCollection(
+        [
+            {
+                "trace_id": "trace-timezone",
+                "user_id": "u1",
+                "farm_uid": "f1",
+                "node_type": "llm_call",
+                "node_name": "model",
+                "start_time": "2026-08-19T10:00:02Z",
+            }
+        ]
+    )
+    events = FakeCollection(
+        [
+            {
+                "trace_id": "trace-timezone",
+                "user_id": "u1",
+                "farm_uid": "f1",
+                "event_id": "event-timezone",
+                "seq": 1,
+                "event_type": "started",
+                "occurred_at": "2026-08-19T10:00:01+00:00",
+            }
+        ]
+    )
+    monkeypatch.setattr(store, "_get_trace_collection", lambda: nodes)
+    monkeypatch.setattr(store, "_get_events_collection", lambda: events)
+
+    result = await store.get_trace_timeline(
+        "trace-timezone", user_id="u1", farm_uid="f1"
+    )
+
+    assert [item["record_kind"] for item in result["items"]] == ["event", "node"]
+    assert result["items"][0]["occurred_at"].endswith("Z")
+
+
+@pytest.mark.asyncio
+async def test_nodes_hide_resource_spans_by_default_and_can_expand_them(
+    monkeypatch, mongodb_enabled
+) -> None:
+    nodes = FakeCollection(
+        [
+            {
+                "trace_id": "trace-1",
+                "user_id": "u1",
+                "farm_uid": "f1",
+                "node_type": "llm_call",
+                "node_name": "model",
+                "layer": "agent",
+            },
+            {
+                "trace_id": "trace-1",
+                "user_id": "u1",
+                "farm_uid": "f1",
+                "node_type": "mcp_call",
+                "node_name": "get_weather",
+                "layer": "resource",
+            },
+        ]
+    )
+    monkeypatch.setattr(store, "_get_trace_collection", lambda: nodes)
+
+    compact = await store.get_trace_nodes(
+        "trace-1", user_id="u1", farm_uid="f1"
+    )
+    expanded = await store.get_trace_nodes(
+        "trace-1",
+        include_resource_spans=True,
+        user_id="u1",
+        farm_uid="f1",
+    )
+
+    assert [node["node_type"] for node in compact["nodes"]] == ["llm_call"]
+    assert {node["node_type"] for node in expanded["nodes"]} == {
+        "llm_call",
+        "mcp_call",
+    }
 
 
 @pytest.mark.asyncio

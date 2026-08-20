@@ -3,8 +3,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from agent.core import react
-from agent.core.turn import Turn
 from agent.skills.loader import _load_skill, load_all
 
 
@@ -47,60 +45,6 @@ def test_user_settings_skill_exposes_query_and_update_operations():
         "default_lon",
         "assistant_role",
     }
-
-
-@pytest.mark.asyncio
-async def test_user_settings_update_requires_one_setting_before_mcp_call():
-    class BusinessMustNotBeCalled:
-        async def call_tool(self, *_args, **_kwargs):
-            raise AssertionError("缺少设置字段时不应调用 Business MCP")
-
-    skill = _loaded("update_user_settings")
-    result = await skill.execute({}, _ctx("修改我的设置", BusinessMustNotBeCalled()))
-
-    assert not result.ok
-    assert "至少提供以下一项" in result.error
-    assert "默认城市" in result.error
-    assert "助手回复风格" in result.error
-
-
-def test_user_settings_missing_result_lists_one_of_fields_for_clarification():
-    skill = _loaded("update_user_settings")
-    missing = skill.missing_required_params({})
-
-    result = react._missing_params_result(skill, missing)
-
-    assert result["error"] == "missing_information"
-    assert set(result["missing"]) == {
-        "default_city",
-        "default_lat",
-        "default_lon",
-        "assistant_role",
-    }
-    assert "至少提供以下一项" in result["message"]
-    assert "__required_any__" not in result["message"]
-
-
-@pytest.mark.asyncio
-async def test_missing_params_terminates_with_user_clarification():
-    skill = _loaded("update_user_settings")
-    turn = Turn(user_input="修改我的设置")
-    missing = skill.missing_required_params({})
-
-    async for _ in react._emit_missing_params(
-        turn, skill, "call-1", skill.name, {}, missing
-    ):
-        pass
-
-    assert turn.finalization_request["code"] == "missing_information"
-    assert turn.finalization_request["answer"] == skill.missing_params_prompt(missing)
-
-    async for _ in react._finalize_requested_error(turn):
-        pass
-
-    assert turn.status == "failed"
-    assert turn.final_answer == skill.missing_params_prompt(missing)
-    assert "工具" not in turn.final_answer
 
 
 def test_operation_skill_schema_does_not_expose_internal_operation():

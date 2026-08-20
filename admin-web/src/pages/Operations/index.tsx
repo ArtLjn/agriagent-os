@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Button,
@@ -25,7 +25,6 @@ import {
 import {
   AppstoreOutlined,
   CheckCircleOutlined,
-  CloudDownloadOutlined,
   DeleteOutlined,
   DollarOutlined,
   FieldTimeOutlined,
@@ -44,8 +43,8 @@ import { cardStyle, palette } from '../../styles/theme';
 import { createCycle, listCycles, type CropCycleListItem, type CycleParseResponse } from '../../api/cycles';
 import { createTemplate, type CropTemplateParseResponse } from '../../api/crops';
 import { createRecord, type CostParseResponse } from '../../api/costs';
-import { listAppSkills, type AppSkillItem, type AppSkillListResponse } from '../../api/agent';
 import { searchLocations } from '../../api/locations';
+import { usersApi, type CurrentUser, type UserSettings } from '../../api/users';
 import {
   operationsApi,
   type CostCategory,
@@ -53,8 +52,6 @@ import {
   type OperationWorkOrder,
   type PlantingUnit,
   type RecentOperation,
-  type UserSettings,
-  type VersionCheck,
   type Worker,
   type WorkerLaborSummary,
 } from '../../api/operations';
@@ -138,7 +135,7 @@ type CategoryForm = {
 };
 
 type SettingsForm = {
-  display_name: string;
+  nickname: string;
   default_city?: string;
   default_lat?: number | null;
   default_lon?: number | null;
@@ -1056,57 +1053,61 @@ function FinancePanel() {
 }
 
 function SystemPanel() {
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [settings, setSettings] = useState<UserSettings | null>(null);
-  const [feedback, setFeedback] = useState<Record<string, unknown> | null>(null);
-  const [version, setVersion] = useState<VersionCheck | null>(null);
-  const [appSkills, setAppSkills] = useState<AppSkillListResponse | null>(null);
   const [loading, setLoading] = useState(false);
-  const [skillsLoading, setSkillsLoading] = useState(false);
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationOptions, setLocationOptions] = useState<LocationSelectOption[]>([]);
   const [settingsForm] = Form.useForm<SettingsForm>();
-  const [versionCode, setVersionCode] = useState(0);
+  const locationSearchRequestRef = useRef(0);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [settingsRes, feedbackRes, versionRes] = await Promise.all([
-        operationsApi.getSettings(),
-        operationsApi.getFeedbackStats(),
-        operationsApi.checkVersion(versionCode),
+      const [userRes, settingsRes] = await Promise.all([
+        usersApi.getCurrent(),
+        usersApi.getSettings(),
       ]);
+      setCurrentUser(userRes.data);
       setSettings(settingsRes.data);
-      setFeedback(feedbackRes.data);
-      setVersion(versionRes.data);
       settingsForm.setFieldsValue({
-        ...settingsRes.data,
+        nickname: userRes.data.nickname ?? undefined,
         default_city: settingsRes.data.default_city ?? undefined,
+        default_lat: settingsRes.data.default_lat ?? null,
+        default_lon: settingsRes.data.default_lon ?? null,
         assistant_role: settingsRes.data.assistant_role ?? 'warm',
       });
       const currentLocation = buildCurrentLocationOption(settingsRes.data);
       setLocationOptions(currentLocation ? buildLocationSelectOptions([currentLocation]) : []);
     } catch {
-      message.error('加载用户与应用调试数据失败');
+      message.error('加载用户设置失败');
     } finally {
       setLoading(false);
     }
-  }, [settingsForm, versionCode]);
+  }, [settingsForm]);
 
   const handleLocationSearch = useCallback(async (keyword: string) => {
+    const requestId = ++locationSearchRequestRef.current;
     const query = keyword.trim();
     if (!query) {
       const currentLocation = settings ? buildCurrentLocationOption(settings) : null;
       setLocationOptions(currentLocation ? buildLocationSelectOptions([currentLocation]) : []);
+      setLocationLoading(false);
       return;
     }
     setLocationLoading(true);
     try {
       const locations = await searchLocations(query, 50);
+      if (requestId !== locationSearchRequestRef.current) return;
       setLocationOptions(buildLocationSelectOptions(locations));
     } catch {
+      if (requestId !== locationSearchRequestRef.current) return;
+      setLocationOptions([]);
       message.error('搜索城市失败');
     } finally {
-      setLocationLoading(false);
+      if (requestId === locationSearchRequestRef.current) {
+        setLocationLoading(false);
+      }
     }
   }, [settings]);
 
@@ -1126,88 +1127,34 @@ function SystemPanel() {
     });
   }, [settingsForm]);
 
-  const refreshAppSkills = useCallback(async () => {
-    setSkillsLoading(true);
-    try {
-      const data = await listAppSkills();
-      setAppSkills(data);
-    } catch {
-      message.error('加载 App 技能列表失败');
-    } finally {
-      setSkillsLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  useEffect(() => {
-    refreshAppSkills();
-  }, [refreshAppSkills]);
-
   const updateSettings = async () => {
     const values = await settingsForm.validateFields();
-    const res = await operationsApi.updateSettings(buildRequestBody(values));
-    setSettings(res.data);
+    const [userRes, settingsRes] = await Promise.all([
+      usersApi.updateCurrent({ nickname: values.nickname.trim() }),
+      usersApi.updateSettings({
+        default_city: values.default_city,
+        default_lat: values.default_lat,
+        default_lon: values.default_lon,
+        assistant_role: values.assistant_role,
+      }),
+    ]);
+    setCurrentUser(userRes.data);
+    setSettings(settingsRes.data);
     message.success('用户设置已更新');
   };
 
-  const skillColumns: ColumnsType<AppSkillItem> = [
-    { title: 'Key', dataIndex: 'key', width: 180 },
-    { title: '名称', dataIndex: 'title', width: 120, render: (text: string) => <strong>{text}</strong> },
-    { title: '分类', dataIndex: 'category', width: 90, render: (value: string) => <Tag color="blue">{value}</Tag> },
-    { title: '图标', dataIndex: 'icon', width: 130 },
-    { title: '颜色', dataIndex: 'icon_color', width: 90 },
-    { title: '推荐', dataIndex: 'recommended', width: 80, render: (value: boolean) => value ? <Tag color="success">是</Tag> : <Tag>否</Tag> },
-    { title: '启用', dataIndex: 'enabled', width: 80, render: (value: boolean) => value ? <Tag color="success">是</Tag> : <Tag color="default">否</Tag> },
-    { title: '描述', dataIndex: 'description', ellipsis: true },
-  ];
-
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <Toolbar
-        left={(
-          <>
-            <InputNumber value={versionCode} min={0} onChange={(value) => setVersionCode(value ?? 0)} addonBefore="当前版本码" />
-            <Button icon={<CloudDownloadOutlined />} onClick={refresh} loading={loading}>检查版本</Button>
-          </>
-        )}
-        right={<Button icon={<ReloadOutlined />} onClick={refresh} loading={loading}>刷新全部</Button>}
-      />
-      <Card
-        title={<span><AppstoreOutlined /> App 技能列表接口</span>}
-        extra={(
-          <Button icon={<ReloadOutlined />} onClick={refreshAppSkills} loading={skillsLoading}>
-            调试 GET /agent/skills
-          </Button>
-        )}
-        style={cardStyle}
-        styles={{ body: { padding: 12 } }}
-      >
-        <Space direction="vertical" size={12} style={{ width: '100%' }}>
-          <Alert
-            type="info"
-            showIcon
-            message={`当前接口：GET /agent/skills${appSkills ? `，返回 ${appSkills.total} 个技能` : ''}`}
-          />
-          <Table
-            rowKey="key"
-            size="small"
-            loading={skillsLoading}
-            dataSource={appSkills?.items ?? []}
-            columns={skillColumns}
-            pagination={false}
-            scroll={{ x: 980 }}
-          />
-          <pre style={rawPreviewStyle}>{JSON.stringify(appSkills ?? {}, null, 2)}</pre>
-        </Space>
-      </Card>
+      <Toolbar right={<Button icon={<ReloadOutlined />} onClick={refresh} loading={loading}>刷新</Button>} />
       <Row gutter={[16, 16]} align="top">
         <Col xs={24} lg={12}>
           <Card title={<span><SettingOutlined /> 当前用户设置</span>} style={cardStyle}>
             <Form form={settingsForm} layout="vertical">
-              <Form.Item name="display_name" label="显示名" rules={[{ required: true }]}><Input /></Form.Item>
+              <Form.Item name="nickname" label="昵称" rules={[{ required: true }]}><Input /></Form.Item>
               <Form.Item name="default_city" label="默认城市">
                 <Select
                   allowClear
@@ -1253,27 +1200,16 @@ function SystemPanel() {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title={<span><CloudDownloadOutlined /> App 版本</span>} style={cardStyle}>
-            {version ? (
-              <Descriptions column={1}>
-                <Descriptions.Item label="最新版本">{version.latest_version}</Descriptions.Item>
-                <Descriptions.Item label="版本码">{version.latest_version_code}</Descriptions.Item>
-                <Descriptions.Item label="强制更新"><Tag color={version.force_update ? 'red' : 'default'}>{version.force_update ? '是' : '否'}</Tag></Descriptions.Item>
-                <Descriptions.Item label="下载地址">{version.download_url || '-'}</Descriptions.Item>
-                <Descriptions.Item label="更新日志">{version.changelog || '-'}</Descriptions.Item>
-              </Descriptions>
-            ) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ marginBlock: 10 }} />}
+          <Card title="当前用户" style={cardStyle}>
+            <Descriptions column={1}>
+              <Descriptions.Item label="手机号">{currentUser?.phone || '-'}</Descriptions.Item>
+              <Descriptions.Item label="角色">{currentUser?.role || '-'}</Descriptions.Item>
+              <Descriptions.Item label="农场">{currentUser?.farm?.name || '-'}</Descriptions.Item>
+              <Descriptions.Item label="农场位置">{currentUser?.farm?.location || '-'}</Descriptions.Item>
+            </Descriptions>
           </Card>
         </Col>
       </Row>
-      <Row gutter={[16, 16]}>
-        <Col xs={24} md={8}><MetricCard><Statistic title="好评" value={Number(feedback?.good ?? 0)} /></MetricCard></Col>
-        <Col xs={24} md={8}><MetricCard accent={palette.danger}><Statistic title="差评" value={Number(feedback?.bad ?? 0)} /></MetricCard></Col>
-        <Col xs={24} md={8}><MetricCard accent={palette.purple}><Statistic title="反馈字段" value={feedback ? Object.keys(feedback).length : 0} /></MetricCard></Col>
-      </Row>
-      <Card title="反馈统计原始响应" style={cardStyle}>
-        <pre style={{ margin: 0, color: palette.textMuted, whiteSpace: 'pre-wrap' }}>{JSON.stringify({ settings, feedback }, null, 2)}</pre>
-      </Card>
     </Space>
   );
 }
