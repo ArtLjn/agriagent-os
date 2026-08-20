@@ -98,6 +98,8 @@ class ConversationStateCfg:
     collection: str = "conversationStates"
     summary_ttl_seconds: int = 86400
     recent_turn_limit: int = 6
+    pending_action_ttl_seconds: int = 600
+    task_state_ttl_seconds: int = 3600
 
 
 @dataclass
@@ -223,6 +225,28 @@ def _build_settings() -> Settings:
                     state_raw.get("recent_turn_limit"),
                     6,
                     default=6,
+                )
+            ),
+        ),
+        pending_action_ttl_seconds=max(
+            1,
+            int(
+                _first_value(
+                    context_raw.get("pending_action_ttl_seconds"),
+                    state_raw.get("pending_action_ttl_seconds"),
+                    600,
+                    default=600,
+                )
+            ),
+        ),
+        task_state_ttl_seconds=max(
+            1,
+            int(
+                _first_value(
+                    context_raw.get("task_state_ttl_seconds"),
+                    state_raw.get("task_state_ttl_seconds"),
+                    3600,
+                    default=3600,
                 )
             ),
         ),
@@ -394,6 +418,10 @@ def _build_settings() -> Settings:
         ),
         "summary_ttl_seconds": os.getenv("CONTEXT__SUMMARY_TTL_SECONDS"),
         "recent_turn_limit": os.getenv("CONTEXT__RECENT_TURN_LIMIT"),
+        "pending_action_ttl_seconds": os.getenv(
+            "CONTEXT__PENDING_ACTION_TTL_SECONDS"
+        ),
+        "task_state_ttl_seconds": os.getenv("CONTEXT__TASK_STATE_TTL_SECONDS"),
         "summary_soft_ratio": os.getenv("CONTEXT__SUMMARY_SOFT_RATIO"),
         "summary_hard_ratio": os.getenv("CONTEXT__SUMMARY_HARD_RATIO"),
         "response_reserve_tokens": os.getenv("CONTEXT__RESPONSE_RESERVE_TOKENS"),
@@ -414,6 +442,14 @@ def _build_settings() -> Settings:
     if context_env["recent_turn_limit"]:
         settings.context.conversation_state.recent_turn_limit = max(
             1, int(context_env["recent_turn_limit"])
+        )
+    if context_env["pending_action_ttl_seconds"]:
+        settings.context.conversation_state.pending_action_ttl_seconds = max(
+            1, int(context_env["pending_action_ttl_seconds"])
+        )
+    if context_env["task_state_ttl_seconds"]:
+        settings.context.conversation_state.task_state_ttl_seconds = max(
+            1, int(context_env["task_state_ttl_seconds"])
         )
     if context_env["summary_soft_ratio"]:
         settings.context.summary_soft_ratio = float(context_env["summary_soft_ratio"])

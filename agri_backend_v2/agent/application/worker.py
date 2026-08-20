@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 import uuid
@@ -57,6 +58,7 @@ async def _persist_session_state(turn: Turn) -> None:
         expected_revision=turn.conversation_revision,
         turn_id=turn.turn_id,
         pending_action=turn.pending_approval,
+        task_state=turn.task_state,
     )
     if result.get("status") not in {"disabled", "ready", "idempotent"}:
         logger.warning(
@@ -64,6 +66,10 @@ async def _persist_session_state(turn: Turn) -> None:
             turn.turn_id,
             result.get("status"),
             result.get("code"),
+        )
+    if result.get("status") in {"ready", "idempotent"}:
+        turn.conversation_revision = int(
+            result.get("conversation_revision", turn.conversation_revision) or 0
         )
 
 
@@ -96,7 +102,18 @@ def _turn_from_state(state: dict[str, str]) -> Turn:
         token_id=state.get("token_id", ""),
         scope=state.get("scope", ""),
         agent_token=settings.auth.agent_service_token,
+        task_state=_decode_json_field(state.get("task_state")),
     )
+
+
+def _decode_json_field(value: str | None) -> dict | None:
+    if not value:
+        return None
+    try:
+        decoded = json.loads(value)
+    except (TypeError, json.JSONDecodeError):
+        return None
+    return decoded if isinstance(decoded, dict) else None
 
 
 async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
@@ -218,6 +235,7 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
                 event_type = event.get("type", "")
                 if event_type == "approval_required":
                     await create_approval(turn, event.get("data", {}))
+                    await _persist_session_state(turn)
                 if event_type == "final_answer":
                     final_answer = event.get("data", {}).get("text", "")
                 await publish_event(turn.turn_id, event)

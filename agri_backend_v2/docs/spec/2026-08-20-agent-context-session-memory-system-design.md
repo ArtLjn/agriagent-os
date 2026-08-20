@@ -193,6 +193,11 @@ temporary_task_state
 last_active_at / expires_at
 ```
 
+实现配置默认使用 `pending_action_ttl_seconds=600` 和
+`task_state_ttl_seconds=3600`。读取 Session View 时同时检查状态字段和
+`expires_at`；发现过期状态后使用当前 `conversation_revision` 做 CAS 清理，
+避免过期审批或临时任务继续注入 Context。
+
 Redis 只保存活动 Turn 的可恢复执行态和事件，不保存 Session 的长期真相。可选的 Redis snapshot 只能作为短 TTL 读缓存，必须带 `conversation_revision`；revision 不一致时回源 Mongo。
 
 ### 5.4 Short Memory：存储、读取和注入
@@ -563,7 +568,7 @@ Mongo Conversation Snapshot
 - [x] 2.2 基于完整 Turn 的最近窗口 projection，移除本地文件和固定消息数截断。
 - [x] 2.3 将摘要迁移为独立 `conversationStates.summary`，补齐 source range、revision、content hash。
 - [x] 2.4 增加摘要 CAS、幂等 key、失败状态和并发 Worker 测试。
-- [ ] 2.5 完成 pending action、临时任务状态的读取与过期清理。
+- [x] 2.5 完成 pending action、临时任务状态的读取与过期清理；审批产生时即时写入，读取时按 `expires_at/status` CAS 清理。
 - [x] 3.5 让 `_try_compress_context` 基于 ContextBundle conversation revision 和 summary revision 工作，避免覆盖竞争。
 
 ### Runtime、Tool 与持久化边界

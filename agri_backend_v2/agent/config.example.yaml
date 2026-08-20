@@ -57,6 +57,8 @@ context:
     collection: "conversationStates"
     summary_ttl_seconds: 86400
     recent_turn_limit: 6
+    pending_action_ttl_seconds: 600
+    task_state_ttl_seconds: 3600
   summary_soft_ratio: 0.60
   summary_hard_ratio: 0.80
   response_reserve_tokens: 4096

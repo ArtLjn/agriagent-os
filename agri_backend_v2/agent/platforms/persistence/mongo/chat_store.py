@@ -19,7 +19,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
@@ -178,6 +178,39 @@ def _result_attr(result: Any, name: str, default: Any = None) -> Any:
     return getattr(result, name, default)
 
 
+def _is_expired(value: Any, *, now: datetime | None = None) -> bool:
+    """只把可解析且已到期的生命周期字段视为过期。"""
+    if not value:
+        return False
+    if isinstance(value, datetime):
+        expires_at = value
+    elif isinstance(value, str):
+        try:
+            expires_at = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return False
+    else:
+        return False
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    current = now or datetime.now(timezone.utc)
+    return expires_at <= current
+
+
+def _expired_state_fields(
+    document: dict[str, Any], *, now: datetime | None = None
+) -> tuple[bool, bool]:
+    """返回 pending action 与临时任务各自是否需要清理。"""
+    pending = document.get("pendingAction") or {}
+    task = document.get("taskState") or {}
+    return (
+        pending.get("status") in {"expired", "approved", "rejected", "cancelled"}
+        or _is_expired(pending.get("expires_at"), now=now),
+        task.get("status") in {"expired", "completed", "failed", "cancelled"}
+        or _is_expired(task.get("expires_at"), now=now),
+    )
+
+
 async def ensure_indexes() -> None:
     """异步初始化消息集合索引，避免在同步连接初始化中遗留协程。"""
     global _indexes_initialized
@@ -230,6 +263,7 @@ async def get_conversation_state(
     *,
     user_id: str,
     farm_id: int | None = None,
+    cleanup_expired: bool = True,
 ) -> dict[str, Any] | None:
     """读取租户范围内的 Conversation state。
 
@@ -251,7 +285,29 @@ async def get_conversation_state(
         return _unavailable_result("get_conversation_state", exc)
     if document is None:
         return None
-    return _state_result(document)
+    state = _state_result(document)
+    if not cleanup_expired:
+        return state
+    pending_expired, task_expired = _expired_state_fields(document)
+    if not pending_expired and not task_expired:
+        return state
+    cleaned = await clear_expired_session_state(
+        conversation_id,
+        user_id=user_id,
+        farm_id=farm_id,
+        expected_revision=state["conversation_revision"],
+        clear_pending_action=pending_expired,
+        clear_task_state=task_expired,
+    )
+    if cleaned.get("status") in {"ready", "idempotent"}:
+        return cleaned
+    # 清理与其他写入竞争时，不把已过期数据重新暴露给 Context。
+    return {
+        **state,
+        "status": "stale",
+        "pending_action": None if pending_expired else state.get("pending_action"),
+        "task_state": None if task_expired else state.get("task_state"),
+    }
 
 
 async def save_conversation_state(
@@ -416,6 +472,34 @@ async def save_conversation_state(
                 }
         logger.warning("conversation state write failed: %s", exc)
         return _unavailable_result("save_conversation_state", exc)
+
+
+async def clear_expired_session_state(
+    conversation_id: str,
+    *,
+    user_id: str,
+    farm_id: int | None,
+    expected_revision: int,
+    clear_pending_action: bool,
+    clear_task_state: bool,
+) -> dict[str, Any]:
+    """以 CAS 清理已过期的 Session 短时状态。"""
+    if not clear_pending_action and not clear_task_state:
+        return await get_conversation_state(
+            conversation_id,
+            user_id=user_id,
+            farm_id=farm_id,
+            cleanup_expired=False,
+        ) or _unavailable_result("clear_expired_session_state")
+    return await save_conversation_state(
+        conversation_id,
+        user_id=user_id,
+        farm_id=farm_id,
+        expected_revision=expected_revision,
+        pending_action=None if clear_pending_action else _UNSET,
+        task_state=None if clear_task_state else _UNSET,
+        idempotency_key=f"expiry:{conversation_id}:{expected_revision}",
+    )
 
 
 async def reset_conversation_state(

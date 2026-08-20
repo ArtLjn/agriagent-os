@@ -105,6 +105,8 @@ class Turn:
     # }
     approved: bool = False
     rejected_reason: str | None = None
+    # 当前 Turn 的可恢复临时任务投影；长期事实不存放在这里。
+    task_state: dict[str, Any] | None = None
 
     # Output.
     final_answer: str | None = None
@@ -195,6 +197,7 @@ class Turn:
             "stop_reason": self.stop_reason.value if self.stop_reason else None,
             "step_count": self.step_count,
             "pending_approval": self.pending_approval,
+            "task_state": self.task_state,
             "final_answer": self.final_answer,
             "committed_result": self.committed_result,
             "finalization_pending": self.finalization_pending,

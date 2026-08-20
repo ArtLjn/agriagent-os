@@ -23,6 +23,8 @@ def test_context_config_defaults_are_stable(tmp_path, monkeypatch):
     assert settings.context.conversation_state_collection == "conversationStates"
     assert settings.context.summary_ttl_seconds == 86400
     assert settings.context.recent_turn_limit == 6
+    assert settings.context.conversation_state.pending_action_ttl_seconds == 600
+    assert settings.context.conversation_state.task_state_ttl_seconds == 3600
     assert settings.context.response_reserve_tokens == 4096
     assert settings.context.safety_margin_tokens == 1024
     assert settings.context.summary_soft_ratio == 0.60
@@ -46,6 +48,8 @@ def test_context_config_yaml_and_environment_overrides(tmp_path, monkeypatch):
             "context": {
                 "conversation_state": {
                     "collection": "conversationStatesStaging",
+                    "pending_action_ttl_seconds": 300,
+                    "task_state_ttl_seconds": 1800,
                 },
                 "summary_ttl_seconds": 7200,
                 "recent_turn_limit": 8,
@@ -68,6 +72,8 @@ def test_context_config_yaml_and_environment_overrides(tmp_path, monkeypatch):
     assert settings.context.conversation_state_collection == "conversationStatesStaging"
     assert settings.context.summary_ttl_seconds == 7200
     assert settings.context.recent_turn_limit == 8
+    assert settings.context.conversation_state.pending_action_ttl_seconds == 300
+    assert settings.context.conversation_state.task_state_ttl_seconds == 1800
     assert settings.context.summary_soft_ratio == 0.55
     assert settings.context.summary_hard_ratio == 0.75
     assert settings.context.response_reserve_tokens == 2048
@@ -81,6 +87,8 @@ def test_context_config_yaml_and_environment_overrides(tmp_path, monkeypatch):
     )
     monkeypatch.setenv("CONTEXT__SUMMARY_TTL_SECONDS", "1800")
     monkeypatch.setenv("CONTEXT__RECENT_TURN_LIMIT", "4")
+    monkeypatch.setenv("CONTEXT__PENDING_ACTION_TTL_SECONDS", "240")
+    monkeypatch.setenv("CONTEXT__TASK_STATE_TTL_SECONDS", "1200")
     monkeypatch.setenv("CONTEXT__RESPONSE_RESERVE_TOKENS", "3072")
     monkeypatch.setenv("CONTEXT__SAFETY_MARGIN_TOKENS", "768")
     monkeypatch.setenv("CONTEXT__SUMMARY_SOFT_RATIO", "0.65")
@@ -94,6 +102,8 @@ def test_context_config_yaml_and_environment_overrides(tmp_path, monkeypatch):
     assert settings.context.conversation_state_collection == "conversationStatesEnv"
     assert settings.context.summary_ttl_seconds == 1800
     assert settings.context.recent_turn_limit == 4
+    assert settings.context.conversation_state.pending_action_ttl_seconds == 240
+    assert settings.context.conversation_state.task_state_ttl_seconds == 1200
     assert settings.context.response_reserve_tokens == 3072
     assert settings.context.safety_margin_tokens == 768
     assert settings.context.summary_soft_ratio == 0.65

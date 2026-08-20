@@ -12,7 +12,7 @@
 - [x] 2.2 实现基于完整 Turn 的最近窗口 projection，移除固定消息数截断和本地文件存储
 - [x] 2.3 将会话摘要迁移为独立 `conversationStates.summary`，补齐摘要加载、source range、revision 和 content hash
 - [x] 2.4 为摘要生成增加 CAS、幂等 key、失败状态和并发 Worker 测试
-- [ ] 2.5 实现 pending action、临时任务状态和 reset generation 的读取与过期清理
+- [x] 2.5 实现 pending action、临时任务状态和 reset generation 的读取与过期清理
 - [x] 2.6 保留 Memory observation 接口和空长期记忆实现，禁止未确认事实写入长期 Memory
 - [x] 2.7 实现 `get_session_view()` 与 `search()` 两个分离接口，分别返回 Short Memory projection 和 scoped Long-term Memory hits
 - [x] 2.8 增加 Memory injection policy：Short Memory 默认注入，Long-term Memory 仅由 ContextPolicy/Skill dependency 按需检索和注入

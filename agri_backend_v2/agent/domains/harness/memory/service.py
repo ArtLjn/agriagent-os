@@ -8,9 +8,72 @@ Conversation 的唯一事实源是 Mongo ``conversationMessages`` 和
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _isoformat(value: datetime) -> str:
+    return value.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def prepare_pending_action(
+    pending_action: dict[str, Any] | None,
+    *,
+    turn_id: str,
+) -> dict[str, Any] | None:
+    """为待审批动作补齐 Session 生命周期字段。"""
+    if pending_action is None:
+        return None
+    from agent.config import settings
+
+    now = _utc_now()
+    normalized = dict(pending_action)
+    normalized.setdefault("status", "pending")
+    normalized.setdefault("source_turn_id", turn_id)
+    normalized.setdefault("created_at", _isoformat(now))
+    normalized.setdefault(
+        "expires_at",
+        _isoformat(
+            now
+            + timedelta(
+                seconds=settings.context.conversation_state.pending_action_ttl_seconds
+            )
+        ),
+    )
+    return normalized
+
+
+def prepare_task_state(
+    task_state: dict[str, Any] | None,
+    *,
+    turn_id: str,
+) -> dict[str, Any] | None:
+    """为临时任务补齐状态、来源和过期时间。"""
+    if task_state is None:
+        return None
+    from agent.config import settings
+
+    now = _utc_now()
+    normalized = dict(task_state)
+    normalized.setdefault("status", "active")
+    normalized.setdefault("source_turn_id", turn_id)
+    normalized.setdefault("updated_at", _isoformat(now))
+    normalized.setdefault(
+        "expires_at",
+        _isoformat(
+            now
+            + timedelta(
+                seconds=settings.context.conversation_state.task_state_ttl_seconds
+            )
+        ),
+    )
+    return normalized
 
 
 def empty_session_view(
@@ -169,15 +232,19 @@ async def persist_session_turn(
     """在可见消息终态后以 CAS 推进 Conversation state revision。"""
     from agent.platforms.persistence.mongo import chat_store
 
+    fields: dict[str, Any] = {
+        "conversation_id": conversation_id,
+        "user_id": user_id,
+        "farm_id": farm_id,
+        "farm_uid": farm_uid,
+        "expected_revision": expected_revision,
+        "pending_action": prepare_pending_action(pending_action, turn_id=turn_id),
+        "idempotency_key": f"turn:{turn_id}:session-state",
+    }
+    if task_state is not None:
+        fields["task_state"] = prepare_task_state(task_state, turn_id=turn_id)
     return await chat_store.save_conversation_state(
-        conversation_id,
-        user_id=user_id,
-        farm_id=farm_id,
-        farm_uid=farm_uid,
-        expected_revision=expected_revision,
-        pending_action=pending_action,
-        task_state=task_state,
-        idempotency_key=f"turn:{turn_id}:session-state",
+        **fields,
     )
 
 

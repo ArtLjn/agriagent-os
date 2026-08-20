@@ -1390,6 +1390,7 @@ async def _apply_approval_gate(
     approval_started = time.perf_counter()
     decision, reason = await approval_waiter(turn.turn_id)
     if reason == "approval_expired":
+        turn.pending_approval = None
         turn.record_error(
             "approval_expired",
             "审批已过期",
@@ -1398,6 +1399,7 @@ async def _apply_approval_gate(
             status="timeout",
         )
     elif reason == "turn_cancelled":
+        turn.pending_approval = None
         turn.record_error(
             "turn_cancelled",
             "本轮任务已取消",

@@ -180,6 +180,51 @@ async def test_state_write_is_idempotent_for_same_key(fake_state_store) -> None:
 
 
 @pytest.mark.asyncio
+async def test_expired_pending_action_is_cleared_on_read(fake_state_store) -> None:
+    saved = await chat_store.save_conversation_state(
+        "conversation-1",
+        user_id="user-1",
+        farm_id=1,
+        pending_action={
+            "tool_name": "create_farm_log",
+            "status": "pending",
+            "expires_at": "2020-01-01T00:00:00Z",
+        },
+        task_state={
+            "task_id": "task-1",
+            "status": "active",
+            "expires_at": "2099-01-01T00:00:00Z",
+        },
+    )
+
+    state = await chat_store.get_conversation_state(
+        "conversation-1", user_id="user-1", farm_id=1
+    )
+
+    assert state["conversation_revision"] == saved["conversation_revision"] + 1
+    assert state["pending_action"] is None
+    assert state["task_state"]["task_id"] == "task-1"
+
+
+@pytest.mark.asyncio
+async def test_expired_task_state_is_cleared_with_pending_action(fake_state_store) -> None:
+    await chat_store.save_conversation_state(
+        "conversation-1",
+        user_id="user-1",
+        farm_id=1,
+        pending_action={"expires_at": "2020-01-01T00:00:00Z"},
+        task_state={"expires_at": "2020-01-01T00:00:00Z"},
+    )
+
+    state = await chat_store.get_conversation_state(
+        "conversation-1", user_id="user-1", farm_id=1
+    )
+
+    assert state["pending_action"] is None
+    assert state["task_state"] is None
+
+
+@pytest.mark.asyncio
 async def test_state_boundary_reports_unavailable_without_fake_success(
     monkeypatch,
 ) -> None:

@@ -83,3 +83,30 @@ def test_recent_projection_keeps_complete_turns() -> None:
         {"role": "user", "content": "第二轮"},
         {"role": "assistant", "content": "答复二"},
     ]
+
+
+def test_session_actions_receive_lifecycle_metadata(monkeypatch) -> None:
+    from agent import config
+
+    monkeypatch.setattr(
+        config.settings.context.conversation_state,
+        "pending_action_ttl_seconds",
+        60,
+    )
+    monkeypatch.setattr(
+        config.settings.context.conversation_state,
+        "task_state_ttl_seconds",
+        120,
+    )
+
+    pending = memory.prepare_pending_action(
+        {"tool_name": "create_farm_log"}, turn_id="turn-1"
+    )
+    task = memory.prepare_task_state({"task_id": "task-1"}, turn_id="turn-1")
+
+    assert pending["status"] == "pending"
+    assert pending["source_turn_id"] == "turn-1"
+    assert pending["expires_at"]
+    assert task["status"] == "active"
+    assert task["source_turn_id"] == "turn-1"
+    assert task["expires_at"]

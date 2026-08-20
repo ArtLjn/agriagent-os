@@ -9,7 +9,7 @@ import logging
 import time
 import uuid
 from collections.abc import AsyncIterator
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from agent.config import settings
@@ -508,14 +508,33 @@ async def create_approval(turn: Turn, event_data: dict[str, Any]) -> None:
     client = get_client()
     if client is None:
         raise RuntimeError("redis coordination is disabled")
+    pending_action = dict(event_data)
+    pending_action.setdefault("status", "pending")
+    pending_action.setdefault("source_turn_id", turn.turn_id)
+    pending_action.setdefault(
+        "created_at",
+        datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace(
+            "+00:00", "Z"
+        ),
+    )
+    pending_action.setdefault(
+        "expires_at",
+        (
+            datetime.now(timezone.utc)
+            + timedelta(seconds=settings.redis.approval_ttl_seconds)
+        )
+        .isoformat(timespec="milliseconds")
+        .replace("+00:00", "Z"),
+    )
+    turn.pending_approval = pending_action
     await client.hset(
         approval_key(turn.turn_id),
         mapping={
             "turn_id": turn.turn_id,
-            "tool_name": event_data.get("tool_name", ""),
-            "risk_level": event_data.get("risk_level", ""),
+            "tool_name": pending_action.get("tool_name", ""),
+            "risk_level": pending_action.get("risk_level", ""),
             "arguments": json.dumps(
-                event_data.get("arguments", {}), ensure_ascii=False
+                pending_action.get("arguments", {}), ensure_ascii=False
             ),
             "status": "pending",
             "created_at": str(time.time()),
@@ -526,7 +545,7 @@ async def create_approval(turn: Turn, event_data: dict[str, Any]) -> None:
     await update_turn(
         turn.turn_id,
         status="awaiting_approval",
-        pending_approval=event_data,
+        pending_approval=pending_action,
     )
 
 
