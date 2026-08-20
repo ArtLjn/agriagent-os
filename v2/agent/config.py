@@ -82,15 +82,78 @@ class AuthCfg:
     delegation_audience: str = "farm-manager-business-mcp"
 
 
+def _default_feature_flags() -> dict[str, bool]:
+    """返回 Context 迁移开关的默认值。"""
+
+    return {
+        "context_bundle_v2": False,
+        "conversation_state_v2": False,
+        "summary_cas": False,
+        "memory_mongo_read": False,
+        "candidate_tool_schema": False,
+        "long_term_memory_observation": False,
+    }
+
+
+@dataclass
+class ConversationStateCfg:
+    """Conversation state 与短时会话投影配置。"""
+
+    collection: str = "conversationStates"
+    summary_ttl_seconds: int = 86400
+    recent_turn_limit: int = 6
+
+
+@dataclass
+class ContextCfg:
+    """Context 构建、预算和迁移开关配置。"""
+
+    conversation_state: ConversationStateCfg = field(
+        default_factory=ConversationStateCfg
+    )
+    summary_soft_ratio: float = 0.60
+    summary_hard_ratio: float = 0.80
+    response_reserve_tokens: int = 4096
+    safety_margin_tokens: int = 1024
+    max_tool_result_summary_chars: int = 1200
+    tool_schema_mode: str = "all"
+    feature_flags: dict[str, bool] = field(default_factory=_default_feature_flags)
+
+    @property
+    def conversation_state_collection(self) -> str:
+        """兼容直接读取 collection 配置的调用方。"""
+
+        return self.conversation_state.collection
+
+    @property
+    def summary_ttl_seconds(self) -> int:
+        """兼容旧式平铺读取方式。"""
+
+        return self.conversation_state.summary_ttl_seconds
+
+    @property
+    def recent_turn_limit(self) -> int:
+        """兼容旧式平铺读取方式。"""
+
+        return self.conversation_state.recent_turn_limit
+
+
 @dataclass
 class Settings:
     redis: RedisCfg = field(default_factory=RedisCfg)
     mongodb: MongoCfg = field(default_factory=MongoCfg)
     business_mcp: BusinessMcpCfg = field(default_factory=BusinessMcpCfg)
     auth: AuthCfg = field(default_factory=AuthCfg)
+    context: ContextCfg = field(default_factory=ContextCfg)
     environment: str = "development"
     default_farm_id: int = 1
     max_parallel_skills: int = 4
+
+    @property
+    def conversation_state(self) -> ConversationStateCfg:
+        """提供 Conversation state 的直达兼容入口。"""
+
+        return self.context.conversation_state
 
 
 def _load_yaml() -> dict:
@@ -99,12 +162,71 @@ def _load_yaml() -> dict:
     return yaml.safe_load(_CONFIG_FILE.read_text(encoding="utf-8")) or {}
 
 
+def _env_bool(value: str | bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    return value.lower() in {"1", "true", "yes", "on"}
+
+
+def _first_value(*values: object, default: object) -> object:
+    for value in values:
+        if value is not None:
+            return value
+    return default
+
+
+def _context_raw(raw: dict) -> tuple[dict, dict]:
+    context_raw = raw.get("context", {}) or {}
+    if not isinstance(context_raw, dict):
+        return {}, {}
+    state_raw = context_raw.get("conversation_state", {}) or {}
+    if not isinstance(state_raw, dict):
+        return context_raw, {}
+    return context_raw, state_raw
+
+
 def _build_settings() -> Settings:
     raw = _load_yaml()
     mongo_raw = raw.get("mongodb", {}) or {}
     redis_raw = raw.get("redis", {}) or {}
     mcp_raw = raw.get("business_mcp", {}) or {}
     auth_raw = raw.get("auth", {}) or {}
+    context_raw, state_raw = _context_raw(raw)
+    feature_flags_raw = dict(raw.get("feature_flags", {}) or {})
+    feature_flags_raw.update(context_raw.get("feature_flags", {}) or {})
+    feature_flags = _default_feature_flags()
+    feature_flags.update(
+        {str(name): _env_bool(value) for name, value in feature_flags_raw.items()}
+    )
+    state_cfg = ConversationStateCfg(
+        collection=str(
+            _first_value(
+                context_raw.get("conversation_state_collection"),
+                state_raw.get("collection"),
+                "conversationStates",
+                default="conversationStates",
+            )
+        ),
+        summary_ttl_seconds=int(
+            _first_value(
+                context_raw.get("summary_ttl_seconds"),
+                state_raw.get("summary_ttl_seconds"),
+                86400,
+                default=86400,
+            )
+        ),
+        recent_turn_limit=max(
+            1,
+            int(
+                _first_value(
+                    context_raw.get("recent_turn_limit"),
+                    state_raw.get("recent_turn_limit"),
+                    6,
+                    default=6,
+                )
+            ),
+        ),
+    )
     settings = Settings(
         redis=RedisCfg(
             enabled=bool(redis_raw.get("enabled", False)),
@@ -174,6 +296,20 @@ def _build_settings() -> Settings:
             delegation_audience=auth_raw.get(
                 "delegation_audience", "farm-manager-business-mcp"
             ),
+        ),
+        context=ContextCfg(
+            conversation_state=state_cfg,
+            summary_soft_ratio=float(context_raw.get("summary_soft_ratio", 0.60)),
+            summary_hard_ratio=float(context_raw.get("summary_hard_ratio", 0.80)),
+            response_reserve_tokens=int(
+                context_raw.get("response_reserve_tokens", 4096)
+            ),
+            safety_margin_tokens=int(context_raw.get("safety_margin_tokens", 1024)),
+            max_tool_result_summary_chars=int(
+                context_raw.get("max_tool_result_summary_chars", 1200)
+            ),
+            tool_schema_mode=str(context_raw.get("tool_schema_mode", "all")),
+            feature_flags=feature_flags,
         ),
         environment=str(raw.get("environment", "development")),
         default_farm_id=int(raw.get("default_farm_id", 1)),
@@ -251,6 +387,62 @@ def _build_settings() -> Settings:
         settings.auth.delegation_secret = env
     if env := os.getenv("DEFAULT_FARM_ID"):
         settings.default_farm_id = int(env)
+
+    context_env = {
+        "conversation_state_collection": os.getenv(
+            "CONTEXT__CONVERSATION_STATE_COLLECTION"
+        ),
+        "summary_ttl_seconds": os.getenv("CONTEXT__SUMMARY_TTL_SECONDS"),
+        "recent_turn_limit": os.getenv("CONTEXT__RECENT_TURN_LIMIT"),
+        "summary_soft_ratio": os.getenv("CONTEXT__SUMMARY_SOFT_RATIO"),
+        "summary_hard_ratio": os.getenv("CONTEXT__SUMMARY_HARD_RATIO"),
+        "response_reserve_tokens": os.getenv("CONTEXT__RESPONSE_RESERVE_TOKENS"),
+        "safety_margin_tokens": os.getenv("CONTEXT__SAFETY_MARGIN_TOKENS"),
+        "max_tool_result_summary_chars": os.getenv(
+            "CONTEXT__MAX_TOOL_RESULT_SUMMARY_CHARS"
+        ),
+        "tool_schema_mode": os.getenv("CONTEXT__TOOL_SCHEMA_MODE"),
+    }
+    if context_env["conversation_state_collection"]:
+        settings.context.conversation_state.collection = context_env[
+            "conversation_state_collection"
+        ]
+    if context_env["summary_ttl_seconds"]:
+        settings.context.conversation_state.summary_ttl_seconds = int(
+            context_env["summary_ttl_seconds"]
+        )
+    if context_env["recent_turn_limit"]:
+        settings.context.conversation_state.recent_turn_limit = max(
+            1, int(context_env["recent_turn_limit"])
+        )
+    if context_env["summary_soft_ratio"]:
+        settings.context.summary_soft_ratio = float(context_env["summary_soft_ratio"])
+    if context_env["summary_hard_ratio"]:
+        settings.context.summary_hard_ratio = float(context_env["summary_hard_ratio"])
+    if context_env["response_reserve_tokens"]:
+        settings.context.response_reserve_tokens = int(
+            context_env["response_reserve_tokens"]
+        )
+    if context_env["safety_margin_tokens"]:
+        settings.context.safety_margin_tokens = int(context_env["safety_margin_tokens"])
+    if context_env["max_tool_result_summary_chars"]:
+        settings.context.max_tool_result_summary_chars = int(
+            context_env["max_tool_result_summary_chars"]
+        )
+    if context_env["tool_schema_mode"]:
+        settings.context.tool_schema_mode = context_env["tool_schema_mode"]
+
+    feature_flag_prefixes = (
+        "FEATURE_FLAGS__",
+        "CONTEXT__FEATURE_FLAGS__",
+        "AGENT_FEATURE_FLAGS__",
+        "AGENT_FEATURE__",
+    )
+    for name in settings.context.feature_flags:
+        for prefix in feature_flag_prefixes:
+            if env := os.getenv(f"{prefix}{name.upper()}"):
+                settings.context.feature_flags[name] = _env_bool(env)
+                break
     return settings
 
 

@@ -233,12 +233,16 @@ def _setup_turn_runtime(
     """加载 skills、构建 tools schema、初始化 tracker。"""
     router_started = time.perf_counter()
     memory_key = turn.memory_key or turn.conversation_id
-    turn.memory_snapshot = memory.snapshot(memory_key)
+    # Worker 可在进入 Runtime 前注入 Mongo-backed Session View；直接调用
+    # Runtime 的旧测试替身仍通过 Memory Service 兼容入口提供空/legacy 快照。
+    if not turn.memory_snapshot:
+        turn.memory_snapshot = memory.snapshot(memory_key)
     # 兼容旧调用方对 load_all 的注入，再在 Runtime 边界统一构建 Registry。
     registry = SkillRegistry.from_skills(skill_loader.load_all())
     tools_schema = registry.exposed_tools()
     # 注入 make_plan 工具，让 LLM 可以一次性规划多步任务
     tools_schema.append(planner.MAKE_PLAN_TOOL_SCHEMA)
+    turn.business_tools = tools_schema
     logger.info(
         "loaded %d skills: %s",
         len(registry.all()),
@@ -256,14 +260,43 @@ def _setup_turn_runtime(
         duration_ms=int((time.perf_counter() - router_started) * 1000),
     )
     context_started = time.perf_counter()
-    turn.messages = context.build_initial_messages(
-        turn.user_input, turn.memory_snapshot
+    turn.context_bundle = context.build_context_bundle(
+        turn.user_input,
+        turn.memory_snapshot,
+        turn_id=turn.turn_id,
+        user_id=turn.user_id,
+        farm_uid=turn.farm_uid,
+        farm_id=turn.farm_id,
+        tools_schema=tools_schema,
     )
+    turn.messages = context.bundle_to_messages(turn.context_bundle)
+    turn.conversation_revision = turn.context_bundle.conversation_revision
+    turn.summary_revision = turn.context_bundle.summary_revision
+    turn.reset_generation = turn.context_bundle.reset_generation
+    turn.context_source_status = str(turn.context_bundle.source_status)
     trace_context_build(
         message_count=len(turn.messages),
         history_count=len(turn.memory_snapshot.get("messages") or []),
-        memory_block_count=len(turn.memory_snapshot.get("long_term") or {}),
+        memory_block_count=sum(
+            item.status.value == "included"
+            and item.key in {"session_summary", "memory_hits"}
+            for item in turn.context_bundle.blocks
+        ),
         duration_ms=int((time.perf_counter() - context_started) * 1000),
+        blocks=[
+            {
+                "key": item.key,
+                "status": item.status.value,
+                "estimated_tokens": item.estimated_tokens,
+                "drop_reason": item.drop_reason,
+            }
+            for item in turn.context_bundle.blocks
+        ],
+        budget=turn.context_bundle.budget.to_dict(),
+        conversation_revision=turn.context_bundle.conversation_revision,
+        summary_revision=turn.context_bundle.summary_revision,
+        source_status=str(turn.context_bundle.source_status),
+        tool_schema_mode=turn.context_bundle.tool_schema_mode,
     )
     return registry, tools_schema, registry, verify.CallTracker(), {"plan": None}
 
@@ -271,17 +304,39 @@ def _setup_turn_runtime(
 async def _try_compress_context(turn: Turn) -> AsyncGenerator[dict, None]:
     """检查 token 用量，超阈值触发压缩。"""
     memory_key = turn.memory_key or turn.conversation_id
-    usage = tokenizer.compute_usage(turn.messages)
+    usage = tokenizer.compute_usage(
+        turn.messages,
+        tools=turn.business_tools,
+        response_reserve=settings.context.response_reserve_tokens,
+        safety_margin=settings.context.safety_margin_tokens,
+    )
     yield sse.context_usage(usage.used, usage.total, usage.percent, usage.level, step=0)
     if tokenizer.must_compress(usage):
         yield sse.context_compressing("hard", usage.percent)
         summary = await summarizer.maybe_summarize_async(memory_key, force=True)
         if summary:
-            turn.memory_snapshot = memory.snapshot(memory_key)
-            turn.messages = context.build_initial_messages(
-                turn.user_input, turn.memory_snapshot
+            turn.memory_snapshot = await memory.get_session_view(
+                turn.conversation_id,
+                user_id=turn.user_id,
+                farm_id=turn.farm_id,
+                legacy_key=memory_key,
             )
-            new_usage = tokenizer.compute_usage(turn.messages)
+            turn.context_bundle = context.build_context_bundle(
+                turn.user_input,
+                turn.memory_snapshot,
+                turn_id=turn.turn_id,
+                user_id=turn.user_id,
+                farm_uid=turn.farm_uid,
+                farm_id=turn.farm_id,
+                tools_schema=turn.business_tools,
+            )
+            turn.messages = context.bundle_to_messages(turn.context_bundle)
+            new_usage = tokenizer.compute_usage(
+                turn.messages,
+                tools=turn.business_tools,
+                response_reserve=settings.context.response_reserve_tokens,
+                safety_margin=settings.context.safety_margin_tokens,
+            )
             yield sse.context_compressed(new_usage.percent, summary[:200])
     elif tokenizer.should_compress(usage):
         # soft 阈值：异步压缩，不阻塞当前 turn
@@ -312,7 +367,12 @@ async def _run_single_reasoning_step(
         return
 
     # ── 上下文使用情况（每步都报）──
-    step_usage = tokenizer.compute_usage(turn.messages)
+    step_usage = tokenizer.compute_usage(
+        turn.messages,
+        tools=tools_schema,
+        response_reserve=settings.context.response_reserve_tokens,
+        safety_margin=settings.context.safety_margin_tokens,
+    )
     yield sse.context_usage(
         step_usage.used,
         step_usage.total,
@@ -1999,7 +2059,7 @@ def _persist_memory(turn: Turn) -> None:
     non_system = [m for m in turn.messages if m.get("role") != "system"]
     if turn.final_answer:
         non_system.append({"role": "assistant", "content": turn.final_answer})
-    memory.save_messages(turn.memory_key or turn.conversation_id, non_system)
+    memory.persist_turn(turn.memory_key or turn.conversation_id, non_system)
 
 
 def _structured_commit_answer(result: dict) -> str:

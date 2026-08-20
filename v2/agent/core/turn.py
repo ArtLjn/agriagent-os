@@ -14,6 +14,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Literal
 
+from agent.core.context_models import ContextBundle
+
 TurnStatus = Literal[
     "running",  # ReAct loop iterating
     "accepted",  # 已创建，等待 Worker 领取
@@ -115,6 +117,12 @@ class Turn:
 
     # Memory snapshot for this conversation at turn start.
     memory_snapshot: dict[str, Any] = field(default_factory=dict)
+    # Turn 内固定的起始 Context 投影；动态 observation 不回写 snapshot。
+    context_bundle: ContextBundle | None = None
+    conversation_revision: int = 0
+    summary_revision: int = 0
+    reset_generation: int = 0
+    context_source_status: str = "empty"
 
     # Errors. error 保留为兼容字段，结构化信息使用下列字段。
     error: str | None = None
@@ -195,4 +203,8 @@ class Turn:
             "error_message": self.error_message,
             "error_details": self.error_details,
             "events_count": len(self.events),
+            "conversation_revision": self.conversation_revision,
+            "summary_revision": self.summary_revision,
+            "reset_generation": self.reset_generation,
+            "context_source_status": self.context_source_status,
         }

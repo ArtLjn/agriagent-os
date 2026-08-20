@@ -630,6 +630,12 @@ def trace_context_build(
     memory_block_count: int,
     duration_ms: int | None = None,
     compressed: bool = False,
+    blocks: list[dict[str, Any]] | None = None,
+    budget: dict[str, Any] | None = None,
+    conversation_revision: int = 0,
+    summary_revision: int = 0,
+    source_status: str = "",
+    tool_schema_mode: str = "all",
 ) -> None:
     """记录模型实际上下文装配的摘要，不重复保存对话全文。"""
     record(
@@ -642,6 +648,8 @@ def trace_context_build(
         output_data={
             "message_count": message_count,
             "compressed": compressed,
+            "blocks": blocks or [],
+            "budget": budget or {},
         },
         duration_ms=duration_ms,
         phase="setup",
@@ -650,6 +658,10 @@ def trace_context_build(
             "memory_block_count": memory_block_count,
             "message_count": message_count,
             "compressed": compressed,
+            "conversation_revision": conversation_revision,
+            "summary_revision": summary_revision,
+            "source_status": source_status,
+            "tool_schema_mode": tool_schema_mode,
         },
     )
 

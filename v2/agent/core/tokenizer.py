@@ -15,6 +15,8 @@ from typing import Any
 from agent.infra.llm import MODEL
 
 DEFAULT_MAX_CONTEXT = 32_768
+DEFAULT_RESPONSE_RESERVE = 4_096
+DEFAULT_SAFETY_MARGIN = 1_024
 
 # 演示用的小阈值：聊几轮就能看到 30%/50%/70% 变化，触发 summarizer。
 # 真实模型支持 128K/1M，但小阈值让压缩机制更容易触发。
@@ -78,6 +80,13 @@ def count_messages_tokens(messages: list[dict[str, Any]]) -> int:
     return total
 
 
+def count_tools_tokens(tools: list[dict[str, Any]] | None) -> int:
+    """估算 Tool Schema，避免只看 messages 导致实际请求超预算。"""
+    if not tools:
+        return 0
+    return count_tokens(str(tools)) + len(tools) * 8
+
+
 @dataclass
 class ContextUsage:
     """上下文使用情况。"""
@@ -86,17 +95,35 @@ class ContextUsage:
     total: int
     ratio: float
     level: str  # green | yellow | orange | red
+    message_tokens: int = 0
+    tool_schema_tokens: int = 0
+    response_reserve: int = 0
+    safety_margin: int = 0
+    usable: int = 0
+    estimation_mode: str = "approximate"
+    decision: str = "within_budget"
 
     @property
     def percent(self) -> int:
         return int(self.ratio * 100)
 
 
-def compute_usage(messages: list[dict[str, Any]], total: int | None = None) -> ContextUsage:
-    """计算 messages 在给定 total 容量下的使用情况。"""
+def compute_usage(
+    messages: list[dict[str, Any]],
+    total: int | None = None,
+    *,
+    tools: list[dict[str, Any]] | None = None,
+    response_reserve: int = DEFAULT_RESPONSE_RESERVE,
+    safety_margin: int = DEFAULT_SAFETY_MARGIN,
+) -> ContextUsage:
+    """计算最终请求的消息、Tool Schema 与输出预留预算。"""
     if total is None:
         total = get_model_context(MODEL)
-    used = count_messages_tokens(messages)
+    message_tokens = count_messages_tokens(messages)
+    tool_schema_tokens = count_tools_tokens(tools)
+    used = message_tokens + tool_schema_tokens
+    usable = max(total - response_reserve - safety_margin, 0)
+    decision = "within_budget" if used <= usable else "budget_exceeded"
     ratio = min(used / total, 1.0) if total else 0
     if ratio < THRESHOLD_GREEN:
         level = "green"
@@ -106,7 +133,18 @@ def compute_usage(messages: list[dict[str, Any]], total: int | None = None) -> C
         level = "orange"
     else:
         level = "red"
-    return ContextUsage(used=used, total=total, ratio=ratio, level=level)
+    return ContextUsage(
+        used=used,
+        total=total,
+        ratio=ratio,
+        level=level,
+        message_tokens=message_tokens,
+        tool_schema_tokens=tool_schema_tokens,
+        response_reserve=response_reserve,
+        safety_margin=safety_margin,
+        usable=usable,
+        decision=decision,
+    )
 
 
 def should_compress(usage: ContextUsage) -> bool:

@@ -80,10 +80,10 @@ def maybe_summarize(
     if not summary:
         return None
 
-    memory.save_messages(conversation_id, [
-        {"role": "assistant", "content": f"[CONVERSATION_SUMMARY] {summary}"},
-        *recent,
-    ])
+    # 摘要是 Session state，不再伪装成 assistant 消息；否则消息规范化会
+    # 因为缺少对应 user 消息而把摘要丢掉。legacy fallback 也沿用同一语义。
+    memory.save_legacy_summary(conversation_id, summary)
+    memory.save_messages(conversation_id, recent)
     logger.info(
         "[summarizer] ✓ 已压缩 conv=%s history_len=%d → %d, summary_len=%d",
         conversation_id, len(history), len(memory.load_messages(conversation_id)), len(summary),

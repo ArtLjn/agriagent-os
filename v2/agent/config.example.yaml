@@ -51,6 +51,27 @@ mongodb:
     trace_request_summaries: "traceRequestSummaries"
     trace_events: "traceEvents"
 
+# Session/Short Memory/Context 迁移配置。
+# conversation_state_v2 与 memory_mongo_read 默认关闭，打开前先完成 shadow-read 验收。
+context:
+  conversation_state:
+    collection: "conversationStates"
+    summary_ttl_seconds: 86400
+    recent_turn_limit: 6
+  summary_soft_ratio: 0.60
+  summary_hard_ratio: 0.80
+  response_reserve_tokens: 4096
+  safety_margin_tokens: 1024
+  max_tool_result_summary_chars: 1200
+  tool_schema_mode: "all"
+  feature_flags:
+    context_bundle_v2: false
+    conversation_state_v2: false
+    summary_cas: false
+    memory_mongo_read: false
+    candidate_tool_schema: false
+    long_term_memory_observation: false
+
 ai:
   model: "qwen3.6-35b-a3b"
   api_key: ""

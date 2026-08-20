@@ -8,6 +8,7 @@ import time
 import uuid
 
 from agent.config import settings
+from agent.core import memory
 from agent.core.react import run_turn
 from agent.core.turn import StopReason, Turn, TurnPhase
 from agent.infra.chat_store import append_message
@@ -44,6 +45,26 @@ logger = logging.getLogger(__name__)
 _worker_tasks: list[asyncio.Task] = []
 _worker_stop: asyncio.Event | None = None
 _consumer_prefix = f"worker-{uuid.uuid4().hex[:10]}"
+
+
+async def _persist_session_state(turn: Turn) -> None:
+    """在 Mongo 可见消息落库后推进 Session state；失败不伪装成成功。"""
+    result = await memory.persist_session_turn(
+        conversation_id=turn.conversation_id,
+        user_id=turn.user_id,
+        farm_id=turn.farm_id,
+        farm_uid=turn.farm_uid,
+        expected_revision=turn.conversation_revision,
+        turn_id=turn.turn_id,
+        pending_action=turn.pending_approval,
+    )
+    if result.get("status") not in {"disabled", "ready", "idempotent"}:
+        logger.warning(
+            "session state persistence incomplete turn_id=%s status=%s code=%s",
+            turn.turn_id,
+            result.get("status"),
+            result.get("code"),
+        )
 
 
 async def _ensure_group() -> None:
@@ -147,6 +168,17 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
     if queue_wait_ms is not None:
         trace_queue_wait(queue_wait_ms)
     trace_id = state.get("trace_id") or trace_id_for_turn(turn.turn_id)
+    # Session View 在 application/Worker 边界读取一次，Runtime 只消费不可变快照。
+    try:
+        turn.memory_snapshot = await memory.get_session_view(
+            turn.conversation_id,
+            user_id=turn.user_id,
+            farm_id=turn.farm_id,
+            legacy_key=turn.memory_key,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("session view preload failed turn_id=%s: %s", turn.turn_id, exc)
+        turn.memory_snapshot = memory.snapshot(turn.memory_key or turn.conversation_id)
 
     async def approval_waiter(turn_id: str) -> tuple[bool, str]:
         return await wait_approval(turn_id)
@@ -206,6 +238,7 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
                 user_id=turn.user_id,
                 farm_id=turn.farm_id,
             )
+            await _persist_session_state(turn)
     except TimeoutError:
         error_info = turn.record_error(
             "turn_timeout",
@@ -259,6 +292,7 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
             user_id=turn.user_id,
             farm_id=turn.farm_id,
         )
+        await _persist_session_state(turn)
     except Exception as exc:
         logger.exception("turn worker failed turn_id=%s", turn.turn_id)
         error_info = turn.record_error(
@@ -301,6 +335,7 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
             user_id=turn.user_id,
             farm_id=turn.farm_id,
         )
+        await _persist_session_state(turn)
     finally:
         renew_stop.set()
         await renew_task

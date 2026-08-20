@@ -15,26 +15,268 @@ no summarizer, no vector store, just JSON.
 from __future__ import annotations
 
 import json
+import logging
 import threading
 from pathlib import Path
 from typing import Any
 
 _DATA_DIR = Path(__file__).resolve().parent / "data"
 _CONV_DIR = _DATA_DIR / "conversations"
+_STATE_DIR = _DATA_DIR / "states"
 _MEMORY_FILE = _DATA_DIR / "memory.json"
 _LOCK = threading.Lock()
+logger = logging.getLogger(__name__)
 
 # Keep last N messages per conversation to bound context size.
 MAX_SHORT_TERM_MESSAGES = 20
 
 
+def _empty_session_view(
+    conversation_id: str,
+    *,
+    user_id: str = "",
+    farm_id: int = 1,
+    source_status: str = "empty",
+) -> dict[str, Any]:
+    """构造可安全注入 Context 的空 Session View。"""
+    return {
+        "conversation_id": conversation_id,
+        "user_id": user_id,
+        "farm_id": farm_id,
+        "messages": [],
+        "summary": None,
+        "summary_revision": 0,
+        "conversation_revision": 0,
+        "reset_generation": 0,
+        "pending_action": None,
+        "task_state": None,
+        "source_status": source_status,
+        # 长期记忆本阶段只保留空结果，不把旧 JSON 事实默认注入。
+        "long_term": {},
+    }
+
+
+async def get_session_view(
+    conversation_id: str,
+    *,
+    user_id: str = "",
+    farm_id: int = 1,
+    legacy_key: str | None = None,
+) -> dict[str, Any]:
+    """读取短时记忆 Session View。
+
+    Mongo 优先读取只在 `memory_mongo_read` 开关打开时生效；否则保留
+    legacy JSON fallback，便于迁移期间回滚。Runtime 只调用本入口，不接触
+    具体存储路径。长期记忆在本阶段固定返回空结果。
+    """
+    from agent.config import settings
+
+    flags = settings.context.feature_flags
+    if settings.mongodb.enabled and flags.get("memory_mongo_read", False):
+        try:
+            from agent.infra import chat_store
+
+            state_reader = getattr(chat_store, "get_conversation_state", None)
+            state = (
+                await state_reader(
+                    conversation_id,
+                    user_id=user_id,
+                    farm_id=farm_id,
+                )
+                if state_reader is not None
+                else None
+            )
+            recent = await chat_store.load_recent(
+                conversation_id,
+                limit=max(settings.context.recent_turn_limit * 2, 2),
+                user_id=user_id,
+                farm_id=farm_id,
+            )
+            if state is None:
+                state = {}
+            if state.get("status") == "unavailable":
+                return _empty_session_view(
+                    conversation_id,
+                    user_id=user_id,
+                    farm_id=farm_id,
+                    source_status="unavailable",
+                )
+            return {
+                **_empty_session_view(
+                    conversation_id,
+                    user_id=user_id,
+                    farm_id=farm_id,
+                    source_status="mongo",
+                ),
+                "messages": project_recent_turns(
+                    _dialogue_messages(recent), settings.context.recent_turn_limit
+                ),
+                "summary": state.get("summary"),
+                "summary_revision": int(state.get("summary_revision", 0) or 0),
+                "conversation_revision": int(
+                    state.get("conversation_revision", 0) or 0
+                ),
+                "reset_generation": int(state.get("reset_generation", 0) or 0),
+                "pending_action": state.get("pending_action"),
+                "task_state": state.get("task_state"),
+                "summary_status": state.get("summary_status", "ready"),
+            }
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "memory session view mongo read failed; fallback to legacy: %s", exc
+            )
+
+    fallback_id = legacy_key or conversation_id
+    legacy_state = load_legacy_state(fallback_id)
+    messages = project_recent_turns(
+        load_messages(fallback_id), settings.context.recent_turn_limit
+    )
+    source = "legacy_json_fallback" if messages or legacy_state else "empty"
+    return {
+        **_empty_session_view(
+            conversation_id,
+            user_id=user_id,
+            farm_id=farm_id,
+            source_status=source,
+        ),
+        "messages": messages,
+        "summary": legacy_state.get("summary"),
+        "summary_revision": int(legacy_state.get("summary_revision", 0) or 0),
+        "reset_generation": int(legacy_state.get("reset_generation", 0) or 0),
+        "summary_status": legacy_state.get("summary_status", "ready"),
+        "pending_action": legacy_state.get("pending_action"),
+        "task_state": legacy_state.get("task_state"),
+    }
+
+
+async def search(
+    *,
+    user_id: str,
+    farm_id: int,
+    query: str = "",
+    scope: str = "farm",
+    dependencies: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """长期记忆检索端口；当前阶段明确返回空结果。"""
+    del user_id, farm_id, query, scope, dependencies
+    return []
+
+
+async def observe(
+    *,
+    user_id: str,
+    farm_id: int,
+    conversation_id: str,
+    turn_id: str,
+    user_input: str,
+    assistant_answer: str,
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """记录长期记忆 observation 的接口占位，不直接沉淀事实。"""
+    del user_id, farm_id, conversation_id, turn_id, user_input, assistant_answer, metadata
+    return {"accepted": False, "persisted": False, "status": "deferred"}
+
+
+async def persist_session_turn(
+    *,
+    conversation_id: str,
+    user_id: str,
+    farm_id: int,
+    farm_uid: str,
+    expected_revision: int,
+    turn_id: str,
+    pending_action: dict[str, Any] | None = None,
+    task_state: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """在可见消息终态后推进 Conversation state revision。"""
+    from agent.config import settings
+
+    if not settings.context.feature_flags.get("conversation_state_v2", False):
+        return {"ok": True, "status": "disabled", "source_status": "legacy_json_fallback"}
+    from agent.infra import chat_store
+
+    return await chat_store.save_conversation_state(
+        conversation_id,
+        user_id=user_id,
+        farm_id=farm_id,
+        farm_uid=farm_uid,
+        expected_revision=expected_revision,
+        pending_action=pending_action,
+        task_state=task_state,
+        idempotency_key=f"turn:{turn_id}:session-state",
+    )
+
+
+async def reset_session(
+    conversation_id: str,
+    *,
+    user_id: str = "",
+    farm_id: int = 1,
+    legacy_key: str | None = None,
+) -> dict[str, Any]:
+    """清除 active Session View；用户可见 Mongo 消息不在此删除。"""
+    reset_conversation(legacy_key or conversation_id)
+    from agent.config import settings
+
+    if settings.mongodb.enabled:
+        try:
+            from agent.infra import chat_store
+
+            resetter = getattr(chat_store, "reset_conversation_state", None)
+            if resetter is not None:
+                return await resetter(
+                    conversation_id,
+                    user_id=user_id,
+                    farm_id=farm_id,
+                )
+        except Exception as exc:  # noqa: BLE001
+            return {
+                "ok": False,
+                "status": "unavailable",
+                "code": "conversation_state_reset_failed",
+                "message": str(exc),
+            }
+    return {"ok": True, "status": "legacy_json_fallback", "reset_generation": 1}
+
+
 def _ensure_dirs() -> None:
     _CONV_DIR.mkdir(parents=True, exist_ok=True)
+    _STATE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _conv_file(conversation_id: str) -> Path:
     safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in conversation_id)
     return _CONV_DIR / f"{safe}.json"
+
+
+def _state_file(conversation_id: str) -> Path:
+    safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in conversation_id)
+    return _STATE_DIR / f"{safe}.json"
+
+
+def load_legacy_state(conversation_id: str) -> dict[str, Any]:
+    """读取迁移期间的本地 Session state fallback。"""
+    _ensure_dirs()
+    path = _state_file(conversation_id)
+    if not path.exists():
+        return {}
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def save_legacy_summary(conversation_id: str, summary: str) -> None:
+    """将摘要独立于消息窗口保存，避免伪 assistant 消息被过滤。"""
+    _ensure_dirs()
+    state = load_legacy_state(conversation_id)
+    state["summary"] = summary
+    state["summary_revision"] = int(state.get("summary_revision", 0) or 0) + 1
+    state["summary_status"] = "ready"
+    _state_file(conversation_id).write_text(
+        json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
 
 def load_messages(conversation_id: str) -> list[dict[str, Any]]:
@@ -49,6 +291,23 @@ def load_messages(conversation_id: str) -> list[dict[str, Any]]:
         return []
 
 
+def project_recent_turns(
+    messages: list[dict[str, Any]], recent_turn_limit: int
+) -> list[dict[str, Any]]:
+    """按完整 user/assistant Turn 投影最近窗口，而非按单条消息截断。"""
+    pairs: list[list[dict[str, Any]]] = []
+    pending: list[dict[str, Any]] = []
+    for message in messages:
+        if message.get("role") == "user":
+            pending = [message]
+        elif message.get("role") == "assistant" and pending:
+            pending.append(message)
+            pairs.append(pending)
+            pending = []
+    selected = pairs[-max(1, recent_turn_limit) :]
+    return [message for pair in selected for message in pair]
+
+
 def save_messages(conversation_id: str, messages: list[dict[str, Any]]) -> None:
     """持久化用户与最终答复；工具轨迹只属于当前 turn。"""
     _ensure_dirs()
@@ -57,6 +316,11 @@ def save_messages(conversation_id: str, messages: list[dict[str, Any]]) -> None:
         json.dumps(trimmed, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+
+
+def persist_turn(conversation_id: str, messages: list[dict[str, Any]]) -> None:
+    """Memory Service 的同步兼容写入口；具体 fallback 由本模块封装。"""
+    save_messages(conversation_id, messages)
 
 
 def load_long_term(conversation_id: str) -> dict[str, Any]:
@@ -295,6 +559,19 @@ def reset_conversation(conversation_id: str) -> None:
     f = _conv_file(conversation_id)
     if f.exists():
         f.unlink()
+    state_file = _state_file(conversation_id)
+    state = load_legacy_state(conversation_id)
+    if state_file.exists():
+        state["summary"] = None
+        state["pending_action"] = None
+        state["task_state"] = None
+        state["reset_generation"] = int(state.get("reset_generation", 0) or 0) + 1
+        state["summary_revision"] = int(state.get("summary_revision", 0) or 0) + 1
+        state["summary_status"] = "stale"
+        state_file.write_text(
+            json.dumps(state, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
     with _LOCK:
         if not _MEMORY_FILE.exists():
             return
