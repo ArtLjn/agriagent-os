@@ -33,7 +33,7 @@
 
 AgriAgentOS 是一个面向农业经营场景的 AI Agent 操作系统，覆盖移动端经营工作台、自然语言记账、农事记录、作物模板、天气辅助规划、后台运维和 Agent 数据飞轮。项目采用 FastAPI 后端、React 管理后台和 Flutter 移动端，并围绕 Skill、Context、Memory、Trace 和 Evaluation 构建可治理、可观测、可评测的农业 Agent 平台。
 
-完整架构、接口协议、Agent 运行规范和项目治理说明见 [设计文档](docs/farm-manager-design-spec/README.md)。
+完整架构、接口协议、Agent 运行规范和项目治理说明见 [设计文档](archive/docs/farm-manager-design-spec/README.md)。
 
 <h2 id="快速导航">🧭 快速导航</h2>
 
@@ -62,19 +62,19 @@ AgriAgentOS 是一个面向农业经营场景的 AI Agent 操作系统，覆盖�
 
 <table>
   <tr>
-    <td align="center"><img src="docs/assets/screenshots/admin-trace-monitor.png" alt="Trace Monitor" width="320"><br>Trace Monitor</td>
-    <td align="center"><img src="docs/assets/screenshots/admin-token-dashboard.png" alt="Token 监控" width="320"><br>Token 监控</td>
-    <td align="center"><img src="docs/assets/screenshots/admin-playground.png" alt="Agent Playground" width="320"><br>Agent Playground</td>
+    <td align="center"><img src="archive/docs/assets/screenshots/admin-trace-monitor.png" alt="Trace Monitor" width="320"><br>Trace Monitor</td>
+    <td align="center"><img src="archive/docs/assets/screenshots/admin-token-dashboard.png" alt="Token 监控" width="320"><br>Token 监控</td>
+    <td align="center"><img src="archive/docs/assets/screenshots/admin-playground.png" alt="Agent Playground" width="320"><br>Agent Playground</td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/assets/screenshots/admin-data-flywheel.png" alt="DataFlywheel" width="320"><br>DataFlywheel</td>
-    <td align="center"><img src="docs/assets/screenshots/admin-skill-registry.png" alt="Skill Registry" width="320"><br>Skill Registry</td>
-    <td align="center"><img src="docs/assets/screenshots/admin-skill-router-eval.png" alt="Skill Router Eval" width="320"><br>Skill Router Eval</td>
+    <td align="center"><img src="archive/docs/assets/screenshots/admin-data-flywheel.png" alt="DataFlywheel" width="320"><br>DataFlywheel</td>
+    <td align="center"><img src="archive/docs/assets/screenshots/admin-skill-registry.png" alt="Skill Registry" width="320"><br>Skill Registry</td>
+    <td align="center"><img src="archive/docs/assets/screenshots/admin-skill-router-eval.png" alt="Skill Router Eval" width="320"><br>Skill Router Eval</td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/assets/screenshots/admin-prompt-inspector.png" alt="Prompt Inspector" width="320"><br>Prompt Inspector</td>
-    <td align="center"><img src="docs/assets/screenshots/admin-user-management.png" alt="用户管理" width="320"><br>用户管理</td>
-    <td align="center"><img src="docs/assets/screenshots/admin-weather.png" alt="天气上下文" width="320"><br>天气上下文</td>
+    <td align="center"><img src="archive/docs/assets/screenshots/admin-prompt-inspector.png" alt="Prompt Inspector" width="320"><br>Prompt Inspector</td>
+    <td align="center"><img src="archive/docs/assets/screenshots/admin-user-management.png" alt="用户管理" width="320"><br>用户管理</td>
+    <td align="center"><img src="archive/docs/assets/screenshots/admin-weather.png" alt="天气上下文" width="320"><br>天气上下文</td>
   </tr>
 </table>
 
@@ -82,11 +82,11 @@ AgriAgentOS 是一个面向农业经营场景的 AI Agent 操作系统，覆盖�
 
 <table>
   <tr>
-    <td align="center"><img src="docs/assets/screenshots/mobile-home.png" alt="首页工作台" width="180"><br>首页工作台</td>
-    <td align="center"><img src="docs/assets/screenshots/mobile-record.png" alt="AI 智填工作台" width="180"><br>AI 智填工作台</td>
-    <td align="center"><img src="docs/assets/screenshots/mobile-yaya.png" alt="AI 助理" width="180"><br>AI 助理</td>
-    <td align="center"><img src="docs/assets/screenshots/mobile-ledger.png" alt="账本概览" width="180"><br>账本概览</td>
-    <td align="center"><img src="docs/assets/screenshots/mobile-crop-templates.png" alt="作物模板库" width="180"><br>作物模板库</td>
+    <td align="center"><img src="archive/docs/assets/screenshots/mobile-home.png" alt="首页工作台" width="180"><br>首页工作台</td>
+    <td align="center"><img src="archive/docs/assets/screenshots/mobile-record.png" alt="AI 智填工作台" width="180"><br>AI 智填工作台</td>
+    <td align="center"><img src="archive/docs/assets/screenshots/mobile-yaya.png" alt="AI 助理" width="180"><br>AI 助理</td>
+    <td align="center"><img src="archive/docs/assets/screenshots/mobile-ledger.png" alt="账本概览" width="180"><br>账本概览</td>
+    <td align="center"><img src="archive/docs/assets/screenshots/mobile-crop-templates.png" alt="作物模板库" width="180"><br>作物模板库</td>
   </tr>
 </table>
 
@@ -111,8 +111,8 @@ AgriAgentOS 是一个面向农业经营场景的 AI Agent 操作系统，覆盖�
 | Prompt 工程 | Prompt registry、snippet 组合、渲染、replay | `backend/app/prompt/` |
 | 数据飞轮 | 样本队列、LLM 预标注、人工确认、问题链、repair pack | `backend/app/platforms/data_flywheel/` |
 | 仿真评测 | Simulation case、Evaluation replay、路由回归、报告聚合 | `backend/app/platforms/evaluation/` |
-| 管理后台 | Trace、Token、Skill、Prompt、Playground、用户、天气、数据飞轮 | `admin-web/src/` |
-| 移动端 | 首页、工作台、AI 助理、账本、作物模板、个人设置 | `mobile-app/lib/` |
+| 管理后台 | Trace、Token、Skill、Prompt、Playground、用户、天气、数据飞轮 | `agri_admin_web/src/` |
+| 移动端 | 首页、工作台、AI 助理、账本、作物模板、个人设置 | `agri_mobile_app/lib/` |
 
 <h2 id="架构亮点">🏗️ 架构亮点</h2>
 
@@ -146,8 +146,8 @@ AgriAgentOS 的重点不是把 LLM 接到一个聊天框，而是把农业场景
 | `backend/app/agent/` | Runtime、planner、executor、guardrails、reflection | Agent 执行链路可拆解 |
 | `backend/app/skills/` | Skill 实现、注册、权限、schema 和脚本 | 工具能力可治理、可回归 |
 | `backend/app/platforms/` | admin、data_flywheel、evaluation、simulation | 平台能力和业务领域隔离 |
-| `admin-web/` | React 管理后台 | 运维、评测、Trace 和数据飞轮工作台 |
-| `mobile-app/` | Flutter 移动端 | 面向真实经营场景的用户工作台 |
+| `agri_admin_web/` | React 管理后台 | 运维、评测、Trace 和数据飞轮工作台 |
+| `agri_mobile_app/` | Flutter 移动端 | 面向真实经营场景的用户工作台 |
 
 ## 项目结构
 
@@ -216,7 +216,7 @@ uvicorn app.main:app --reload
 管理后台：
 
 ```bash
-cd admin-web
+cd agri_admin_web
 pnpm install
 pnpm dev
 ```
@@ -224,7 +224,7 @@ pnpm dev
 移动端：
 
 ```bash
-cd mobile-app
+cd agri_mobile_app
 flutter pub get
 flutter run
 ```
@@ -238,12 +238,12 @@ ruff check .
 pytest -v
 
 # 管理后台
-cd admin-web
+cd agri_admin_web
 pnpm lint
 pnpm test
 
 # 移动端
-cd mobile-app
+cd agri_mobile_app
 flutter analyze
 flutter test
 ```
@@ -263,24 +263,24 @@ bash scripts/check-guide-sensor-pairing.sh
 - **文档同步**：新增 API、数据模型、Skill、配置、部署或安全策略时，同步更新对应设计文档。
 - **测试策略**：需求明确且可测试时补自动化测试；涉及不可自动验证的设计变更，至少补结构检查和人工审查点。
 - **安全边界**：不提交 `.env`、真实密钥、凭证、生产连接串或大体积临时产物。
-- **资源归档**：README 只引用 `docs/assets/screenshots/` 中的稳定截图；`output/` 只作为生成物和候选素材池。
+- **资源归档**：README 只引用 `archive/docs/assets/screenshots/` 中的稳定截图；`output/` 只作为生成物和候选素材池。
 
 <h2 id="文档入口">📚 文档入口</h2>
 
 | 文档 | 用途 |
 | --- | --- |
 | [AGENTS.md](AGENTS.md) | Agent 工作规则、项目地图和硬性约束 |
-| [系统架构](docs/architecture/overview.md) | 当前架构事实源和模块边界 |
-| [后端系统架构](docs/architecture/backend-architecture.md) | 后端目录职责、请求链路和 Agent 平台拆分 |
-| [设计文档](docs/farm-manager-design-spec/README.md) | 完整设计文档、接口协议、测试策略和项目管理 |
-| [Agent 开发标准](docs/agent/agent-development-standard.md) | Agent / Skill / Context / Trace 开发硬规范 |
-| [API 协议](docs/reference/api-spec.yaml) | OpenAPI / HTTP 协议参考 |
-| [当前迭代](docs/plans/current-sprint.md) | 当前 sprint 状态和后续任务 |
+| [系统架构](archive/docs/architecture/overview.md) | 当前架构事实源和模块边界 |
+| [后端系统架构](archive/docs/architecture/backend-architecture.md) | 后端目录职责、请求链路和 Agent 平台拆分 |
+| [设计文档](archive/docs/farm-manager-design-spec/README.md) | 完整设计文档、接口协议、测试策略和项目管理 |
+| [Agent 开发标准](archive/docs/agent/agent-development-standard.md) | Agent / Skill / Context / Trace 开发硬规范 |
+| [API 协议](archive/docs/reference/api-spec.yaml) | OpenAPI / HTTP 协议参考 |
+| [当前迭代](archive/docs/plans/current-sprint.md) | 当前 sprint 状态和后续任务 |
 
 ## 截图与素材约定
 
-根 README 只引用稳定文档资产：`docs/assets/screenshots/`。`output/` 目录用于生成物、设计候选和临时截图沉淀，不作为长期文档引用入口。
+根 README 只引用稳定文档资产：`archive/docs/assets/screenshots/`。`output/` 目录用于生成物、设计候选和临时截图沉淀，不作为长期文档引用入口。
 
 ## 许可证
 
-[CC BY-NC 4.0](docs/farm-manager-design-spec/LICENSE) © BlockShip。允许分享与改编，必须署名，不得用于商业目的。
+[CC BY-NC 4.0](archive/docs/farm-manager-design-spec/LICENSE) © BlockShip。允许分享与改编，必须署名，不得用于商业目的。

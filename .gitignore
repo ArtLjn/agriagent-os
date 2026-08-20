@@ -74,9 +74,9 @@ bug.todo.md
 .github/workflows/
 .worktrees/
 
-farm-index/app/node_modules/
+agri_home_index/app/node_modules/
 backend/data/repair-packs/
 backend/var/mongodb-cleanup/
 output/
-admin-web/dist/
-farm-index/app/dist/
+agri_admin_web/dist/
+agri_home_index/app/dist/

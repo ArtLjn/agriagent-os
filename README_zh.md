@@ -28,7 +28,7 @@
 docker compose up -d --build
 
 # 管理后台
-cd admin-web && npm install && npm run dev
+cd agri_admin_web && npm install && npm run dev
 
 # 移动端
 cd FarmManagerMobile && npm install

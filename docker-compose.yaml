@@ -87,10 +87,10 @@ services:
       - farm-manager
 
   admin-web:
-    container_name: farm-manager-admin-web
+    container_name: farm-manager-agri_admin_web
     restart: unless-stopped
     build:
-      context: ./admin-web
+      context: agri_admin_web
       dockerfile: Dockerfile
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
