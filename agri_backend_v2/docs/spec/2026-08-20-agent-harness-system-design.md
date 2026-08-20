@@ -510,7 +510,6 @@ agri_backend_v2/
 │   │   ├── persistence/
 │   │   │   ├── mongo/              # conversationMessages、conversationStates、Trace
 │   │   │   ├── redis/              # Turn、Lock、Event Stream、Checkpoint
-│   │   │   └── legacy_json/        # memory.py 迁移期兼容适配
 │   │   ├── mcp/                    # Business MCP Client
 │   │   └── clock.py
 │   │
@@ -565,7 +564,7 @@ shared
 | 当前路径 | 目标归属 | 迁移说明 |
 |---|---|---|
 | `agent/core/context.py`、`context_models.py` | `domains/harness/context/` | 收敛为 ContextBuilder、Block、Budget 和 Selector |
-| `agent/core/memory.py` | `domains/harness/memory/` + `platforms/persistence/legacy_json/` | 领域策略与 JSON 存储拆开；JSON 只保留迁移期适配 |
+| `agent/core/memory.py` | `domains/harness/memory/` + `platforms/persistence/mongo/` | Memory Service 统一读取 Mongo Conversation snapshot，不保留本地 JSON 适配 |
 | `agent/core/summarizer.py` | `domains/harness/context/compression.py` | 摘要属于 Context 压缩，不是独立的隐式 Memory |
 | `agent/core/turn.py`、`react.py` | `domains/harness/runtime/` | `react.py` 收敛为 Runtime 编排入口，不直接读存储 |
 | `agent/core/planner.py`、`verify.py` | `domains/harness/runtime/`、`state/` | Planner 产出 State；Verify 负责结果验证和终态判定 |
@@ -598,7 +597,7 @@ shared
 3. Mongo、Redis、LLM、MCP 已进入 `platforms`；
 4. Worker、Sweeper、启动入口已进入 `application`、`bootstrap`；
 5. 具体 Tool 目录位于 `agent/tools`，Tool 契约、Loader、Registry 位于 `domains/harness/tools`；
-6. 原 `agent/core/data` 已迁移到 `platforms/legacy_json/data`，仅作为明确的迁移期数据适配。
+6. 原 `agent/core/data` 已从运行目录移除；Short Memory 统一由 Mongo Conversation snapshot 提供。
 
 后续迁移只允许在新目录内继续拆分，不得重新引入 `core`、`infra` 或 `skills` 聚合目录。
 
@@ -608,7 +607,7 @@ shared
 
 改动范围：
 
-- `agri_backend_v2/agent/domains/harness/memory/service.py`：负责 Memory Service 入口；遗留 JSON 仅由 `platforms/legacy_json/data` 适配，不再由 Runtime 直接依赖；
+- `agri_backend_v2/agent/domains/harness/memory/service.py`：负责 Memory Service 入口；只读取 Mongo Conversation snapshot，不提供本地文件 fallback；
 - Session View / `conversationStates` 读取与写入适配；
 - `conversationMessages`、Redis Turn、Trace 的职责边界；
 - summary revision、reset generation、pending action 的并发和幂等规则；
@@ -679,7 +678,7 @@ Phase 6  Long Memory、Trace Evaluation、数据闭环
 
 - [ ] 定义 `SessionScope`、`SessionView`、`Turn`、`ContextBundle` 的稳定类型
 - [ ] 完成 `conversationStates` 的 schema、索引、revision 和 reset 规则
-- [x] 将原 `memory.py` 本地 JSON 迁移到 `platforms/legacy_json/data`，并由 Memory Service 统一适配
+- [x] 移除原 `memory.py` 本地 JSON 存储，Short Memory 统一由 Mongo Conversation snapshot 提供
 - [ ] 统一 `conversationMessages`、Redis Turn、Trace 的职责
 - [ ] 为 Session View 增加 source status 和 revision trace
 

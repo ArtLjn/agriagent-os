@@ -174,11 +174,15 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
             turn.conversation_id,
             user_id=turn.user_id,
             farm_id=turn.farm_id,
-            legacy_key=turn.memory_key,
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning("session view preload failed turn_id=%s: %s", turn.turn_id, exc)
-        turn.memory_snapshot = memory.snapshot(turn.memory_key or turn.conversation_id)
+        turn.memory_snapshot = memory.empty_session_view(
+            turn.conversation_id,
+            user_id=turn.user_id,
+            farm_id=turn.farm_id,
+            source_status="unavailable",
+        )
 
     async def approval_waiter(turn_id: str) -> tuple[bool, str]:
         return await wait_approval(turn_id)

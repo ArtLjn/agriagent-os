@@ -113,7 +113,11 @@ def test_operation_execution_policy_overrides_aggregate_defaults() -> None:
 def test_runtime_keeps_registry_as_the_skill_lookup(monkeypatch) -> None:
     skill = _ReadSkill("runtime-lookup")
     monkeypatch.setattr(react.skill_loader, "load_all", lambda: [skill])
-    monkeypatch.setattr(react.memory, "snapshot", lambda _key: {})
+    monkeypatch.setattr(
+        react.memory,
+        "empty_session_view",
+        lambda conversation_id, **_kwargs: {},
+    )
     monkeypatch.setattr(react.context, "build_initial_messages", lambda *_args: [])
 
     registry, _tools, lookup, _tracker, _plan_box = react._setup_turn_runtime(

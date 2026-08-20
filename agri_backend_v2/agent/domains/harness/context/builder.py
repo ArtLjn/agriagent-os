@@ -4,7 +4,7 @@ Builds the system prompt, message list, and OpenAI tool schema for a Turn.
 Pure functions; no side effects on Turn.
 
 Inputs:
-  - turn.memory_snapshot (from agent.memory.snapshot)
+  - turn.memory_snapshot (from Memory Service Session View)
   - turn.business_tools (from BusinessClient.list_tools())
 
 Outputs feed into agent.llm.chat(messages, tools).
@@ -112,8 +112,8 @@ def build_context_bundle(
 ) -> ContextBundle:
     """从 Session View 构建结构化 ContextBundle。
 
-    该函数只负责 Context 投影和预算裁剪；Mongo、Redis 和本地 JSON 的读取
-    由 Memory Service 完成。长期记忆只有显式开启时才有机会进入候选块。
+    该函数只负责 Context 投影和预算裁剪；Mongo、Redis 的读取由 Memory Service
+    完成。长期记忆只有显式开启时才有机会进入候选块。
     """
     tools_schema = tools_schema or []
     user_id = user_id or str(memory_snapshot.get("user_id", ""))

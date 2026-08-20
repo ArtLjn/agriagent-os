@@ -137,8 +137,11 @@ def _patch_react_runtime(
     monkeypatch.setattr(react, "chat_stream", fake_chat_stream)
     monkeypatch.setattr(react.skill_loader, "load_all", lambda: [prepare, commit])
     # 不再 patch to_openai_tools，让真实实现按 exposed 过滤（commit 不暴露给模型）
-    monkeypatch.setattr(react.memory, "snapshot", lambda conversation_id: {})
-    monkeypatch.setattr(react.memory, "save_messages", lambda *args: None)
+    monkeypatch.setattr(
+        react.memory,
+        "empty_session_view",
+        lambda conversation_id, **_kwargs: {},
+    )
     monkeypatch.setattr(react, "increment_step", lambda: None)
     monkeypatch.setattr(react, "trace_llm_call", lambda **kwargs: None)
     monkeypatch.setattr(react, "trace_tool_call", lambda *args, **kwargs: None)

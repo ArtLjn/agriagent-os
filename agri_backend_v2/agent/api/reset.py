@@ -8,7 +8,6 @@ from agent.api import api_router
 from agent.domains.harness.memory import service as memory
 from agent.auth import parse_identity
 from fastapi import Header
-from agent.platforms.persistence.redis.coordination import scope_hash
 
 
 class ResetRequest(BaseModel):
@@ -21,14 +20,10 @@ async def reset(
     authorization: str | None = Header(default=None),
 ) -> dict:
     identity = parse_identity(authorization)
-    scoped_id = scope_hash(
-        identity["user_id"], identity["farm_id"], req.conversation_id
-    )
     result = await memory.reset_session(
         req.conversation_id,
         user_id=identity["user_id"],
         farm_id=identity["farm_id"],
-        legacy_key=scoped_id,
     )
     return {
         **result,

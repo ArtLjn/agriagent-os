@@ -275,12 +275,14 @@ async def save_conversation_state(
     task_state: dict[str, Any] | None | object = _UNSET,
     reset_generation: int | object = _UNSET,
     idempotency_key: str | None = None,
+    advance_conversation_revision: bool = True,
 ) -> dict[str, Any]:
     """以 revision CAS 保存 Conversation state。
 
     新 state 使用 `expected_revision=0` 创建；已有 state 必须传入读取时的
     `conversation_revision`。相同 `idempotency_key` 的重试返回当前版本，
-    不会再次递增 revision。
+    不会再次递增 revision。摘要 claim/commit 可关闭 conversation revision
+    推进，只推进独立的 summary revision，避免后台压缩阻塞当前 Turn 收尾。
     """
     coll = get_state_collection()
     if coll is None:
@@ -363,13 +365,15 @@ async def save_conversation_state(
             "summaryStatus": "ready",
             "createdAt": now,
         }
+        update_doc: dict[str, Any] = {
+            "$set": set_doc,
+            "$setOnInsert": base_doc,
+        }
+        if advance_conversation_revision:
+            update_doc["$inc"] = {"conversationRevision": 1}
         result = await coll.update_one(
             {**tenant_filter, "conversationRevision": expected_revision},
-            {
-                "$set": set_doc,
-                "$setOnInsert": base_doc,
-                "$inc": {"conversationRevision": 1},
-            },
+            update_doc,
             upsert=True,
         )
         matched = int(_result_attr(result, "matched_count", 0) or 0)
@@ -461,6 +465,148 @@ async def reset_conversation_state(
     )
 
 
+async def claim_summary_generation(
+    conversation_id: str,
+    *,
+    user_id: str,
+    farm_id: int | None,
+    source_conversation_revision: int,
+    summary_key: str,
+) -> dict[str, Any]:
+    """以 Conversation revision CAS 抢占一次摘要生成任务。
+
+    ``summary_key`` 由会话、来源 revision 和来源消息范围组成。先写入
+    ``generating`` 再调用 LLM，其他 Worker 会在同一来源范围上收到冲突，
+    避免两个摘要任务互相覆盖。
+    """
+    current = await get_conversation_state(
+        conversation_id, user_id=user_id, farm_id=farm_id
+    )
+    if current and current.get("status") == "unavailable":
+        return current
+    if current is not None:
+        if (
+            current.get("summary_source_conversation_revision")
+            == source_conversation_revision
+            and current.get("summary_status") == "ready"
+        ):
+            return {**current, "status": "idempotent"}
+        if current.get("summary_status") == "generating":
+            if current.get("last_write_key") == f"{summary_key}:claim":
+                return {**current, "status": "idempotent"}
+            return {
+                "ok": False,
+                "status": "conflict",
+                "source_status": "mongo",
+                "code": "summary_generation_in_progress",
+                "actual_revision": current.get("conversation_revision"),
+            }
+        retrying_failed_summary = (
+            current.get("summary_status") == "failed"
+            and current.get("summary_source_conversation_revision")
+            == source_conversation_revision
+        )
+        if (
+            not retrying_failed_summary
+            and current.get("conversation_revision", 0) != source_conversation_revision
+        ):
+            return {
+                "ok": False,
+                "status": "conflict",
+                "source_status": "mongo",
+                "code": "summary_source_revision_conflict",
+                "expected_revision": source_conversation_revision,
+                "actual_revision": current.get("conversation_revision"),
+            }
+    elif source_conversation_revision != 0:
+        return {
+            "ok": False,
+            "status": "conflict",
+            "source_status": "mongo",
+            "code": "summary_source_revision_conflict",
+            "expected_revision": source_conversation_revision,
+            "actual_revision": None,
+        }
+
+    expected_revision = (
+        int(current.get("conversation_revision", 0) or 0)
+        if current is not None
+        and current.get("summary_status") == "failed"
+        and current.get("summary_source_conversation_revision")
+        == source_conversation_revision
+        else source_conversation_revision
+    )
+    return await save_conversation_state(
+        conversation_id,
+        user_id=user_id,
+        farm_id=farm_id,
+        expected_revision=expected_revision,
+        summary_status="generating",
+        summary_source_conversation_revision=source_conversation_revision,
+        idempotency_key=f"{summary_key}:claim",
+        advance_conversation_revision=False,
+    )
+
+
+async def save_summary_result(
+    conversation_id: str,
+    *,
+    user_id: str,
+    farm_id: int | None,
+    expected_revision: int,
+    source_conversation_revision: int,
+    summary_key: str,
+    summary: str | object = _UNSET,
+    status: str,
+    source_from_message_id: str | None = None,
+    source_to_message_id: str | None = None,
+    content_hash: str | None = None,
+    generated_by: str | None = None,
+    created_at: str | None = None,
+    expires_at: str | None = None,
+) -> dict[str, Any]:
+    """提交摘要结果；结果提交仍需匹配 claim 后产生的 state revision。"""
+    current = await get_conversation_state(
+        conversation_id, user_id=user_id, farm_id=farm_id
+    )
+    if current and current.get("status") == "unavailable":
+        return current
+    if current and current.get("last_write_key") == f"{summary_key}:commit":
+        return {**current, "status": "idempotent"}
+    if current is not None and current.get("conversation_revision") != expected_revision:
+        return {
+            "ok": False,
+            "status": "conflict",
+            "source_status": "mongo",
+            "code": "summary_commit_revision_conflict",
+            "expected_revision": expected_revision,
+            "actual_revision": current.get("conversation_revision"),
+        }
+    current_summary_revision = int(
+        (current or {}).get("summary_revision", 0) or 0
+    )
+    return await save_conversation_state(
+        conversation_id,
+        user_id=user_id,
+        farm_id=farm_id,
+        expected_revision=expected_revision,
+        summary=summary,
+        summary_status=status,
+        summary_revision=(
+            current_summary_revision + 1 if status == "ready" else current_summary_revision
+        ),
+        summary_source_from_message_id=source_from_message_id,
+        summary_source_to_message_id=source_to_message_id,
+        summary_source_conversation_revision=source_conversation_revision,
+        summary_content_hash=content_hash,
+        summary_generated_by=generated_by,
+        summary_created_at=created_at,
+        summary_expires_at=expires_at,
+        idempotency_key=f"{summary_key}:commit",
+        advance_conversation_revision=False,
+    )
+
+
 async def append_message(
     *,
     conversation_id: str,
@@ -527,7 +673,7 @@ async def load_recent(
             coll.find(
                 filter_doc,
                 projection={
-                    "_id": 0,
+                    "_id": 1,
                     "role": 1,
                     "content": 1,
                     "createdAt": 1,
@@ -545,6 +691,7 @@ async def load_recent(
             {
                 "role": d["role"],
                 "content": d["content"],
+                "message_id": str(d.get("_id")) if d.get("_id") is not None else None,
                 "createdAt": d.get("createdAt"),
                 "turn_id": d.get("turnId"),
                 "trace_id": d.get("traceId"),

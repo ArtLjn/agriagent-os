@@ -54,8 +54,8 @@
 - **THEN** 只有一个版本被接受，另一个写入返回幂等成功或 conflict，不得覆盖更新的会话消息
 
 ### Requirement: Short-term memory source status
-短时记忆视图 SHALL 明确标记 `mongo`、`redis_snapshot`、`legacy_json_fallback`、`empty` 或 `unavailable` 来源。
+短时记忆视图 SHALL 明确标记 `mongo`、`redis_snapshot`、`empty` 或 `unavailable` 来源。
 
-#### Scenario: Legacy fallback
-- **WHEN** 迁移期间 Mongo snapshot 暂时不可读且启用了 fallback
-- **THEN** Agent 可以使用 legacy JSON 继续执行，但 Context trace 和 Turn 结果必须标记 fallback，不得宣称使用了最新持久化历史
+#### Scenario: Mongo unavailable
+- **WHEN** Mongo snapshot 暂时不可读
+- **THEN** Agent 返回 `unavailable` source status，由 application 明确决定继续当前 Turn 或终止，不读取本地文件伪造历史

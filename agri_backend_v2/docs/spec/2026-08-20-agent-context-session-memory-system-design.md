@@ -36,10 +36,10 @@ status: proposed
 | 能力 | 当前实现 | 设计问题 | 目标阶段 |
 |---|---|---|---|
 | Prompt Cache | 静态 system prompt，时间放 user message | 方向正确，但 Tool Schema 未纳入统一预算 | P1 |
-| Session 历史 | `memory.py` 本地 JSON | 与 Mongo 用户历史形成双事实源，多 Worker 不可靠 | P0 |
+| Session 历史 | Memory Service 读取 Mongo | 需要完成真实 Mongo/Worker/SSE 验收 | P0 |
 | 对话历史 | Mongo `conversationMessages` | 只用于 UI/历史查询，Runtime 不直接消费 | P0 |
-| 短时窗口 | 固定 `MAX_SHORT_TERM_MESSAGES=20` | 按 message 截断，不按完整 Turn/token 截断 | P1 |
-| 摘要 | `summarizer.py` + assistant 伪消息 | 摘要可能在归一化时被丢弃，且存在异步覆盖竞争 | P0 |
+| 短时窗口 | Memory Service 按完整 Turn 投影 | 需要继续完成 token 压缩和端到端验收 | P1 |
+| 摘要 | `conversationStates.summary` + CAS | 需要继续完成真实 Worker 并发验收 | P0 |
 | 长期 Memory | 只有读取入口，无沉淀生命周期 | 只是占位，不能宣称已有长期记忆 | P2 |
 | Context usage | 只估算 messages | 未计 Tool Schema、Tool payload、response reserve | P1 |
 | Tool Schema | 默认暴露所有 exposed skills | 没有 active candidate/schema budget | P2 |
@@ -139,10 +139,10 @@ flowchart TD
 | 活动 Turn | Redis `turn:<turn_id>` Hash | `turn_store.py`、`worker.py` | `turn_state_ttl_seconds`，默认 1 天 | 只表示执行态，不是会话历史 |
 | SSE 事件 | Redis `events:<turn_id>` Stream | `publish_event()`、`stream_events()` | Turn TTL | 只用于实时和重放 |
 | 用户可见历史 | Mongo `conversationMessages` | `chat_store.append_message/load_recent/get_conversation` | 长期保留策略 | 当前 Runtime 不以它为短记忆主读源 |
-| 当前短时记忆 | `../../agent/platforms/legacy_json/data/conversations/<memory_key>.json` | `memory.snapshot()`、`_persist_memory()` | 本地文件长期存在 | 多 Worker/多实例不一致 |
-| 当前长期记忆 | `../../agent/platforms/legacy_json/data/memory.json` | `load_long_term()` | 本地文件长期存在 | 当前没有稳定写入流程，不能视为已启用 |
+| 当前短时记忆 | Mongo `conversationMessages` + `conversationStates` | `MemoryService.get_session_view()` | Mongo 持久化 | Mongo 不可用返回 `unavailable`，不伪造 fallback |
+| 当前长期记忆 | 尚未启用 | `MemoryService.search()` 空实现 | 无 | Long-term Memory 按计划后置 |
 
-结论：当前 Session 的“运行态”保存在 Redis Turn；当前短时记忆保存在本地 JSON；当前用户可见历史保存在 Mongo。这是迁移前状态，不是目标架构。生产 Context 不能继续同时把本地 JSON 和 Mongo 当作两个平级事实源。
+结论：Session 运行态保存在 Redis Turn，用户可见历史和 Short Memory 保存在 Mongo。Memory Service 是唯一读取入口；Mongo 不可用时返回结构化 `unavailable`，不再保留本地 JSON fallback。
 
 ### 5.2 `conversationStates` 建议文档
 
@@ -468,11 +468,11 @@ stateDiagram-v2
 - 修复摘要回注；
 - reset 改为 generation 语义。
 
-### Phase 2：Mongo 优先读取
+### Phase 2：Mongo-only 读取
 
-- Memory adapter 先读 Mongo；
-- JSON 只作为带标记的 fallback；
-- 完成多 Worker、重启、Mongo 故障和一致性验收后关闭生产 JSON fallback。
+- Memory adapter 只读 Mongo；
+- Mongo 不可用时返回 `unavailable`，由 application 按策略决定当前 Turn 是否继续；
+- 完成多 Worker、重启、Mongo 故障和一致性验收后进入生产运行。
 
 ### Phase 3：预算与候选工具
 
@@ -489,15 +489,11 @@ stateDiagram-v2
 建议开关：
 
 ```text
-context_bundle_v2
-conversation_state_v2
-summary_cas
-memory_mongo_read
 candidate_tool_schema
 long_term_memory_observation
 ```
 
-任何阶段回滚只关闭开关，不删除 Mongo 消息、摘要和 Trace；若启用 JSON fallback，必须在健康检查和 Trace 中明确标记。
+任何阶段回滚只关闭业务能力开关，不删除 Mongo 消息、摘要和 Trace；Mongo 不可用时返回 `unavailable`，不启用本地文件 fallback。
 
 ## 10. 验收体系
 
@@ -546,13 +542,13 @@ Mongo Conversation Snapshot
 |---|---|
 | `ConversationSnapshot`、`ContextBlock`、`ContextBundle`、`MemoryObservation`、`MemoryHit` | `../../agent/domains/harness/context/models.py`，含 JSON round-trip、租户字段和 revision |
 | `conversationStates` adapter | `../../agent/platforms/persistence/mongo/chat_store.py`，含租户过滤、唯一索引、revision CAS、幂等和 unavailable |
-| Session View 读取入口 | `memory.get_session_view()`；Mongo 由 `memory_mongo_read` 控制，legacy JSON fallback 明确标记 source status |
+| Session View 读取入口 | `memory.get_session_view()`；只读取 Mongo，故障返回 `unavailable` |
 | Short Memory 注入 | `session_summary`、`recent_turns`、`pending_action`、`active_task_state` 独立 Block；工具原始 payload 不进入历史投影 |
 | Context 预算 | messages、Tool Schema、response reserve、safety margin，支持 required 保留和低优先级 Block drop reason |
 | reset 语义 | `/api/v2/reset` 清理 active state 并递增 `reset_generation`；Mongo 可见消息不删除 |
 | 长时记忆 | 仅保留 `search()` 空结果和 observation 占位，未接入事实抽取、审核、向量检索或自动写入 |
 
-本轮尚未宣称完成：摘要生成的 Mongo CAS/并发 Worker 流程、candidate Tool Schema 灰度、真实 Mongo/Redis/Worker/SSE replay、legacy JSON shadow-read 与迁移归档。配置开关默认关闭，打开 `conversation_state_v2` 或 `memory_mongo_read` 前必须补齐对应 smoke evidence。
+本轮尚未宣称完成：candidate Tool Schema 灰度、真实 Mongo/Redis/Worker/SSE replay、历史数据导入校验。摘要 Mongo CAS、并发保护和 Context 压缩流程已完成 focused tests；Long-term Memory 仍为空实现。
 
 目录对齐状态：`agent/core`、`agent/infra`、`agent/skills` 已删除；Context、Runtime、Memory、Control、Trace 位于 `agent/domains/harness`，平台适配位于 `agent/platforms`，具体 Tool 位于 `agent/tools`，启动和 Worker 位于 `agent/bootstrap`、`agent/application`。
 
@@ -564,11 +560,11 @@ Mongo Conversation Snapshot
 
 ### 短时记忆与摘要
 
-- [ ] 2.2 基于完整 Turn 的最近窗口 projection，移除生产默认的固定消息数截断。
-- [ ] 2.3 将摘要迁移为独立 `conversationStates.summary`，补齐 source range、revision、content hash。
-- [ ] 2.4 增加摘要 CAS、幂等 key、失败状态、重试和并发 Worker 测试。
+- [x] 2.2 基于完整 Turn 的最近窗口 projection，移除本地文件和固定消息数截断。
+- [x] 2.3 将摘要迁移为独立 `conversationStates.summary`，补齐 source range、revision、content hash。
+- [x] 2.4 增加摘要 CAS、幂等 key、失败状态和并发 Worker 测试。
 - [ ] 2.5 完成 pending action、临时任务状态的读取与过期清理。
-- [ ] 3.5 让 `_try_compress_context` 基于 ContextBundle 和 summary revision 工作，避免覆盖竞争。
+- [x] 3.5 让 `_try_compress_context` 基于 ContextBundle conversation revision 和 summary revision 工作，避免覆盖竞争。
 
 ### Runtime、Tool 与持久化边界
 
@@ -580,7 +576,7 @@ Mongo Conversation Snapshot
 
 - [ ] 5.1 让 `/api/v2/chat`、conversation detail 和 Turn state 暴露 revision、reset generation、source status。
 - [ ] 5.3 验证 Worker 重启、SSE `after_seq` 重连和幂等 request 不重复执行或写消息。
-- [ ] 5.4 完成 Mongo/Redis 不可用、legacy JSON fallback、source divergence 的结构化降级。
+- [ ] 5.4 完成 Mongo/Redis 不可用和 source divergence 的结构化降级；不提供本地 JSON fallback。
 
 ### Trace 与安全观测
 
@@ -590,11 +586,11 @@ Mongo Conversation Snapshot
 
 ### 迁移与灰度
 
-- [ ] 7.1 实现 Mongo snapshot 与 legacy JSON shadow-read 对比和 divergence 指标。
-- [ ] 7.2 灰度启用 `conversation_state_v2`、`summary_cas`，验证重启、多 Worker 和摘要冲突。
-- [ ] 7.3 灰度启用 Mongo 优先读取，完成 parity 后关闭生产 JSON fallback。
+- [ ] 7.1 完成 Mongo snapshot 历史数据导入校验和 divergence 指标。
+- [ ] 7.2 灰度启用摘要 CAS 和 Conversation state，完成真实重启、多 Worker 和摘要冲突验收。
+- [ ] 7.3 完成 Mongo-only Context 读取验收；持久化不可用时返回 unavailable。
 - [ ] 7.4 灰度启用 candidate Tool Schema，并比较工具召回、误调用和 token 成本。
-- [ ] 7.5 完成旧本地 JSON 迁移/归档策略，保证可回滚且不删除 Mongo 用户历史。
+- [ ] 7.5 完成 Mongo 历史数据导入校验与归档策略，保证可回滚且不删除用户可见历史。
 
 ### 最终验收
 

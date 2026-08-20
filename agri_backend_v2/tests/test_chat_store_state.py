@@ -196,3 +196,125 @@ async def test_state_boundary_reports_unavailable_without_fake_success(
         "code": "conversation_state_unavailable",
         "operation": "save_conversation_state",
     }
+
+
+@pytest.mark.asyncio
+async def test_summary_claim_is_cas_and_idempotent(fake_state_store) -> None:
+    initial = await chat_store.save_conversation_state(
+        "conversation-1", user_id="user-1", farm_id=1
+    )
+    claim = await chat_store.claim_summary_generation(
+        "conversation-1",
+        user_id="user-1",
+        farm_id=1,
+        source_conversation_revision=initial["conversation_revision"],
+        summary_key="summary-source-1",
+    )
+
+    assert claim["status"] == "ready"
+    assert claim["summary_status"] == "generating"
+    assert claim["conversation_revision"] == 1
+
+    duplicate = await chat_store.claim_summary_generation(
+        "conversation-1",
+        user_id="user-1",
+        farm_id=1,
+        source_conversation_revision=initial["conversation_revision"],
+        summary_key="summary-source-1",
+    )
+    assert duplicate["status"] == "idempotent"
+
+    concurrent = await chat_store.claim_summary_generation(
+        "conversation-1",
+        user_id="user-1",
+        farm_id=1,
+        source_conversation_revision=initial["conversation_revision"],
+        summary_key="summary-source-2",
+    )
+    assert concurrent["status"] == "conflict"
+    assert concurrent["code"] == "summary_generation_in_progress"
+
+
+@pytest.mark.asyncio
+async def test_summary_result_persists_source_range_hash_and_is_idempotent(
+    fake_state_store,
+) -> None:
+    initial = await chat_store.save_conversation_state(
+        "conversation-1", user_id="user-1", farm_id=1
+    )
+    claim = await chat_store.claim_summary_generation(
+        "conversation-1",
+        user_id="user-1",
+        farm_id=1,
+        source_conversation_revision=initial["conversation_revision"],
+        summary_key="summary-source-1",
+    )
+    saved = await chat_store.save_summary_result(
+        "conversation-1",
+        user_id="user-1",
+        farm_id=1,
+        expected_revision=claim["conversation_revision"],
+        source_conversation_revision=initial["conversation_revision"],
+        summary_key="summary-source-1",
+        summary="已确认地块 A",
+        status="ready",
+        source_from_message_id="message-1",
+        source_to_message_id="message-4",
+        content_hash="hash-1",
+        generated_by="test",
+    )
+
+    assert saved["status"] == "ready"
+    assert saved["summary_revision"] == 1
+    assert saved["summary_source_from_message_id"] == "message-1"
+    assert saved["summary_source_to_message_id"] == "message-4"
+    assert saved["summary_content_hash"] == "hash-1"
+
+    retry = await chat_store.save_summary_result(
+        "conversation-1",
+        user_id="user-1",
+        farm_id=1,
+        expected_revision=claim["conversation_revision"],
+        source_conversation_revision=initial["conversation_revision"],
+        summary_key="summary-source-1",
+        summary="已确认地块 A",
+        status="ready",
+        content_hash="hash-1",
+    )
+    assert retry["status"] == "idempotent"
+
+
+@pytest.mark.asyncio
+async def test_failed_summary_can_be_retried_for_same_source_revision(
+    fake_state_store,
+) -> None:
+    initial = await chat_store.save_conversation_state(
+        "conversation-1", user_id="user-1", farm_id=1
+    )
+    claim = await chat_store.claim_summary_generation(
+        "conversation-1",
+        user_id="user-1",
+        farm_id=1,
+        source_conversation_revision=initial["conversation_revision"],
+        summary_key="summary-source-1",
+    )
+    failed = await chat_store.save_summary_result(
+        "conversation-1",
+        user_id="user-1",
+        farm_id=1,
+        expected_revision=claim["conversation_revision"],
+        source_conversation_revision=initial["conversation_revision"],
+        summary_key="summary-source-1",
+        status="failed",
+    )
+    retried = await chat_store.claim_summary_generation(
+        "conversation-1",
+        user_id="user-1",
+        farm_id=1,
+        source_conversation_revision=initial["conversation_revision"],
+        summary_key="summary-source-1",
+    )
+
+    assert failed["summary_status"] == "failed"
+    assert retried["summary_status"] == "generating"
+    assert retried["conversation_revision"] == failed["conversation_revision"]

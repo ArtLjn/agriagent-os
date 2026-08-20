@@ -31,10 +31,6 @@ def test_context_config_defaults_are_stable(tmp_path, monkeypatch):
     assert settings.context.tool_schema_mode == "all"
     assert settings.conversation_state is settings.context.conversation_state
     assert settings.context.feature_flags == {
-        "context_bundle_v2": False,
-        "conversation_state_v2": False,
-        "summary_cas": False,
-        "memory_mongo_read": False,
         "candidate_tool_schema": False,
         "long_term_memory_observation": False,
     }
@@ -60,8 +56,7 @@ def test_context_config_yaml_and_environment_overrides(tmp_path, monkeypatch):
                 "max_tool_result_summary_chars": 800,
                 "tool_schema_mode": "candidate",
                 "feature_flags": {
-                    "context_bundle_v2": True,
-                    "conversation_state_v2": True,
+                    "candidate_tool_schema": True,
                 },
             },
         },
@@ -79,8 +74,7 @@ def test_context_config_yaml_and_environment_overrides(tmp_path, monkeypatch):
     assert settings.context.safety_margin_tokens == 512
     assert settings.context.max_tool_result_summary_chars == 800
     assert settings.context.tool_schema_mode == "candidate"
-    assert settings.context.feature_flags["context_bundle_v2"] is True
-    assert settings.context.feature_flags["conversation_state_v2"] is True
+    assert settings.context.feature_flags["candidate_tool_schema"] is True
 
     monkeypatch.setenv(
         "CONTEXT__CONVERSATION_STATE_COLLECTION", "conversationStatesEnv"
@@ -93,7 +87,6 @@ def test_context_config_yaml_and_environment_overrides(tmp_path, monkeypatch):
     monkeypatch.setenv("CONTEXT__SUMMARY_HARD_RATIO", "0.85")
     monkeypatch.setenv("CONTEXT__MAX_TOOL_RESULT_SUMMARY_CHARS", "600")
     monkeypatch.setenv("CONTEXT__TOOL_SCHEMA_MODE", "all")
-    monkeypatch.setenv("CONTEXT__FEATURE_FLAGS__CONTEXT_BUNDLE_V2", "false")
     monkeypatch.setenv("FEATURE_FLAGS__CANDIDATE_TOOL_SCHEMA", "true")
 
     settings = config_module._build_settings()
@@ -107,5 +100,4 @@ def test_context_config_yaml_and_environment_overrides(tmp_path, monkeypatch):
     assert settings.context.summary_hard_ratio == 0.85
     assert settings.context.max_tool_result_summary_chars == 600
     assert settings.context.tool_schema_mode == "all"
-    assert settings.context.feature_flags["context_bundle_v2"] is False
     assert settings.context.feature_flags["candidate_tool_schema"] is True

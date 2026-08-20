@@ -177,7 +177,7 @@ max_tool_result_summary_chars = 1200
 
 ### D5. 短时记忆采用“完整 Turn + 滚动摘要”
 
-不再用 `MAX_SHORT_TERM_MESSAGES` 作为唯一策略。一个完整 Turn 至少包含用户输入和最终 assistant 答复；Tool 结果只保留结构化摘要或引用。
+不再使用本地文件或固定消息数作为生产策略。一个完整 Turn 至少包含用户输入和最终 assistant 答复；Tool 结果只保留结构化摘要或引用。
 
 窗口外历史进入 `conversationStates.summary`，摘要记录：
 
@@ -237,7 +237,7 @@ Trace 只保存脱敏摘要，不保存凭证、完整隐藏思维链或无限�
 - **[摘要有损导致实体 ID 丢失]** → 最近完整 Turn 原文优先；摘要 schema 强制保留实体 ID、状态、待办和来源范围；为关键 ID 增加回归测试。
 - **[摘要任务与 Turn 写入竞争]** → 使用 `source_conversation_revision` CAS 和幂等 summary key，禁止无版本覆盖。
 - **[全量工具 Schema 迁移后模型召回下降]** → 先 shadow 记录 candidate 集合与全量选择结果，按评测集灰度切换。
-- **[本地 JSON 与 Mongo 历史不一致]** → 先 shadow-read 对比并记录 divergence；迁移期间 Mongo 优先、JSON 只作为明确 fallback，完成后删除生产 fallback。
+- **[Conversation snapshot 与活动 Turn 不一致]** → 记录 source divergence；以 Mongo Conversation snapshot 为事实源，Redis 只提供活动 Turn 和 replay 状态。
 - **[Context trace 增加 payload 成本]** → 只记录 block metadata、hash、token 和受控 preview；不逐 token 记录。
 - **[reset 后用户仍能看到旧历史产生歧义]** → API 返回明确的 `reset_generation` 和“仅重置 Agent 工作记忆”语义；硬删除单独设计。
 
@@ -258,10 +258,10 @@ Trace 只保存脱敏摘要，不保存凭证、完整隐藏思维链或无限�
 
 ### Phase 2：统一读取路径
 
-1. Memory adapter 从 Mongo Conversation Snapshot 读取；
-2. JSON 只作为 feature flag 控制的 fallback；
-3. 连续观察 shadow divergence；
-4. divergence 达到零且完成重启/多 Worker 验收后关闭生产 JSON fallback。
+1. Memory adapter 只从 Mongo Conversation Snapshot 读取；
+2. Mongo 不可用时返回 `unavailable`，由 application 按策略决定当前 Turn 是否继续；
+3. 完成真实重启、多 Worker 和 source divergence 验收；
+4. 不保留本地 JSON fallback 或对应 feature flag。
 
 ### Phase 3：预算与按需工具 Schema
 
@@ -278,9 +278,9 @@ Trace 只保存脱敏摘要，不保存凭证、完整隐藏思维链或无限�
 
 ### 回滚策略
 
-- 每个阶段由 feature flag 控制：`context_bundle_v2`、`conversation_state_v2`、`memory_mongo_read`、`candidate_tool_schema`、`summary_cas`；
+- 运行时只保留业务能力开关：`candidate_tool_schema`、`long_term_memory_observation`；Session/Short Memory 不通过迁移开关切换事实源；
 - 发现 Context 质量下降时可退回全量 Tool Schema，但保留 Trace 和预算统计；
-- 发现 Mongo 读异常时可临时启用 JSON fallback，但必须把 fallback 状态暴露给 Trace 和健康检查；
+- 发现 Mongo 读异常时必须返回 `unavailable`，由 application 明确选择继续当前 Turn 或终止；
 - 任何回滚不得删除已写入的 Mongo 消息、摘要或 Trace。
 
 ## Open Questions

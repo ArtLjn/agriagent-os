@@ -59,27 +59,15 @@ def test_pending_action_is_required_and_budget_drops_low_priority(monkeypatch) -
     assert summary.status == ContextBlockStatus.DROPPED
 
 
-def test_legacy_summary_is_not_encoded_as_assistant_message(
-    tmp_path, monkeypatch
-) -> None:
-    monkeypatch.setattr(memory, "_CONV_DIR", tmp_path / "conversations")
-    monkeypatch.setattr(memory, "_STATE_DIR", tmp_path / "states")
-    memory.save_messages(
-        "scope-conv-3",
-        [
-            {"role": "user", "content": "明天天气"},
-            {"role": "assistant", "content": "明天有雨"},
-        ],
-    )
-    memory.save_legacy_summary("scope-conv-3", "已确认地点是苏州。")
+def test_session_view_reports_unavailable_without_mongo(monkeypatch) -> None:
+    from agent import config
 
-    view = __import__("asyncio").run(
-        memory.get_session_view("conv-3", legacy_key="scope-conv-3")
-    )
-    assert view["summary"] == "已确认地点是苏州。"
-    assert all(
-        "CONVERSATION_SUMMARY" not in item["content"] for item in view["messages"]
-    )
+    monkeypatch.setattr(config.settings.mongodb, "enabled", False)
+    view = __import__("asyncio").run(memory.get_session_view("conv-3"))
+
+    assert view["source_status"] == "unavailable"
+    assert view["messages"] == []
+    assert view["summary"] is None
 
 
 def test_recent_projection_keeps_complete_turns() -> None:

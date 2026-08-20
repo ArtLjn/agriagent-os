@@ -86,10 +86,6 @@ def _default_feature_flags() -> dict[str, bool]:
     """返回 Context 迁移开关的默认值。"""
 
     return {
-        "context_bundle_v2": False,
-        "conversation_state_v2": False,
-        "summary_cas": False,
-        "memory_mongo_read": False,
         "candidate_tool_schema": False,
         "long_term_memory_observation": False,
     }
@@ -196,7 +192,11 @@ def _build_settings() -> Settings:
     feature_flags_raw.update(context_raw.get("feature_flags", {}) or {})
     feature_flags = _default_feature_flags()
     feature_flags.update(
-        {str(name): _env_bool(value) for name, value in feature_flags_raw.items()}
+        {
+            str(name): _env_bool(value)
+            for name, value in feature_flags_raw.items()
+            if str(name) in feature_flags
+        }
     )
     state_cfg = ConversationStateCfg(
         collection=str(

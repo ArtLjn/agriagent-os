@@ -26,7 +26,6 @@ class ContextSource(_ValueEnum):
     CONVERSATION_MESSAGES = "conversation_messages"
     CONVERSATION_STATE = "conversation_state"
     REDIS_SNAPSHOT = "redis_snapshot"
-    LEGACY_JSON_FALLBACK = "legacy_json_fallback"
     MEMORY_RECORDS = "memory_records"
     CURRENT_TURN = "current_turn"
     EMPTY = "empty"
@@ -38,7 +37,6 @@ class SourceStatus(_ValueEnum):
 
     MONGO = "mongo"
     REDIS_SNAPSHOT = "redis_snapshot"
-    LEGACY_JSON_FALLBACK = "legacy_json_fallback"
     EMPTY = "empty"
     UNAVAILABLE = "unavailable"
     STALE = "stale"

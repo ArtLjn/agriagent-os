@@ -15,7 +15,7 @@ Conversation snapshot SHALL 包含 `conversation_revision`、`summary_revision`�
 - **THEN** 系统 SHALL 拒绝该摘要覆盖新版本，并记录 `stale_context` 或 `summary_conflict`
 
 ### Requirement: Single source of conversation truth
-用户和助手最终可见消息 SHALL 以 MongoDB `conversationMessages` 为事实源；Redis 只负责活动 Turn、并发协调和事件重放；本地 JSON 不得作为生产 Context 的默认来源。
+用户和助手最终可见消息 SHALL 以 MongoDB `conversationMessages` 为事实源；Redis 只负责活动 Turn、并发协调和事件重放；Memory Service 不提供本地文件 fallback。
 
 #### Scenario: Worker reads a conversation after restart
 - **WHEN** Worker 重启后继续处理一个已有 `conversation_id` 的请求

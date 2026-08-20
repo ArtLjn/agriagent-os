@@ -24,11 +24,11 @@ Trace SHALL 提供足够信息用于构建评测回放样本，包括用户输�
 ## ADDED Requirements
 
 ### Requirement: Context source divergence warning
-Trace SHALL 在 Mongo、Redis snapshot、legacy fallback、summary revision 或 Memory source 不一致时记录结构化 warning，不得把缺失证据解释为业务不存在。
+Trace SHALL 在 Mongo、Redis snapshot、summary revision 或 Memory source 不一致时记录结构化 warning，不得把缺失证据解释为业务不存在。
 
-#### Scenario: Legacy source divergence
-- **WHEN** Mongo 与 legacy JSON 对同一 conversation 返回不同 revision 或消息数量
-- **THEN** trace 记录 `context_source_divergence`，包含双方 source status、revision 和差异摘要
+#### Scenario: Conversation source divergence
+- **WHEN** Conversation state、消息投影或 Redis Turn 对同一 conversation 返回不同 revision 或状态
+- **THEN** trace 记录 `context_source_divergence`，包含各 source status、revision 和差异摘要
 
 ### Requirement: Budget decision observability
 Trace summary SHALL 聚合 Context token 使用、response reserve、Tool Schema token、压缩次数、丢弃 Block 数、summary 生成次数和 context budget error。

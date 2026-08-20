@@ -335,7 +335,6 @@ def fake_runtime(monkeypatch: pytest.MonkeyPatch) -> _FakeStore:
     monkeypatch.setattr(
         react, "create_delegation_token", lambda *_args, **_kwargs: "delegated"
     )
-    monkeypatch.setattr(react, "_persist_memory", lambda _turn: None)
     monkeypatch.setattr(react, "trace_llm_call", lambda **_kwargs: None)
     monkeypatch.setattr(react, "trace_tool_call", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(react, "trace_commit_state", lambda *_args, **_kwargs: None)
