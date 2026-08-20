@@ -539,11 +539,11 @@ git commit -m "test: add admin user management API integration tests"
 ### Task 5: 创建用户管理 API 模块
 
 **Files:**
-- Create: `../../../../admin-web/src/api/users.ts`
+- Create: `../../../../agri_admin_web/src/api/users.ts`
 
 - [ ] **Step 1: 创建 API 模块**
 
-创建 `../../../../admin-web/src/api/users.ts`：
+创建 `../../../../agri_admin_web/src/api/users.ts`：
 
 ```typescript
 import apiClient from "./client";
@@ -596,7 +596,7 @@ Expected: 无错误（或仅有已存在的错误）
 - [ ] **Step 3: Commit**
 
 ```bash
-git add admin-web/src/api/users.ts
+git add agri_admin_web/src/api/users.ts
 git commit -m "feat(admin-web): add users API module"
 ```
 
@@ -605,11 +605,11 @@ git commit -m "feat(admin-web): add users API module"
 ### Task 6: 创建用户列表页面 + 详情弹窗
 
 **Files:**
-- Create: `../../../../admin-web/src/pages/Users/index.tsx`
+- Create: `../../../../agri_admin_web/src/pages/Users/index.tsx`
 
 - [ ] **Step 1: 创建页面组件**
 
-创建 `../../../../admin-web/src/pages/Users/index.tsx`：
+创建 `../../../../agri_admin_web/src/pages/Users/index.tsx`：
 
 ```tsx
 import { useState, useEffect, useCallback } from "react";
@@ -956,7 +956,7 @@ Expected: 无新增错误
 - [ ] **Step 3: Commit**
 
 ```bash
-git add admin-web/src/pages/Users/index.tsx
+git add agri_admin_web/src/pages/Users/index.tsx
 git commit -m "feat(admin-web): add users list page with detail modal"
 ```
 
@@ -965,12 +965,12 @@ git commit -m "feat(admin-web): add users list page with detail modal"
 ### Task 7: 更新导航和路由
 
 **Files:**
-- Modify: `../../../../admin-web/src/layouts/AdminLayout.tsx`
-- Modify: `../../../../admin-web/src/App.tsx`
+- Modify: `../../../../agri_admin_web/src/layouts/AdminLayout.tsx`
+- Modify: `../../../../agri_admin_web/src/App.tsx`
 
 - [ ] **Step 1: 在 AdminLayout.tsx 添加导航项**
 
-在 `../../../../admin-web/src/layouts/AdminLayout.tsx` 中：
+在 `../../../../agri_admin_web/src/layouts/AdminLayout.tsx` 中：
 
 a) 在 icons 导入中添加 `TeamOutlined`：
 
@@ -1018,7 +1018,7 @@ const pageTitles: Record<string, string> = {
 
 - [ ] **Step 2: 在 App.tsx 添加路由**
 
-在 `../../../../admin-web/src/App.tsx` 中：
+在 `../../../../agri_admin_web/src/App.tsx` 中：
 
 a) 添加 Users 页面导入：
 
@@ -1050,7 +1050,7 @@ Run: `cd admin-web && npm run dev`
 - [ ] **Step 5: Commit**
 
 ```bash
-git add admin-web/src/layouts/AdminLayout.tsx admin-web/src/App.tsx
+git add agri_admin_web/src/layouts/AdminLayout.tsx agri_admin_web/src/App.tsx
 git commit -m "feat(admin-web): add user management navigation and routing"
 ```
 
@@ -2228,7 +2228,7 @@ Expected: 无错误
 
 **3. Type Consistency:**
 - `UserProfile` 定义在 `api/types.ts`，在 `authStore.ts` 和 `LoginScreen`/`RegisterScreen` 中通过 `TokenResponse.user` 获取
-- `UserListItem` / `UserDetail` / `ListUsersParams` 在 `../../../../admin-web/src/api/users.ts` 中定义，在 `pages/Users/index.tsx` 中使用
+- `UserListItem` / `UserDetail` / `ListUsersParams` 在 `../../../../agri_admin_web/src/api/users.ts` 中定义，在 `pages/Users/index.tsx` 中使用
 - `UpdateUserStatusRequest` 的 `status` 字段使用 regex 校验 `^(active|disabled)$`，与 `UserStatus` 枚举一致
 - `authStore.login` 接收 `LoginParams`，`authStore.register` 接收 `RegisterParams`，与 `LoginScreen`/`RegisterScreen` 调用一致
 

@@ -1,4 +1,4 @@
-"""每日建议 v2 校验规则实现。"""
+"""每日建议 agri_backend_v2 校验规则实现。"""
 
 from __future__ import annotations
 
@@ -171,7 +171,7 @@ def validate_top_level_shape(
         issues.append(
             DailyAdviceValidationIssue(
                 code="invalid_payload_shape",
-                message="DailyAdvice v2 payload 缺少必需顶层字段。",
+                message="DailyAdvice agri_backend_v2 payload 缺少必需顶层字段。",
                 path="$",
                 evidence={"missing_fields": missing_fields},
             )

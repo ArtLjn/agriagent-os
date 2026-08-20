@@ -102,7 +102,7 @@ def _sample_detail() -> dict[str, Any]:
             "absolute_path": "/tmp/events.jsonl",
         },
         "debug_export": {
-            "format": "farm-manager.chat-session-debug.v2",
+            "format": "farm-manager.chat-session-debug.agri_backend_v2",
             "session": {"session_id": "sess-1"},
             "turns": [
                 {"id": 12, "request_id": "req-1"},

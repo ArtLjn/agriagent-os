@@ -2,7 +2,7 @@
 
 ### 当前状态
 
-`v2/agent` 已经具备 Prompt Cache、ReAct Turn、Redis 并发协调、Mongo 对话历史和 Trace，但这些机制处在不同层级：
+`../../../agri_backend_v2/agent` 已经具备 Prompt Cache、ReAct Turn、Redis 并发协调、Mongo 对话历史和 Trace，但这些机制处在不同层级：
 
 ```text
 POST /chat
@@ -85,7 +85,7 @@ memoryRecords          后续长期记忆事实；第一阶段仅保留 MemorySe
 
 #### Session、Short Memory、Long Memory 的具体存储与注入
 
-当前实现必须明确标记为迁移前状态：`conversation_id` 是公开 Session 标识，但没有独立 Session 文档；活动 Turn 在 Redis；用户可见消息在 Mongo `conversationMessages`；短时记忆在 `v2/agent/core/data/conversations/*.json`；长期记忆在 `v2/agent/core/data/memory.json`，且当前没有稳定写入流程。
+当前实现必须明确标记为迁移前状态：`conversation_id` 是公开 Session 标识，但没有独立 Session 文档；活动 Turn 在 Redis；用户可见消息在 Mongo `conversationMessages`；短时记忆在 `../../../agri_backend_v2/agent/core/data/conversations/*.json`；长期记忆在 `../../../agri_backend_v2/agent/core/data/memory.json`，且当前没有稳定写入流程。
 
 目标实现采用以下映射：
 

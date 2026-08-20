@@ -1,4 +1,4 @@
-"""每日建议 v2 骨架构建测试。"""
+"""每日建议 agri_backend_v2 骨架构建测试。"""
 
 from datetime import date
 

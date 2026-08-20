@@ -338,7 +338,7 @@ class TestGetDailyAdvice:
         mock_get_composer: MagicMock,
         mock_collect_candidates: AsyncMock,
     ) -> None:
-        """首次 v2 草稿校验失败时，应带修复提示重试并缓存 repaired 元数据。"""
+        """首次 agri_backend_v2 草稿校验失败时，应带修复提示重试并缓存 repaired 元数据。"""
         candidate = self._candidate()
         invalid_payload = json.loads(self._v2_payload(candidate))
         invalid_payload["items"][0]["compact"]["subtitle"] = "太短"
@@ -456,7 +456,7 @@ class TestGetDailyAdvice:
         mock_get_composer: MagicMock,
         mock_collect_candidates: AsyncMock,
     ) -> None:
-        """验证每日建议生成 v2 结构化 items 并保存。"""
+        """验证每日建议生成 agri_backend_v2 结构化 items 并保存。"""
         candidate = self._candidate()
         mock_collect_candidates.return_value = [candidate]
         mock_get_composer.return_value.compose.return_value = "daily prompt"
@@ -511,7 +511,7 @@ class TestGetDailyAdvice:
         mock_get_composer: MagicMock,
         mock_collect_candidates: AsyncMock,
     ) -> None:
-        """验证 v2 格式（含 preview + items）正确解析。"""
+        """验证 agri_backend_v2 格式（含 preview + items）正确解析。"""
         candidate = self._candidate()
         mock_collect_candidates.return_value = [candidate]
         mock_get_composer.return_value.compose.return_value = "daily prompt"

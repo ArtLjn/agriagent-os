@@ -92,7 +92,7 @@ export interface StreamTraceContext {
 }
 
 // ── Stream Chunk（Playground 消费）──
-// 对齐 v2/agent/static/index.html 的 appendEvent 覆盖的事件类型。
+// 对齐 agri_backend_v2/agent/static/index.html 的 appendEvent 覆盖的事件类型。
 export type StreamChunk =
   | { type: 'content'; data: string }
   | { type: 'final_content'; data: string }
@@ -161,7 +161,7 @@ export async function* parseSseStream(
 }
 
 // ── 将 SSE 事件映射为 StreamChunk ──
-// 参考 v2/agent/static/index.html 的 appendEvent 实现，覆盖所有事件类型，
+// 参考 agri_backend_v2/agent/static/index.html 的 appendEvent 实现，覆盖所有事件类型，
 // 让 Playground 能像 index.html 一样实时展示 thought/plan/action/observation 等。
 function mapSsePayloadToChunk(event: SseEvent): StreamChunk | null {
   const { type, data } = event;
@@ -464,7 +464,7 @@ export async function listDevUsers(): Promise<DevUser[]> {
 
 /**
  * 兼容 Operations 旧页面的技能列表入口。
- * v2 Agent 当前通过本地 skill loader 组装工具，尚未提供该 REST 端点。
+ * agri_backend_v2 Agent 当前通过本地 skill loader 组装工具，尚未提供该 REST 端点。
  */
 export interface AppSkillItem {
   key: string;
@@ -487,7 +487,7 @@ export async function listAppSkills(): Promise<AppSkillListResponse> {
   return res.data;
 }
 
-// ── 会话调试导出（v2 后端未提供独立端点，调用会 404，前端走 fallback 构建）──
+// ── 会话调试导出（agri_backend_v2 后端未提供独立端点，调用会 404，前端走 fallback 构建）──
 export interface SessionDebugExport {
   format: string;
   session_id: string;
@@ -508,8 +508,8 @@ export async function getSessionDebugExport(
 ): Promise<SessionDebugExport> {
   void _sessionId;
   void _simulateUserId;
-  // v2 后端无此端点，直接抛错让 Playground 走本地 fallback
-  throw new Error('session debug export endpoint not available on v2 agent');
+  // agri_backend_v2 后端无此端点，直接抛错让 Playground 走本地 fallback
+  throw new Error('session debug export endpoint not available on agri_backend_v2 agent');
 }
 
 // ── 兼容旧接口的 stub（后端尚未实现，调用会 404 但不影响编译）──

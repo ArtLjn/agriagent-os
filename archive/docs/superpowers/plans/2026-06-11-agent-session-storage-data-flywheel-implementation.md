@@ -2461,7 +2461,7 @@ def test_build_session_debug_export_includes_messages_turns_pending_and_events(t
 
     result = build_session_debug_export(db, farm_id=1, session_id="sess-debug")
 
-    assert result["format"] == "farm-manager.chat-session-debug.v2"
+    assert result["format"] == "farm-manager.chat-session-debug.agri_backend_v2"
     assert len(result["messages"]) == 2
     assert result["turns"][0]["request_id"] == "abcd1234"
     assert result["events"][0]["event_type"] == "message.user"
@@ -2484,7 +2484,7 @@ Expected: FAIL because service does not exist.
 Create `backend/app/services/session_debug_export_service.py`:
 
 ```python
-"""Session debug export v2 组装服务。"""
+"""Session debug export agri_backend_v2 组装服务。"""
 
 from typing import Any
 
@@ -2525,7 +2525,7 @@ def build_session_debug_export(db: Session, *, farm_id: int, session_id: str) ->
                 }
             )
     return {
-        "format": "farm-manager.chat-session-debug.v2",
+        "format": "farm-manager.chat-session-debug.agri_backend_v2",
         "session": {
             "id": conversation.id if conversation else None,
             "farm_id": farm_id,
@@ -2691,7 +2691,7 @@ def test_get_session_debug_export_v2():
 
     assert response.status_code == 200
     body = response.json()
-    assert body["format"] == "farm-manager.chat-session-debug.v2"
+    assert body["format"] == "farm-manager.chat-session-debug.agri_backend_v2"
     assert "messages" in body
     assert "turns" in body
     assert "events" in body
@@ -2721,7 +2721,7 @@ def get_session_debug_export(
     current_user: User = Depends(get_current_user),
     farm: Farm = Depends(get_current_farm),
 ) -> dict:
-    """导出会话调试 JSON v2。"""
+    """导出会话调试 JSON agri_backend_v2。"""
     if simulate_user_id:
         _, farm = resolve_stream_user_and_farm(db, current_user, simulate_user_id)
     return build_session_debug_export(db, farm_id=farm.id, session_id=session_id)

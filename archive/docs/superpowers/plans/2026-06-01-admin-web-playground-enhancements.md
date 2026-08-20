@@ -16,7 +16,7 @@
 
 | 文件 | 职责 |
 |------|------|
-| `../../../../admin-web/src/components/SkillOutputFormatter/index.tsx` | Skill 输出 JSON 的结构化渲染：提取 reply_preview 高亮展示，其余字段折叠 |
+| `../../../../agri_admin_web/src/components/SkillOutputFormatter/index.tsx` | Skill 输出 JSON 的结构化渲染：提取 reply_preview 高亮展示，其余字段折叠 |
 
 ### 修改文件
 
@@ -24,9 +24,9 @@
 |------|------|
 | `backend/app/schemas/agent.py` | `ChatRequest` 增加 `simulate_user_id` 可选字段 |
 | `backend/app/api/agent.py` | `agent_chat_stream` 支持 `simulate_user_id` 参数，管理员可模拟其他用户 |
-| `../../../../admin-web/src/api/admin.ts` | 增加 `listUsers` 接口定义和类型 |
-| `../../../../admin-web/src/pages/TraceMonitor/index.tsx` | 集成 SkillOutputFormatter + 复制耗时按钮 |
-| `../../../../admin-web/src/pages/Playground/index.tsx` | 集成 SkillOutputFormatter + 用户选择器 |
+| `../../../../agri_admin_web/src/api/admin.ts` | 增加 `listUsers` 接口定义和类型 |
+| `../../../../agri_admin_web/src/pages/TraceMonitor/index.tsx` | 集成 SkillOutputFormatter + 复制耗时按钮 |
+| `../../../../agri_admin_web/src/pages/Playground/index.tsx` | 集成 SkillOutputFormatter + 用户选择器 |
 
 ---
 
@@ -200,7 +200,7 @@ git commit -m "feat(api): agent_chat_stream 支持管理员模拟用户身份"
 ## Task 3: 前端 API 层 — 增加 listUsers 接口
 
 **Files:**
-- Modify: `../../../../admin-web/src/api/admin.ts`
+- Modify: `../../../../agri_admin_web/src/api/admin.ts`
 
 - [ ] **Step 1: 在 admin.ts 末尾（deleteTracesBefore 之后）添加用户相关类型和函数**
 
@@ -234,7 +234,7 @@ export async function listUsers(params?: { page?: number; size?: number; status?
 - [ ] **Step 2: Commit**
 
 ```bash
-git add admin-web/src/api/admin.ts
+git add agri_admin_web/src/api/admin.ts
 git commit -m "feat(api): admin-web 增加 listUsers 接口"
 ```
 
@@ -243,7 +243,7 @@ git commit -m "feat(api): admin-web 增加 listUsers 接口"
 ## Task 4: 创建 SkillOutputFormatter 组件
 
 **Files:**
-- Create: `../../../../admin-web/src/components/SkillOutputFormatter/index.tsx`
+- Create: `../../../../agri_admin_web/src/components/SkillOutputFormatter/index.tsx`
 
 - [ ] **Step 1: 创建组件文件**
 
@@ -368,7 +368,7 @@ export default function SkillOutputFormatter({ outputData }: SkillOutputFormatte
 - [ ] **Step 2: Commit**
 
 ```bash
-git add admin-web/src/components/SkillOutputFormatter/index.tsx
+git add agri_admin_web/src/components/SkillOutputFormatter/index.tsx
 git commit -m "feat(ui): 创建 SkillOutputFormatter 组件"
 ```
 
@@ -377,7 +377,7 @@ git commit -m "feat(ui): 创建 SkillOutputFormatter 组件"
 ## Task 5: TraceMonitor — 集成 SkillOutputFormatter
 
 **Files:**
-- Modify: `../../../../admin-web/src/pages/TraceMonitor/index.tsx`
+- Modify: `../../../../agri_admin_web/src/pages/TraceMonitor/index.tsx`
 
 - [ ] **Step 1: 导入 SkillOutputFormatter**
 
@@ -419,7 +419,7 @@ import SkillOutputFormatter from '../../components/SkillOutputFormatter';
 - [ ] **Step 3: Commit**
 
 ```bash
-git add admin-web/src/pages/TraceMonitor/index.tsx
+git add agri_admin_web/src/pages/TraceMonitor/index.tsx
 git commit -m "feat(trace): TraceMonitor Skill 输出使用格式化组件"
 ```
 
@@ -428,7 +428,7 @@ git commit -m "feat(trace): TraceMonitor Skill 输出使用格式化组件"
 ## Task 6: Playground — 集成 SkillOutputFormatter
 
 **Files:**
-- Modify: `../../../../admin-web/src/pages/Playground/index.tsx`
+- Modify: `../../../../agri_admin_web/src/pages/Playground/index.tsx`
 
 - [ ] **Step 1: 导入 SkillOutputFormatter**
 
@@ -470,7 +470,7 @@ import SkillOutputFormatter from '../../components/SkillOutputFormatter';
 - [ ] **Step 3: Commit**
 
 ```bash
-git add admin-web/src/pages/Playground/index.tsx
+git add agri_admin_web/src/pages/Playground/index.tsx
 git commit -m "feat(playground): Playground Skill 输出使用格式化组件"
 ```
 
@@ -479,7 +479,7 @@ git commit -m "feat(playground): Playground Skill 输出使用格式化组件"
 ## Task 7: TraceMonitor — 添加复制耗时按钮
 
 **Files:**
-- Modify: `../../../../admin-web/src/pages/TraceMonitor/index.tsx`
+- Modify: `../../../../agri_admin_web/src/pages/TraceMonitor/index.tsx`
 
 - [ ] **Step 1: 导入 CopyOutlined 图标**
 
@@ -586,7 +586,7 @@ async function copyTimingReport(timeline: TraceTimeline) {
 - [ ] **Step 4: Commit**
 
 ```bash
-git add admin-web/src/pages/TraceMonitor/index.tsx
+git add agri_admin_web/src/pages/TraceMonitor/index.tsx
 git commit -m "feat(trace): Trace 列表增加复制耗时分析按钮"
 ```
 
@@ -595,7 +595,7 @@ git commit -m "feat(trace): Trace 列表增加复制耗时分析按钮"
 ## Task 8: Playground — 添加用户选择器
 
 **Files:**
-- Modify: `../../../../admin-web/src/pages/Playground/index.tsx`
+- Modify: `../../../../agri_admin_web/src/pages/Playground/index.tsx`
 
 - [ ] **Step 1: 导入 listUsers 和 Select 组件**
 
@@ -755,7 +755,7 @@ for await (const chunk of streamPlaygroundChat(userMsg, sessionId, selectedUserI
 - [ ] **Step 7: Commit**
 
 ```bash
-git add admin-web/src/pages/Playground/index.tsx
+git add agri_admin_web/src/pages/Playground/index.tsx
 git commit -m "feat(playground): Playground 增加用户选择器支持模拟用户身份"
 ```
 
@@ -772,7 +772,7 @@ cd backend && poetry run python -m py_compile app/schemas/agent.py app/api/agent
 - [ ] **Step 2: 前端类型检查**
 
 ```bash
-cd admin-web && npx tsc --noEmit
+cd agri_admin_web && npx tsc --noEmit
 ```
 
 - [ ] **Step 3: 启动后端并测试 API**
@@ -792,7 +792,7 @@ curl -X POST http://localhost:8000/api/agent/chat/stream \
 - [ ] **Step 4: 启动前端并手动验证三个功能**
 
 ```bash
-cd admin-web && pnpm dev
+cd agri_admin_web && pnpm dev
 ```
 
 验证清单：

@@ -5,10 +5,10 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from agent.api import api_router
-from agent.core import memory
+from agent.domains.harness.memory import service as memory
 from agent.auth import parse_identity
 from fastapi import Header
-from agent.infra.coordination import scope_hash
+from agent.platforms.persistence.redis.coordination import scope_hash
 
 
 class ResetRequest(BaseModel):

@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from agent.infra import sweeper
+from agent.application import sweeper
 
 
 @pytest.mark.asyncio

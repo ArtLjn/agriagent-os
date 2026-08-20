@@ -5,11 +5,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from agent.core import react
-from agent.core.turn import Turn
-from agent.infra.trace import collector
-from agent.skills import loader
-from agent.skills.base import Skill, SkillResult
+from agent.domains.harness.runtime import engine as react
+from agent.domains.harness.runtime.turn import Turn
+from agent.domains.harness.observability.trace import collector
+from agent.domains.harness.tools import loader
+from agent.domains.harness.tools.base import Skill, SkillResult
 
 
 class _PrepareSkill(Skill):
@@ -146,7 +146,7 @@ def _patch_react_runtime(
     monkeypatch.setattr(
         react.tokenizer,
         "compute_usage",
-        lambda messages: SimpleNamespace(
+        lambda messages, **kwargs: SimpleNamespace(
             used=1, total=100, percent=1, level="ok"
         ),
     )
@@ -177,7 +177,7 @@ def _prepare_call() -> dict:
 
 
 def test_manage_planting_plan_declares_followup_and_hides_commit() -> None:
-    skill_dir = Path(loader.__file__).resolve().parent / "manage-planting-plan"
+    skill_dir = loader._SKILLS_DIR / "manage-planting-plan"
     source = loader._load_skill(skill_dir)
     assert source is not None
     operations = {skill.name: skill for skill in source.operation_skills()}

@@ -5,7 +5,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 
 from business.tools import crop_templates
-from agent.skills import loader
+from agent.domains.harness.tools import loader
 
 
 class _FakeDb:

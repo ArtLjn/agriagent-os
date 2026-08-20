@@ -1,4 +1,4 @@
-"""v2 Agent 收敛与 trace 结果测试。"""
+"""agri_backend_v2 Agent 收敛与 trace 结果测试。"""
 
 import pytest
 

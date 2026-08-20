@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# admin-web 部署脚本 — 打包并上传到腾讯云服务器
+# agri_admin_web 部署脚本 — 打包并上传到腾讯云服务器
 #
 # 用法:
-#   deploy/admin-web-deploy.sh                # 默认打包 + 上传
-#   deploy/admin-web-deploy.sh --no-build     # 跳过打包,直接上传现有 dist
-#   deploy/admin-web-deploy.sh --api-url=https://api.farm.lllcnm.cn
+#   deploy/agri_admin_web-deploy.sh                # 默认打包 + 上传
+#   deploy/agri_admin_web-deploy.sh --no-build     # 跳过打包,直接上传现有 dist
+#   deploy/agri_admin_web-deploy.sh --api-url=https://api.farm.lllcnm.cn
 #
 # 环境变量(可选):
 #   SERVER_HOST=43.155.217.74                 SSH 主机
 #   SERVER_USER=root                          SSH 用户
-#   REMOTE_DIR=/root/workspace/static/farm-admin-web  远程静态目录
+#   REMOTE_DIR=/root/workspace/static/farm-agri_admin_web  远程静态目录
 
 set -euo pipefail
 
@@ -20,7 +20,7 @@ ADMIN_WEB_DIR="$PROJECT_ROOT/admin-web"
 # === 服务器配置(环境变量覆盖) ===
 SERVER_HOST="${SERVER_HOST:-43.155.217.74}"
 SERVER_USER="${SERVER_USER:-root}"
-REMOTE_DIR="${REMOTE_DIR:-/root/workspace/static/farm-admin-web}"
+REMOTE_DIR="${REMOTE_DIR:-/root/workspace/static/farm-agri_admin_web}"
 API_URL="${API_URL:-https://api.farm.lllcnm.cn}"
 
 # === 参数 ===
@@ -43,7 +43,7 @@ ok()   { printf '  \033[32m✓\033[0m %s\n' "$*"; }
 die()  { printf '  \033[31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
 
 printf '\n=========================================\n'
-printf ' admin-web 部署\n'
+printf ' agri_admin_web 部署\n'
 printf '=========================================\n'
 printf ' 服务器:  %s@%s\n' "$SERVER_USER" "$SERVER_HOST"
 printf ' 远程目录: %s\n' "$REMOTE_DIR"
@@ -123,5 +123,5 @@ printf '=========================================\n'
 printf ' 路径:   %s@%s:%s\n' "$SERVER_USER" "$SERVER_HOST" "$REMOTE_DIR"
 printf ' API:    %s\n' "$API_URL"
 printf ' 文件数: %s\n' "$(ssh "${SERVER_USER}@${SERVER_HOST}" "find '${REMOTE_DIR}' -type f | wc -l | tr -d ' '")"
-printf ' 回滚:   ssh %s@%s \"cp -a /tmp/farm-admin-web-backup-%s/* %s/\"\n' \
+printf ' 回滚:   ssh %s@%s \"cp -a /tmp/farm-agri_admin_web-backup-%s/* %s/\"\n' \
   "$SERVER_USER" "$SERVER_HOST" "$TIMESTAMP" "$REMOTE_DIR"

@@ -29,7 +29,7 @@
 
 ## 5. Mobile App Consumption
 
-- [x] 5.1 Update `mobile-app/lib/data/api/api_models.dart` to parse DailyAdvice v2 while preserving old response compatibility.
+- [x] 5.1 Update `../../../../agri_mobile_app/lib/data/api/api_models.dart` to parse DailyAdvice v2 while preserving old response compatibility.
 - [x] 5.2 Update home controller/view models to render `items[].compact` for the AI 今日建议 list.
 - [x] 5.3 Update advice detail navigation to pass the selected item from the existing response instead of requesting a single-item endpoint.
 - [x] 5.4 Update `AdviceDetailScreen` to render `detail.title`, `detail.description`, `hero_badges`, `evidence`, `steps`, `related`, and `actions` from API data with empty-state handling.

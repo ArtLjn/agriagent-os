@@ -1033,21 +1033,21 @@ git commit -m "test: update all tests for farm_id multi-tenant support"
 ### Task 10: 创建 Vite + React + TS 项目
 
 **Files:**
-- Create: `../../../../../../../admin-web` 整个目录
+- Create: `../../../../../../../agri_admin_web` 整个目录
 
 - [ ] **Step 1: 创建 Vite 项目**
 
 Run:
 ```bash
 cd /Users/ljn/Documents/demo/explore
-npm create vite@latest admin-web -- --template react-ts
+npm create vite@latest agri_admin_web -- --template react-ts
 ```
 
 - [ ] **Step 2: 安装核心依赖**
 
 Run:
 ```bash
-cd admin-web
+cd agri_admin_web
 npm install antd @ant-design/icons react-router-dom axios
 ```
 
@@ -1079,7 +1079,7 @@ export default defineConfig({
 - [ ] **Step 5: Commit**
 
 ```bash
-git add admin-web/
+git add agri_admin_web/
 git commit -m "feat: initialize admin-web with Vite + React + TypeScript + Ant Design"
 ```
 
@@ -1088,9 +1088,9 @@ git commit -m "feat: initialize admin-web with Vite + React + TypeScript + Ant D
 ### Task 11: 创建布局和路由
 
 **Files:**
-- Create: `../../../../../../../admin-web/src/layouts/AdminLayout.tsx`
-- Modify: `../../../../../../../admin-web/src/App.tsx`
-- Modify: `../../../../../../../admin-web/src/main.tsx`
+- Create: `../../../../../../../agri_admin_web/src/layouts/AdminLayout.tsx`
+- Modify: `../../../../../../../agri_admin_web/src/App.tsx`
+- Modify: `../../../../../../../agri_admin_web/src/main.tsx`
 
 - [ ] **Step 1: 创建 AdminLayout.tsx**
 
@@ -1206,7 +1206,7 @@ createRoot(document.getElementById('root')!).render(
 
 - [ ] **Step 4: 创建页面占位文件**
 
-每个页面先创建最小占位组件，例如 `../../../../../../../admin-web/src/pages/Dashboard/index.tsx`：
+每个页面先创建最小占位组件，例如 `../../../../../../../agri_admin_web/src/pages/Dashboard/index.tsx`：
 
 ```tsx
 export default function Dashboard() {
@@ -1224,7 +1224,7 @@ Run: `cd admin-web && npm run dev`
 - [ ] **Step 6: Commit**
 
 ```bash
-git add admin-web/src/
+git add agri_admin_web/src/
 git commit -m "feat: add admin layout, routing, and page placeholders"
 ```
 
@@ -1235,13 +1235,13 @@ git commit -m "feat: add admin layout, routing, and page placeholders"
 ### Task 12: 创建 Axios 实例和 API 模块
 
 **Files:**
-- Create: `../../../../../../../admin-web/src/api/client.ts`
-- Create: `../../../../../../../admin-web/src/api/crops.ts`
-- Create: `../../../../../../../admin-web/src/api/cycles.ts`
-- Create: `../../../../../../../admin-web/src/api/logs.ts`
-- Create: `../../../../../../../admin-web/src/api/costs.ts`
-- Create: `../../../../../../../admin-web/src/api/agent.ts`
-- Create: `../../../../../../../admin-web/src/api/weather.ts`
+- Create: `../../../../../../../agri_admin_web/src/api/client.ts`
+- Create: `../../../../../../../agri_admin_web/src/api/crops.ts`
+- Create: `../../../../../../../agri_admin_web/src/api/cycles.ts`
+- Create: `../../../../../../../agri_admin_web/src/api/logs.ts`
+- Create: `../../../../../../../agri_admin_web/src/api/costs.ts`
+- Create: `../../../../../../../agri_admin_web/src/api/agent.ts`
+- Create: `../../../../../../../agri_admin_web/src/api/weather.ts`
 
 - [ ] **Step 1: 创建 client.ts**
 
@@ -1438,7 +1438,7 @@ export const getForecast = (days: number = 7) =>
 - [ ] **Step 8: Commit**
 
 ```bash
-git add admin-web/src/api/
+git add agri_admin_web/src/api/
 git commit -m "feat: add API client layer with all endpoint modules"
 ```
 
@@ -1449,9 +1449,9 @@ git commit -m "feat: add API client layer with all endpoint modules"
 ### Task 13: 创建 ApiDebugger 组件
 
 **Files:**
-- Create: `../../../../../../../admin-web/src/components/ApiDebugger/index.tsx`
-- Create: `../../../../../../../admin-web/src/components/ApiDebugger/RequestEditor.tsx`
-- Create: `../../../../../../../admin-web/src/components/ApiDebugger/ResponsePanel.tsx`
+- Create: `../../../../../../../agri_admin_web/src/components/ApiDebugger/index.tsx`
+- Create: `../../../../../../../agri_admin_web/src/components/ApiDebugger/RequestEditor.tsx`
+- Create: `../../../../../../../agri_admin_web/src/components/ApiDebugger/ResponsePanel.tsx`
 
 - [ ] **Step 1: 创建 RequestEditor.tsx**
 
@@ -1607,7 +1607,7 @@ export default function ApiDebugger({ open, onClose, defaultMethod = 'GET', defa
 - [ ] **Step 4: Commit**
 
 ```bash
-git add admin-web/src/components/
+git add agri_admin_web/src/components/
 git commit -m "feat: add reusable ApiDebugger component"
 ```
 
@@ -1618,7 +1618,7 @@ git commit -m "feat: add reusable ApiDebugger component"
 ### Task 14: Dashboard 仪表盘页面
 
 **Files:**
-- Modify: `../../../../../../../admin-web/src/pages/Dashboard/index.tsx`
+- Modify: `../../../../../../../agri_admin_web/src/pages/Dashboard/index.tsx`
 
 - [ ] **Step 1: 实现 Dashboard**
 
@@ -1699,7 +1699,7 @@ export default function Dashboard() {
 - [ ] **Step 2: Commit**
 
 ```bash
-git add admin-web/src/pages/Dashboard/
+git add agri_admin_web/src/pages/Dashboard/
 git commit -m "feat: implement Dashboard page"
 ```
 
@@ -1708,7 +1708,7 @@ git commit -m "feat: implement Dashboard page"
 ### Task 15: 作物管理页面
 
 **Files:**
-- Modify: `../../../../../../../admin-web/src/pages/Crops/index.tsx`
+- Modify: `../../../../../../../agri_admin_web/src/pages/Crops/index.tsx`
 
 - [ ] **Step 1: 实现 Crops 页面（Table + Modal + 内嵌调试）**
 
@@ -1789,7 +1789,7 @@ export default function Crops() {
 - [ ] **Step 2: Commit**
 
 ```bash
-git add admin-web/src/pages/Crops/
+git add agri_admin_web/src/pages/Crops/
 git commit -m "feat: implement Crops management page with inline debugger"
 ```
 
@@ -1798,8 +1798,8 @@ git commit -m "feat: implement Crops management page with inline debugger"
 ### Task 16: 茬口管理页面
 
 **Files:**
-- Modify: `../../../../../../../admin-web/src/pages/Cycles/index.tsx`
-- Create: `../../../../../../../admin-web/src/pages/Cycles/Detail.tsx`
+- Modify: `../../../../../../../agri_admin_web/src/pages/Cycles/index.tsx`
+- Create: `../../../../../../../agri_admin_web/src/pages/Cycles/Detail.tsx`
 
 - [ ] **Step 1: 实现 Cycles 列表页**
 
@@ -1951,7 +1951,7 @@ export default function CycleDetail() {
 - [ ] **Step 4: Commit**
 
 ```bash
-git add admin-web/src/pages/Cycles/ admin-web/src/App.tsx
+git add agri_admin_web/src/pages/Cycles/ agri_admin_web/src/App.tsx
 git commit -m "feat: implement Cycles list and detail pages"
 ```
 
@@ -1960,7 +1960,7 @@ git commit -m "feat: implement Cycles list and detail pages"
 ### Task 17: 农事日志页面
 
 **Files:**
-- Modify: `../../../../../../../admin-web/src/pages/Logs/index.tsx`
+- Modify: `../../../../../../../agri_admin_web/src/pages/Logs/index.tsx`
 
 - [ ] **Step 1: 实现 Logs 页面**
 
@@ -2057,7 +2057,7 @@ export default function Logs() {
 - [ ] **Step 2: Commit**
 
 ```bash
-git add admin-web/src/pages/Logs/
+git add agri_admin_web/src/pages/Logs/
 git commit -m "feat: implement Logs page with cycle filter"
 ```
 
@@ -2066,7 +2066,7 @@ git commit -m "feat: implement Logs page with cycle filter"
 ### Task 18: 成本记账页面
 
 **Files:**
-- Modify: `../../../../../../../admin-web/src/pages/Costs/index.tsx`
+- Modify: `../../../../../../../agri_admin_web/src/pages/Costs/index.tsx`
 
 - [ ] **Step 1: 实现 Costs 页面（统计卡片 + 列表 + 新增）**
 
@@ -2202,7 +2202,7 @@ export default function Costs() {
 - [ ] **Step 2: Commit**
 
 ```bash
-git add admin-web/src/pages/Costs/
+git add agri_admin_web/src/pages/Costs/
 git commit -m "feat: implement Costs page with stats cards and profit view"
 ```
 
@@ -2211,7 +2211,7 @@ git commit -m "feat: implement Costs page with stats cards and profit view"
 ### Task 19: AI 助手页面
 
 **Files:**
-- Modify: `../../../../../../../admin-web/src/pages/Agent/index.tsx`
+- Modify: `../../../../../../../agri_admin_web/src/pages/Agent/index.tsx`
 
 - [ ] **Step 1: 实现 Agent 页面（Tabs: 对话/建议/报告/历史）**
 
@@ -2367,7 +2367,7 @@ function HistoryTab({ cycleId }: { cycleId?: number }) {
 - [ ] **Step 2: Commit**
 
 ```bash
-git add admin-web/src/pages/Agent/
+git add agri_admin_web/src/pages/Agent/
 git commit -m "feat: implement Agent page with chat, advice, report, history tabs"
 ```
 
@@ -2376,7 +2376,7 @@ git commit -m "feat: implement Agent page with chat, advice, report, history tab
 ### Task 20: 天气预报页面
 
 **Files:**
-- Modify: `../../../../../../../admin-web/src/pages/Weather/index.tsx`
+- Modify: `../../../../../../../agri_admin_web/src/pages/Weather/index.tsx`
 
 - [ ] **Step 1: 实现 Weather 页面**
 
@@ -2447,7 +2447,7 @@ export default function Weather() {
 - [ ] **Step 2: Commit**
 
 ```bash
-git add admin-web/src/pages/Weather/
+git add agri_admin_web/src/pages/Weather/
 git commit -m "feat: implement Weather forecast page"
 ```
 
@@ -2458,7 +2458,7 @@ git commit -m "feat: implement Weather forecast page"
 ### Task 21: 实现 API Tester 页面
 
 **Files:**
-- Modify: `admin-web/src/pages/ApiTester/index.tsx`
+- Modify: `../../../../../../../agri_admin_web/src/pages/ApiTester/index.tsx`
 
 - [ ] **Step 1: 定义端点元数据 + 实现页面**
 
@@ -2611,7 +2611,7 @@ export default function ApiTester() {
 - [ ] **Step 2: Commit**
 
 ```bash
-git add admin-web/src/pages/ApiTester/
+git add agri_admin_web/src/pages/ApiTester/
 git commit -m "feat: implement standalone API Tester page with all 20 endpoints"
 ```
 
@@ -2635,7 +2635,7 @@ cd backend && python -m uvicorn app.main:app --reload &
 - [ ] **Step 3: 启动前端**
 
 ```bash
-cd admin-web && npm run dev
+cd agri_admin_web && npm run dev
 ```
 
 - [ ] **Step 4: 验证全部页面**

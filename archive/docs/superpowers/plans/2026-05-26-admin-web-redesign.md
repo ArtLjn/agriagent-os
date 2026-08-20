@@ -76,12 +76,12 @@ admin-web/src/
 ## Task 1: 安装依赖
 
 **Files:**
-- Modify: `../../../../admin-web/package.json`
+- Modify: `../../../../agri_admin_web/package.json`
 
 - [ ] **Step 1: 安装 @ant-design/charts**
 
 ```bash
-cd /Users/ljn/Documents/demo/explore/admin-web && npm install @ant-design/charts
+cd /Users/ljn/Documents/demo/explore/agri_admin_web && npm install @ant-design/charts
 ```
 
 Expected: 安装成功，无报错。
@@ -89,7 +89,7 @@ Expected: 安装成功，无报错。
 - [ ] **Step 2: 验证安装**
 
 ```bash
-cd /Users/ljn/Documents/demo/explore/admin-web && npm ls @ant-design/charts
+cd /Users/ljn/Documents/demo/explore/agri_admin_web && npm ls @ant-design/charts
 ```
 
 Expected: 显示 `@ant-design/charts@x.x.x` 版本号。
@@ -97,7 +97,7 @@ Expected: 显示 `@ant-design/charts@x.x.x` 版本号。
 - [ ] **Step 3: Commit**
 
 ```bash
-git add admin-web/package.json admin-web/package-lock.json
+git add agri_admin_web/package.json agri_admin_web/package-lock.json
 git commit -m "chore(admin-web): 安装 @ant-design/charts 依赖"
 ```
 
@@ -106,11 +106,11 @@ git commit -m "chore(admin-web): 安装 @ant-design/charts 依赖"
 ## Task 2: 创建 API 层 (admin.ts)
 
 **Files:**
-- Create: `../../../../admin-web/src/api/admin.ts`
+- Create: `../../../../agri_admin_web/src/api/admin.ts`
 
 - [ ] **Step 1: 编写 admin API 模块**
 
-Create `../../../../admin-web/src/api/admin.ts`:
+Create `../../../../agri_admin_web/src/api/admin.ts`:
 
 ```typescript
 import client from './client';
@@ -310,7 +310,7 @@ export async function clearCache(): Promise<{ cleared: Record<string, number> }>
 - [ ] **Step 2: Commit**
 
 ```bash
-git add admin-web/src/api/admin.ts
+git add agri_admin_web/src/api/admin.ts
 git commit -m "feat(admin-web): 创建 admin API 层"
 ```
 
@@ -319,11 +319,11 @@ git commit -m "feat(admin-web): 创建 admin API 层"
 ## Task 3: 创建 Trace 常量
 
 **Files:**
-- Create: `../../../../admin-web/src/constants/trace.ts`
+- Create: `../../../../agri_admin_web/src/constants/trace.ts`
 
 - [ ] **Step 1: 编写节点类型颜色常量**
 
-Create `../../../../admin-web/src/constants/trace.ts`:
+Create `../../../../agri_admin_web/src/constants/trace.ts`:
 
 ```typescript
 /**
@@ -358,7 +358,7 @@ export function getNodeLabel(nodeType: string): string {
 - [ ] **Step 2: Commit**
 
 ```bash
-git add admin-web/src/constants/trace.ts
+git add agri_admin_web/src/constants/trace.ts
 git commit -m "feat(admin-web): 添加 trace 节点类型颜色常量"
 ```
 
@@ -367,12 +367,12 @@ git commit -m "feat(admin-web): 添加 trace 节点类型颜色常量"
 ## Task 4: 创建 GanttTimeline 组件
 
 **Files:**
-- Create: `../../../../admin-web/src/components/GanttTimeline/types.ts`
-- Create: `../../../../admin-web/src/components/GanttTimeline/index.tsx`
+- Create: `../../../../agri_admin_web/src/components/GanttTimeline/types.ts`
+- Create: `../../../../agri_admin_web/src/components/GanttTimeline/index.tsx`
 
 - [ ] **Step 1: 编写类型定义**
 
-Create `../../../../admin-web/src/components/GanttTimeline/types.ts`:
+Create `../../../../agri_admin_web/src/components/GanttTimeline/types.ts`:
 
 ```typescript
 export interface GanttNode {
@@ -396,7 +396,7 @@ export interface GanttTimelineProps {
 
 - [ ] **Step 2: 编写 GanttTimeline 组件**
 
-Create `../../../../admin-web/src/components/GanttTimeline/index.tsx`:
+Create `../../../../agri_admin_web/src/components/GanttTimeline/index.tsx`:
 
 ```typescript
 import { useMemo, useState } from 'react';
@@ -550,7 +550,7 @@ function formatDuration(ms: number): string {
 - [ ] **Step 3: Commit**
 
 ```bash
-git add admin-web/src/components/GanttTimeline/
+git add agri_admin_web/src/components/GanttTimeline/
 git commit -m "feat(admin-web): 实现 GanttTimeline 组件"
 ```
 
@@ -559,11 +559,11 @@ git commit -m "feat(admin-web): 实现 GanttTimeline 组件"
 ## Task 5: 修改 App.tsx — 新增路由
 
 **Files:**
-- Modify: `../../../../admin-web/src/App.tsx`
+- Modify: `../../../../agri_admin_web/src/App.tsx`
 
 - [ ] **Step 1: 新增路由和页面导入**
 
-Modify `../../../../admin-web/src/App.tsx`:
+Modify `../../../../agri_admin_web/src/App.tsx`:
 
 ```typescript
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
@@ -622,7 +622,7 @@ export default function App() {
 - [ ] **Step 2: Commit**
 
 ```bash
-git add admin-web/src/App.tsx
+git add agri_admin_web/src/App.tsx
 git commit -m "feat(admin-web): 新增 /dev/* 路由"
 ```
 
@@ -631,11 +631,11 @@ git commit -m "feat(admin-web): 新增 /dev/* 路由"
 ## Task 6: 修改 AdminLayout — 侧边栏分组
 
 **Files:**
-- Modify: `../../../../admin-web/src/layouts/AdminLayout.tsx`
+- Modify: `../../../../agri_admin_web/src/layouts/AdminLayout.tsx`
 
 - [ ] **Step 1: 重写菜单结构**
 
-Replace the entire content of `../../../../admin-web/src/layouts/AdminLayout.tsx`:
+Replace the entire content of `../../../../agri_admin_web/src/layouts/AdminLayout.tsx`:
 
 ```typescript
 import { useState } from 'react';
@@ -843,7 +843,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 - [ ] **Step 2: Commit**
 
 ```bash
-git add admin-web/src/layouts/AdminLayout.tsx
+git add agri_admin_web/src/layouts/AdminLayout.tsx
 git commit -m "feat(admin-web): 侧边栏按业务管理和开发调试分组"
 ```
 
@@ -852,11 +852,11 @@ git commit -m "feat(admin-web): 侧边栏按业务管理和开发调试分组"
 ## Task 7: 创建 TraceMonitor 页面
 
 **Files:**
-- Create: `../../../../admin-web/src/pages/TraceMonitor/index.tsx`
+- Create: `../../../../agri_admin_web/src/pages/TraceMonitor/index.tsx`
 
 - [ ] **Step 1: 编写 TraceMonitor 页面**
 
-Create `../../../../admin-web/src/pages/TraceMonitor/index.tsx`:
+Create `../../../../agri_admin_web/src/pages/TraceMonitor/index.tsx`:
 
 ```typescript
 import { useState, useCallback } from 'react';
@@ -1114,7 +1114,7 @@ export default function TraceMonitor() {
 - [ ] **Step 2: Commit**
 
 ```bash
-git add admin-web/src/pages/TraceMonitor/
+git add agri_admin_web/src/pages/TraceMonitor/
 git commit -m "feat(admin-web): 实现 Trace Monitor 页面"
 ```
 
@@ -1123,11 +1123,11 @@ git commit -m "feat(admin-web): 实现 Trace Monitor 页面"
 ## Task 8: 创建 TokenDashboard 页面
 
 **Files:**
-- Create: `../../../../admin-web/src/pages/TokenDashboard/index.tsx`
+- Create: `../../../../agri_admin_web/src/pages/TokenDashboard/index.tsx`
 
 - [ ] **Step 1: 编写 TokenDashboard 页面**
 
-Create `../../../../admin-web/src/pages/TokenDashboard/index.tsx`:
+Create `../../../../agri_admin_web/src/pages/TokenDashboard/index.tsx`:
 
 ```typescript
 import { useState, useEffect, useMemo } from 'react';
@@ -1314,7 +1314,7 @@ export default function TokenDashboard() {
 - [ ] **Step 2: Commit**
 
 ```bash
-git add admin-web/src/pages/TokenDashboard/
+git add agri_admin_web/src/pages/TokenDashboard/
 git commit -m "feat(admin-web): 实现 Token Dashboard 页面"
 ```
 
@@ -1323,11 +1323,11 @@ git commit -m "feat(admin-web): 实现 Token Dashboard 页面"
 ## Task 9: 创建 Playground 页面
 
 **Files:**
-- Create: `../../../../admin-web/src/pages/Playground/index.tsx`
+- Create: `../../../../agri_admin_web/src/pages/Playground/index.tsx`
 
 - [ ] **Step 1: 编写 Playground 页面**
 
-Create `../../../../admin-web/src/pages/Playground/index.tsx`:
+Create `../../../../agri_admin_web/src/pages/Playground/index.tsx`:
 
 ```typescript
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -1572,7 +1572,7 @@ export default function Playground() {
 - [ ] **Step 2: Commit**
 
 ```bash
-git add admin-web/src/pages/Playground/
+git add agri_admin_web/src/pages/Playground/
 git commit -m "feat(admin-web): 实现 Chat Playground 页面"
 ```
 
@@ -1581,11 +1581,11 @@ git commit -m "feat(admin-web): 实现 Chat Playground 页面"
 ## Task 10: 创建 SkillRegistry 页面
 
 **Files:**
-- Create: `../../../../admin-web/src/pages/SkillRegistry/index.tsx`
+- Create: `../../../../agri_admin_web/src/pages/SkillRegistry/index.tsx`
 
 - [ ] **Step 1: 编写 SkillRegistry 页面**
 
-Create `../../../../admin-web/src/pages/SkillRegistry/index.tsx`:
+Create `../../../../agri_admin_web/src/pages/SkillRegistry/index.tsx`:
 
 ```typescript
 import { useState, useEffect } from 'react';
@@ -1666,7 +1666,7 @@ export default function SkillRegistry() {
 - [ ] **Step 2: Commit**
 
 ```bash
-git add admin-web/src/pages/SkillRegistry/
+git add agri_admin_web/src/pages/SkillRegistry/
 git commit -m "feat(admin-web): 实现 Skill Registry 页面"
 ```
 
@@ -1675,11 +1675,11 @@ git commit -m "feat(admin-web): 实现 Skill Registry 页面"
 ## Task 11: 创建 PromptInspector 页面
 
 **Files:**
-- Create: `../../../../admin-web/src/pages/PromptInspector/index.tsx`
+- Create: `../../../../agri_admin_web/src/pages/PromptInspector/index.tsx`
 
 - [ ] **Step 1: 编写 PromptInspector 页面**
 
-Create `../../../../admin-web/src/pages/PromptInspector/index.tsx`:
+Create `../../../../agri_admin_web/src/pages/PromptInspector/index.tsx`:
 
 ```typescript
 import { useState, useEffect } from 'react';
@@ -1792,7 +1792,7 @@ export default function PromptInspector() {
 - [ ] **Step 2: Commit**
 
 ```bash
-git add admin-web/src/pages/PromptInspector/
+git add agri_admin_web/src/pages/PromptInspector/
 git commit -m "feat(admin-web): 实现 Prompt Inspector 页面"
 ```
 
@@ -1801,11 +1801,11 @@ git commit -m "feat(admin-web): 实现 Prompt Inspector 页面"
 ## Task 12: 创建 ConfigKeys 页面
 
 **Files:**
-- Create: `../../../../admin-web/src/pages/ConfigKeys/index.tsx`
+- Create: `../../../../agri_admin_web/src/pages/ConfigKeys/index.tsx`
 
 - [ ] **Step 1: 编写 ConfigKeys 页面**
 
-Create `../../../../admin-web/src/pages/ConfigKeys/index.tsx`:
+Create `../../../../agri_admin_web/src/pages/ConfigKeys/index.tsx`:
 
 ```typescript
 import { useState, useEffect } from 'react';
@@ -1925,7 +1925,7 @@ export default function ConfigKeys() {
 - [ ] **Step 2: Commit**
 
 ```bash
-git add admin-web/src/pages/ConfigKeys/
+git add agri_admin_web/src/pages/ConfigKeys/
 git commit -m "feat(admin-web): 实现 Config & Keys 页面"
 ```
 
@@ -1939,7 +1939,7 @@ git commit -m "feat(admin-web): 实现 Config & Keys 页面"
 - [ ] **Step 1: 运行 TypeScript 编译检查**
 
 ```bash
-cd /Users/ljn/Documents/demo/explore/admin-web && npx tsc --noEmit
+cd /Users/ljn/Documents/demo/explore/agri_admin_web && npx tsc --noEmit
 ```
 
 Expected: 无 TypeScript 错误。如有错误，根据报错信息修复类型问题。
@@ -1947,15 +1947,15 @@ Expected: 无 TypeScript 错误。如有错误，根据报错信息修复类型�
 - [ ] **Step 2: 运行构建**
 
 ```bash
-cd /Users/ljn/Documents/demo/explore/admin-web && npm run build
+cd /Users/ljn/Documents/demo/explore/agri_admin_web && npm run build
 ```
 
-Expected: 构建成功，输出到 `../../../../admin-web/dist` 目录。
+Expected: 构建成功，输出到 `../../../../agri_admin_web/dist` 目录。
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add admin-web/
+git add agri_admin_web/
 git commit -m "feat(admin-web): admin-web-redesign 完成 — 6 个开发调试页面"
 ```
 
@@ -1977,7 +1977,7 @@ Expected: 后端启动在 `http://localhost:8000`，Admin API 端点可访问。
 - [ ] **Step 2: 启动前端开发服务器**
 
 ```bash
-cd /Users/ljn/Documents/demo/explore/admin-web && npm run dev
+cd /Users/ljn/Documents/demo/explore/agri_admin_web && npm run dev
 ```
 
 Expected: 前端启动在 `http://localhost:5173`，侧边栏显示两个分组。

@@ -9,7 +9,7 @@ from fastapi import HTTPException
 
 from agent.auth import create_delegation_token, parse_identity
 from agent.config import settings as agent_settings
-from agent.infra.trace.context import clear_trace, init_trace
+from agent.domains.harness.observability.trace.context import clear_trace, init_trace
 from business.config import settings as business_settings
 from business.services.tokens import create_access_token, decode_access_token
 

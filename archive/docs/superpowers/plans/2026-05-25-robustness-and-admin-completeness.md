@@ -2136,14 +2136,14 @@ git commit -m "feat: add pagination to all list endpoints"
 ## Task 14: 前端 API 类型补全
 
 **Files:**
-- Modify: `../../../../admin-web/src/api/agent.ts`
-- Modify: `../../../../admin-web/src/api/weather.ts`
+- Modify: `../../../../agri_admin_web/src/api/agent.ts`
+- Modify: `../../../../agri_admin_web/src/api/weather.ts`
 
 **前置条件:** 无
 
 - [ ] **Step 1: agent.ts 添加类型定义**
 
-修改 `../../../../admin-web/src/api/agent.ts`，在文件顶部添加：
+修改 `../../../../agri_admin_web/src/api/agent.ts`，在文件顶部添加：
 
 ```typescript
 export interface ChatRequest {
@@ -2231,7 +2231,7 @@ export async function getReports(): Promise<ReportListResponse> {
 
 - [ ] **Step 2: weather.ts 添加类型定义**
 
-修改 `../../../../admin-web/src/api/weather.ts`：
+修改 `../../../../agri_admin_web/src/api/weather.ts`：
 
 ```typescript
 export interface DayWeather {
@@ -2256,7 +2256,7 @@ export async function getForecast(days: number = 7): Promise<ForecastResponse> {
 - [ ] **Step 3: Commit**
 
 ```bash
-cd /Users/ljn/Documents/demo/explore/admin-web
+cd /Users/ljn/Documents/demo/explore/agri_admin_web
 git add src/api/agent.ts src/api/weather.ts
 git commit -m "feat: add TypeScript type definitions for agent and weather APIs"
 ```
@@ -2266,16 +2266,16 @@ git commit -m "feat: add TypeScript type definitions for agent and weather APIs"
 ## Task 15: 前端 API 层 PUT/DELETE
 
 **Files:**
-- Modify: `../../../../admin-web/src/api/crops.ts`
-- Modify: `../../../../admin-web/src/api/cycles.ts`
-- Modify: `../../../../admin-web/src/api/logs.ts`
-- Modify: `../../../../admin-web/src/api/costs.ts`
+- Modify: `../../../../agri_admin_web/src/api/crops.ts`
+- Modify: `../../../../agri_admin_web/src/api/cycles.ts`
+- Modify: `../../../../agri_admin_web/src/api/logs.ts`
+- Modify: `../../../../agri_admin_web/src/api/costs.ts`
 
 **前置条件:** 无
 
 - [ ] **Step 1: crops.ts 添加 update/delete**
 
-修改 `../../../../admin-web/src/api/crops.ts`，在末尾添加：
+修改 `../../../../agri_admin_web/src/api/crops.ts`，在末尾添加：
 
 ```typescript
 export async function updateTemplate(id: number, data: Omit<CropTemplate, "id">): Promise<CropTemplate> {
@@ -2290,7 +2290,7 @@ export async function deleteTemplate(id: number): Promise<void> {
 
 - [ ] **Step 2: cycles.ts 添加 update/delete/advance**
 
-修改 `../../../../admin-web/src/api/cycles.ts`，在末尾添加：
+修改 `../../../../agri_admin_web/src/api/cycles.ts`，在末尾添加：
 
 ```typescript
 export async function updateCycle(id: number, data: Omit<CropCycle, "id" | "stages">): Promise<CropCycle> {
@@ -2310,7 +2310,7 @@ export async function advanceStage(id: number): Promise<CropCycle> {
 
 - [ ] **Step 3: logs.ts 添加 update/delete**
 
-修改 `../../../../admin-web/src/api/logs.ts`，在末尾添加：
+修改 `../../../../agri_admin_web/src/api/logs.ts`，在末尾添加：
 
 ```typescript
 export async function updateLog(id: number, data: Omit<FarmLog, "id" | "created_at">): Promise<FarmLog> {
@@ -2325,7 +2325,7 @@ export async function deleteLog(id: number): Promise<void> {
 
 - [ ] **Step 4: costs.ts 添加 update/delete**
 
-修改 `../../../../admin-web/src/api/costs.ts`，在末尾添加：
+修改 `../../../../agri_admin_web/src/api/costs.ts`，在末尾添加：
 
 ```typescript
 export async function updateRecord(id: number, data: Partial<Omit<CostRecord, "id" | "created_at">>): Promise<CostRecord> {
@@ -2341,7 +2341,7 @@ export async function deleteRecord(id: number): Promise<void> {
 - [ ] **Step 5: Commit**
 
 ```bash
-cd /Users/ljn/Documents/demo/explore/admin-web
+cd /Users/ljn/Documents/demo/explore/agri_admin_web
 git add src/api/crops.ts src/api/cycles.ts src/api/logs.ts src/api/costs.ts
 git commit -m "feat: add PUT/DELETE APIs for crops, cycles, logs, costs"
 ```
@@ -2351,13 +2351,13 @@ git commit -m "feat: add PUT/DELETE APIs for crops, cycles, logs, costs"
 ## Task 16: Axios 响应拦截器
 
 **Files:**
-- Modify: `../../../../admin-web/src/api/client.ts`
+- Modify: `../../../../agri_admin_web/src/api/client.ts`
 
 **前置条件:** 无
 
 - [ ] **Step 1: client.ts 添加响应拦截器**
 
-将 `../../../../admin-web/src/api/client.ts` 替换为：
+将 `../../../../agri_admin_web/src/api/client.ts` 替换为：
 
 ```typescript
 import axios from "axios";
@@ -2401,7 +2401,7 @@ export default apiClient;
 - [ ] **Step 2: Commit**
 
 ```bash
-cd /Users/ljn/Documents/demo/explore/admin-web
+cd /Users/ljn/Documents/demo/explore/agri_admin_web
 git add src/api/client.ts
 git commit -m "feat: add Axios response interceptor with unified error messages"
 ```
@@ -2411,13 +2411,13 @@ git commit -m "feat: add Axios response interceptor with unified error messages"
 ## Task 17: Crops 页面 Edit/Delete
 
 **Files:**
-- Modify: `../../../../admin-web/src/pages/Crops/index.tsx`
+- Modify: `../../../../agri_admin_web/src/pages/Crops/index.tsx`
 
 **前置条件:** Task 15 完成
 
 - [ ] **Step 1: 修改 Crops 页面**
 
-修改 `../../../../admin-web/src/pages/Crops/index.tsx`，添加编辑和删除功能：
+修改 `../../../../agri_admin_web/src/pages/Crops/index.tsx`，添加编辑和删除功能：
 
 ```typescript
 import { useState, useEffect } from "react";
@@ -2577,7 +2577,7 @@ export default function Crops() {
 - [ ] **Step 2: Commit**
 
 ```bash
-cd /Users/ljn/Documents/demo/explore/admin-web
+cd /Users/ljn/Documents/demo/explore/agri_admin_web
 git add src/pages/Crops/index.tsx
 git commit -m "feat: add Edit/Delete to Crops page"
 ```
@@ -2587,14 +2587,14 @@ git commit -m "feat: add Edit/Delete to Crops page"
 ## Task 18: Cycles 页面 Edit/Delete + Advance
 
 **Files:**
-- Modify: `../../../../admin-web/src/pages/Cycles/index.tsx`
-- Modify: `../../../../admin-web/src/pages/Cycles/Detail.tsx`
+- Modify: `../../../../agri_admin_web/src/pages/Cycles/index.tsx`
+- Modify: `../../../../agri_admin_web/src/pages/Cycles/Detail.tsx`
 
 **前置条件:** Task 15 完成
 
 - [ ] **Step 1: Cycles 列表页添加 Edit/Delete**
 
-类似 Crops 页面的模式，修改 `../../../../admin-web/src/pages/Cycles/index.tsx`：
+类似 Crops 页面的模式，修改 `../../../../agri_admin_web/src/pages/Cycles/index.tsx`：
 - 导入 `updateCycle`, `deleteCycle`
 - 添加 `editingId` state
 - 添加 `openEdit`, `handleUpdate`, `handleDelete` 函数
@@ -2603,7 +2603,7 @@ git commit -m "feat: add Edit/Delete to Crops page"
 
 - [ ] **Step 2: Cycle Detail 页添加 Advance Stage 按钮**
 
-修改 `../../../../admin-web/src/pages/Cycles/Detail.tsx`：
+修改 `../../../../agri_admin_web/src/pages/Cycles/Detail.tsx`：
 - 导入 `advanceStage`
 - 添加 "推进到下一阶段" 按钮
 - 调用 `advanceStage(cycleId)`，成功后刷新数据
@@ -2624,7 +2624,7 @@ import { advanceStage } from "../../api/cycles";
 - [ ] **Step 3: Commit**
 
 ```bash
-cd /Users/ljn/Documents/demo/explore/admin-web
+cd /Users/ljn/Documents/demo/explore/agri_admin_web
 git add src/pages/Cycles/index.tsx src/pages/Cycles/Detail.tsx
 git commit -m "feat: add Edit/Delete to Cycles list and Advance Stage button to Detail"
 ```
@@ -2634,13 +2634,13 @@ git commit -m "feat: add Edit/Delete to Cycles list and Advance Stage button to 
 ## Task 19: Logs 页面 Edit/Delete
 
 **Files:**
-- Modify: `../../../../admin-web/src/pages/Logs/index.tsx`
+- Modify: `../../../../agri_admin_web/src/pages/Logs/index.tsx`
 
 **前置条件:** Task 15 完成
 
 - [ ] **Step 1: Logs 页面添加 Edit/Delete**
 
-类似 Crops 页面的模式，修改 `../../../../admin-web/src/pages/Logs/index.tsx`：
+类似 Crops 页面的模式，修改 `../../../../agri_admin_web/src/pages/Logs/index.tsx`：
 - 导入 `updateLog`, `deleteLog`
 - 添加 `editingId` state
 - 添加 `openEdit`, `handleUpdate`, `handleDelete` 函数
@@ -2650,7 +2650,7 @@ git commit -m "feat: add Edit/Delete to Cycles list and Advance Stage button to 
 - [ ] **Step 2: Commit**
 
 ```bash
-cd /Users/ljn/Documents/demo/explore/admin-web
+cd /Users/ljn/Documents/demo/explore/agri_admin_web
 git add src/pages/Logs/index.tsx
 git commit -m "feat: add Edit/Delete to Logs page"
 ```
@@ -2660,13 +2660,13 @@ git commit -m "feat: add Edit/Delete to Logs page"
 ## Task 20: Costs 页面 Edit/Delete + 分页
 
 **Files:**
-- Modify: `../../../../admin-web/src/pages/Costs/index.tsx`
+- Modify: `../../../../agri_admin_web/src/pages/Costs/index.tsx`
 
 **前置条件:** Task 13（后端分页）、Task 15 完成
 
 - [ ] **Step 1: Costs 页面添加 Edit/Delete**
 
-类似前面页面的模式，修改 `../../../../admin-web/src/pages/Costs/index.tsx`：
+类似前面页面的模式，修改 `../../../../agri_admin_web/src/pages/Costs/index.tsx`：
 - 导入 `updateRecord`, `deleteRecord`
 - 添加 `editingId` state
 - 添加 `openEdit`, `handleUpdate`, `handleDelete` 函数
@@ -2674,7 +2674,7 @@ git commit -m "feat: add Edit/Delete to Logs page"
 
 - [ ] **Step 2: Costs 页面接入分页**
 
-修改 `../../../../admin-web/src/pages/Costs/index.tsx`：
+修改 `../../../../agri_admin_web/src/pages/Costs/index.tsx`：
 - 添加 `pagination` state：`{ current: 1, pageSize: 20, total: 0 }`
 - `listRecords` 调用时传入 `page` 和 `size`
 - Table 添加 `pagination` prop
@@ -2723,7 +2723,7 @@ const fetchData = async (page = pagination.current, pageSize = pagination.pageSi
 - [ ] **Step 3: Commit**
 
 ```bash
-cd /Users/ljn/Documents/demo/explore/admin-web
+cd /Users/ljn/Documents/demo/explore/agri_admin_web
 git add src/pages/Costs/index.tsx
 git commit -m "feat: add Edit/Delete and pagination to Costs page"
 ```
@@ -2733,9 +2733,9 @@ git commit -m "feat: add Edit/Delete and pagination to Costs page"
 ## Task 21: 其他页面接入分页
 
 **Files:**
-- Modify: `../../../../admin-web/src/pages/Crops/index.tsx`
-- Modify: `../../../../admin-web/src/pages/Cycles/index.tsx`
-- Modify: `../../../../admin-web/src/pages/Logs/index.tsx`
+- Modify: `../../../../agri_admin_web/src/pages/Crops/index.tsx`
+- Modify: `../../../../agri_admin_web/src/pages/Cycles/index.tsx`
+- Modify: `../../../../agri_admin_web/src/pages/Logs/index.tsx`
 
 **前置条件:** Task 13（后端分页）完成
 
@@ -2750,7 +2750,7 @@ git commit -m "feat: add Edit/Delete and pagination to Costs page"
 - [ ] **Step 2: Commit**
 
 ```bash
-cd /Users/ljn/Documents/demo/explore/admin-web
+cd /Users/ljn/Documents/demo/explore/agri_admin_web
 git add src/pages/Crops/index.tsx src/pages/Cycles/index.tsx src/pages/Logs/index.tsx
 git commit -m "feat: add pagination to Crops, Cycles, and Logs pages"
 ```

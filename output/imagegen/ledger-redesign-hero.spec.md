@@ -4,7 +4,7 @@
 
 - 高保真 HTML 渲染：`output/imagegen/ledger-redesign-hero.html`（浏览器打开即可看 1:1 效果）
 - Canvas：`430 x 932`（iPhone 14 Pro Max logical），可截图复用
-- 目标平台：Flutter mobile app，`mobile-app/lib/features/billing/`
+- 目标平台：Flutter mobile app，`../../agri_mobile_app/lib/features/billing/`
 - 设计基调：Apple Weather + Linear calm-tech，对齐 `.claude/rules/app-ui.md`
 
 > imagegen 通道：本次 AISpeech gateway 对 1024x2224 / 1024x1536 复杂 UI mockup 持续 502（简单 prompt 可过，复杂 UI 必失败），故改用 HTML 渲染作为视觉真相源。HTML 在浏览器打开即可看到 1:1 还原，且代码可直接复制到 Flutter。
@@ -147,7 +147,7 @@ Touch target:      44×44 min
 ### P0 · 视觉层级修复
 
 - [ ] **账本首页**：将 `年度净收益 -¥12万` 提为 hero card，字号 56px bold，颜色 `#E5484D`
-  - 文件：`mobile-app/lib/features/billing/billing_screen.dart`
+  - 文件：`../../agri_mobile_app/lib/features/billing/billing_screen.dart`
   - 当前是平铺在概览卡中，需拆出独立 hero 区
 - [ ] **三指标去卡片化**：把 `收入 / 支出 / 欠款` 从 3 个独立小卡改为单一 strip + 1px 分隔线
 - [ ] **AI 洞察卡**：删去副标题，只留主标题"智能复盘" + 副标签"AI 财务洞察"；背景换 soft blue gradient + 1px border
@@ -262,8 +262,8 @@ Container(
 
 ## 参考文件
 
-- 当前账本页源码：`mobile-app/lib/features/billing/billing_screen.dart`、`billing_summary_widgets.dart`
-- 当前账本页测试：`mobile-app/test/features/business/business_pages_test.dart`
+- 当前账本页源码：`../../agri_mobile_app/lib/features/billing/billing_screen.dart`、`billing_summary_widgets.dart`
+- 当前账本页测试：`../../agri_mobile_app/test/features/business/business_pages_test.dart`
 - 设计规范：`.claude/rules/app-ui.md`
 - 前端编码规范：`.claude/rules/frontend-style.md`
 - 旧探索（深色方向，未落地）：`output/imagegen/billing-ledger-redesign.spec.md`、`ledger-screen-ref.spec.md`

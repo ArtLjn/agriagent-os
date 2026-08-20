@@ -5,12 +5,12 @@
 
 ## 2. 前端 API 层扩展
 
-- [ ] 2.1 在 `admin-web/src/api/admin.ts` 中补充 `listUsers` 接口定义和请求函数
+- [ ] 2.1 在 `../../../../agri_admin_web/src/api/admin.ts` 中补充 `listUsers` 接口定义和请求函数
 - [ ] 2.2 确认 `streamPlaygroundChat` 支持传递 `user_id` 参数
 
 ## 3. Skill 输出格式化（trace-skill-output-formatter）
 
-- [ ] 3.1 创建 `admin-web/src/components/SkillOutputFormatter/index.tsx` 组件：解析 `output_data` JSON，提取 `reply_preview`，其余字段折叠
+- [ ] 3.1 创建 `../../../../agri_admin_web/src/components/SkillOutputFormatter/index.tsx` 组件：解析 `output_data` JSON，提取 `reply_preview`，其余字段折叠
 - [ ] 3.2 在 `TraceMonitor` 的节点详情 Drawer 中，对 `skill_call` 类型节点使用 `SkillOutputFormatter` 替代原始 JSON 展示
 - [ ] 3.3 在 `Playground` 的节点详情 Drawer 中同步应用 `SkillOutputFormatter`
 - [ ] 3.4 增加「复制格式化内容」按钮，将 `reply_preview` 写入剪贴板

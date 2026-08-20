@@ -12,7 +12,7 @@ vi.mock('./client', () => ({
 const mockedApiClient = vi.mocked(apiClient, true);
 
 describe('admin api', () => {
-  it('通过正式 v2 timeline 接口读取节点和事件，并补充 summary', async () => {
+  it('通过正式 agri_backend_v2 timeline 接口读取节点和事件，并补充 summary', async () => {
     mockedApiClient.get
       .mockResolvedValueOnce({
         data: {

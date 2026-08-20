@@ -20,7 +20,7 @@ describe('Login', () => {
     mockedApiClient.post.mockReset();
   });
 
-  it('读取 v2 登录接口返回的 access_token 并完成跳转', async () => {
+  it('读取 agri_backend_v2 登录接口返回的 access_token 并完成跳转', async () => {
     mockedApiClient.post.mockResolvedValueOnce({ data: { access_token: 'jwt-token' } });
     const onLogin = vi.fn();
     const user = userEvent.setup();

@@ -147,7 +147,7 @@ class TestComposerCompose:
             _composer.compose("nonexistent")
 
     def test_daily_advice_v2_prompt_renders_skeleton_json(self, _composer):
-        """daily_advice 模板可渲染 v2 候选骨架 JSON。"""
+        """daily_advice 模板可渲染 agri_backend_v2 候选骨架 JSON。"""
         result = _composer.compose(
             "daily_advice",
             variables={

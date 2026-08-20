@@ -200,7 +200,7 @@ class DailyAdviceDetailView(BaseModel):
 
 
 class AdviceItem(BaseModel):
-    """单条每日建议，兼容旧字段并提供 v2 展示结构。"""
+    """单条每日建议，兼容旧字段并提供 agri_backend_v2 展示结构。"""
 
     id: str = "legacy-advice"
     category: DailyAdviceCategory = "record"
@@ -239,7 +239,7 @@ class AdviceItem(BaseModel):
 
     @model_validator(mode="after")
     def _fill_v2_display_fields(self) -> "AdviceItem":
-        """旧字段输入通过原校验后，补齐 v2 展示字段。"""
+        """旧字段输入通过原校验后，补齐 agri_backend_v2 展示字段。"""
         if self.compact is None:
             self.compact = DailyAdviceCompact(
                 title=self.title[:12],
@@ -291,7 +291,7 @@ class DailyAdviceResponse(BaseModel):
 
 
 def _pad_min_length(value: str, min_length: int) -> str:
-    """为旧字段兼容生成满足 v2 最小长度的详情描述。"""
+    """为旧字段兼容生成满足 agri_backend_v2 最小长度的详情描述。"""
     text = value.strip() or "暂无详细说明"
     while len(text) < min_length:
         text = f"{text}，请结合现场情况处理"

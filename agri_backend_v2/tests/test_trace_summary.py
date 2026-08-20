@@ -1,6 +1,6 @@
 """Trace summary 对 root span 和资源 span 的聚合契约测试。"""
 
-from agent.infra.trace.summary import build_trace_request_summary
+from agent.domains.harness.observability.trace.summary import build_trace_request_summary
 
 
 def test_summary_uses_root_duration_without_double_counting_children() -> None:

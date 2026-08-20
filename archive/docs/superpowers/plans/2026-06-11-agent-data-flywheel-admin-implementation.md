@@ -25,14 +25,14 @@ Read these files before starting implementation:
 - `backend/app/infra/agent_events.py`
 - `backend/app/api/admin_trace.py`
 - `backend/app/bootstrap/routes.py`
-- `../../../../admin-web/src/pages/TraceMonitor/index.tsx`
-- `../../../../admin-web/src/pages/Simulation/index.tsx`
-- `../../../../admin-web/src/pages/Playground/index.tsx`
-- `../../../../admin-web/src/api/admin.ts`
-- `../../../../admin-web/src/api/agent.ts`
-- `../../../../admin-web/src/layouts/AdminLayout.tsx`
-- `../../../../admin-web/src/App.tsx`
-- `../../../../admin-web/src/styles/theme.ts`
+- `../../../../agri_admin_web/src/pages/TraceMonitor/index.tsx`
+- `../../../../agri_admin_web/src/pages/Simulation/index.tsx`
+- `../../../../agri_admin_web/src/pages/Playground/index.tsx`
+- `../../../../agri_admin_web/src/api/admin.ts`
+- `../../../../agri_admin_web/src/api/agent.ts`
+- `../../../../agri_admin_web/src/layouts/AdminLayout.tsx`
+- `../../../../agri_admin_web/src/App.tsx`
+- `../../../../agri_admin_web/src/styles/theme.ts`
 
 Important worktree note: the repository may already contain unrelated modified/untracked files. Do not revert them. Stage and commit only the files listed by each task.
 
@@ -52,18 +52,18 @@ Backend files:
 
 Frontend files:
 
-- Create `../../../../admin-web/src/api/dataFlywheel.ts`: API types and functions.
-- Create `../../../../admin-web/src/pages/DataFlywheel/index.tsx`: page shell and orchestration.
-- Create `../../../../admin-web/src/pages/DataFlywheel/components/SampleQueueTable.tsx`: sample list table.
-- Create `../../../../admin-web/src/pages/DataFlywheel/components/SampleDetailPanel.tsx`: evidence detail panel.
-- Create `../../../../admin-web/src/pages/DataFlywheel/components/AnnotationPanel.tsx`: label and actions panel.
-- Create `../../../../admin-web/src/pages/DataFlywheel/components/ToolComparison.tsx`: selected vs actual tools.
-- Create `../../../../admin-web/src/pages/DataFlywheel/components/PendingLifecycleView.tsx`: pending lifecycle timeline.
-- Create `../../../../admin-web/src/pages/DataFlywheel/components/CaseDraftPreview.tsx`: case draft preview modal.
-- Create `../../../../admin-web/src/pages/DataFlywheel/index.test.tsx`: page integration tests.
-- Create `../../../../admin-web/src/api/dataFlywheel.test.ts`: API wrapper tests.
-- Modify `../../../../admin-web/src/App.tsx`: add route.
-- Modify `../../../../admin-web/src/layouts/AdminLayout.tsx`: add menu item and title.
+- Create `../../../../agri_admin_web/src/api/dataFlywheel.ts`: API types and functions.
+- Create `../../../../agri_admin_web/src/pages/DataFlywheel/index.tsx`: page shell and orchestration.
+- Create `../../../../agri_admin_web/src/pages/DataFlywheel/components/SampleQueueTable.tsx`: sample list table.
+- Create `../../../../agri_admin_web/src/pages/DataFlywheel/components/SampleDetailPanel.tsx`: evidence detail panel.
+- Create `../../../../agri_admin_web/src/pages/DataFlywheel/components/AnnotationPanel.tsx`: label and actions panel.
+- Create `../../../../agri_admin_web/src/pages/DataFlywheel/components/ToolComparison.tsx`: selected vs actual tools.
+- Create `../../../../agri_admin_web/src/pages/DataFlywheel/components/PendingLifecycleView.tsx`: pending lifecycle timeline.
+- Create `../../../../agri_admin_web/src/pages/DataFlywheel/components/CaseDraftPreview.tsx`: case draft preview modal.
+- Create `../../../../agri_admin_web/src/pages/DataFlywheel/index.test.tsx`: page integration tests.
+- Create `../../../../agri_admin_web/src/api/dataFlywheel.test.ts`: API wrapper tests.
+- Modify `../../../../agri_admin_web/src/App.tsx`: add route.
+- Modify `../../../../agri_admin_web/src/layouts/AdminLayout.tsx`: add menu item and title.
 
 Implementation should not add MongoDB, Kafka, ClickHouse, Celery, vector DBs, or new frontend component libraries.
 
@@ -572,7 +572,7 @@ def test_get_sample_detail_includes_events_and_debug_export(tmp_path):
     assert detail["tool_events"][0]["payload"]["tool_name"] == "manage_workers"
     assert detail["pending_lifecycle"][0]["event_type"] == "pending.plan.created"
     assert detail["source"]["event_seq_start"] == 1
-    assert detail["debug_export"]["format"] == "farm-manager.chat-session-debug.v2"
+    assert detail["debug_export"]["format"] == "farm-manager.chat-session-debug.agri_backend_v2"
     db.close()
 
 
@@ -1631,12 +1631,12 @@ git commit -m "feat: expose agent data flywheel admin api"
 ### Task 4: Add Frontend API Client
 
 **Files:**
-- Create: `../../../../admin-web/src/api/dataFlywheel.ts`
-- Test: `../../../../admin-web/src/api/dataFlywheel.test.ts`
+- Create: `../../../../agri_admin_web/src/api/dataFlywheel.ts`
+- Test: `../../../../agri_admin_web/src/api/dataFlywheel.test.ts`
 
 - [ ] **Step 1: Write failing frontend API tests**
 
-Create `../../../../admin-web/src/api/dataFlywheel.test.ts`:
+Create `../../../../agri_admin_web/src/api/dataFlywheel.test.ts`:
 
 ```typescript
 import { describe, expect, it, vi, beforeEach } from 'vitest';
@@ -1748,14 +1748,14 @@ describe('dataFlywheel api', () => {
 Run:
 
 ```bash
-cd admin-web && pnpm exec vitest run src/api/dataFlywheel.test.ts
+cd agri_admin_web && pnpm exec vitest run src/api/dataFlywheel.test.ts
 ```
 
 Expected: FAIL because `src/api/dataFlywheel.ts` does not exist.
 
 - [ ] **Step 3: Create frontend API module**
 
-Create `../../../../admin-web/src/api/dataFlywheel.ts`:
+Create `../../../../agri_admin_web/src/api/dataFlywheel.ts`:
 
 ```typescript
 import apiClient from './client';
@@ -1919,7 +1919,7 @@ export async function createCaseDraft(
 Run:
 
 ```bash
-cd admin-web && pnpm exec vitest run src/api/dataFlywheel.test.ts
+cd agri_admin_web && pnpm exec vitest run src/api/dataFlywheel.test.ts
 ```
 
 Expected: PASS.
@@ -1929,7 +1929,7 @@ Expected: PASS.
 Run:
 
 ```bash
-cd admin-web && pnpm exec eslint src/api/dataFlywheel.ts src/api/dataFlywheel.test.ts
+cd agri_admin_web && pnpm exec eslint src/api/dataFlywheel.ts src/api/dataFlywheel.test.ts
 ```
 
 Expected: PASS.
@@ -1937,7 +1937,7 @@ Expected: PASS.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add admin-web/src/api/dataFlywheel.ts admin-web/src/api/dataFlywheel.test.ts
+git add agri_admin_web/src/api/dataFlywheel.ts agri_admin_web/src/api/dataFlywheel.test.ts
 git commit -m "feat: add data flywheel frontend api"
 ```
 
@@ -1946,18 +1946,18 @@ git commit -m "feat: add data flywheel frontend api"
 ### Task 5: Build Data Flywheel Page Components
 
 **Files:**
-- Create: `../../../../admin-web/src/pages/DataFlywheel/components/SampleQueueTable.tsx`
-- Create: `../../../../admin-web/src/pages/DataFlywheel/components/ToolComparison.tsx`
-- Create: `../../../../admin-web/src/pages/DataFlywheel/components/PendingLifecycleView.tsx`
-- Create: `../../../../admin-web/src/pages/DataFlywheel/components/SampleDetailPanel.tsx`
-- Create: `../../../../admin-web/src/pages/DataFlywheel/components/AnnotationPanel.tsx`
-- Create: `../../../../admin-web/src/pages/DataFlywheel/components/CaseDraftPreview.tsx`
-- Create: `../../../../admin-web/src/pages/DataFlywheel/index.tsx`
-- Test: `../../../../admin-web/src/pages/DataFlywheel/index.test.tsx`
+- Create: `../../../../agri_admin_web/src/pages/DataFlywheel/components/SampleQueueTable.tsx`
+- Create: `../../../../agri_admin_web/src/pages/DataFlywheel/components/ToolComparison.tsx`
+- Create: `../../../../agri_admin_web/src/pages/DataFlywheel/components/PendingLifecycleView.tsx`
+- Create: `../../../../agri_admin_web/src/pages/DataFlywheel/components/SampleDetailPanel.tsx`
+- Create: `../../../../agri_admin_web/src/pages/DataFlywheel/components/AnnotationPanel.tsx`
+- Create: `../../../../agri_admin_web/src/pages/DataFlywheel/components/CaseDraftPreview.tsx`
+- Create: `../../../../agri_admin_web/src/pages/DataFlywheel/index.tsx`
+- Test: `../../../../agri_admin_web/src/pages/DataFlywheel/index.test.tsx`
 
 - [ ] **Step 1: Write the failing page tests**
 
-Create `../../../../admin-web/src/pages/DataFlywheel/index.test.tsx`:
+Create `../../../../agri_admin_web/src/pages/DataFlywheel/index.test.tsx`:
 
 ```tsx
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -2004,7 +2004,7 @@ const detail = {
   router_decision: { selected_tools: sample.selected_tools },
   tool_events: [{ event_type: 'tool.call.finished', payload: { tool_name: 'manage_workers' } }],
   pending_lifecycle: [{ event_type: 'pending.plan.created', payload: { plan_id: 'plan-1' } }],
-  debug_export: { format: 'farm-manager.chat-session-debug.v2' },
+  debug_export: { format: 'farm-manager.chat-session-debug.agri_backend_v2' },
   source: {
     event_file: 'data/agent-events/dt=2026-06-11/farm_id=1/session_id=sess-1/events.jsonl',
     event_seq_start: 1,
@@ -2129,14 +2129,14 @@ describe('DataFlywheel Page', () => {
 Run:
 
 ```bash
-cd admin-web && pnpm exec vitest run src/pages/DataFlywheel/index.test.tsx
+cd agri_admin_web && pnpm exec vitest run src/pages/DataFlywheel/index.test.tsx
 ```
 
 Expected: FAIL because the page and components do not exist.
 
 - [ ] **Step 3: Create `ToolComparison`**
 
-Create `../../../../admin-web/src/pages/DataFlywheel/components/ToolComparison.tsx`:
+Create `../../../../agri_admin_web/src/pages/DataFlywheel/components/ToolComparison.tsx`:
 
 ```tsx
 import { Space, Tag, Typography } from 'antd';
@@ -2171,7 +2171,7 @@ export default function ToolComparison({ selectedTools, actualTools }: ToolCompa
 
 - [ ] **Step 4: Create `PendingLifecycleView`**
 
-Create `../../../../admin-web/src/pages/DataFlywheel/components/PendingLifecycleView.tsx`:
+Create `../../../../agri_admin_web/src/pages/DataFlywheel/components/PendingLifecycleView.tsx`:
 
 ```tsx
 import { Empty, Timeline, Typography } from 'antd';
@@ -2216,7 +2216,7 @@ export default function PendingLifecycleView({ events }: PendingLifecycleViewPro
 
 - [ ] **Step 5: Create `SampleQueueTable`**
 
-Create `../../../../admin-web/src/pages/DataFlywheel/components/SampleQueueTable.tsx`:
+Create `../../../../agri_admin_web/src/pages/DataFlywheel/components/SampleQueueTable.tsx`:
 
 ```tsx
 import { Table, Tag, Space, Typography } from 'antd';
@@ -2298,7 +2298,7 @@ export default function SampleQueueTable({ samples, loading, selectedSampleId, o
 
 - [ ] **Step 6: Create `SampleDetailPanel`**
 
-Create `../../../../admin-web/src/pages/DataFlywheel/components/SampleDetailPanel.tsx`:
+Create `../../../../agri_admin_web/src/pages/DataFlywheel/components/SampleDetailPanel.tsx`:
 
 ```tsx
 import { Card, Col, Empty, Row, Space, Tag, Typography } from 'antd';
@@ -2378,7 +2378,7 @@ export default function SampleDetailPanel({ detail, loading }: SampleDetailPanel
 
 - [ ] **Step 7: Create `AnnotationPanel`**
 
-Create `../../../../admin-web/src/pages/DataFlywheel/components/AnnotationPanel.tsx`:
+Create `../../../../agri_admin_web/src/pages/DataFlywheel/components/AnnotationPanel.tsx`:
 
 ```tsx
 import { Button, Card, Input, Radio, Space, Typography } from 'antd';
@@ -2463,7 +2463,7 @@ export default function AnnotationPanel({
 
 - [ ] **Step 8: Create `CaseDraftPreview`**
 
-Create `../../../../admin-web/src/pages/DataFlywheel/components/CaseDraftPreview.tsx`:
+Create `../../../../agri_admin_web/src/pages/DataFlywheel/components/CaseDraftPreview.tsx`:
 
 ```tsx
 import { Modal } from 'antd';
@@ -2496,7 +2496,7 @@ export default function CaseDraftPreview({ draft, open, onClose }: CaseDraftPrev
 
 - [ ] **Step 9: Create the page shell**
 
-Create `../../../../admin-web/src/pages/DataFlywheel/index.tsx`:
+Create `../../../../agri_admin_web/src/pages/DataFlywheel/index.tsx`:
 
 ```tsx
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -2724,7 +2724,7 @@ export default function DataFlywheel() {
 Run:
 
 ```bash
-cd admin-web && pnpm exec vitest run src/pages/DataFlywheel/index.test.tsx
+cd agri_admin_web && pnpm exec vitest run src/pages/DataFlywheel/index.test.tsx
 ```
 
 Expected: PASS.
@@ -2734,7 +2734,7 @@ Expected: PASS.
 Run:
 
 ```bash
-cd admin-web && pnpm exec eslint src/pages/DataFlywheel src/api/dataFlywheel.ts
+cd agri_admin_web && pnpm exec eslint src/pages/DataFlywheel src/api/dataFlywheel.ts
 ```
 
 Expected: PASS.
@@ -2742,7 +2742,7 @@ Expected: PASS.
 - [ ] **Step 12: Commit**
 
 ```bash
-git add admin-web/src/pages/DataFlywheel admin-web/src/api/dataFlywheel.ts
+git add agri_admin_web/src/pages/DataFlywheel agri_admin_web/src/api/dataFlywheel.ts
 git commit -m "feat: build agent data flywheel page"
 ```
 
@@ -2751,13 +2751,13 @@ git commit -m "feat: build agent data flywheel page"
 ### Task 6: Wire Data Flywheel Route and Menu
 
 **Files:**
-- Modify: `../../../../admin-web/src/App.tsx`
-- Modify: `../../../../admin-web/src/layouts/AdminLayout.tsx`
-- Test: extend `../../../../admin-web/src/pages/DataFlywheel/index.test.tsx` or create `../../../../admin-web/src/layouts/AdminLayout.test.tsx`
+- Modify: `../../../../agri_admin_web/src/App.tsx`
+- Modify: `../../../../agri_admin_web/src/layouts/AdminLayout.tsx`
+- Test: extend `../../../../agri_admin_web/src/pages/DataFlywheel/index.test.tsx` or create `../../../../agri_admin_web/src/layouts/AdminLayout.test.tsx`
 
 - [ ] **Step 1: Add route/menu assertions to the page test**
 
-Add these imports at the top of `../../../../admin-web/src/pages/DataFlywheel/index.test.tsx`:
+Add these imports at the top of `../../../../agri_admin_web/src/pages/DataFlywheel/index.test.tsx`:
 
 ```tsx
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
@@ -2787,12 +2787,12 @@ it('菜单中展示数据飞轮入口', () => {
 Run:
 
 ```bash
-cd admin-web && pnpm exec vitest run src/pages/DataFlywheel/index.test.tsx
+cd agri_admin_web && pnpm exec vitest run src/pages/DataFlywheel/index.test.tsx
 ```
 
 Expected: FAIL because `AdminLayout` does not yet include the `数据飞轮` menu entry.
 
-- [ ] **Step 3: Modify `../../../../admin-web/src/App.tsx`**
+- [ ] **Step 3: Modify `../../../../agri_admin_web/src/App.tsx`**
 
 Add this import near the other page imports:
 
@@ -2806,7 +2806,7 @@ Add this route near the other `/dev/*` routes, after Playground:
           <Route path="/dev/data-flywheel" element={<AuthGuard><DataFlywheel /></AuthGuard>} />
 ```
 
-- [ ] **Step 4: Modify `../../../../admin-web/src/layouts/AdminLayout.tsx`**
+- [ ] **Step 4: Modify `../../../../agri_admin_web/src/layouts/AdminLayout.tsx`**
 
 Add an icon import:
 
@@ -2831,7 +2831,7 @@ Add the page title:
 Run:
 
 ```bash
-cd admin-web && pnpm exec vitest run src/pages/DataFlywheel/index.test.tsx
+cd agri_admin_web && pnpm exec vitest run src/pages/DataFlywheel/index.test.tsx
 ```
 
 Expected: PASS.
@@ -2841,7 +2841,7 @@ Expected: PASS.
 Run:
 
 ```bash
-cd admin-web && pnpm build
+cd agri_admin_web && pnpm build
 ```
 
 Expected: PASS.
@@ -2849,7 +2849,7 @@ Expected: PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add admin-web/src/App.tsx admin-web/src/layouts/AdminLayout.tsx admin-web/src/pages/DataFlywheel/index.test.tsx
+git add agri_admin_web/src/App.tsx agri_admin_web/src/layouts/AdminLayout.tsx agri_admin_web/src/pages/DataFlywheel/index.test.tsx
 git commit -m "feat: add data flywheel admin route"
 ```
 
@@ -2893,7 +2893,7 @@ Expected: PASS.
 Run:
 
 ```bash
-cd admin-web && pnpm exec vitest run src/api/dataFlywheel.test.ts src/pages/DataFlywheel/index.test.tsx
+cd agri_admin_web && pnpm exec vitest run src/api/dataFlywheel.test.ts src/pages/DataFlywheel/index.test.tsx
 ```
 
 Expected: PASS.
@@ -2903,7 +2903,7 @@ Expected: PASS.
 Run:
 
 ```bash
-cd admin-web && pnpm lint && pnpm build
+cd agri_admin_web && pnpm lint && pnpm build
 ```
 
 Expected: PASS.
@@ -2914,7 +2914,7 @@ Start the backend and frontend in separate terminals:
 
 ```bash
 cd backend && poetry run uvicorn app.main:app --reload
-cd admin-web && pnpm dev
+cd agri_admin_web && pnpm dev
 ```
 
 Open the Vite URL, log in as an admin user, then verify:

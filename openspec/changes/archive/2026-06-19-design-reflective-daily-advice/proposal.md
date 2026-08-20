@@ -28,5 +28,5 @@
 - 反思框架：`backend/app/agent/reflector/` 需要增加今日建议专用检查入口或通用结构化生成检查能力。
 - 候选模型：`backend/app/services/daily_advice_models.py` 可扩展为生成稳定 `compact/detail` fallback 所需的类别、来源、默认 actions 和默认 steps。
 - Prompt：`backend/prompts/daily_advice.j2` 需要改为 v2 JSON 输出约束，强调只补全文案，不允许新增候选外建议。
-- 移动端：`mobile-app/lib/data/api/api_models.dart` 和首页/详情页 view model 需要消费同一份响应结构。
+- 移动端：`../../../../agri_mobile_app/lib/data/api/api_models.dart` 和首页/详情页 view model 需要消费同一份响应结构。
 - 测试：新增后端 schema/validator/retry/fallback/cache 测试，以及移动端解析和首页到详情传参测试。

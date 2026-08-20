@@ -11,7 +11,7 @@ from pathlib import Path
 MODULE_PATH = (
     Path(__file__).resolve().parents[1]
     / "agent"
-    / "skills"
+    / "tools"
     / "calculate-arithmetic"
     / "scripts"
     / "main.py"

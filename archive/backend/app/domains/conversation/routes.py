@@ -175,7 +175,7 @@ def get_session_debug_export(
     db: Session = Depends(get_db),
     farm: Farm = Depends(get_effective_auth_context_farm),
 ) -> dict:
-    """导出会话调试 JSON v2。"""
+    """导出会话调试 JSON agri_backend_v2。"""
     return build_session_debug_export(db, farm_id=farm.id, session_id=session_id)
 
 

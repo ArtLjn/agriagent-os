@@ -6,10 +6,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from agent.core import react
-from agent.core.turn import Turn
-from agent.infra import mcp_client
-from agent.skills.context import SkillContext
+from agent.domains.harness.runtime import engine as react
+from agent.domains.harness.runtime.turn import Turn
+from agent.platforms.mcp import client as mcp_client
+from agent.domains.harness.tools.context import SkillContext
 
 
 class _FlakyClient:

@@ -363,7 +363,7 @@ export default function Playground() {
     }
   }, []);
 
-  /* ── 加载 dev 用户列表（v2 agent /api/v2/dev-users）── */
+  /* ── 加载 dev 用户列表（agri_backend_v2 agent /api/agri_backend_v2/dev-users）── */
   const loadDevUsers = useCallback(async () => {
     try {
       const users = await listDevUsers();
@@ -391,7 +391,7 @@ export default function Playground() {
     updateSession(sid, () => ({ ...emptySessionState(), loading: true }));
     try {
       const msgs = await getConversationMessages(sid);
-      // v2 agent 只返回 role/content/created_at；skills/pendingAction 仅来自 SSE 流，历史消息无此字段
+      // agri_backend_v2 agent 只返回 role/content/created_at；skills/pendingAction 仅来自 SSE 流，历史消息无此字段
       const loaded: Message[] = msgs.map((m: ConversationMessage, idx: number) => ({
         id: `history-${idx}-${m.role}`,
         role: m.role as 'user' | 'assistant',
@@ -431,7 +431,7 @@ export default function Playground() {
     try {
       const persistedMessages = await getConversationMessages(sid);
       if (persistedMessages.length > 0) {
-        // v2 agent 历史消息只有 role/content，skills/pendingAction 仅存在于当前会话 SSE 流中
+        // agri_backend_v2 agent 历史消息只有 role/content，skills/pendingAction 仅存在于当前会话 SSE 流中
         sourceMessages = persistedMessages.map((m) => ({
           role: m.role,
           content: m.content,
@@ -455,7 +455,7 @@ export default function Playground() {
     const ok = await copyAsyncText({
       placeholder: `正在准备调试 JSON...\nconversation_id: ${sid}`,
       loadText: async () => {
-        // v2 agent 无独立 debug export 端点，始终走本地 fallback 构建
+        // agri_backend_v2 agent 无独立 debug export 端点，始终走本地 fallback 构建
         return buildFallbackSessionDebugJson(sid);
       },
     });
@@ -838,7 +838,7 @@ export default function Playground() {
                 setSessionId(sid);
                 setSessions({ [sid]: emptySessionState() });
                 setConversations([]);
-                // v2 agent 通过 token 识别用户身份，listConversations 不需要 user_id 参数
+                // agri_backend_v2 agent 通过 token 识别用户身份，listConversations 不需要 user_id 参数
                 void listConversations(50).then(setConversations).catch(() => {
                   message.error('加载会话列表失败');
                 });

@@ -20,9 +20,9 @@
 | 修改 | `backend/app/schemas/agent.py:17-23` | 修改 `PendingActionResponse` 增加 `context` 字段 |
 | 修改 | `backend/app/agent/advisor.py:56-127,130-239` | 在 `invoke_advisor` / `stream_advisor` 入口增加意图路由 `_route_intent()` |
 | 新增 | `backend/app/agent/intent_router.py` | 意图路由函数 `_classify_intent()` — 基于规则匹配问候/查询/写操作 |
-| 修改 | `admin-web/src/api/agent.ts:57-66` | 修改 `PendingAction` 接口增加 `context` 字段 |
-| 修改 | `admin-web/src/pages/Agent/index.tsx:57-86` | 修改 `ChatBubble` 展示三层确认信息 |
-| 修改 | `admin-web/src/pages/Playground/index.tsx:76-118` | 修改 Playground `ChatBubble` 展示三层确认信息 |
+| 修改 | `../../../../agri_admin_web/src/api/agent.ts:57-66` | 修改 `PendingAction` 接口增加 `context` 字段 |
+| 修改 | `../../../../agri_admin_web/src/pages/Agent/index.tsx:57-86` | 修改 `ChatBubble` 展示三层确认信息 |
+| 修改 | `../../../../agri_admin_web/src/pages/Playground/index.tsx:76-118` | 修改 Playground `ChatBubble` 展示三层确认信息 |
 | 新增 | `backend/tests/test_intent_router.py` | 意图路由单元测试 |
 | 新增 | `backend/tests/test_schema_constraint.py` | 动态 enum + Pydantic 校验测试 |
 | 修改 | `backend/tests/test_pending_actions.py` | 新增三层确认消息测试 |
@@ -977,13 +977,13 @@ git commit -m "feat(agent): 规则式意图路由，问候语直接回复不触�
 ## Task 5: 前端适配 — 展示三层确认消息
 
 **Files:**
-- Modify: `admin-web/src/api/agent.ts:57-66`
-- Modify: `admin-web/src/pages/Agent/index.tsx:57-86`
-- Modify: `admin-web/src/pages/Playground/index.tsx:76-118`
+- Modify: `../../../../agri_admin_web/src/api/agent.ts:57-66`
+- Modify: `../../../../agri_admin_web/src/pages/Agent/index.tsx:57-86`
+- Modify: `../../../../agri_admin_web/src/pages/Playground/index.tsx:76-118`
 
 - [ ] **Step 1: 更新 TypeScript 类型**
 
-修改 `../../../../admin-web/src/api/agent.ts` 的 `PendingAction` 接口（第 57-60 行）：
+修改 `../../../../agri_admin_web/src/api/agent.ts` 的 `PendingAction` 接口（第 57-60 行）：
 
 ```typescript
 export interface PendingActionContext {
@@ -1002,7 +1002,7 @@ export interface PendingAction {
 
 - [ ] **Step 2: 更新 Agent ChatBubble 展示 context**
 
-修改 `../../../../admin-web/src/pages/Agent/index.tsx` 的 `ChatBubble` 组件（约第 57-86 行），在 pending action 的确认/取消按钮上方，增加 context 展示区域：
+修改 `../../../../agri_admin_web/src/pages/Agent/index.tsx` 的 `ChatBubble` 组件（约第 57-86 行），在 pending action 的确认/取消按钮上方，增加 context 展示区域：
 
 找到渲染 pending action 按钮的位置（确认/取消按钮附近），在按钮之前添加：
 
@@ -1021,7 +1021,7 @@ export interface PendingAction {
 
 - [ ] **Step 3: 更新 Playground ChatBubble**
 
-在 `../../../../admin-web/src/pages/Playground/index.tsx` 中做同样的修改，在 Playground 的 `ChatBubble` 中增加 context 展示（结构和 Agent 页面一致）。
+在 `../../../../agri_admin_web/src/pages/Playground/index.tsx` 中做同样的修改，在 Playground 的 `ChatBubble` 中增加 context 展示（结构和 Agent 页面一致）。
 
 - [ ] **Step 4: 手动验证**
 
@@ -1035,7 +1035,7 @@ Run: `cd admin-web && pnpm dev`
 - [ ] **Step 5: 提交**
 
 ```bash
-git add admin-web/src/api/agent.ts admin-web/src/pages/Agent/index.tsx admin-web/src/pages/Playground/index.tsx
+git add agri_admin_web/src/api/agent.ts agri_admin_web/src/pages/Agent/index.tsx agri_admin_web/src/pages/Playground/index.tsx
 git commit -m "feat(frontend): 展示三层确认消息（理解/参数/操作）"
 ```
 

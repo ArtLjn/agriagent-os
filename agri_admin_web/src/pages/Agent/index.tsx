@@ -194,7 +194,7 @@ function ChatTab({ cycles, selectedCycle, setSelectedCycle }: { cycles: CropCycl
   );
 }
 
-/* v2 当前只提供 Agent 对话和审批流；每日建议、报告、历史接口尚未纳入 v2。 */
+/* agri_backend_v2 当前只提供 Agent 对话和审批流；每日建议、报告、历史接口尚未纳入 agri_backend_v2。 */
 function V2Unavailable({ title }: { title: string }) {
   return (
     <div style={{ height: 'calc(100vh - 220px)', display: 'grid', placeItems: 'center', color: TEXT_DIM }}>

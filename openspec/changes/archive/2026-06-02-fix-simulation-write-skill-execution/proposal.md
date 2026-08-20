@@ -23,5 +23,5 @@ Agent 仿真测试平台的 write skills 测试大面积失败（12/14 失败）
 
 - **后端**: `backend/app/simulation/routes.py`、`test_runner.py`、`consistency_checker.py`、`state_snapshot.py`
 - **测试用例**: `backend/data/simulation_cases/*.json` 可能需要调整预期
-- **前端**: `admin-web/src/pages/Simulation/index.tsx` 需要新增 `execution_failure` 的错误展示
+- **前端**: `../../../../agri_admin_web/src/pages/Simulation/index.tsx` 需要新增 `execution_failure` 的错误展示
 - **数据库**: 不影响现有业务表，仅影响仿真测试的 snapshot 查询

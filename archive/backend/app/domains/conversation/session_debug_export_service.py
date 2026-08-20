@@ -1,4 +1,4 @@
-"""Session debug export v2 组装服务。"""
+"""Session debug export agri_backend_v2 组装服务。"""
 
 from pathlib import Path
 from typing import Any
@@ -56,7 +56,7 @@ def build_session_debug_export(
                 }
             )
     return {
-        "format": "farm-manager.chat-session-debug.v2",
+        "format": "farm-manager.chat-session-debug.agri_backend_v2",
         "session": {
             "id": conversation.id if conversation else None,
             "farm_id": farm_id,

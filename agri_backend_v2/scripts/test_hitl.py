@@ -14,7 +14,7 @@ if _PARENT not in sys.path:
     sys.path.insert(0, _PARENT)
 
 import httpx
-from agent.infra.logging import setup_logging
+from agent.platforms.logging import setup_logging
 
 AGENT = "http://127.0.0.1:8000"
 

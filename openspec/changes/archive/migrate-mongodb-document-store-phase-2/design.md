@@ -152,7 +152,7 @@
 
 ### 8. `agent_turns.rule_hits` 评估输出
 
-**选择**: 本变更增加评估任务，产出 `docs/database/mongodb-agent-turn-rule-hits-evaluation.md` 或同等文档，包含数据量、字段大小、查询路径、索引收益、迁移收益和推荐结论。
+**选择**: 本变更增加评估任务，产出 `../../../../archive/docs/database/mongodb-agent-turn-rule-hits-evaluation.md` 或同等文档，包含数据量、字段大小、查询路径、索引收益、迁移收益和推荐结论。
 
 评估点：
 

@@ -15,14 +15,14 @@ description: Use when debugging farm-manager Agent request chains, trace evidenc
 2. 在项目根目录运行脚本。旧版 archive/backend 链路仍使用：
 
 ```bash
-v2/.venv/bin/python .codex/skills/trace-chain-debugger/scripts/analyze_trace_chain.py --project . --request-id 0744f155
+agri_backend_v2/.venv/bin/python .codex/skills/trace-chain-debugger/scripts/analyze_trace_chain.py --project . --request-id 0744f155
 ```
 
 v2 Agent 使用字符串 `turn_id`，并把 trace 存在 MongoDB 的 `traceRecords`；使用 v2 兼容模式：
 
 ```bash
 python .codex/skills/trace-chain-debugger/scripts/analyze_trace_chain.py \
-  --project . --v2 --turn-id a93fdbf47d7a
+  --project . --agri_backend_v2 --turn-id a93fdbf47d7a
 ```
 
 脚本会先通过 v2 `/traces` 列表把 `turn_id` 解析为对应的 `trace_id`（当前兼容响应可能仍叫 `request_id`），再读取 trace 节点和会话消息。
@@ -48,7 +48,7 @@ read -r -s V2_AGENT_PASSWORD
 export V2_AGENT_PASSWORD
 
 python .codex/skills/trace-chain-debugger/scripts/analyze_trace_chain.py \
-  --project . --v2 --trace-id <trace_id> --include-events
+  --project . --agri_backend_v2 --trace-id <trace_id> --include-events
 ```
 
 `V2_AGENT_AUTO_AUTH=0` 可以关闭自动鉴权。生产或非本机地址不会调用 `/dev-users`；应通过环境变量提供显式 Authorization 或登录凭据。鉴权失败会保留 `401/403`、登录失败和开发用户歧义等状态，不会伪装成空 Trace。
@@ -56,7 +56,7 @@ python .codex/skills/trace-chain-debugger/scripts/analyze_trace_chain.py \
 ## v2 调试召回模式
 
 v2 的正式链路主键和召回边界见 `references/v2-trace-recall-design.md` 以及
-`v2/docs/spec/2026-08-18-agent-trace-observability-and-recall-design.md`。
+`../../../agri_backend_v2/docs/spec/2026-08-18-agent-trace-observability-and-recall-design.md`。
 
 ### 单轮 Turn
 
@@ -123,7 +123,7 @@ GET /api/v2/traces/{trace_id}/timeline
 
 ```bash
 python .codex/skills/trace-chain-debugger/scripts/analyze_trace_chain.py \
-  --project . --v2 --turn-id <turn_id>
+  --project . --agri_backend_v2 --turn-id <turn_id>
 ```
 
 当前支持参数：`--trace-id`、`--conversation-id`、`--include-events`、`--include-payload`、`--json`。`traceEvents` 集合未创建或不可用时必须报告 `not_available(v2_api)`/`unavailable`，不能静默转为空事件。

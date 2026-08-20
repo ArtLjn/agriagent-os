@@ -196,7 +196,7 @@ describe('LlmContextInspector', () => {
     expect(document.body.textContent).toContain('"system_prompt"');
   });
 
-  it('展示 schema v2 的上下文分类、压缩状态、Runtime Context 和工具消息元数据', () => {
+  it('展示 schema agri_backend_v2 的上下文分类、压缩状态、Runtime Context 和工具消息元数据', () => {
     render(
       <LlmContextInspector
         snapshot={v2Snapshot}

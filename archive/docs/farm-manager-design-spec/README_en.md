@@ -111,8 +111,8 @@ Full architecture, API contracts, Agent runtime rules, and project governance li
 | Prompt Engineering | Prompt registry, snippet composition, rendering, replay | `backend/app/prompt/` |
 | Data Flywheel | Sample queue, LLM pre-labeling, human confirmation, issue chain, repair pack | `backend/app/platforms/data_flywheel/` |
 | Simulation & Evaluation | Simulation cases, evaluation replay, router regression, report aggregation | `backend/app/platforms/evaluation/` |
-| Admin Console | Trace, Token, Skill, Prompt, Playground, users, weather, data flywheel | `../../../admin-web/src` |
-| Mobile App | Home, workspace, AI assistant, ledger, crop templates, profile settings | `../../../mobile-app/lib` |
+| Admin Console | Trace, Token, Skill, Prompt, Playground, users, weather, data flywheel | `../../../agri_admin_web/src` |
+| Mobile App | Home, workspace, AI assistant, ledger, crop templates, profile settings | `../../../agri_mobile_app/lib` |
 
 <h2 id="architecture-highlights">🏗️ Architecture Highlights</h2>
 
@@ -146,8 +146,8 @@ AgriAgentOS is not just an LLM wired to a chat box. It separates risky writes, c
 | `backend/app/agent/` | Runtime, planner, executor, guardrails, reflection | Decomposable Agent execution |
 | `backend/app/skills/` | Skill implementation, registration, permission, schema | Governable and testable tools |
 | `backend/app/platforms/` | admin, data_flywheel, evaluation, simulation | Platform capabilities isolated from domains |
-| `../../../admin-web` | React admin console | Operations, evaluation, traces, and data flywheel |
-| `../../../mobile-app` | Flutter mobile app | User-facing operations workspace |
+| `../../../agri_admin_web` | React admin console | Operations, evaluation, traces, and data flywheel |
+| `../../../agri_mobile_app` | Flutter mobile app | User-facing operations workspace |
 
 ## Project Structure
 
@@ -216,7 +216,7 @@ uvicorn app.main:app --reload
 Admin console:
 
 ```bash
-cd admin-web
+cd agri_admin_web
 pnpm install
 pnpm dev
 ```
@@ -224,7 +224,7 @@ pnpm dev
 Mobile app:
 
 ```bash
-cd mobile-app
+cd agri_mobile_app
 flutter pub get
 flutter run
 ```
@@ -238,12 +238,12 @@ ruff check .
 pytest -v
 
 # Admin console
-cd admin-web
+cd agri_admin_web
 pnpm lint
 pnpm test
 
 # Mobile app
-cd mobile-app
+cd agri_mobile_app
 flutter analyze
 flutter test
 ```

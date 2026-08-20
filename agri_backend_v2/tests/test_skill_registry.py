@@ -4,17 +4,17 @@ from pathlib import Path
 
 import pytest
 
-from agent.skills.registry import SkillRegistry, SkillRegistryError
+from agent.domains.harness.tools.registry import SkillRegistry, SkillRegistryError
 
 
 def test_from_directory_loads_current_skill_catalog() -> None:
-    skills_dir = Path(__file__).parents[1] / "agent" / "skills"
+    skills_dir = Path(__file__).parents[1] / "agent" / "tools"
 
     registry = SkillRegistry.from_directory(skills_dir)
     snapshot = registry.snapshot()
 
-    assert len(registry.all()) == 49
-    assert len(registry.exposed_tools()) == 48
+    assert len(registry.all()) == 53
+    assert len(registry.exposed_tools()) == 52
     assert "get_weather" in snapshot["skill_names"]
     assert "commit_planting_plan" not in snapshot["exposed_tool_names"]
     assert snapshot["risk_levels"] == tuple(sorted(snapshot["risk_levels"]))

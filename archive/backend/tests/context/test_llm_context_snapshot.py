@@ -1,4 +1,4 @@
-"""final_llm_context v2 快照契约测试。"""
+"""final_llm_context agri_backend_v2 快照契约测试。"""
 
 import json
 
@@ -20,7 +20,7 @@ class FakeCollector:
 
 
 def test_final_llm_context_snapshot_v2_is_structured_and_sanitized() -> None:
-    """最终 LLM 快照应包含 v2 结构、压缩信息，并脱敏敏感内容。"""
+    """最终 LLM 快照应包含 agri_backend_v2 结构、压缩信息，并脱敏敏感内容。"""
     collector = FakeCollector()
     bundle = ContextBundle(
         blocks=[

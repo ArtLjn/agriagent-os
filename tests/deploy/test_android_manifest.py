@@ -6,7 +6,7 @@ from pathlib import Path
 
 ANDROID_NS = "http://schemas.android.com/apk/res/android"
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-MANIFEST = PROJECT_ROOT / "mobile-app/android/app/src/main/AndroidManifest.xml"
+MANIFEST = PROJECT_ROOT / "agri_mobile_app/android/app/src/main/AndroidManifest.xml"
 
 
 def test_release_manifest_allows_backend_network_requests() -> None:

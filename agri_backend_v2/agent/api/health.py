@@ -10,8 +10,8 @@ from fastapi import HTTPException
 from agent.api import api_router
 from agent.config import settings
 from agent.deps import pending_approvals
-from agent.infra.redis_store import get_client, key, status as redis_status
-from agent.infra.turn_store import pending_approval_count
+from agent.platforms.persistence.redis.redis_store import get_client, key, status as redis_status
+from agent.platforms.persistence.redis.turn_store import pending_approval_count
 
 logger = logging.getLogger(__name__)
 

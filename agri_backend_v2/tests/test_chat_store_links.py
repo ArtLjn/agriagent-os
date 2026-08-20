@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from agent.infra import chat_store
+from agent.platforms.persistence.mongo import chat_store
 
 
 class FakeCursor:

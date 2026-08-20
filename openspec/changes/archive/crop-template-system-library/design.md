@@ -3,7 +3,7 @@
 当前作物模版（`CropTemplate` + `GrowthStage`）管理存在三个事实：
 
 1. **数据模型**：[models/crop.py:13](backend/app/models/crop.py#L13) `farm_id` 为 `NOT NULL` 且默认 `1`，模型层无唯一约束，技术允许任意重复。
-2. **API 层**：[api/crop.py:24](backend/app/api/crop.py#L24) `POST /crops/templates` 直接调 `create_crop_template` 入库，无任何查重；前端 `admin-web` 直连此接口。
+2. **API 层**：[api/crop.py:24](backend/app/api/crop.py#L24) `POST /crops/templates` 直接调 `create_crop_template` 入库，无任何查重；前端 `agri_admin_web` 直连此接口。
 3. **Skill 层**：[create-crop-template/scripts/main.py:69-77](backend/app/agent/skills/create-crop-template/scripts/main.py#L69-L77) 通过 `crop_service.find_template_by_name` 做软查重，而该方法 [crop_service.py:11-22](backend/app/services/crop_service.py#L11-L22) 使用 `name.ilike(f"%{crop_name}%")`，存在子串误匹配（"瓜"命中"西瓜"）和不区分 `variety`（春季版挡住秋季版）两个缺陷。
 
 新用户冷启动路径只有一条：调用 Skill → LLM 凭空生成 4 阶段 → 入库。没有"先用成熟方案"的路径，质量取决于 LLM 单次输出。
@@ -92,7 +92,7 @@ Admin Web 中管理员账号同时具备 admin 权限和 app 业务账号数据�
 
 - **[Risk] `farm_id` 现有外键约束阻止 NULL** → Migration：先 alembic 放宽 `NOT NULL` → `NULL`，保留外键；现有数据 `farm_id = 1` 不受影响；上线前验证 `SELECT 1 FROM crop_templates WHERE farm_id IS NULL` 在 schema 层被允许。
 - **[Risk] 精确查重的 stages 比对在大数据集下性能差** → 已有短路优化（先 name+variety 过滤）；当前作物模版量小（单农场 < 100 条），不会成为瓶颈；如果未来出现性能问题，再加 `(farm_id, name, variety)` 联合索引。
-- **[Risk] 系统模版内容质量风险** → seed 数据必须人工审核；写一份 `docs/design/crop-template-system-library.md` 列出初始清单和审核人；本期禁止任何 LLM 自动写入系统库。
+- **[Risk] 系统模版内容质量风险** → seed 数据必须人工审核；写一份 `../../../../archive/docs/design/crop-template-system-library.md` 列出初始清单和审核人；本期禁止任何 LLM 自动写入系统库。
 - **[Risk] 用户多次导入同一系统模版产生重复** → 导入路径复用 `find_exact_duplicate`，命中则提示"已导入过，是否查看现有"。
 - **[Risk] Skill 模糊匹配移除后，部分老用户对话体验变化** → 旧行为是"已存在则直接 SUCCESS 不创建"；新行为是"完全相同则不创建、相似则推荐选择"，对用户更友好，不构成回归。
 
@@ -109,7 +109,7 @@ Admin Web 中管理员账号同时具备 admin 权限和 app 业务账号数据�
    - `create_crop_template` 移除 `ilike`，改用精确查重 + 系统库推荐。
 
 3. **Phase 3（前端）**：
-   - `admin-web` 在"业务运营"下新增"系统模板"页面（分类 + 多选 + 一键导入）。
+   - `agri_admin_web` 在"业务运营"下新增"系统模板"页面（分类 + 多选 + 一键导入）。
    - 管理员个人 app 账号下的作物模板、种植周期、农事日志、成本记账、天气预报和 AI 助手归入"业务调试"。
    - "作物模板"列表处理用户副本与重复创建提示；"系统模板"作为平台预置资产入口。
 

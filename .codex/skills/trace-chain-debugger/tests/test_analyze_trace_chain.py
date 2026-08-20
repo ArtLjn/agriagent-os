@@ -1,4 +1,4 @@
-"""trace-chain-debugger v2 召回协议测试，不连接真实服务。"""
+"""trace-chain-debugger agri_backend_v2 召回协议测试，不连接真实服务。"""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ def args_for(**overrides):
         "trace_id": None,
         "conversation_id": None,
         "farm_id": None,
-        "v2": True,
+        "agri_backend_v2": True,
         "v2_base_url": "http://agent.test",
         "limit": 2,
         "include_payload": False,
@@ -116,7 +116,7 @@ class V2RecallTest(unittest.TestCase):
             parsed = urlparse(url)
             path = parsed.path
             query = parse_qs(parsed.query)
-            if path == "/api/v2/traces":
+            if path == "/api/agri_backend_v2/traces":
                 if query.get("cursor") == ["c1"]:
                     return {
                         "items": [
@@ -250,8 +250,8 @@ class V2RecallTest(unittest.TestCase):
         finally:
             MODULE.v2_get_json = original
 
-        self.assertTrue(any("/api/v2/traces/trace-1/nodes" in call for call in calls))
-        self.assertTrue(any("/api/v2/traces/trace-1?" in call for call in calls))
+        self.assertTrue(any("/api/agri_backend_v2/traces/trace-1/nodes" in call for call in calls))
+        self.assertTrue(any("/api/agri_backend_v2/traces/trace-1?" in call for call in calls))
         self.assertEqual(report.status.events, "not_available(v2_api)")
         self.assertTrue(
             any(

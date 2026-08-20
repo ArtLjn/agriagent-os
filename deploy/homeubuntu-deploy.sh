@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# HomeUbuntu 一键部署：Docker Compose 部署 mysql/mongo/backend/admin-web，并接入宿主机 nginx。
+# HomeUbuntu 一键部署：Docker Compose 部署 mysql/mongo/backend/agri_admin_web，并接入宿主机 nginx。
 #
 # 用法：
 #   SSH_PASSWORD=****** bash deploy/homeubuntu-deploy.sh
@@ -32,7 +32,7 @@ while [ "$#" -gt 0 ]; do
     --server=*) SERVER="${1#--server=}"; SERVER_USER="${SERVER%@*}"; SERVER_HOST="${SERVER#*@}" ;;
     --remote-root=*) REMOTE_ROOT="${1#--remote-root=}" ;;
     --nginx-port=*) NGINX_PORT="${1#--nginx-port=}" ;;
-    --admin-web-port=*) ADMIN_WEB_PORT="${1#--admin-web-port=}" ;;
+    --agri_admin_web-port=*) ADMIN_WEB_PORT="${1#--agri_admin_web-port=}" ;;
     --backend-port=*) BACKEND_PORT="${1#--backend-port=}" ;;
     -h|--help)
       sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
@@ -108,7 +108,7 @@ package_project() {
     --exclude='.pytest_cache' \
     --exclude='.ruff_cache' \
     --exclude='node_modules' \
-    --exclude='admin-web/.env.production' \
+    --exclude='agri_admin_web/.env.production' \
     --exclude='backend/.venv' \
     --exclude='backend/data' \
     --exclude='backend/providers.json' \
@@ -117,7 +117,7 @@ package_project() {
     .dockerignore \
     docker-compose.yaml \
     backend \
-    admin-web \
+    agri_admin_web \
     shared
   ok "已生成 ${TARBALL}"
 }

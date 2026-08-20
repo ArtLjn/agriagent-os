@@ -9,17 +9,17 @@ export default defineConfig({
       '/api/agent': {
         target: 'http://localhost:8000',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/agent/, '/api/v2'),
+        rewrite: (path) => path.replace(/^\/api\/agent/, '/api/agri_backend_v2'),
       },
       '/api/admin/traces': {
         target: 'http://localhost:8000',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/admin/, '/api/v2'),
+        rewrite: (path) => path.replace(/^\/api\/admin/, '/api/agri_backend_v2'),
       },
       '/api': {
         target: 'http://localhost:9876',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, '/api/v2'),
+        rewrite: (path) => path.replace(/^\/api/, '/api/agri_backend_v2'),
       },
     },
   },

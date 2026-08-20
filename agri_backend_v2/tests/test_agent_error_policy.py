@@ -6,9 +6,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from agent.core import react
-from agent.core.turn import StopReason, Turn
-from agent.infra import error_policy, llm
+from agent.domains.harness.runtime import engine as react
+from agent.domains.harness.runtime.turn import StopReason, Turn
+from agent.domains.harness.runtime import error_policy
+from agent.platforms.llm import client as llm
 
 
 @pytest.mark.parametrize(

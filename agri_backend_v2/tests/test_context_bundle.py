@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from agent.core import context, memory
-from agent.core.context_models import ContextBlockStatus
+from agent.domains.harness.context import builder as context
+from agent.domains.harness.memory import service as memory
+from agent.domains.harness.context.models import ContextBlockStatus
 
 
 def test_short_memory_summary_is_separate_and_long_memory_is_opt_in() -> None:

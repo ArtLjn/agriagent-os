@@ -6,7 +6,7 @@ import importlib.util
 import sys
 from pathlib import Path
 
-from agent.infra.trace.context import clear_trace
+from agent.domains.harness.observability.trace.context import clear_trace
 
 
 def _load_debugger():

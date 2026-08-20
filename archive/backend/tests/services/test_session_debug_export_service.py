@@ -98,7 +98,7 @@ def test_build_session_debug_export_includes_messages_turns_pending_and_events(
 
     result = build_session_debug_export(db, farm_id=1, session_id="sess-debug")
 
-    assert result["format"] == "farm-manager.chat-session-debug.v2"
+    assert result["format"] == "farm-manager.chat-session-debug.agri_backend_v2"
     assert len(result["messages"]) == 2
     assert result["turns"][0]["request_id"] == "abcd1234"
     assert result["events"][0]["event_type"] == "message.user"

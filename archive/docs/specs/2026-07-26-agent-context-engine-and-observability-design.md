@@ -414,8 +414,8 @@ TraceMonitor 保留面向链路排查的视角，但在 `context_build` 和 `fin
 
 前端：
 
-- `../../../admin-web/src/pages/Playground/LlmContextInspector.test.tsx`：抽屉展示指标、分组、压缩状态和 messages。
-- `../../../admin-web/src/pages/TraceMonitor/index.test.tsx`：context_build 与 final_llm_context 节点分别渲染。
+- `../../../agri_admin_web/src/pages/Playground/LlmContextInspector.test.tsx`：抽屉展示指标、分组、压缩状态和 messages。
+- `../../../agri_admin_web/src/pages/TraceMonitor/index.test.tsx`：context_build 与 final_llm_context 节点分别渲染。
 - 敏感字段测试：API key、Authorization、password 不出现在 UI。
 
 验证命令：
@@ -423,7 +423,7 @@ TraceMonitor 保留面向链路排查的视角，但在 `context_build` 和 `fin
 ```bash
 ruff check . && ruff format .
 poetry run pytest -v backend/tests/context
-pnpm test -- --run admin-web/src/pages/Playground admin-web/src/pages/TraceMonitor
+pnpm test -- --run agri_admin_web/src/pages/Playground agri_admin_web/src/pages/TraceMonitor
 bash scripts/check-complexity-budget.sh
 ```
 

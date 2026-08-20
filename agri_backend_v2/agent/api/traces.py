@@ -8,7 +8,7 @@ from fastapi import Header, HTTPException, Query
 
 from agent.api import api_router
 from agent.auth import parse_identity
-from agent.infra.trace.store import (
+from agent.domains.harness.observability.trace.store import (
     get_trace_events,
     get_trace_nodes,
     get_trace_summary,

@@ -3,8 +3,8 @@
 #
 # 备份来源:
 #   farm-backup-*           ← deploy/server-sync.sh
-#   farm-admin-web-backup-* ← deploy/admin-web-deploy.sh
-#   farm-index-backup-*     ← deploy/farm-index-deploy.sh
+#   farm-agri_admin_web-backup-* ← deploy/agri_admin_web-deploy.sh
+#   agri_home_index-backup-*     ← deploy/agri_home_index-deploy.sh
 #
 # 用法:
 #   bash deploy/clean-tmp-backups.sh                    # 预览（dry-run）
@@ -20,8 +20,8 @@ OLDER_THAN_DAYS=0
 APPLY="false"
 DEFAULT_PATTERNS=(
     'farm-backup-*'
-    'farm-admin-web-backup-*'
-    'farm-index-backup-*'
+    'farm-agri_admin_web-backup-*'
+    'agri_home_index-backup-*'
 )
 PATTERNS=()
 

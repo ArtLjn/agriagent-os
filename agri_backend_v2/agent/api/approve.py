@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from agent.api import api_router
 from agent.auth import parse_identity
-from agent.infra.turn_store import get_turn, resolve_approval
+from agent.platforms.persistence.redis.turn_store import get_turn, resolve_approval
 
 
 class ApproveRequest(BaseModel):

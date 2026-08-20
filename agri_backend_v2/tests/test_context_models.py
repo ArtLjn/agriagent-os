@@ -1,6 +1,6 @@
 """Context 数据模型契约测试。"""
 
-from agent.core.context_models import (
+from agent.domains.harness.context.models import (
     BudgetDecision,
     ContextBlock,
     ContextBlockStatus,

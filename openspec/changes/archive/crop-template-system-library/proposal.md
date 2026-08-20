@@ -46,4 +46,4 @@
 - **Agent Skill**：[create-crop-template](backend/app/agent/skills/create-crop-template/scripts/main.py) 移除 `ilike` 匹配，改为调用 service 精确查重 + 推荐系统模版。
 - **Admin Web**：新增"系统模版库"页面与"我的模版库"区分展示。
 - **数据库迁移**：alembic 新增一个迁移放宽 `crop_templates.farm_id` 约束；新增 seed 数据加载脚本。
-- **文档**：`docs/design/` 新增设计文档；`docs/reference/api-spec.yaml` 同步新增端点。
+- **文档**：`../../../../archive/docs/design/` 新增设计文档；`../../../../archive/docs/reference/api-spec.yaml` 同步新增端点。

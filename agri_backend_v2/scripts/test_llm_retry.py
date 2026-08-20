@@ -26,10 +26,10 @@ if _PARENT not in sys.path:
     sys.path.insert(0, _PARENT)
 
 # 降低重试间隔，让测试跑得快
-import agent.infra.llm as llm_mod
+from agent.platforms.llm import client as llm_mod
 llm_mod.RETRY_DELAY_SECONDS = 0.01
 
-from agent.infra import llm  # noqa: E402
+from agent.platforms.llm import client as llm  # noqa: E402
 
 
 # ─── Mock 工具：构造假的 OpenAI stream response ────────────────

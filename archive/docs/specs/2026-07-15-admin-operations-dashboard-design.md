@@ -12,14 +12,14 @@ status: draft
 | 路径 | [docs/specs/2026-07-15-admin-operations-dashboard-design.md](2026-07-15-admin-operations-dashboard-design.md) |
 | 创建日期 | 2026-07-15 |
 | 状态 | draft（待评审） |
-| 关联前端 | `../../../admin-web/src/pages/Dashboard/index.tsx` |
+| 关联前端 | `../../../agri_admin_web/src/pages/Dashboard/index.tsx` |
 | 关联后端 | `backend/app/api/admin/dashboard.py`（新增） |
 
 ---
 
 ## 1. 背景
 
-现有 `../../../admin-web/src/pages/Dashboard/index.tsx` 是农户视角（周期数、天气、AI 建议、单农场收支），但 admin 后台农户不使用，**实际受众只有管理员**。需要改为管理员能看的平台运营基础数据。
+现有 `../../../agri_admin_web/src/pages/Dashboard/index.tsx` 是农户视角（周期数、天气、AI 建议、单农场收支），但 admin 后台农户不使用，**实际受众只有管理员**。需要改为管理员能看的平台运营基础数据。
 
 管理员最基本诉求：**平台有没有人在用、有没有业务在产出**。
 

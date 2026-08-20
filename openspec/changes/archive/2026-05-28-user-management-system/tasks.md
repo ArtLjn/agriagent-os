@@ -21,7 +21,7 @@
 
 ## 3. admin-web — 用户管理 API 层
 
-- [x] 3.1 创建 `admin-web/src/api/users.ts`：
+- [x] 3.1 创建 `../../../../agri_admin_web/src/api/users.ts`：
   - `listUsers(params)` → `GET /admin/users`
   - `getUserDetail(userId)` → `GET /admin/users/{user_id}`
   - `updateUserStatus(userId, status)` → `PUT /admin/users/{user_id}/status`
@@ -30,7 +30,7 @@
 
 ## 4. admin-web — 用户列表页面
 
-- [x] 4.1 创建 `admin-web/src/pages/Users/index.tsx`：
+- [x] 4.1 创建 `../../../../agri_admin_web/src/pages/Users/index.tsx`：
   - Ant Design Table 展示用户列表
   - 列：手机号、昵称、角色、状态（带颜色标签）、注册时间、操作
   - 状态筛选器（全部/正常/已禁用）
@@ -39,8 +39,8 @@
   - 操作列：查看详情按钮、禁用/启用按钮
 - [x] 4.2 状态标签颜色：active → 绿色，disabled → 红色
 - [x] 4.3 禁用/启用操作需二次确认（Modal.confirm）
-- [x] 4.4 更新 `admin-web/src/App.tsx` 添加 `/users` 路由
-- [x] 4.5 更新 `admin-web/src/layouts/AdminLayout.tsx` 添加"用户管理"导航项
+- [x] 4.4 更新 `../../../../agri_admin_web/src/App.tsx` 添加 `/users` 路由
+- [x] 4.5 更新 `../../../../agri_admin_web/src/layouts/AdminLayout.tsx` 添加"用户管理"导航项
 
 ## 5. admin-web — 用户详情弹窗
 

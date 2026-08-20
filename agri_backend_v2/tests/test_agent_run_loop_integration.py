@@ -17,13 +17,13 @@ import httpx
 import pytest
 
 from agent.api import approve, chat
-from agent.core import react
-from agent.core.turn import Turn
-from agent.infra import worker
-from agent.infra.coordination import TurnAdmission, TurnLease
-from agent.skills.base import Skill, SkillResult
-from agent.skills.registry import SkillRegistry
-from agent.main import app
+from agent.domains.harness.runtime import engine as react
+from agent.domains.harness.runtime.turn import Turn
+from agent.application import worker
+from agent.platforms.persistence.redis.coordination import TurnAdmission, TurnLease
+from agent.domains.harness.tools.base import Skill, SkillResult
+from agent.domains.harness.tools.registry import SkillRegistry
+from agent.bootstrap.app import app
 
 
 TEST_IDENTITY = {

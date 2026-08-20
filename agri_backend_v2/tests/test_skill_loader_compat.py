@@ -1,6 +1,6 @@
 """Skill Loader 聚合配置审计入口和 Runtime 展开入口契约测试。"""
 
-from agent.skills import loader
+from agent.domains.harness.tools import loader
 
 
 def test_aggregate_loader_keeps_mixed_skill_for_risk_audit() -> None:

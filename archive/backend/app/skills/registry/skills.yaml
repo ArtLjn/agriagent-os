@@ -69,7 +69,7 @@ capabilities:
       - 同比
       - 环比
       - 分析
-    version: v2
+    version: agri_backend_v2
     owner: agent-platform
     status: active
     context_dependencies:
@@ -147,7 +147,7 @@ capabilities:
       - 成本分类
       - 收入分类
       - 支出分类
-    version: v2
+    version: agri_backend_v2
     owner: agent-platform
     status: active
     context_dependencies:
@@ -201,7 +201,7 @@ capabilities:
       - 采收
       - 面积
       - 亩
-    version: v2
+    version: agri_backend_v2
     owner: agent-platform
     status: active
     context_dependencies:
@@ -292,7 +292,7 @@ capabilities:
       - 阶段模板
       - 生长阶段
       - 作物
-    version: v2
+    version: agri_backend_v2
     owner: agent-platform
     status: active
     context_dependencies:
@@ -356,7 +356,7 @@ capabilities:
       - 种植单元
       - 面积
       - 亩
-    version: v2
+    version: agri_backend_v2
     owner: agent-platform
     status: active
     context_dependencies:
@@ -401,7 +401,7 @@ capabilities:
       - 摘要
       - 活跃茬口
       - 经营情况
-    version: v2
+    version: agri_backend_v2
     owner: agent-platform
     status: active
     context_dependencies:
@@ -435,7 +435,7 @@ capabilities:
       - 用工
       - 付款状态
       - 作业范围
-    version: v2
+    version: agri_backend_v2
     owner: agent-platform
     status: active
     context_dependencies:
@@ -501,7 +501,7 @@ capabilities:
       - 劳务
       - 离职
       - 工资标准
-    version: v2
+    version: agri_backend_v2
     owner: agent-platform
     status: active
     context_dependencies:
@@ -554,7 +554,7 @@ capabilities:
       - 付款
       - 发薪
       - 出勤
-    version: v2
+    version: agri_backend_v2
     owner: agent-platform
     status: active
     context_dependencies:
@@ -616,7 +616,7 @@ capabilities:
       - 除草
       - 操作记录
       - 参与人追溯
-    version: v2
+    version: agri_backend_v2
     owner: agent-platform
     status: active
     context_dependencies:
@@ -670,7 +670,7 @@ capabilities:
       - 天气城市
       - 经纬度
       - 助手角色
-    version: v2
+    version: agri_backend_v2
     owner: agent-platform
     status: active
     context_dependencies:
@@ -712,7 +712,7 @@ capabilities:
       - 降雨
       - 气温
       - 预警
-    version: v2
+    version: agri_backend_v2
     owner: agent-platform
     status: active
     context_dependencies:
@@ -747,7 +747,7 @@ capabilities:
       - 价格
       - 行情
       - 实时
-    version: v2
+    version: agri_backend_v2
     owner: agent-platform
     status: active
     context_dependencies:

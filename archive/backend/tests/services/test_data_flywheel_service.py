@@ -410,7 +410,7 @@ def test_get_sample_detail_includes_events_and_debug_export(tmp_path):
     assert detail["tool_events"][0]["payload"]["tool_name"] == "manage_workers"
     assert detail["pending_lifecycle"][0]["event_type"] == "pending.plan.created"
     assert detail["source"]["event_seq_start"] == 1
-    assert detail["debug_export"]["format"] == "farm-manager.chat-session-debug.v2"
+    assert detail["debug_export"]["format"] == "farm-manager.chat-session-debug.agri_backend_v2"
     assert detail["issue_candidates"][0]["type"] == "pending_missed"
     db.close()
 

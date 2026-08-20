@@ -37,6 +37,8 @@
 4. **业务封在 business** — agent 不持有 DB 句柄、不写业务逻辑
 5. **最简实现优先** — 单文件 < 200 行，JSON 持久化，零额外依赖
 
+> 上述内容描述 v2 MVP 的当前实现约束。Agent Harness 的目标演进架构，以及从 Session 聚焦到 Context、Short Memory 和压缩机制的设计，见 [Agent Harness 设计总览](spec/2026-08-20-agent-harness-system-design.md)；具体落地契约见 [Context、Session 与 Memory 一体化设计](spec/2026-08-20-agent-context-session-memory-system-design.md)。
+
 ## 3. Skill 标准格式
 
 每个 skill 是一个目录，包含：
@@ -71,7 +73,7 @@ PYTHONDONTWRITEBYTECODE=1 python agri_backend_v2/scripts/validate_skill_metadata
 """<skill_name> skill 实现。"""
 from __future__ import annotations
 from typing import Any
-from agent.skills.base import Skill, SkillResult
+from agent.tools.base import Skill, SkillResult
 
 
 class <Name>Skill(Skill):
@@ -267,7 +269,10 @@ uv sync                                  # 装齐所有依赖
 uv run --package farm-manager-business python -m business.server
 
 # Terminal 2：agent FastAPI
-uv run --package farm-manager-agent python -m agent.main
+uv run --package farm-manager-agent python -m agent.bootstrap.app
+
+# 或直接执行入口文件
+# uv run --package farm-manager-agent python agent/bootstrap/app.py
 
 # 浏览器打开 http://127.0.0.1:8000
 ```

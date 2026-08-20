@@ -1,7 +1,7 @@
 import apiClient from './client';
 import type { TracePayload } from '../utils/tracePayload';
 
-// ─── Trace API（对齐 v2 agent /api/v2/traces*）──────────────────────────────
+// ─── Trace API（对齐 agri_backend_v2 agent /api/agri_backend_v2/traces*）──────────────────────────────
 // vite proxy: /api/admin/traces* → http://localhost:8000/api/v2/traces*
 
 export interface TraceRootError {
@@ -44,7 +44,7 @@ export interface TraceNodeBreakdownItem {
   avg_duration_ms?: number;
 }
 
-/** v2 agent trace 列表项（请求级 summary）*/
+/** agri_backend_v2 agent trace 列表项（请求级 summary）*/
 export interface TraceRequestSummary {
   request_id: string;
   trace_id?: string;
@@ -68,7 +68,7 @@ export interface TraceRequestSummary {
   node_breakdown?: TraceNodeBreakdownItem[];
 }
 
-/** v2 agent trace node（get_trace_nodes 返回）*/
+/** agri_backend_v2 agent trace node（get_trace_nodes 返回）*/
 export interface TraceNode {
   record_kind?: 'node';
   source?: 'traceRecords';
@@ -130,7 +130,7 @@ export interface TraceRound {
   nodes: TraceNode[];
 }
 
-/** 前端统一 timeline 结构：v2 返回的是 flat nodes，这里包成单 round 以兼容 GanttTimeline */
+/** 前端统一 timeline 结构：agri_backend_v2 返回的是 flat nodes，这里包成单 round 以兼容 GanttTimeline */
 export interface TraceTimeline {
   request_id: string;
   trace_id?: string;
@@ -184,7 +184,7 @@ export interface ListTracesResponse {
   items: TraceRequestSummary[];
   next_cursor?: string | null;
   has_more?: boolean;
-  /** 旧分页响应兼容字段，v2 cursor API 不保证返回。 */
+  /** 旧分页响应兼容字段，agri_backend_v2 cursor API 不保证返回。 */
   total?: number;
 }
 
@@ -201,7 +201,7 @@ interface TraceTimelineResponse {
 }
 
 /**
- * 列出 trace 请求级 summary（v2 /api/v2/traces）。
+ * 列出 trace 请求级 summary（agri_backend_v2 /api/agri_backend_v2/traces）。
  * 兼容旧调用：返回 items + next_cursor + has_more。
  */
 export async function listTraces(params?: ListTracesParams): Promise<ListTracesResponse> {
@@ -216,7 +216,7 @@ export async function listTraceRequests(params?: ListTracesParams): Promise<List
   return listTraces(params);
 }
 
-/** 获取正式 v2 Trace timeline；兼容层只负责把 items 适配给旧 Gantt 组件。 */
+/** 获取正式 agri_backend_v2 Trace timeline；兼容层只负责把 items 适配给旧 Gantt 组件。 */
 export async function getTimeline(
   traceId: string,
   params: {
@@ -420,16 +420,16 @@ export async function listSkills(): Promise<ListSkillsResponse> {
   return res.data;
 }
 
-/** v2 尚未提供 trace 清理接口，保留显式入口避免旧页面导入时整站加载失败。 */
+/** agri_backend_v2 尚未提供 trace 清理接口，保留显式入口避免旧页面导入时整站加载失败。 */
 export async function deleteTracesBefore(_before: string): Promise<{ deleted: number }> {
   void _before;
-  throw new Error('v2 trace cleanup endpoint is not available');
+  throw new Error('agri_backend_v2 trace cleanup endpoint is not available');
 }
 
-/** v2 尚未提供 reflection diagnostics 独立接口。 */
+/** agri_backend_v2 尚未提供 reflection diagnostics 独立接口。 */
 export async function getTraceDiagnostics(_requestId: string): Promise<TraceDiagnostics> {
   void _requestId;
-  throw new Error('v2 trace diagnostics endpoint is not available');
+  throw new Error('agri_backend_v2 trace diagnostics endpoint is not available');
 }
 
 export interface TraceReflectionIssue {

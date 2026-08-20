@@ -1,6 +1,6 @@
 ## Why
 
-`v2/agent` 已分别实现了 Prompt Cache、短时消息、Mongo 对话历史、Redis Turn 和 Trace，但这些能力没有统一的 Context、Session、Memory 生命周期与事实源契约。当前 Agent 实际从本地 JSON 读取模型历史、从 MongoDB 提供用户可见历史，摘要还可能在序列化时丢失，导致多 Worker、重启、长会话和上下文超预算场景出现失忆或不可解释行为。
+`../../../agri_backend_v2/agent` 已分别实现了 Prompt Cache、短时消息、Mongo 对话历史、Redis Turn 和 Trace，但这些能力没有统一的 Context、Session、Memory 生命周期与事实源契约。当前 Agent 实际从本地 JSON 读取模型历史、从 MongoDB 提供用户可见历史，摘要还可能在序列化时丢失，导致多 Worker、重启、长会话和上下文超预算场景出现失忆或不可解释行为。
 
 现在需要把这些零散机制收敛为一套可实施、可迁移、可观测的设计体系，再据此分阶段修改代码，避免继续在 `react.py` 和 `memory.py` 中堆叠局部修复。
 
@@ -35,10 +35,10 @@
 
 ## Impact
 
-- Agent Runtime：`v2/agent/core/react.py`、`context.py`、`memory.py`、`summarizer.py`、`turn.py`。
-- 持久化与协调：`v2/agent/infra/chat_store.py`、`turn_store.py`、`worker.py`、Redis/Mongo 配置及索引。
+- Agent Runtime：`../../../agri_backend_v2/agent/domains/harness/runtime/engine.py`、`context.py`、`memory.py`、`summarizer.py`、`turn.py`。
+- 持久化与协调：`../../../agri_backend_v2/agent/platforms/persistence/mongo/chat_store.py`、`turn_store.py`、`worker.py`、Redis/Mongo 配置及索引。
 - API：`/api/v2/chat`、`/api/v2/conversations`、`/api/v2/reset`、Turn/SSE replay 和 Trace 查询接口。
-- Prompt/Tool：`v2/agent/prompts/`、Skill Registry 的候选工具暴露与 Context dependency 元数据。
-- 观测：`v2/agent/infra/trace/`、Context Usage SSE、Trace summary 和一致性告警。
+- Prompt/Tool：`../../../agri_backend_v2/agent/prompts/`、Skill Registry 的候选工具暴露与 Context dependency 元数据。
+- 观测：`../../../agri_backend_v2/agent/domains/harness/observability/trace/`、Context Usage SSE、Trace summary 和一致性告警。
 - 测试：多轮上下文、摘要回注、租户隔离、Worker 重启、Mongo/Redis 降级、预算裁剪、SSE 回放和 reset 语义。
 - 本次阶段只产出设计与实现边界，不直接修改运行时代码；后续实现必须按 tasks 分阶段提交并分别验证。

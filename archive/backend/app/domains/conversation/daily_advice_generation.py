@@ -1,4 +1,4 @@
-"""每日建议 v2 生成、重试、fallback 与缓存编排。"""
+"""每日建议 agri_backend_v2 生成、重试、fallback 与缓存编排。"""
 
 from __future__ import annotations
 
@@ -66,7 +66,7 @@ async def generate_daily_advice(
     invoke_advisor: InvokeAdvisor,
     get_composer: GetComposer,
 ) -> DailyAdviceResponse:
-    """生成每日建议 v2 响应，负责缓存、retry 和 fallback。"""
+    """生成每日建议 agri_backend_v2 响应，负责缓存、retry 和 fallback。"""
     today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     selected_candidates = await _collect_selected_candidates(db, farm_id)
     candidate_fingerprint = fingerprint_candidates(selected_candidates)
@@ -132,7 +132,7 @@ def _load_matching_cache(
 
     meta = _parse_record_meta(cached.meta)
     if meta.get("schema_version") != SCHEMA_VERSION:
-        logger.info("忽略非 v2 今日建议缓存 | record_id=%s", cached.id)
+        logger.info("忽略非 agri_backend_v2 今日建议缓存 | record_id=%s", cached.id)
         return None
     if meta.get("candidate_fingerprint") != candidate_fingerprint:
         logger.info("忽略候选指纹不匹配的今日建议缓存 | record_id=%s", cached.id)
@@ -143,7 +143,7 @@ def _load_matching_cache(
         response = DailyAdviceResponse.model_validate(payload)
     except (TypeError, ValueError) as exc:
         logger.warning(
-            "忽略无法解析的 v2 今日建议缓存 | record_id=%s error=%s", cached.id, exc
+            "忽略无法解析的 agri_backend_v2 今日建议缓存 | record_id=%s error=%s", cached.id, exc
         )
         return None
 
@@ -190,7 +190,7 @@ async def _run_generation_attempts(
             payload, parse_repair_instruction = _parse_llm_payload(raw)
         except _DailyAdvicePayloadTruncated as exc:
             logger.warning(
-                "DailyAdvice v2 JSON 明显截断，直接进入 fallback | error=%s", exc
+                "DailyAdvice agri_backend_v2 JSON 明显截断，直接进入 fallback | error=%s", exc
             )
             validation_errors.append("llm_json_truncated")
             break
@@ -286,7 +286,7 @@ def _parse_llm_payload(raw: str) -> tuple[dict[str, Any] | None, str]:
         if _looks_like_truncated_json(text):
             raise _DailyAdvicePayloadTruncated(str(exc)) from exc
         logger.warning(
-            "DailyAdvice v2 JSON 解析失败，将进入 fallback/retry | error=%s", exc
+            "DailyAdvice agri_backend_v2 JSON 解析失败，将进入 fallback/retry | error=%s", exc
         )
         return None, _build_json_parse_repair_instruction(exc)
     return (parsed, "") if isinstance(parsed, dict) else (None, "")

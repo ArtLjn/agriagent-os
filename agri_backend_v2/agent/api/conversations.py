@@ -8,7 +8,7 @@ from fastapi import Header, HTTPException, Query
 
 from agent.api import api_router
 from agent.auth import parse_identity
-from agent.infra.chat_store import get_conversation, list_conversations
+from agent.platforms.persistence.mongo.chat_store import get_conversation, list_conversations
 
 logger = logging.getLogger(__name__)
 

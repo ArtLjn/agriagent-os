@@ -18,8 +18,8 @@
 
 | 文件 | 职责 |
 | --- | --- |
-| `../../../admin-web/src/components/TemplateForm.tsx` | 共享模版表单（name/variety/stages），供 Crops 和 SystemLibrary 复用 |
-| `../../../admin-web/src/components/TemplateForm.test.tsx` | TemplateForm 单测 |
+| `../../../agri_admin_web/src/components/TemplateForm.tsx` | 共享模版表单（name/variety/stages），供 Crops 和 SystemLibrary 复用 |
+| `../../../agri_admin_web/src/components/TemplateForm.test.tsx` | TemplateForm 单测 |
 
 ### 修改
 
@@ -29,10 +29,10 @@
 | `backend/app/api/crop.py` | 新增 3 个 `/templates/system` 写端点；现有农场副本接口的 403 边界保留 |
 | `backend/tests/api/test_crop_templates_system.py` | 新增系统模版写接口的 4 个测试用例 |
 | `backend/tests/services/test_crop_service_system_write.py` | **新建** service 层系统模版写方法单测 |
-| `../../../admin-web/src/api/crops.ts` | 新增 `createSystemTemplate`、`updateSystemTemplate`、`deleteSystemTemplate` 3 个函数 |
-| `../../../admin-web/src/pages/Crops/index.tsx` | 把表单 Modal 内的 Form 部分替换为 `<TemplateForm />` 组件 |
-| `../../../admin-web/src/pages/CropTemplates/SystemLibrary.tsx` | 工具栏加「新建模版」按钮、表格加「操作」列、引入 TemplateForm Modal |
-| `../../../admin-web/src/pages/CropTemplates/SystemLibrary.test.tsx` | 新增新建/编辑/删除流程测试 |
+| `../../../agri_admin_web/src/api/crops.ts` | 新增 `createSystemTemplate`、`updateSystemTemplate`、`deleteSystemTemplate` 3 个函数 |
+| `../../../agri_admin_web/src/pages/Crops/index.tsx` | 把表单 Modal 内的 Form 部分替换为 `<TemplateForm />` 组件 |
+| `../../../agri_admin_web/src/pages/CropTemplates/SystemLibrary.tsx` | 工具栏加「新建模版」按钮、表格加「操作」列、引入 TemplateForm Modal |
+| `../../../agri_admin_web/src/pages/CropTemplates/SystemLibrary.test.tsx` | 新增新建/编辑/删除流程测试 |
 | `../reference/api-spec.yaml` | 同步 3 个新接口 |
 
 ---
@@ -492,11 +492,11 @@ git commit -m "feat(crop): 新增系统模版写接口 POST/PUT/DELETE /crops/te
 ## Task 3: 前端 API 层 — 新增 3 个调用函数
 
 **Files:**
-- Modify: `../../../admin-web/src/api/crops.ts`
+- Modify: `../../../agri_admin_web/src/api/crops.ts`
 
 ### Step 3.1: 写失败测试
 
-- [ ] **检查 `../../../admin-web/src/api/crops.ts` 当前测试文件是否存在**
+- [ ] **检查 `../../../agri_admin_web/src/api/crops.ts` 当前测试文件是否存在**
 
 Run: `ls admin-web/src/api/crops.test.ts 2>/dev/null || echo "no test file"`
 
@@ -504,7 +504,7 @@ Run: `ls admin-web/src/api/crops.test.ts 2>/dev/null || echo "no test file"`
 
 ### Step 3.2: 实现 API 函数
 
-- [ ] **在 `../../../admin-web/src/api/crops.ts` 的 `importSystemCropTemplate` 之后新增 3 个函数**
+- [ ] **在 `../../../agri_admin_web/src/api/crops.ts` 的 `importSystemCropTemplate` 之后新增 3 个函数**
 
 先 Read 文件确认现有 `importSystemCropTemplate` 的位置，然后在它之后插入：
 
@@ -549,7 +549,7 @@ Expected: 0 errors。
 - [ ] **commit**
 
 ```bash
-git add admin-web/src/api/crops.ts
+git add agri_admin_web/src/api/crops.ts
 git commit -m "feat(crop-api): 新增 createSystemTemplate/updateSystemTemplate/deleteSystemTemplate"
 ```
 
@@ -558,13 +558,13 @@ git commit -m "feat(crop-api): 新增 createSystemTemplate/updateSystemTemplate/
 ## Task 4: 抽离 TemplateForm 共享组件
 
 **Files:**
-- Create: `../../../admin-web/src/components/TemplateForm.tsx`
-- Create: `../../../admin-web/src/components/TemplateForm.test.tsx`
-- Modify: `../../../admin-web/src/pages/Crops/index.tsx`
+- Create: `../../../agri_admin_web/src/components/TemplateForm.tsx`
+- Create: `../../../agri_admin_web/src/components/TemplateForm.test.tsx`
+- Modify: `../../../agri_admin_web/src/pages/Crops/index.tsx`
 
 ### Step 4.1: 写失败测试 — 组件渲染与受控
 
-- [ ] **创建 `../../../admin-web/src/components/TemplateForm.test.tsx`**
+- [ ] **创建 `../../../agri_admin_web/src/components/TemplateForm.test.tsx`**
 
 ```tsx
 import { describe, it, expect } from 'vitest';
@@ -605,7 +605,7 @@ Expected: FAIL，`Cannot find module './TemplateForm'`。
 
 ### Step 4.2: 实现 TemplateForm 组件
 
-- [ ] **创建 `../../../admin-web/src/components/TemplateForm.tsx`**
+- [ ] **创建 `../../../agri_admin_web/src/components/TemplateForm.tsx`**
 
 ```tsx
 import { Form, Input, InputNumber, Button, Divider, Space } from 'antd';
@@ -682,9 +682,9 @@ Expected: 2 个测试 PASS。
 
 ### Step 4.3: 改造 Crops/index.tsx 使用 TemplateForm
 
-- [ ] **修改 `../../../admin-web/src/pages/Crops/index.tsx`**
+- [ ] **修改 `../../../agri_admin_web/src/pages/Crops/index.tsx`**
 
-替换 `<Form>...</Form>` 内部内容。把 [:245-271](../../../admin-web/src/pages/Crops/index.tsx#L245-L271) 这一段：
+替换 `<Form>...</Form>` 内部内容。把 [:245-271](../../../agri_admin_web/src/pages/Crops/index.tsx#L245-L271) 这一段：
 
 ```tsx
 <Form form={form} layout="vertical">
@@ -740,7 +740,7 @@ Expected: 全 PASS。
 - [ ] **commit**
 
 ```bash
-git add admin-web/src/components/TemplateForm.tsx admin-web/src/components/TemplateForm.test.tsx admin-web/src/pages/Crops/index.tsx
+git add agri_admin_web/src/components/TemplateForm.tsx agri_admin_web/src/components/TemplateForm.test.tsx agri_admin_web/src/pages/Crops/index.tsx
 git commit -m "refactor(admin-web): 抽离 TemplateForm 共享组件，Crops 复用"
 ```
 
@@ -749,8 +749,8 @@ git commit -m "refactor(admin-web): 抽离 TemplateForm 共享组件，Crops 复
 ## Task 5: SystemLibrary 加 CRUD UI
 
 **Files:**
-- Modify: `../../../admin-web/src/pages/CropTemplates/SystemLibrary.tsx`
-- Modify: `../../../admin-web/src/pages/CropTemplates/SystemLibrary.test.tsx`
+- Modify: `../../../agri_admin_web/src/pages/CropTemplates/SystemLibrary.tsx`
+- Modify: `../../../agri_admin_web/src/pages/CropTemplates/SystemLibrary.test.tsx`
 
 ### Step 5.1: 写失败测试 — 新建/编辑/删除流程
 
@@ -795,7 +795,7 @@ Expected: 3 个新测试 FAIL。
 
 ### Step 5.2: 实现 SystemLibrary CRUD
 
-- [ ] **修改 `../../../admin-web/src/pages/CropTemplates/SystemLibrary.tsx`**
+- [ ] **修改 `../../../agri_admin_web/src/pages/CropTemplates/SystemLibrary.tsx`**
 
 完整改动要点（具体代码见下方）：
 
@@ -949,7 +949,7 @@ Expected: 0 errors。
 - [ ] **commit**
 
 ```bash
-git add admin-web/src/pages/CropTemplates/SystemLibrary.tsx admin-web/src/pages/CropTemplates/SystemLibrary.test.tsx
+git add agri_admin_web/src/pages/CropTemplates/SystemLibrary.tsx agri_admin_web/src/pages/CropTemplates/SystemLibrary.test.tsx
 git commit -m "feat(admin-web): SystemLibrary 加新建/编辑/删除系统模版 UI"
 ```
 
@@ -1076,7 +1076,7 @@ git commit -m "docs(api-spec): 同步系统模版 CRUD 接口"
 
 - service 方法签名（`create_system_crop_template(db, template)` / `update_system_crop_template(db, template_id, update)` / `delete_system_crop_template(db, template_id)` / `count_farm_template_imports(db, name, variety)`）在 Task 1 测试、Task 1 实现、Task 2 API 实现中保持一致。
 - 前端 `createSystemTemplate` / `updateSystemTemplate` / `deleteSystemTemplate` 命名在 Task 3、Task 5 一致。
-- `TemplateFormValues` 类型导出位置：`../../../admin-web/src/components/TemplateForm.tsx`（Task 4 创建）。
+- `TemplateFormValues` 类型导出位置：`../../../agri_admin_web/src/components/TemplateForm.tsx`（Task 4 创建）。
 
 ### 无占位符
 

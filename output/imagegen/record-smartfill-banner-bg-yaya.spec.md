@@ -30,7 +30,7 @@ Do not bake interactive controls into the image.
 
 Recommended destination:
 
-- `mobile-app/assets/images/record/smartfill_banner_bg_yaya.png`
+- `../../agri_mobile_app/assets/images/record/smartfill_banner_bg_yaya.png`
 
 Recommended asset constant:
 

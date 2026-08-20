@@ -10,12 +10,12 @@ from types import SimpleNamespace
 import pytest
 
 from agent.config import settings
-from agent.core import react
-from agent.core.turn import StopReason, Turn, TurnPhase
-from agent.infra import sse, turn_store
-from agent.infra import trace as trace_infra
-from agent.skills.base import McpSkill, OperationSkill, Skill, SkillResult
-from agent.skills.registry import SkillRegistry, SkillRegistryError
+from agent.domains.harness.runtime import engine as react
+from agent.domains.harness.runtime.turn import StopReason, Turn, TurnPhase
+from agent.platforms.persistence.redis import sse, turn_store
+from agent.domains.harness.observability import trace as trace_infra
+from agent.domains.harness.tools.base import McpSkill, OperationSkill, Skill, SkillResult
+from agent.domains.harness.tools.registry import SkillRegistry, SkillRegistryError
 
 
 class _ReadSkill(Skill):

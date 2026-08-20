@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# farm-index 部署脚本 — 构建 dist，打包上传并同步到腾讯云静态目录。
+# agri_home_index 部署脚本 — 构建 dist，打包上传并同步到腾讯云静态目录。
 #
 # 用法:
-#   bash deploy/farm-index-deploy.sh
-#   bash deploy/farm-index-deploy.sh --no-build
-#   bash deploy/farm-index-deploy.sh --api-url=https://api.farm.lllcnm.cn
+#   bash deploy/agri_home_index-deploy.sh
+#   bash deploy/agri_home_index-deploy.sh --no-build
+#   bash deploy/agri_home_index-deploy.sh --api-url=https://api.farm.lllcnm.cn
 #
 # 环境变量(可选):
 #   SERVER_HOST=43.155.217.74
 #   SERVER_USER=root
-#   REMOTE_DIR=/root/workspace/static/farm-index
+#   REMOTE_DIR=/root/workspace/static/agri_home_index
 #   API_URL=https://api.farm.lllcnm.cn
 
 set -euo pipefail
@@ -20,7 +20,7 @@ FARM_INDEX_DIR="$PROJECT_ROOT/farm-index/app"
 
 SERVER_HOST="${SERVER_HOST:-43.155.217.74}"
 SERVER_USER="${SERVER_USER:-root}"
-REMOTE_DIR="${REMOTE_DIR:-/root/workspace/static/farm-index}"
+REMOTE_DIR="${REMOTE_DIR:-/root/workspace/static/agri_home_index}"
 API_URL="${API_URL:-https://api.farm.lllcnm.cn}"
 
 SKIP_BUILD=0
@@ -45,7 +45,7 @@ die() { printf '  \033[31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
 [ -d "$FARM_INDEX_DIR" ] || die "找不到 farm-index 前端目录: $FARM_INDEX_DIR"
 
 printf '\n=========================================\n'
-printf ' farm-index 部署\n'
+printf ' agri_home_index 部署\n'
 printf '=========================================\n'
 printf ' 服务器:  %s@%s\n' "$SERVER_USER" "$SERVER_HOST"
 printf ' 远程目录: %s\n' "$REMOTE_DIR"
@@ -126,5 +126,5 @@ printf '=========================================\n'
 printf ' 路径:   %s@%s:%s\n' "$SERVER_USER" "$SERVER_HOST" "$REMOTE_DIR"
 printf ' API:    %s\n' "$API_URL"
 printf ' 文件数: %s\n' "$FILE_COUNT"
-printf ' 回滚:   ssh %s@%s \"cp -a /tmp/farm-index-backup-%s/* %s/\"\n' \
+printf ' 回滚:   ssh %s@%s \"cp -a /tmp/agri_home_index-backup-%s/* %s/\"\n' \
   "$SERVER_USER" "$SERVER_HOST" "$TIMESTAMP" "$REMOTE_DIR"

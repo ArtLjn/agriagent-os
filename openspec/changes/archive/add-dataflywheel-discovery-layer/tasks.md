@@ -49,7 +49,7 @@
 
 ## 6. 工作台前端改造
 
-- [x] 6.1 修改 `admin-web/src/pages/DataFlywheel/` 列表组件：默认 `sort_by=risk`
+- [x] 6.1 修改 `../../../../agri_admin_web/src/pages/DataFlywheel/` 列表组件：默认 `sort_by=risk`
 - [x] 6.2 加「隐藏低风险（score < 0.3）」Checkbox，URL query `min_risk=0.3`
 - [x] 6.3 修改会话卡片：显示 `Risk: 0.xx` 数值 + 主导信号标识（Rule / Judge）
 - [x] 6.4 P0 卡片视觉强调：红色边框或徽标
@@ -64,5 +64,5 @@
 - [ ] 7.3 基于标注员反馈微调 `rules.yaml` 权重
 - [ ] 7.4 灰度部署：先放给 2 个标注员试用 1 周
 - [x] 7.5 监控 Judge 月成本是否接近 $200 阈值
-- [ ] 7.6 更新 `docs/farm-manager-design-spec/01_正式设计/06_数据飞轮与评测.md` § 9 状态：设计中 → 已落地
-- [x] 7.7 更新 `.claude/rules/` 与 `docs/architecture/boundaries.md`：新增 `app/evaluation/discovery/` 的依赖方向说明
+- [ ] 7.6 更新 `../../../../archive/docs/farm-manager-design-spec/01_正式设计/06_数据飞轮与评测.md` § 9 状态：设计中 → 已落地
+- [x] 7.7 更新 `.claude/rules/` 与 `../../../../archive/docs/architecture/boundaries.md`：新增 `app/evaluation/discovery/` 的依赖方向说明

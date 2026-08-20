@@ -56,7 +56,7 @@ def test_create_template_passes_validated_payload_to_service(
 
     monkeypatch.setattr(crop_templates.crop_service, "create_crop_template", create)
     response = client.post(
-        "/api/v2/crop-templates",
+        "/api/agri_backend_v2/crop-templates",
         json={
             "name": "西瓜",
             "category": "瓜果",
@@ -94,7 +94,7 @@ def test_update_cycle_merges_partial_request(
         return {"id": cycle_id, "name": kwargs["name"]}
 
     monkeypatch.setattr(crop_cycles.cycle_service, "update_crop_cycle", update)
-    response = client.patch("/api/v2/crop-cycles/3", json={"name": "新茬口"})
+    response = client.patch("/api/agri_backend_v2/crop-cycles/3", json={"name": "新茬口"})
 
     assert response.status_code == 200
     assert captured["db"] is db_marker
@@ -112,7 +112,7 @@ def test_create_log_maps_date_and_worker_names(client: TestClient, monkeypatch) 
 
     monkeypatch.setattr(farm_logs.log_service, "create_log", create_log)
     response = client.post(
-        "/api/v2/farm-logs",
+        "/api/agri_backend_v2/farm-logs",
         json={
             "cycle_id": 2,
             "operation_type": "浇水",
@@ -138,7 +138,7 @@ def test_create_cost_record_injects_database_session(
 
     monkeypatch.setattr(costs.cost_service, "create_record", create_record)
     response = client.post(
-        "/api/v2/cost-records",
+        "/api/agri_backend_v2/cost-records",
         json={
             "record_type": "cost",
             "category": "农资",
@@ -166,7 +166,7 @@ def test_create_work_order_keeps_nested_labor_contract(
         work_orders.work_order_service, "create_work_order", create_order
     )
     response = client.post(
-        "/api/v2/work-orders",
+        "/api/agri_backend_v2/work-orders",
         json={
             "operation_type": "施肥",
             "operation_date": "2026-08-09",
@@ -190,7 +190,7 @@ def test_farm_path_cannot_cross_token_farm(client: TestClient, monkeypatch) -> N
         called = True
 
     monkeypatch.setattr(farms.farm_crud_service, "get_farm_with_user", get_farm)
-    response = client.get("/api/v2/farms/8")
+    response = client.get("/api/agri_backend_v2/farms/8")
 
     assert response.status_code == 403
     assert response.json()["detail"]["code"] == "forbidden"
@@ -199,7 +199,7 @@ def test_farm_path_cannot_cross_token_farm(client: TestClient, monkeypatch) -> N
 
 def test_unknown_request_field_is_rejected(client: TestClient) -> None:
     response = client.post(
-        "/api/v2/workers",
+        "/api/agri_backend_v2/workers",
         json={"name": "王五", "unexpected": True},
     )
 

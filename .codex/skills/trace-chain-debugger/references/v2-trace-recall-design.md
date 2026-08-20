@@ -101,7 +101,7 @@ GET /api/v2/traces/{request_id}/summary
 
 ```bash
 python .codex/skills/trace-chain-debugger/scripts/analyze_trace_chain.py \
-  --project . --v2 --turn-id <turn_id>
+  --project . --agri_backend_v2 --turn-id <turn_id>
 ```
 
 目标扩展参数：
@@ -140,7 +140,7 @@ python .codex/skills/trace-chain-debugger/scripts/analyze_trace_chain.py \
 | 执行节点 | `/traces/{trace_id}/nodes` | Mongo `traceRecords` | 缺少 Runtime 细节 |
 | SSE 事件 | `/traces/{trace_id}/events` | Redis/本地事件导出 | 缺少状态迁移和重放证据 |
 | 聊天消息 | `/conversations/{conversation_id}` | Mongo `conversationMessages` | 缺少输入和最终答复证据 |
-| 本地事件 | `event_file + event_seq_range` | `data/agent-events/.../events.jsonl` | 缺少旧链路审计事件 |
+| 本地事件 | `event_file + event_seq_range` | `../../../../archive/data/agent-events/.../events.jsonl` | 缺少旧链路审计事件 |
 
 Mongo 超时、鉴权失败、服务未启动和集合不存在必须分别输出 `error`、`forbidden`、`unavailable`、`missing`，不能统一成空列表。
 

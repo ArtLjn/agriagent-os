@@ -396,7 +396,7 @@ Trace 写入失败不能影响主链路。Mongo trace 只能服务调试、质�
 - [memory/long_term/store.py](../../../backend/app/memory/long_term/store.py)
 - [memory/service.py](../../../backend/app/memory/service.py)：summary 生成、cursor 更新和增量压缩。
 - [memory/prompts/summary.md](../../../backend/app/memory/prompts/summary.md)：完整新版摘要 prompt。
-- [admin-web Playground LLM Context 可观测](../../../../admin-web/src/pages/Playground/LlmContextVisualView.tsx)
+- [admin-web Playground LLM Context 可观测](../../../../agri_admin_web/src/pages/Playground/LlmContextVisualView.tsx)
 
 相关 specs：
 

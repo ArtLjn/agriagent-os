@@ -3,7 +3,7 @@
 跑法：
   cd /Users/ljn/Documents/demo/explore/agri_backend_v2
   # 先启动 agent 服务
-  uv run --package farm-manager-agent uvicorn agent.main:app --port 8000 &
+  uv run --package farm-manager-agent uvicorn agent.bootstrap.app:app --port 8000 &
   # 再跑测试
   uv run --package farm-manager-agent python scripts/test_hitl_e2e.py
 
@@ -266,7 +266,7 @@ async def main():
         # 检查服务可用性
         if not await check_health(client):
             print(f"{RED}✗ agent 服务不可用（{AGENT}），请先启动：{NC}")
-            print(f"  uv run --package farm-manager-agent uvicorn agent.main:app --port 8000")
+            print(f"  uv run --package farm-manager-agent uvicorn agent.bootstrap.app:app --port 8000")
             sys.exit(1)
         print(f"{GREEN}✓ agent 服务可用{NC}\n")
 

@@ -33,7 +33,7 @@ Farm Manager 的真实坏例经常跨多轮发生，例如「查询欠款 → �
 ## Impact
 
 - **前端**：
-  - `admin-web/src/pages/DataFlywheel/` 页面信息架构重构。
+  - `../../../../agri_admin_web/src/pages/DataFlywheel/` 页面信息架构重构。
   - 新增或拆分 `DailyReviewInbox`、`ReviewIssueChainTimeline`、`IssueChainReviewPanel`、`AdvancedSearch` 等组件。
   - 原样本队列、问题候选、Session 复盘、Turn 审核入口需要迁移或降级。
 - **后端 API**：
@@ -47,4 +47,4 @@ Farm Manager 的真实坏例经常跨多轮发生，例如「查询欠款 → �
   - regression draft 必须消费 expected behavior。
   - repair pack 需要包含问题链相关 turn 和证据完整性信息。
 - **文档**：
-  - 与 `docs/farm-manager-design-spec/01_正式设计/06_数据飞轮与评测.md` 第 10 节保持一致。
+  - 与 `../../../../archive/docs/farm-manager-design-spec/01_正式设计/06_数据飞轮与评测.md` 第 10 节保持一致。

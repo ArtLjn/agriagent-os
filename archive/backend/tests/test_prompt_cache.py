@@ -49,10 +49,10 @@ class TestPromptCache:
     def test_cache_invalidate_by_farm(self):
         cache = PromptCache(ttl_seconds=3600)
         cache.set(farm_id=1, date_str="2026-06-02", value="v1")
-        cache.set(farm_id=2, date_str="2026-06-02", value="v2")
+        cache.set(farm_id=2, date_str="2026-06-02", value="agri_backend_v2")
         cache.invalidate(farm_id=1)
         assert cache.get(farm_id=1, date_str="2026-06-02") is None
-        assert cache.get(farm_id=2, date_str="2026-06-02") == "v2"
+        assert cache.get(farm_id=2, date_str="2026-06-02") == "agri_backend_v2"
 
 
 class TestFarmContextCache:

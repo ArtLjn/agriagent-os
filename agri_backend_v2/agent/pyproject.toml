@@ -24,4 +24,4 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["agent"]
 
-# Run: uv run --package farm-manager-agent python -m agent.main
+# Run: uv run --package farm-manager-agent python -m agent.bootstrap.app

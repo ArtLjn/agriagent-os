@@ -42,7 +42,7 @@
 
 ## 6. 上线
 
-- [ ] 6.1 提交 PR,关联 `docs/specs/2026-07-31-agent-harness-design.md` 阶段 2
+- [ ] 6.1 提交 PR,关联 `../../../archive/docs/specs/2026-07-31-agent-harness-design.md` 阶段 2
 - [ ] 6.2 A/B 实验:50% 会话开 planner.draft LLM 路径,50% 走规则降级,对比 tool_calls 准确率与 LLM 成本
 - [ ] 6.3 2 周后根据 A/B 数据决定是否全量启用 LLM planner
 - [ ] 6.4 在变更记录追加"阶段 2 已实施"

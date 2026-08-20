@@ -180,9 +180,9 @@ describe('buildPlaygroundTraceMetrics', () => {
     expect(hasAutomaticCompression(metrics)).toBe(true);
   });
 
-  it('缺少 final_prompt 时可从 v2 final_llm_context budget 兜底读取指标', () => {
+  it('缺少 final_prompt 时可从 agri_backend_v2 final_llm_context budget 兜底读取指标', () => {
     const timeline: TraceTimeline = {
-      request_id: 'req-prompt-v2-fallback',
+      request_id: 'req-prompt-agri_backend_v2-fallback',
       rounds: [
         {
           round_index: 0,
@@ -218,9 +218,9 @@ describe('buildPlaygroundTraceMetrics', () => {
 });
 
 describe('extractLatestLlmContextSnapshot', () => {
-  it('优先解析 schema v2 的 runtime_context、block 明细和压缩统计', () => {
+  it('优先解析 schema agri_backend_v2 的 runtime_context、block 明细和压缩统计', () => {
     const timeline: TraceTimeline = {
-      request_id: 'req-context-v2',
+      request_id: 'req-context-agri_backend_v2',
       rounds: [
         {
           round_index: 0,
@@ -311,7 +311,7 @@ describe('extractLatestLlmContextSnapshot', () => {
     };
 
     const snapshot = extractLatestLlmContextSnapshot(timeline);
-    if (!snapshot) throw new Error('expected v2 snapshot');
+    if (!snapshot) throw new Error('expected agri_backend_v2 snapshot');
 
     expect(snapshot.schemaVersion).toBe(2);
     expect(snapshot.runtimeSections[0]?.name).toBe('Task');

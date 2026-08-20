@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 
 from agent.config import settings
-from agent.infra import coordination
-from agent.infra.redis_store import key
+from agent.platforms.persistence.redis import coordination
+from agent.platforms.persistence.redis.redis_store import key
 
 
 def test_scope_hash_isolated_by_user_farm_and_conversation() -> None:

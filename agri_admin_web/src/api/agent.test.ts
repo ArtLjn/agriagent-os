@@ -20,7 +20,7 @@ vi.mock('./client', () => ({
 const mockedApiClient = vi.mocked(apiClient, true);
 
 describe('agent api', () => {
-  it('解析 SSE id 并透传 v2 trace 元数据', async () => {
+  it('解析 SSE id 并透传 agri_backend_v2 trace 元数据', async () => {
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
         controller.enqueue(new TextEncoder().encode(
@@ -167,10 +167,10 @@ describe('agent api', () => {
     expect(result.advice).toBe('重新生成的建议');
   });
 
-  it('读取会话 debug export v2 并透传模拟用户', async () => {
+  it('读取会话 debug export agri_backend_v2 并透传模拟用户', async () => {
     mockedApiClient.get.mockResolvedValueOnce({
       data: {
-        format: 'farm-manager.chat-session-debug.v2',
+        format: 'farm-manager.chat-session-debug.agri_backend_v2',
         session: { session_id: 'sess-1' },
         messages: [],
         turns: [],
@@ -185,6 +185,6 @@ describe('agent api', () => {
     expect(mockedApiClient.get).toHaveBeenCalledWith('/agent/conversations/sess-1/debug-export', {
       params: { simulate_user_id: 'user-1' },
     });
-    expect(result.format).toBe('farm-manager.chat-session-debug.v2');
+    expect(result.format).toBe('farm-manager.chat-session-debug.agri_backend_v2');
   });
 });

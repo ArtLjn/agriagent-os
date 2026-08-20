@@ -51,7 +51,10 @@ export AGENT_DELEGATION_SECRET='请替换为 Agent/Business 委托凭证密钥'
 uv run --package farm-manager-business python -m business.server
 
 # Terminal 2：启动 agent（FastAPI + SSE）
-uv run --package farm-manager-agent python -m agent.main
+uv run --package farm-manager-agent python -m agent.bootstrap.app
+
+# 也支持直接执行入口文件
+# uv run --package farm-manager-agent python agent/bootstrap/app.py
 
 # 浏览器打开 http://127.0.0.1:8000
 ```

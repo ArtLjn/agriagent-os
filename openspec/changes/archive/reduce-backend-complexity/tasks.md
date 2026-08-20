@@ -43,7 +43,7 @@
 
 ## 6. Harness, Docs, And Final Verification
 
-- [x] 6.1 Align `docs/architecture/boundaries.md`, `.claude/CLAUDE.md`, `AGENTS.md`, and harness scripts with the target backend dependency direction
+- [x] 6.1 Align `../../../../archive/docs/architecture/boundaries.md`, `.claude/CLAUDE.md`, `AGENTS.md`, and harness scripts with the target backend dependency direction
 - [x] 6.2 Ensure `scripts/check-complexity-budget.sh` is wired into `scripts/harness-check.sh` and Guide+Sensor pairing
 - [x] 6.3 Run `ruff check app tests` or a documented narrower ruff command if full lint is blocked by unrelated historical issues
 - [x] 6.4 Run targeted pytest suites for auth/startup, DataFlywheel, Agent router, and Agent runtime/tool executor

@@ -4,7 +4,7 @@
 
 **Goal:** 新建 Flutter App，并让首页、工作台、芽芽、账单、我的五个核心页面与 `../../ui/flutter-app-concept/index.html` 的移动端 UI 高度一致。
 
-**Architecture:** 在仓库根目录创建 `../../../../mobile-app` Flutter 工程，使用纯 Flutter 组件复刻现有 HTML 高保真稿。UI 层先用 mock 数据完整还原视觉，再通过 Repository/Service 层接入后端能力；API 路径只能出现在数据层代码中，不能出现在用户可见 UI 文案中。
+**Architecture:** 在仓库根目录创建 `../../../../agri_mobile_app` Flutter 工程，使用纯 Flutter 组件复刻现有 HTML 高保真稿。UI 层先用 mock 数据完整还原视觉，再通过 Repository/Service 层接入后端能力；API 路径只能出现在数据层代码中，不能出现在用户可见 UI 文案中。
 
 **Tech Stack:** Flutter stable、Dart、Riverpod、Dio、GoRouter、Lucide 风格图标、Flutter widget/golden tests。
 
@@ -25,52 +25,52 @@
 
 创建或修改以下文件：
 
-- Create: `../../../../mobile-app/pubspec.yaml`：Flutter 依赖、资源声明、测试依赖。
-- Create: `../../../../mobile-app/lib/main.dart`：App 入口。
-- Create: `../../../../mobile-app/lib/app/farm_manager_app.dart`：全局 App、路由、主题入口。
-- Create: `../../../../mobile-app/lib/app/app_router.dart`：五个主 Tab 路由。
-- Create: `../../../../mobile-app/lib/theme/app_colors.dart`：设计色板，必须从 HTML token 翻译。
-- Create: `../../../../mobile-app/lib/theme/app_text_styles.dart`：字号、字重、行高。
-- Create: `../../../../mobile-app/lib/theme/app_theme.dart`：Material theme。
-- Create: `../../../../mobile-app/lib/features/shell/app_shell.dart`：五 Tab 容器和底部导航。
-- Create: `../../../../mobile-app/lib/features/shell/bottom_tab_bar.dart`：完全复刻 HTML 底栏。
-- Create: `../../../../mobile-app/lib/features/home/home_screen.dart`：今日概览页。
-- Create: `../../../../mobile-app/lib/features/workbench/workbench_screen.dart`：工作台页。
-- Create: `../../../../mobile-app/lib/features/yaya/yaya_screen.dart`：芽芽聊天页。
-- Create: `../../../../mobile-app/lib/features/billing/billing_screen.dart`：账单页。
-- Create: `../../../../mobile-app/lib/features/profile/profile_screen.dart`：我的页。
-- Create: `../../../../mobile-app/lib/shared/widgets/phone_safe_scaffold.dart`：页面安全区和背景布局。
-- Create: `../../../../mobile-app/lib/shared/widgets/card_panel.dart`：卡片容器。
-- Create: `../../../../mobile-app/lib/shared/widgets/app_icon_tile.dart`：功能宫格图标。
-- Create: `../../../../mobile-app/lib/shared/widgets/status_header.dart`：页面标题栏。
-- Create: `../../../../mobile-app/lib/data/api/api_client.dart`：Dio 客户端。
-- Create: `../../../../mobile-app/lib/data/repositories/dashboard_repository.dart`：首页经营汇总数据。
-- Create: `../../../../mobile-app/lib/data/repositories/workbench_repository.dart`：工作台入口数据。
-- Create: `../../../../mobile-app/lib/data/repositories/yaya_repository.dart`：芽芽对话数据。
-- Create: `../../../../mobile-app/lib/data/repositories/billing_repository.dart`：账单数据。
-- Create: `../../../../mobile-app/lib/data/repositories/profile_repository.dart`：我的页数据。
-- Create: `../../../../mobile-app/test/features/shell/bottom_tab_bar_test.dart`：底栏布局测试。
-- Create: `../../../../mobile-app/test/features/yaya/yaya_copy_test.dart`：芽芽命名和禁紫测试。
-- Create: `../../../../mobile-app/test/features/home/home_screen_test.dart`：首页关键文案测试。
-- Create: `../../../../mobile-app/test/features/billing/billing_screen_test.dart`：账单关键模块测试。
-- Create: `../../../../mobile-app/test/golden/app_screens_golden_test.dart`：五屏 golden 截图测试。
-- Create: `../../../../mobile-app/README.md`：启动、测试、视觉验收说明。
+- Create: `../../../../agri_mobile_app/pubspec.yaml`：Flutter 依赖、资源声明、测试依赖。
+- Create: `../../../../agri_mobile_app/lib/main.dart`：App 入口。
+- Create: `../../../../agri_mobile_app/lib/app/farm_manager_app.dart`：全局 App、路由、主题入口。
+- Create: `../../../../agri_mobile_app/lib/app/app_router.dart`：五个主 Tab 路由。
+- Create: `../../../../agri_mobile_app/lib/theme/app_colors.dart`：设计色板，必须从 HTML token 翻译。
+- Create: `../../../../agri_mobile_app/lib/theme/app_text_styles.dart`：字号、字重、行高。
+- Create: `../../../../agri_mobile_app/lib/theme/app_theme.dart`：Material theme。
+- Create: `../../../../agri_mobile_app/lib/features/shell/app_shell.dart`：五 Tab 容器和底部导航。
+- Create: `../../../../agri_mobile_app/lib/features/shell/bottom_tab_bar.dart`：完全复刻 HTML 底栏。
+- Create: `../../../../agri_mobile_app/lib/features/home/home_screen.dart`：今日概览页。
+- Create: `../../../../agri_mobile_app/lib/features/workbench/workbench_screen.dart`：工作台页。
+- Create: `../../../../agri_mobile_app/lib/features/yaya/yaya_screen.dart`：芽芽聊天页。
+- Create: `../../../../agri_mobile_app/lib/features/billing/billing_screen.dart`：账单页。
+- Create: `../../../../agri_mobile_app/lib/features/profile/profile_screen.dart`：我的页。
+- Create: `../../../../agri_mobile_app/lib/shared/widgets/phone_safe_scaffold.dart`：页面安全区和背景布局。
+- Create: `../../../../agri_mobile_app/lib/shared/widgets/card_panel.dart`：卡片容器。
+- Create: `../../../../agri_mobile_app/lib/shared/widgets/app_icon_tile.dart`：功能宫格图标。
+- Create: `../../../../agri_mobile_app/lib/shared/widgets/status_header.dart`：页面标题栏。
+- Create: `../../../../agri_mobile_app/lib/data/api/api_client.dart`：Dio 客户端。
+- Create: `../../../../agri_mobile_app/lib/data/repositories/dashboard_repository.dart`：首页经营汇总数据。
+- Create: `../../../../agri_mobile_app/lib/data/repositories/workbench_repository.dart`：工作台入口数据。
+- Create: `../../../../agri_mobile_app/lib/data/repositories/yaya_repository.dart`：芽芽对话数据。
+- Create: `../../../../agri_mobile_app/lib/data/repositories/billing_repository.dart`：账单数据。
+- Create: `../../../../agri_mobile_app/lib/data/repositories/profile_repository.dart`：我的页数据。
+- Create: `../../../../agri_mobile_app/test/features/shell/bottom_tab_bar_test.dart`：底栏布局测试。
+- Create: `../../../../agri_mobile_app/test/features/yaya/yaya_copy_test.dart`：芽芽命名和禁紫测试。
+- Create: `../../../../agri_mobile_app/test/features/home/home_screen_test.dart`：首页关键文案测试。
+- Create: `../../../../agri_mobile_app/test/features/billing/billing_screen_test.dart`：账单关键模块测试。
+- Create: `../../../../agri_mobile_app/test/golden/app_screens_golden_test.dart`：五屏 golden 截图测试。
+- Create: `../../../../agri_mobile_app/README.md`：启动、测试、视觉验收说明。
 
 ---
 
 ### Task 1: 创建 Flutter 工程骨架
 
 **Files:**
-- Create: `../../../../mobile-app`
-- Modify: `../../../../mobile-app/pubspec.yaml`
-- Create: `../../../../mobile-app/README.md`
+- Create: `../../../../agri_mobile_app`
+- Modify: `../../../../agri_mobile_app/pubspec.yaml`
+- Create: `../../../../agri_mobile_app/README.md`
 
 - [ ] **Step 1: 确认当前没有 Flutter App 目录**
 
 Run:
 
 ```bash
-test ! -d mobile-app && echo "mobile-app can be created"
+test ! -d agri_mobile_app && echo "mobile-app can be created"
 ```
 
 Expected:
@@ -84,12 +84,12 @@ mobile-app can be created
 Run:
 
 ```bash
-flutter create mobile-app --org com.farmmanager --project-name farm_manager_app --platforms=ios,android
+flutter create agri_mobile_app --org com.farmmanager --project-name farm_manager_app --platforms=ios,android
 ```
 
-Expected: 输出包含 `All done!`，并生成 `../../../../mobile-app/pubspec.yaml`。
+Expected: 输出包含 `All done!`，并生成 `../../../../agri_mobile_app/pubspec.yaml`。
 
-- [ ] **Step 3: 修改 `../../../../mobile-app/pubspec.yaml` 依赖**
+- [ ] **Step 3: 修改 `../../../../agri_mobile_app/pubspec.yaml` 依赖**
 
 将依赖调整为：
 
@@ -128,12 +128,12 @@ flutter:
 Run:
 
 ```bash
-cd mobile-app && flutter pub get
+cd agri_mobile_app && flutter pub get
 ```
 
 Expected: `exit code 0`。如果 `lucide_icons_flutter` 版本不可用，先运行 `flutter pub add lucide_icons_flutter`，然后保留解析出的版本号。
 
-- [ ] **Step 5: 创建 `../../../../mobile-app/README.md`**
+- [ ] **Step 5: 创建 `../../../../agri_mobile_app/README.md`**
 
 写入：
 
@@ -178,15 +178,15 @@ Expected: commit 成功。
 ### Task 2: 建立设计 Token 和主题
 
 **Files:**
-- Create: `../../../../mobile-app/lib/theme/app_colors.dart`
-- Create: `../../../../mobile-app/lib/theme/app_text_styles.dart`
-- Create: `../../../../mobile-app/lib/theme/app_theme.dart`
-- Modify: `../../../../mobile-app/lib/main.dart`
-- Create: `../../../../mobile-app/lib/app/farm_manager_app.dart`
+- Create: `../../../../agri_mobile_app/lib/theme/app_colors.dart`
+- Create: `../../../../agri_mobile_app/lib/theme/app_text_styles.dart`
+- Create: `../../../../agri_mobile_app/lib/theme/app_theme.dart`
+- Modify: `../../../../agri_mobile_app/lib/main.dart`
+- Create: `../../../../agri_mobile_app/lib/app/farm_manager_app.dart`
 
 - [ ] **Step 1: 创建色板测试**
 
-Create: `../../../../mobile-app/test/theme/app_colors_test.dart`
+Create: `../../../../agri_mobile_app/test/theme/app_colors_test.dart`
 
 ```dart
 import 'package:farm_manager_app/theme/app_colors.dart';
@@ -215,7 +215,7 @@ void main() {
 Run:
 
 ```bash
-cd mobile-app && flutter test test/theme/app_colors_test.dart
+cd agri_mobile_app && flutter test test/theme/app_colors_test.dart
 ```
 
 Expected: FAIL，提示找不到 `AppColors`。
@@ -327,7 +327,7 @@ class AppTheme {
 
 - [ ] **Step 6: 创建 App 入口**
 
-Modify: `../../../../mobile-app/lib/main.dart`
+Modify: `../../../../agri_mobile_app/lib/main.dart`
 
 ```dart
 import 'package:flutter/material.dart';
@@ -338,7 +338,7 @@ void main() {
 }
 ```
 
-Create: `../../../../mobile-app/lib/app/farm_manager_app.dart`
+Create: `../../../../agri_mobile_app/lib/app/farm_manager_app.dart`
 
 ```dart
 import 'package:flutter/material.dart';
@@ -365,7 +365,7 @@ class FarmManagerApp extends StatelessWidget {
 Run:
 
 ```bash
-cd mobile-app && flutter test test/theme/app_colors_test.dart
+cd agri_mobile_app && flutter test test/theme/app_colors_test.dart
 ```
 
 Expected: PASS。
@@ -375,7 +375,7 @@ Expected: PASS。
 Run:
 
 ```bash
-git add mobile-app/lib/theme mobile-app/lib/main.dart mobile-app/lib/app mobile-app/test/theme
+git add agri_mobile_app/lib/theme agri_mobile_app/lib/main.dart agri_mobile_app/lib/app agri_mobile_app/test/theme
 git commit -m "feat: add flutter design tokens"
 ```
 
@@ -384,12 +384,12 @@ git commit -m "feat: add flutter design tokens"
 ### Task 3: 实现共享 UI 组件
 
 **Files:**
-- Create: `../../../../mobile-app/lib/shared/widgets/card_panel.dart`
-- Create: `../../../../mobile-app/lib/shared/widgets/status_header.dart`
-- Create: `../../../../mobile-app/lib/shared/widgets/app_icon_tile.dart`
-- Create: `../../../../mobile-app/lib/shared/widgets/chip_label.dart`
-- Create: `../../../../mobile-app/lib/shared/widgets/phone_safe_scaffold.dart`
-- Test: `../../../../mobile-app/test/shared/widgets/shared_widgets_test.dart`
+- Create: `../../../../agri_mobile_app/lib/shared/widgets/card_panel.dart`
+- Create: `../../../../agri_mobile_app/lib/shared/widgets/status_header.dart`
+- Create: `../../../../agri_mobile_app/lib/shared/widgets/app_icon_tile.dart`
+- Create: `../../../../agri_mobile_app/lib/shared/widgets/chip_label.dart`
+- Create: `../../../../agri_mobile_app/lib/shared/widgets/phone_safe_scaffold.dart`
+- Test: `../../../../agri_mobile_app/test/shared/widgets/shared_widgets_test.dart`
 
 - [ ] **Step 1: 创建共享组件测试**
 
@@ -430,7 +430,7 @@ void main() {
 Run:
 
 ```bash
-cd mobile-app && flutter test test/shared/widgets/shared_widgets_test.dart
+cd agri_mobile_app && flutter test test/shared/widgets/shared_widgets_test.dart
 ```
 
 Expected: FAIL，提示组件不存在。
@@ -694,7 +694,7 @@ class PhoneSafeScaffold extends StatelessWidget {
 Run:
 
 ```bash
-cd mobile-app && flutter test test/shared/widgets/shared_widgets_test.dart
+cd agri_mobile_app && flutter test test/shared/widgets/shared_widgets_test.dart
 ```
 
 Expected: PASS。
@@ -704,7 +704,7 @@ Expected: PASS。
 Run:
 
 ```bash
-git add mobile-app/lib/shared mobile-app/test/shared
+git add agri_mobile_app/lib/shared agri_mobile_app/test/shared
 git commit -m "feat: add shared flutter ui primitives"
 ```
 
@@ -713,9 +713,9 @@ git commit -m "feat: add shared flutter ui primitives"
 ### Task 4: 实现五 Tab Shell 和底部导航
 
 **Files:**
-- Create: `../../../../mobile-app/lib/features/shell/app_shell.dart`
-- Create: `../../../../mobile-app/lib/features/shell/bottom_tab_bar.dart`
-- Create: `../../../../mobile-app/test/features/shell/bottom_tab_bar_test.dart`
+- Create: `../../../../agri_mobile_app/lib/features/shell/app_shell.dart`
+- Create: `../../../../agri_mobile_app/lib/features/shell/bottom_tab_bar.dart`
+- Create: `../../../../agri_mobile_app/test/features/shell/bottom_tab_bar_test.dart`
 
 - [ ] **Step 1: 创建底栏测试**
 
@@ -759,7 +759,7 @@ void main() {
 Run:
 
 ```bash
-cd mobile-app && flutter test test/features/shell/bottom_tab_bar_test.dart
+cd agri_mobile_app && flutter test test/features/shell/bottom_tab_bar_test.dart
 ```
 
 Expected: FAIL，提示 Shell/TabBar 不存在。
@@ -1008,18 +1008,18 @@ class HomeScreen extends StatelessWidget {
 
 对应创建：
 
-- `../../../../mobile-app/lib/features/home/home_screen.dart`
-- `../../../../mobile-app/lib/features/workbench/workbench_screen.dart`，文本 `工作台`
-- `../../../../mobile-app/lib/features/yaya/yaya_screen.dart`，文本 `芽芽`
-- `../../../../mobile-app/lib/features/billing/billing_screen.dart`，文本 `账单`
-- `../../../../mobile-app/lib/features/profile/profile_screen.dart`，文本 `我的`
+- `../../../../agri_mobile_app/lib/features/home/home_screen.dart`
+- `../../../../agri_mobile_app/lib/features/workbench/workbench_screen.dart`，文本 `工作台`
+- `../../../../agri_mobile_app/lib/features/yaya/yaya_screen.dart`，文本 `芽芽`
+- `../../../../agri_mobile_app/lib/features/billing/billing_screen.dart`，文本 `账单`
+- `../../../../agri_mobile_app/lib/features/profile/profile_screen.dart`，文本 `我的`
 
 - [ ] **Step 6: 运行底栏测试**
 
 Run:
 
 ```bash
-cd mobile-app && flutter test test/features/shell/bottom_tab_bar_test.dart
+cd agri_mobile_app && flutter test test/features/shell/bottom_tab_bar_test.dart
 ```
 
 Expected: PASS。
@@ -1029,7 +1029,7 @@ Expected: PASS。
 Run:
 
 ```bash
-git add mobile-app/lib/features mobile-app/test/features/shell
+git add agri_mobile_app/lib/features agri_mobile_app/test/features/shell
 git commit -m "feat: add mobile tab shell"
 ```
 
@@ -1038,8 +1038,8 @@ git commit -m "feat: add mobile tab shell"
 ### Task 5: 实现首页 今日概览
 
 **Files:**
-- Modify: `../../../../mobile-app/lib/features/home/home_screen.dart`
-- Test: `../../../../mobile-app/test/features/home/home_screen_test.dart`
+- Modify: `../../../../agri_mobile_app/lib/features/home/home_screen.dart`
+- Test: `../../../../agri_mobile_app/test/features/home/home_screen_test.dart`
 
 - [ ] **Step 1: 创建首页测试**
 
@@ -1074,7 +1074,7 @@ void main() {
 Run:
 
 ```bash
-cd mobile-app && flutter test test/features/home/home_screen_test.dart
+cd agri_mobile_app && flutter test test/features/home/home_screen_test.dart
 ```
 
 Expected: FAIL，当前页面只有占位。
@@ -1340,7 +1340,7 @@ class TaskRow extends StatelessWidget {
 Run:
 
 ```bash
-cd mobile-app && flutter test test/features/home/home_screen_test.dart
+cd agri_mobile_app && flutter test test/features/home/home_screen_test.dart
 ```
 
 Expected: PASS。
@@ -1350,7 +1350,7 @@ Expected: PASS。
 Run:
 
 ```bash
-cd mobile-app && flutter run -d chrome
+cd agri_mobile_app && flutter run -d chrome
 ```
 
 Expected:
@@ -1364,7 +1364,7 @@ Expected:
 Run:
 
 ```bash
-git add mobile-app/lib/features/home mobile-app/test/features/home
+git add agri_mobile_app/lib/features/home agri_mobile_app/test/features/home
 git commit -m "feat: implement mobile home overview"
 ```
 
@@ -1373,8 +1373,8 @@ git commit -m "feat: implement mobile home overview"
 ### Task 6: 实现工作台页面
 
 **Files:**
-- Modify: `../../../../mobile-app/lib/features/workbench/workbench_screen.dart`
-- Test: `../../../../mobile-app/test/features/workbench/workbench_screen_test.dart`
+- Modify: `../../../../agri_mobile_app/lib/features/workbench/workbench_screen.dart`
+- Test: `../../../../agri_mobile_app/test/features/workbench/workbench_screen_test.dart`
 
 - [ ] **Step 1: 创建工作台测试**
 
@@ -1450,7 +1450,7 @@ GridView.count(
 Run:
 
 ```bash
-cd mobile-app && flutter test test/features/workbench/workbench_screen_test.dart
+cd agri_mobile_app && flutter test test/features/workbench/workbench_screen_test.dart
 ```
 
 Expected: PASS。
@@ -1460,7 +1460,7 @@ Expected: PASS。
 Run:
 
 ```bash
-git add mobile-app/lib/features/workbench mobile-app/test/features/workbench
+git add agri_mobile_app/lib/features/workbench agri_mobile_app/test/features/workbench
 git commit -m "feat: implement mobile workbench"
 ```
 
@@ -1469,8 +1469,8 @@ git commit -m "feat: implement mobile workbench"
 ### Task 7: 实现芽芽聊天页面
 
 **Files:**
-- Modify: `../../../../mobile-app/lib/features/yaya/yaya_screen.dart`
-- Test: `../../../../mobile-app/test/features/yaya/yaya_copy_test.dart`
+- Modify: `../../../../agri_mobile_app/lib/features/yaya/yaya_screen.dart`
+- Test: `../../../../agri_mobile_app/test/features/yaya/yaya_copy_test.dart`
 
 - [ ] **Step 1: 创建芽芽测试**
 
@@ -1542,7 +1542,7 @@ const Color(0xFFF3EFFF);
 Run:
 
 ```bash
-cd mobile-app && flutter test test/features/yaya/yaya_copy_test.dart
+cd agri_mobile_app && flutter test test/features/yaya/yaya_copy_test.dart
 ```
 
 Expected: PASS。
@@ -1552,7 +1552,7 @@ Expected: PASS。
 Run:
 
 ```bash
-cd mobile-app && flutter run -d chrome
+cd agri_mobile_app && flutter run -d chrome
 ```
 
 Expected:
@@ -1566,7 +1566,7 @@ Expected:
 Run:
 
 ```bash
-git add mobile-app/lib/features/yaya mobile-app/test/features/yaya
+git add agri_mobile_app/lib/features/yaya agri_mobile_app/test/features/yaya
 git commit -m "feat: implement yaya chat screen"
 ```
 
@@ -1575,8 +1575,8 @@ git commit -m "feat: implement yaya chat screen"
 ### Task 8: 实现账单页面
 
 **Files:**
-- Modify: `../../../../mobile-app/lib/features/billing/billing_screen.dart`
-- Test: `../../../../mobile-app/test/features/billing/billing_screen_test.dart`
+- Modify: `../../../../agri_mobile_app/lib/features/billing/billing_screen.dart`
+- Test: `../../../../agri_mobile_app/test/features/billing/billing_screen_test.dart`
 
 - [ ] **Step 1: 创建账单测试**
 
@@ -1633,7 +1633,7 @@ const financeGradient = LinearGradient(
 Run:
 
 ```bash
-cd mobile-app && flutter test test/features/billing/billing_screen_test.dart
+cd agri_mobile_app && flutter test test/features/billing/billing_screen_test.dart
 ```
 
 Expected: PASS。
@@ -1643,7 +1643,7 @@ Expected: PASS。
 Run:
 
 ```bash
-git add mobile-app/lib/features/billing mobile-app/test/features/billing
+git add agri_mobile_app/lib/features/billing agri_mobile_app/test/features/billing
 git commit -m "feat: implement mobile billing screen"
 ```
 
@@ -1652,8 +1652,8 @@ git commit -m "feat: implement mobile billing screen"
 ### Task 9: 实现我的页面
 
 **Files:**
-- Modify: `../../../../mobile-app/lib/features/profile/profile_screen.dart`
-- Test: `../../../../mobile-app/test/features/profile/profile_screen_test.dart`
+- Modify: `../../../../agri_mobile_app/lib/features/profile/profile_screen.dart`
+- Test: `../../../../agri_mobile_app/test/features/profile/profile_screen_test.dart`
 
 - [ ] **Step 1: 创建我的页面测试**
 
@@ -1692,7 +1692,7 @@ void main() {
 Run:
 
 ```bash
-cd mobile-app && flutter test test/features/profile/profile_screen_test.dart
+cd agri_mobile_app && flutter test test/features/profile/profile_screen_test.dart
 ```
 
 Expected: PASS。
@@ -1702,7 +1702,7 @@ Expected: PASS。
 Run:
 
 ```bash
-git add mobile-app/lib/features/profile mobile-app/test/features/profile
+git add agri_mobile_app/lib/features/profile agri_mobile_app/test/features/profile
 git commit -m "feat: implement mobile profile screen"
 ```
 
@@ -1711,13 +1711,13 @@ git commit -m "feat: implement mobile profile screen"
 ### Task 10: 接入后端数据层但保持 UI 文案干净
 
 **Files:**
-- Create: `../../../../mobile-app/lib/data/api/api_client.dart`
-- Create: `../../../../mobile-app/lib/data/repositories/dashboard_repository.dart`
-- Create: `../../../../mobile-app/lib/data/repositories/workbench_repository.dart`
-- Create: `../../../../mobile-app/lib/data/repositories/yaya_repository.dart`
-- Create: `../../../../mobile-app/lib/data/repositories/billing_repository.dart`
-- Create: `../../../../mobile-app/lib/data/repositories/profile_repository.dart`
-- Test: `../../../../mobile-app/test/data/api_path_visibility_test.dart`
+- Create: `../../../../agri_mobile_app/lib/data/api/api_client.dart`
+- Create: `../../../../agri_mobile_app/lib/data/repositories/dashboard_repository.dart`
+- Create: `../../../../agri_mobile_app/lib/data/repositories/workbench_repository.dart`
+- Create: `../../../../agri_mobile_app/lib/data/repositories/yaya_repository.dart`
+- Create: `../../../../agri_mobile_app/lib/data/repositories/billing_repository.dart`
+- Create: `../../../../agri_mobile_app/lib/data/repositories/profile_repository.dart`
+- Test: `../../../../agri_mobile_app/test/data/api_path_visibility_test.dart`
 
 - [ ] **Step 1: 创建 API 路径可见性测试**
 
@@ -1874,7 +1874,7 @@ class ProfileRepository {
 Run:
 
 ```bash
-cd mobile-app && flutter test test/data/api_path_visibility_test.dart
+cd agri_mobile_app && flutter test test/data/api_path_visibility_test.dart
 ```
 
 Expected: PASS。
@@ -1884,7 +1884,7 @@ Expected: PASS。
 Run:
 
 ```bash
-git add mobile-app/lib/data mobile-app/test/data
+git add agri_mobile_app/lib/data agri_mobile_app/test/data
 git commit -m "feat: add mobile data repositories"
 ```
 
@@ -1893,12 +1893,12 @@ git commit -m "feat: add mobile data repositories"
 ### Task 11: Golden 截图与视觉验收
 
 **Files:**
-- Create: `../../../../mobile-app/test/golden/app_screens_golden_test.dart`
-- Modify: `../../../../mobile-app/test/flutter_test_config.dart`
+- Create: `../../../../agri_mobile_app/test/golden/app_screens_golden_test.dart`
+- Modify: `../../../../agri_mobile_app/test/flutter_test_config.dart`
 
 - [ ] **Step 1: 创建 golden 配置**
 
-`../../../../mobile-app/test/flutter_test_config.dart`：
+`../../../../agri_mobile_app/test/flutter_test_config.dart`：
 
 ```dart
 import 'dart:async';
@@ -1950,10 +1950,10 @@ late int selectedIndex = widget.initialIndex;
 Run:
 
 ```bash
-cd mobile-app && flutter test --update-goldens test/golden/app_screens_golden_test.dart
+cd agri_mobile_app && flutter test --update-goldens test/golden/app_screens_golden_test.dart
 ```
 
-Expected: golden 图片生成到 `../../../../mobile-app/test/golden/goldens` 或 golden_toolkit 默认目录。
+Expected: golden 图片生成到 `../../../../agri_mobile_app/test/golden/goldens` 或 golden_toolkit 默认目录。
 
 - [ ] **Step 4: 对照 HTML 原稿人工检查**
 
@@ -1983,7 +1983,7 @@ flutter run -d chrome
 Run:
 
 ```bash
-cd mobile-app && flutter test
+cd agri_mobile_app && flutter test
 ```
 
 Expected: PASS。
@@ -1993,7 +1993,7 @@ Expected: PASS。
 Run:
 
 ```bash
-git add mobile-app/test mobile-app/lib
+git add agri_mobile_app/test agri_mobile_app/lib
 git commit -m "test: add mobile visual regression coverage"
 ```
 
@@ -2002,14 +2002,14 @@ git commit -m "test: add mobile visual regression coverage"
 ### Task 12: 最终质量门
 
 **Files:**
-- Modify: `../../../../mobile-app/README.md`
+- Modify: `../../../../agri_mobile_app/README.md`
 
 - [ ] **Step 1: 运行格式化**
 
 Run:
 
 ```bash
-cd mobile-app && dart format lib test
+cd agri_mobile_app && dart format lib test
 ```
 
 Expected: 输出格式化的文件列表或 `0` 改动。
@@ -2019,7 +2019,7 @@ Expected: 输出格式化的文件列表或 `0` 改动。
 Run:
 
 ```bash
-cd mobile-app && flutter analyze
+cd agri_mobile_app && flutter analyze
 ```
 
 Expected: `No issues found!`
@@ -2029,7 +2029,7 @@ Expected: `No issues found!`
 Run:
 
 ```bash
-cd mobile-app && flutter test
+cd agri_mobile_app && flutter test
 ```
 
 Expected: 全部 PASS。
@@ -2039,18 +2039,18 @@ Expected: 全部 PASS。
 Run:
 
 ```bash
-rg -n "AI 助手|<span>AI</span>|#8559f6|#f3efff|purple|violet|/agent|/costs|/weather|/planting|/cycles|/auth|/settings|/api" mobile-app/lib
+rg -n "AI 助手|<span>AI</span>|#8559f6|#f3efff|purple|violet|/agent|/costs|/weather|/planting|/cycles|/auth|/settings|/api" agri_mobile_app/lib
 ```
 
 Expected:
 
 - 不出现 `AI 助手`
 - 不出现紫色 token
-- API 路径只出现在 `../../../../mobile-app/lib/data` 下
+- API 路径只出现在 `../../../../agri_mobile_app/lib/data` 下
 
 - [ ] **Step 5: 更新 README 验收结果**
 
-在 `../../../../mobile-app/README.md` 增加：
+在 `../../../../agri_mobile_app/README.md` 增加：
 
 ```markdown
 ## 当前验收状态
@@ -2067,7 +2067,7 @@ Expected:
 Run:
 
 ```bash
-git add mobile-app/README.md
+git add agri_mobile_app/README.md
 git commit -m "docs: document flutter mobile validation"
 ```
 
@@ -2075,7 +2075,7 @@ git commit -m "docs: document flutter mobile validation"
 
 ## 后端能力映射
 
-这些路径只允许出现在 `../../../../mobile-app/lib/data`：
+这些路径只允许出现在 `../../../../agri_mobile_app/lib/data`：
 
 - 首页：经营建议、天气预报、作业提醒、未结人工
 - 工作台：批次、作业、种植单元、工人、作业类型、农事日志
@@ -2087,7 +2087,7 @@ git commit -m "docs: document flutter mobile validation"
 
 ## 自检清单
 
-- [ ] 新工程位于 `../../../../mobile-app`，没有修改 `archive/FarmManagerMobile`。
+- [ ] 新工程位于 `../../../../agri_mobile_app`，没有修改 `archive/FarmManagerMobile`。
 - [ ] 五个页面均实现，不是空壳。
 - [ ] 视觉尺寸以 375x812 为基准，内容不被底部导航遮挡。
 - [ ] 底部 Tab 中间项叫 `芽芽`，不是 `AI`。

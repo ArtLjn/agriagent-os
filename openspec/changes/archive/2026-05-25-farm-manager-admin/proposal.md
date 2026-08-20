@@ -16,7 +16,7 @@
 
 ### New Capabilities
 
-- `admin-web`: PC 端管理后台，包含 Dashboard、作物管理、茬口管理、农事日志、成本记账、AI 助手、天气预报、API Tester 共 8 个页面，支持全 API 的 CRUD 和调试
+- `agri_admin_web`: PC 端管理后台，包含 Dashboard、作物管理、茬口管理、农事日志、成本记账、AI 助手、天气预报、API Tester 共 8 个页面，支持全 API 的 CRUD 和调试
 - `multi-tenant-foundation`: Farm 实体 + farm_id 数据隔离 + 认证中间件占位，为多农户扩展预留架构基础
 - `yaml-config`: 后端配置静态化，使用 config.yaml 替代 .env，支持分层结构化配置
 

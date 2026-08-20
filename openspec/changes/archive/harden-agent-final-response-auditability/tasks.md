@@ -54,5 +54,5 @@
 - [x] 8.1 Run focused backend tests for Runtime final context, LLM invocation logging, Output Guard, reflection, and DataFlywheel issue extraction.
 - [x] 8.2 Run focused frontend tests for TraceMonitor timeline, drawer, and copy audit block behavior.
 - [x] 8.3 Run `ruff check` and project complexity budget checks for touched backend files.
-- [x] 8.4 Update `docs/farm-manager-design-spec/01_正式设计/15_Agent运行协议与防泄漏设计.md` and `16_Agent日志与诊断设计.md` if implementation details differ from the design.
+- [x] 8.4 Update `../../../../archive/docs/farm-manager-design-spec/01_正式设计/15_Agent运行协议与防泄漏设计.md` and `16_Agent日志与诊断设计.md` if implementation details differ from the design.
 - [x] 8.5 Add final verification notes with remaining risks and rollback guidance.

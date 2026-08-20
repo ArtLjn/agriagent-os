@@ -160,7 +160,7 @@ tags:
   - 赊账
   - 农资
   - 化肥
-version: v2
+version: agri_backend_v2
 owner: agent-platform
 status: active
 context_dependencies:

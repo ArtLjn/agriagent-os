@@ -26,7 +26,7 @@ def test_build_prompt_comparison_outputs_required_deltas() -> None:
 
     comparison = build_prompt_comparison(
         "system_base:v1",
-        "system_base:v2",
+        "system_base:agri_backend_v2",
         base_results,
         candidate_results,
     )

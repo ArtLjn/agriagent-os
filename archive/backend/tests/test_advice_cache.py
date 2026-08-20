@@ -1,4 +1,4 @@
-"""每日建议 v2 缓存逻辑测试。"""
+"""每日建议 agri_backend_v2 缓存逻辑测试。"""
 
 import json
 from datetime import datetime, timedelta
@@ -35,7 +35,7 @@ def _candidate(key: str, title: str = "高温错峰采收") -> DailyAdviceCandid
 
 
 def _v2_payload(candidate: DailyAdviceCandidate, *, label: str | None = None) -> dict:
-    """构造合法 DailyAdvice v2 payload。"""
+    """构造合法 DailyAdvice agri_backend_v2 payload。"""
     title = label or candidate.title_hint
     return {
         "preview": "今日建议",
@@ -146,13 +146,13 @@ def mock_collect_candidates():
 
 
 class TestDailyAdviceCache:
-    """测试 get_daily_advice v2 缓存命中/未命中逻辑。"""
+    """测试 get_daily_advice agri_backend_v2 缓存命中/未命中逻辑。"""
 
     @pytest.mark.asyncio
     async def test_cache_miss_calls_llm(
         self, db, mock_composer, mock_collect_candidates
     ):
-        """无 v2 缓存时应调用 LLM 并保存 v2 JSON。"""
+        """无 agri_backend_v2 缓存时应调用 LLM 并保存 agri_backend_v2 JSON。"""
         candidate = _candidate("weather:hot:miss")
         mock_collect_candidates.return_value = [candidate]
         with patch(
@@ -231,7 +231,7 @@ class TestDailyAdviceCache:
     async def test_legacy_cache_is_ignored(
         self, db, mock_composer, mock_collect_candidates
     ):
-        """旧 schema 或无 schema 的缓存不能阻止 v2 重新生成。"""
+        """旧 schema 或无 schema 的缓存不能阻止 agri_backend_v2 重新生成。"""
         today = _today_start()
         candidate = _candidate("weather:hot:legacy")
         db.add(

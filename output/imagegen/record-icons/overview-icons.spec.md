@@ -11,7 +11,7 @@
 
 Recommended directory:
 
-- `mobile-app/assets/images/record/overview/`
+- `../../../agri_mobile_app/assets/images/record/overview/`
 
 Recommended final asset names:
 

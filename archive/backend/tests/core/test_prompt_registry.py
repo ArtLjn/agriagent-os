@@ -26,16 +26,16 @@ class TestPromptRegistry:
     def test_switch_version(self):
         reg = PromptRegistry()
         reg.register("test", "v1", "hello v1")
-        reg.register("test", "v2", "hello v2")
+        reg.register("test", "agri_backend_v2", "hello agri_backend_v2")
         assert reg.get("test") == "hello v1"
-        reg.switch_version("test", "v2")
-        assert reg.get("test") == "hello v2"
+        reg.switch_version("test", "agri_backend_v2")
+        assert reg.get("test") == "hello agri_backend_v2"
 
     def test_list_versions(self):
         reg = PromptRegistry()
         reg.register("test", "v1", "a")
-        reg.register("test", "v2", "b")
-        assert reg.list_versions("test") == ["v1", "v2"]
+        reg.register("test", "agri_backend_v2", "b")
+        assert reg.list_versions("test") == ["v1", "agri_backend_v2"]
 
     def test_reload_clears_and_reloads(self):
         reg = PromptRegistry()

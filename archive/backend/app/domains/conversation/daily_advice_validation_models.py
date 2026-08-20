@@ -1,4 +1,4 @@
-"""每日建议 v2 校验模型和修复指令。"""
+"""每日建议 agri_backend_v2 校验模型和修复指令。"""
 
 from __future__ import annotations
 
@@ -60,7 +60,7 @@ def _build_repair_instruction(
 
     allowed_ids = ", ".join(candidate.id for candidate in candidates) or "无"
     lines = [
-        "请修复 DailyAdvice v2 JSON 后重试：",
+        "请修复 DailyAdvice agri_backend_v2 JSON 后重试：",
         f"- 只能使用 selected candidate id：{allowed_ids}。",
         "- 保留 candidate 的 category/source_type/source_id，priority 不得小于候选 priority。",
         "- compact.subtitle 至少 15 字，detail_view.description 至少 20 字。",

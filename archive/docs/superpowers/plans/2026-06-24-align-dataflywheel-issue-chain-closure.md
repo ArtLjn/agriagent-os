@@ -28,19 +28,19 @@
   - 覆盖 chain final label、chain draft/repair pack 出口阻断。
 - 修改：`backend/tests/api/test_admin_data_flywheel_repair_packs.py`
   - 覆盖 sample repair pack compatibility/debug 标识。
-- 修改：`../../../../admin-web/src/api/dataFlywheel.ts`
+- 修改：`../../../../agri_admin_web/src/api/dataFlywheel.ts`
   - 补齐标签类型、chain draft/repair pack API 方法、repair pack case 字段。
-- 修改：`../../../../admin-web/src/api/dataFlywheel.test.ts`
+- 修改：`../../../../agri_admin_web/src/api/dataFlywheel.test.ts`
   - 覆盖新增 API endpoint 编码和 payload。
-- 修改：`../../../../admin-web/src/pages/DataFlywheel/components/IssueChainReviewPanel.tsx`
+- 修改：`../../../../agri_admin_web/src/pages/DataFlywheel/components/IssueChainReviewPanel.tsx`
   - 补齐标签集合和 chain 闭环按钮。
-- 修改：`../../../../admin-web/src/pages/DataFlywheel/components/DailyReviewWorkbench.tsx`
+- 修改：`../../../../agri_admin_web/src/pages/DataFlywheel/components/DailyReviewWorkbench.tsx`
   - 承接 chain draft/repair pack 回调和预览状态。
-- 修改：`../../../../admin-web/src/pages/DataFlywheel/index.tsx`
+- 修改：`../../../../agri_admin_web/src/pages/DataFlywheel/index.tsx`
   - 移除高级搜索详情栏中的正式标注/回归/修复包入口，保留 debug/证据能力。
-- 修改：`../../../../admin-web/src/pages/DataFlywheel/index.test.tsx`
+- 修改：`../../../../agri_admin_web/src/pages/DataFlywheel/index.test.tsx`
   - 覆盖每日质检 chain 出口和高级搜索边界。
-- 修改：`../../../../admin-web/src/pages/DataFlywheel/layout.test.tsx`
+- 修改：`../../../../agri_admin_web/src/pages/DataFlywheel/layout.test.tsx`
   - 覆盖默认入口和高级搜索结构不回退。
 - 修改：`../.../farm-manager-design-spec/01_正式设计/06_数据飞轮与评测.md`
   - 更新当前状态和旧入口边界说明。
@@ -50,11 +50,11 @@
 **Files:**
 - Modify: `backend/app/modules/data_flywheel/service.py`
 - Modify: `backend/tests/api/test_admin_data_flywheel_review_issue_chain_closure.py`
-- Modify: `../../../../admin-web/src/api/dataFlywheel.ts`
-- Modify: `../../../../admin-web/src/pages/DataFlywheel/index.tsx`
-- Modify: `../../../../admin-web/src/pages/DataFlywheel/components/IssueChainReviewPanel.tsx`
+- Modify: `../../../../agri_admin_web/src/api/dataFlywheel.ts`
+- Modify: `../../../../agri_admin_web/src/pages/DataFlywheel/index.tsx`
+- Modify: `../../../../agri_admin_web/src/pages/DataFlywheel/components/IssueChainReviewPanel.tsx`
 - Test: `backend/tests/api/test_admin_data_flywheel_review_issue_chain_closure.py`
-- Test: `../../../../admin-web/src/api/dataFlywheel.test.ts`
+- Test: `../../../../agri_admin_web/src/api/dataFlywheel.test.ts`
 
 - [ ] **Step 1: 写后端失败测试，证明 `tool_parameter_mismatch` 可保存为 final label**
 
@@ -130,13 +130,13 @@ ALLOWED_LABELS = {
 
 - [ ] **Step 4: 前端类型和筛选标签加入 `tool_parameter_mismatch`**
 
-在 `../../../../admin-web/src/api/dataFlywheel.ts` 的 `DataFlywheelLabel` union 中加入：
+在 `../../../../agri_admin_web/src/api/dataFlywheel.ts` 的 `DataFlywheelLabel` union 中加入：
 
 ```ts
   | 'tool_parameter_mismatch'
 ```
 
-在 `../../../../admin-web/src/pages/DataFlywheel/index.tsx` 的 `labelOptions` 加入：
+在 `../../../../agri_admin_web/src/pages/DataFlywheel/index.tsx` 的 `labelOptions` 加入：
 
 ```ts
   { label: '工具参数错配', value: 'tool_parameter_mismatch' },
@@ -144,7 +144,7 @@ ALLOWED_LABELS = {
 
 - [ ] **Step 5: IssueChain 审核面板使用完整标签集合**
 
-把 `../../../../admin-web/src/pages/DataFlywheel/components/IssueChainReviewPanel.tsx` 中的 `labelOptions` 替换为：
+把 `../../../../agri_admin_web/src/pages/DataFlywheel/components/IssueChainReviewPanel.tsx` 中的 `labelOptions` 替换为：
 
 ```ts
 const labelOptions = [
@@ -171,7 +171,7 @@ Run:
 
 ```bash
 cd backend && pytest tests/api/test_admin_data_flywheel_review_issue_chain_closure.py::test_review_issue_chain_accepts_tool_parameter_mismatch_label -q
-cd admin-web && pnpm test src/api/dataFlywheel.test.ts
+cd agri_admin_web && pnpm test src/api/dataFlywheel.test.ts
 ```
 
 Expected: 两个命令 PASS。
@@ -181,9 +181,9 @@ Expected: 两个命令 PASS。
 ```bash
 git add backend/app/modules/data_flywheel/service.py \
   backend/tests/api/test_admin_data_flywheel_review_issue_chain_closure.py \
-  admin-web/src/api/dataFlywheel.ts \
-  admin-web/src/pages/DataFlywheel/index.tsx \
-  admin-web/src/pages/DataFlywheel/components/IssueChainReviewPanel.tsx
+  agri_admin_web/src/api/dataFlywheel.ts \
+  agri_admin_web/src/pages/DataFlywheel/index.tsx \
+  agri_admin_web/src/pages/DataFlywheel/components/IssueChainReviewPanel.tsx
 git commit -m "fix: 对齐数据飞轮固定标签集合"
 ```
 
@@ -398,13 +398,13 @@ git commit -m "fix: 增强问题链证据状态"
 ## Task 3: 前端 API 增加 chain draft 和 chain repair pack 方法
 
 **Files:**
-- Modify: `../../../../admin-web/src/api/dataFlywheel.ts`
-- Modify: `../../../../admin-web/src/api/dataFlywheel.test.ts`
-- Test: `../../../../admin-web/src/api/dataFlywheel.test.ts`
+- Modify: `../../../../agri_admin_web/src/api/dataFlywheel.ts`
+- Modify: `../../../../agri_admin_web/src/api/dataFlywheel.test.ts`
+- Test: `../../../../agri_admin_web/src/api/dataFlywheel.test.ts`
 
 - [ ] **Step 1: 写 API 失败测试**
 
-在 `../../../../admin-web/src/api/dataFlywheel.test.ts` 的 imports 中加入：
+在 `../../../../agri_admin_web/src/api/dataFlywheel.test.ts` 的 imports 中加入：
 
 ```ts
   createReviewIssueChainCaseDraft,
@@ -468,14 +468,14 @@ git commit -m "fix: 增强问题链证据状态"
 Run:
 
 ```bash
-cd admin-web && pnpm test src/api/dataFlywheel.test.ts
+cd agri_admin_web && pnpm test src/api/dataFlywheel.test.ts
 ```
 
 Expected: FAIL，提示导入的函数不存在。
 
 - [ ] **Step 3: 实现前端 API 方法**
 
-在 `../../../../admin-web/src/api/dataFlywheel.ts` 的 `saveReviewIssueChainReview()` 后加入：
+在 `../../../../agri_admin_web/src/api/dataFlywheel.ts` 的 `saveReviewIssueChainReview()` 后加入：
 
 ```ts
 export async function createReviewIssueChainCaseDraft(
@@ -514,7 +514,7 @@ export async function createReviewIssueChainRepairPack(
 Run:
 
 ```bash
-cd admin-web && pnpm test src/api/dataFlywheel.test.ts
+cd agri_admin_web && pnpm test src/api/dataFlywheel.test.ts
 ```
 
 Expected: PASS。
@@ -522,22 +522,22 @@ Expected: PASS。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add admin-web/src/api/dataFlywheel.ts admin-web/src/api/dataFlywheel.test.ts
+git add agri_admin_web/src/api/dataFlywheel.ts agri_admin_web/src/api/dataFlywheel.test.ts
 git commit -m "feat: 增加问题链闭环 API"
 ```
 
 ## Task 4: Daily Review 审核面板接入 chain 闭环按钮
 
 **Files:**
-- Modify: `../../../../admin-web/src/pages/DataFlywheel/components/IssueChainReviewPanel.tsx`
-- Modify: `../../../../admin-web/src/pages/DataFlywheel/components/DailyReviewWorkbench.tsx`
-- Modify: `../../../../admin-web/src/pages/DataFlywheel/index.tsx`
-- Modify: `../../../../admin-web/src/pages/DataFlywheel/index.test.tsx`
-- Test: `../../../../admin-web/src/pages/DataFlywheel/index.test.tsx`
+- Modify: `../../../../agri_admin_web/src/pages/DataFlywheel/components/IssueChainReviewPanel.tsx`
+- Modify: `../../../../agri_admin_web/src/pages/DataFlywheel/components/DailyReviewWorkbench.tsx`
+- Modify: `../../../../agri_admin_web/src/pages/DataFlywheel/index.tsx`
+- Modify: `../../../../agri_admin_web/src/pages/DataFlywheel/index.test.tsx`
+- Test: `../../../../agri_admin_web/src/pages/DataFlywheel/index.test.tsx`
 
 - [ ] **Step 1: 写前端失败测试，确认每日质检可生成 chain draft 和 repair pack**
 
-在 `../../../../admin-web/src/pages/DataFlywheel/index.test.tsx` 的 mock imports 中加入：
+在 `../../../../agri_admin_web/src/pages/DataFlywheel/index.test.tsx` 的 mock imports 中加入：
 
 ```ts
   createReviewIssueChainCaseDraft,
@@ -627,7 +627,7 @@ mockedReviewChain.mockResolvedValueOnce({
 Run:
 
 ```bash
-cd admin-web && pnpm test src/pages/DataFlywheel/index.test.tsx -t "每日质检从问题链生成回归草稿和修复包"
+cd agri_admin_web && pnpm test src/pages/DataFlywheel/index.test.tsx -t "每日质检从问题链生成回归草稿和修复包"
 ```
 
 Expected: FAIL，按钮或 API 方法未接入。
@@ -778,7 +778,7 @@ export default function DailyReviewWorkbench({
 
 - [ ] **Step 6: DataFlywheel 父组件接收预览**
 
-在 `../../../../admin-web/src/pages/DataFlywheel/index.tsx` 的 Daily Review tab 改为：
+在 `../../../../agri_admin_web/src/pages/DataFlywheel/index.tsx` 的 Daily Review tab 改为：
 
 ```tsx
 children: (
@@ -800,7 +800,7 @@ children: (
 Run:
 
 ```bash
-cd admin-web && pnpm test src/pages/DataFlywheel/index.test.tsx -t "每日质检从问题链生成回归草稿和修复包"
+cd agri_admin_web && pnpm test src/pages/DataFlywheel/index.test.tsx -t "每日质检从问题链生成回归草稿和修复包"
 ```
 
 Expected: PASS。
@@ -810,7 +810,7 @@ Expected: PASS。
 Run:
 
 ```bash
-cd admin-web && pnpm test src/api/dataFlywheel.test.ts src/pages/DataFlywheel/index.test.tsx src/pages/DataFlywheel/layout.test.tsx
+cd agri_admin_web && pnpm test src/api/dataFlywheel.test.ts src/pages/DataFlywheel/index.test.tsx src/pages/DataFlywheel/layout.test.tsx
 ```
 
 Expected: PASS。
@@ -818,25 +818,25 @@ Expected: PASS。
 - [ ] **Step 9: 提交**
 
 ```bash
-git add admin-web/src/api/dataFlywheel.ts \
-  admin-web/src/api/dataFlywheel.test.ts \
-  admin-web/src/pages/DataFlywheel/components/IssueChainReviewPanel.tsx \
-  admin-web/src/pages/DataFlywheel/components/DailyReviewWorkbench.tsx \
-  admin-web/src/pages/DataFlywheel/index.tsx \
-  admin-web/src/pages/DataFlywheel/index.test.tsx
+git add agri_admin_web/src/api/dataFlywheel.ts \
+  agri_admin_web/src/api/dataFlywheel.test.ts \
+  agri_admin_web/src/pages/DataFlywheel/components/IssueChainReviewPanel.tsx \
+  agri_admin_web/src/pages/DataFlywheel/components/DailyReviewWorkbench.tsx \
+  agri_admin_web/src/pages/DataFlywheel/index.tsx \
+  agri_admin_web/src/pages/DataFlywheel/index.test.tsx
 git commit -m "feat: 接入问题链闭环出口"
 ```
 
 ## Task 5: 高级搜索边界收口
 
 **Files:**
-- Modify: `../../../../admin-web/src/pages/DataFlywheel/index.tsx`
-- Modify: `../../../../admin-web/src/pages/DataFlywheel/index.test.tsx`
-- Test: `../../../../admin-web/src/pages/DataFlywheel/index.test.tsx`
+- Modify: `../../../../agri_admin_web/src/pages/DataFlywheel/index.tsx`
+- Modify: `../../../../agri_admin_web/src/pages/DataFlywheel/index.test.tsx`
+- Test: `../../../../agri_admin_web/src/pages/DataFlywheel/index.test.tsx`
 
 - [ ] **Step 1: 写失败测试，确认高级搜索没有正式标注和资产按钮**
 
-在 `../../../../admin-web/src/pages/DataFlywheel/index.test.tsx` 追加：
+在 `../../../../agri_admin_web/src/pages/DataFlywheel/index.test.tsx` 追加：
 
 ```tsx
   it('高级搜索只保留查证入口，不暴露最终标注和正式资产按钮', async () => {
@@ -862,14 +862,14 @@ git commit -m "feat: 接入问题链闭环出口"
 Run:
 
 ```bash
-cd admin-web && pnpm test src/pages/DataFlywheel/index.test.tsx -t "高级搜索只保留查证入口"
+cd agri_admin_web && pnpm test src/pages/DataFlywheel/index.test.tsx -t "高级搜索只保留查证入口"
 ```
 
 Expected: FAIL，因为当前高级搜索仍渲染 `AnnotationPanel` 的保存/导出按钮。
 
 - [ ] **Step 3: 给 AnnotationPanel 增加只读模式**
 
-在 `../../../../admin-web/src/pages/DataFlywheel/components/AnnotationPanel.tsx` 的 props 中加入：
+在 `../../../../agri_admin_web/src/pages/DataFlywheel/components/AnnotationPanel.tsx` 的 props 中加入：
 
 ```ts
   mode?: 'review' | 'evidence';
@@ -893,7 +893,7 @@ Expected: FAIL，因为当前高级搜索仍渲染 `AnnotationPanel` 的保存/�
 
 - [ ] **Step 4: 高级搜索详情传 evidence 模式**
 
-在 `../../../../admin-web/src/pages/DataFlywheel/index.tsx` 构造 `detailContent` 时，把 `AnnotationPanel` 调用加入：
+在 `../../../../agri_admin_web/src/pages/DataFlywheel/index.tsx` 构造 `detailContent` 时，把 `AnnotationPanel` 调用加入：
 
 ```tsx
 mode={activeTab === 'advanced-search' ? 'evidence' : 'review'}
@@ -928,7 +928,7 @@ mode={activeTab === 'advanced-search' ? 'evidence' : 'review'}
 Run:
 
 ```bash
-cd admin-web && pnpm test src/pages/DataFlywheel/index.test.tsx -t "高级搜索只保留查证入口"
+cd agri_admin_web && pnpm test src/pages/DataFlywheel/index.test.tsx -t "高级搜索只保留查证入口"
 ```
 
 Expected: PASS。
@@ -938,7 +938,7 @@ Expected: PASS。
 Run:
 
 ```bash
-cd admin-web && pnpm test src/pages/DataFlywheel/index.test.tsx src/pages/DataFlywheel/layout.test.tsx
+cd agri_admin_web && pnpm test src/pages/DataFlywheel/index.test.tsx src/pages/DataFlywheel/layout.test.tsx
 ```
 
 Expected: PASS。需要同步更新旧测试名“高级搜索中保留旧样本检索入口”，让它只断言检索和证据查看，不再断言保存/导出按钮。
@@ -946,9 +946,9 @@ Expected: PASS。需要同步更新旧测试名“高级搜索中保留旧样本
 - [ ] **Step 8: 提交**
 
 ```bash
-git add admin-web/src/pages/DataFlywheel/index.tsx \
-  admin-web/src/pages/DataFlywheel/index.test.tsx \
-  admin-web/src/pages/DataFlywheel/components/AnnotationPanel.tsx
+git add agri_admin_web/src/pages/DataFlywheel/index.tsx \
+  agri_admin_web/src/pages/DataFlywheel/index.test.tsx \
+  agri_admin_web/src/pages/DataFlywheel/components/AnnotationPanel.tsx
 git commit -m "fix: 收口高级搜索审核边界"
 ```
 
@@ -1126,7 +1126,7 @@ Expected: PASS。
 Run:
 
 ```bash
-cd admin-web && pnpm test \
+cd agri_admin_web && pnpm test \
   src/api/dataFlywheel.test.ts \
   src/pages/DataFlywheel/index.test.tsx \
   src/pages/DataFlywheel/layout.test.tsx \
@@ -1141,7 +1141,7 @@ Run:
 
 ```bash
 cd backend && ruff check . && ruff format --check .
-cd admin-web && pnpm lint
+cd agri_admin_web && pnpm lint
 ```
 
 Expected: PASS。若项目当前存在无关 lint 失败，记录失败文件，不在本 change 中修复无关代码。

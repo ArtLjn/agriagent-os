@@ -6,7 +6,7 @@ import pytest
 
 from agent.api import traces as traces_api  # noqa: F401
 from agent.config import settings
-from agent.infra.trace import store
+from agent.domains.harness.observability.trace import store
 from agent.api import api_router
 
 

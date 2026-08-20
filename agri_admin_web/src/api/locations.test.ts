@@ -41,7 +41,7 @@ describe('locations api', () => {
     });
   });
 
-  it('兼容 v2 返回的 name/full_name 字段，避免下拉显示 undefined', async () => {
+  it('兼容 agri_backend_v2 返回的 name/full_name 字段，避免下拉显示 undefined', async () => {
     mockedApiClient.get.mockResolvedValueOnce({
       data: {
         items: [

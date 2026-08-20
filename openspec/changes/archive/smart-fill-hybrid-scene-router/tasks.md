@@ -28,19 +28,19 @@
 
 ## 4. admin-web 接入
 
-- [ ] 4.1 修改 `admin-web/src/api/smartFill.ts` 的 `parseSmartFill` 签名：`scene` 改为可选
-- [ ] 4.2 修改 `admin-web/src/pages/Operations/smartCreateModel.ts` 的 `inferSmartFillScene`：补充 worker 自然说法正则
-- [ ] 4.3 修改 `admin-web/src/pages/Operations/index.tsx`：`inferredScene === 'unsupported'` 时不再前端拦截，改为不传 scene 调后端
+- [ ] 4.1 修改 `../../../../agri_admin_web/src/api/smartFill.ts` 的 `parseSmartFill` 签名：`scene` 改为可选
+- [ ] 4.2 修改 `../../../../agri_admin_web/src/pages/Operations/smartCreateModel.ts` 的 `inferSmartFillScene`：补充 worker 自然说法正则
+- [ ] 4.3 修改 `../../../../agri_admin_web/src/pages/Operations/index.tsx`：`inferredScene === 'unsupported'` 时不再前端拦截，改为不传 scene 调后端
 - [ ] 4.4 调整 UI：前端预判 unsupported 时移除"无法识别"warning，改为 loading 状态等后端响应
-- [ ] 4.5 更新 `admin-web/src/api/smartFill.test.ts`：覆盖 scene 可选场景
-- [ ] 4.6 更新 `admin-web/src/pages/Operations/smartCreateModel.test.ts`：补充 worker 自然说法 case
-- [ ] 4.7 更新 `admin-web/src/pages/Costs/costSmartFill.test.ts`：兼容 scene 可选签名
+- [ ] 4.5 更新 `../../../../agri_admin_web/src/api/smartFill.test.ts`：覆盖 scene 可选场景
+- [ ] 4.6 更新 `../../../../agri_admin_web/src/pages/Operations/smartCreateModel.test.ts`：补充 worker 自然说法 case
+- [ ] 4.7 更新 `../../../../agri_admin_web/src/pages/Costs/costSmartFill.test.ts`：兼容 scene 可选签名
 
 ## 5. mobile-app 接入
 
-- [ ] 5.1 修改 `mobile-app/lib/data/api/api_models.dart` 的 `SmartFillResult`：scene 字段语义更新（注释）
-- [ ] 5.2 修改 `mobile-app/lib/data/repositories/workbench_repository.dart` 的 `parseSmartFill`：scene 参数改为可选
-- [ ] 5.3 修改 `mobile-app/lib/features/record_flow/record_flow_controller.dart:15`：去掉默认 `scene="ledger.record"`
+- [ ] 5.1 修改 `../../../../agri_mobile_app/lib/data/api/api_models.dart` 的 `SmartFillResult`：scene 字段语义更新（注释）
+- [ ] 5.2 修改 `../../../../agri_mobile_app/lib/data/repositories/workbench_repository.dart` 的 `parseSmartFill`：scene 参数改为可选
+- [ ] 5.3 修改 `../../../../agri_mobile_app/lib/features/record_flow/record_flow_controller.dart:15`：去掉默认 `scene="ledger.record"`
 - [ ] 5.4 检查 `RecordAiConfirmScreen` 的展示逻辑：确认能正确展示后端返回的 scene（不再是写死的 ledger）
 - [ ] 5.5 检查 `controller.save(draft)` 的 scene 路由分支：确认 4 个场景都能正确路由到对应业务 create 接口
 - [ ] 5.6 新增 widget test：覆盖工作台输入不同场景文本的端到端流程
@@ -48,8 +48,8 @@
 
 ## 6. 文档与可观测性
 
-- [ ] 6.1 更新 `docs/design/smart-fill-unified-entry.md`：补充"场景自动路由"章节，链接到本次 change
-- [ ] 6.2 在 `docs/architecture/overview.md` 中补充 scene router 模块的位置（如果该文件有 smart-fill 相关章节）
+- [ ] 6.1 更新 `../../../../archive/docs/design/smart-fill-unified-entry.md`：补充"场景自动路由"章节，链接到本次 change
+- [ ] 6.2 在 `../../../../archive/docs/architecture/overview.md` 中补充 scene router 模块的位置（如果该文件有 smart-fill 相关章节）
 - [ ] 6.3 在后端日志查询文档中补充 scene router 日志字段说明（route_source / scene / duration_ms / llm_reason）
 - [ ] 6.4 运行 `bash scripts/check-doc-freshness.sh` 确认文档同步
 - [ ] 6.5 准备一份 eval set（20-30 条真实/构造输入），人工标注期望 scene，作为后续迭代的回归基线

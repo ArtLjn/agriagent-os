@@ -29,7 +29,7 @@ fi
 
 if [ -d "admin-web" ]; then
   echo "📦 安装前端依赖..."
-  cd admin-web && pnpm install --silent 2>/dev/null || echo "⚠️ pnpm install 跳过"
+  cd agri_admin_web && pnpm install --silent 2>/dev/null || echo "⚠️ pnpm install 跳过"
   echo "🔍 运行 TypeScript 检查..."
   npx tsc --noEmit 2>/dev/null || { echo "❌ TypeScript 检查失败"; exit 1; }
   echo "🧪 运行前端测试..."

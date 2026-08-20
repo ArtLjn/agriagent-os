@@ -21,8 +21,8 @@
 - Modify `backend/app/agent/runtime/final_prompt_budget.py`: report richer before/after budget and use structured tool-result compression.
 - Modify `backend/app/agent/runtime/node_helpers.py`: emit `final_llm_context` schema v2.
 - Create/modify backend tests under `backend/tests/context/` and `backend/tests/test_final_prompt_budget.py`, `backend/tests/test_sliding_window.py`.
-- Modify `../../../../admin-web/src/pages/Playground/traceMetrics.ts`: parse snapshot v2.
-- Modify `../../../../admin-web/src/pages/Playground/LlmContextVisualView.tsx`: show block decisions, compression, messages timeline.
+- Modify `../../../../agri_admin_web/src/pages/Playground/traceMetrics.ts`: parse snapshot v2.
+- Modify `../../../../agri_admin_web/src/pages/Playground/LlmContextVisualView.tsx`: show block decisions, compression, messages timeline.
 - Modify/add admin-web Playground tests for the new snapshot shape.
 - Add `../.../specs/2026-07-26-agent-context-engine-and-observability-design.md` to the feature branch.
 
@@ -244,10 +244,10 @@ Expected: all pass.
 ### Task 3: Admin-Web LLM Context Inspector V2
 
 **Files:**
-- Modify: `../../../../admin-web/src/pages/Playground/traceMetrics.ts`
-- Modify: `../../../../admin-web/src/pages/Playground/LlmContextVisualView.tsx`
-- Test: `../../../../admin-web/src/pages/Playground/LlmContextInspector.test.tsx`
-- Test: `../../../../admin-web/src/pages/Playground/traceMetrics.test.ts`
+- Modify: `../../../../agri_admin_web/src/pages/Playground/traceMetrics.ts`
+- Modify: `../../../../agri_admin_web/src/pages/Playground/LlmContextVisualView.tsx`
+- Test: `../../../../agri_admin_web/src/pages/Playground/LlmContextInspector.test.tsx`
+- Test: `../../../../agri_admin_web/src/pages/Playground/traceMetrics.test.ts`
 
 - [ ] **Step 1: Write frontend parsing tests**
 
@@ -264,7 +264,7 @@ Add a v2 final_llm_context node fixture to `traceMetrics.test.ts`. Assert `extra
 Run:
 
 ```bash
-pnpm test -- --run admin-web/src/pages/Playground/traceMetrics.test.ts admin-web/src/pages/Playground/LlmContextInspector.test.tsx
+pnpm test -- --run agri_admin_web/src/pages/Playground/traceMetrics.test.ts agri_admin_web/src/pages/Playground/LlmContextInspector.test.tsx
 ```
 
 Expected: fails because v2 fields are not parsed or rendered.
@@ -314,7 +314,7 @@ Update Runtime Context panel to prefer `snapshot.runtimeSections` over parsing `
 Run:
 
 ```bash
-pnpm test -- --run admin-web/src/pages/Playground/traceMetrics.test.ts admin-web/src/pages/Playground/LlmContextInspector.test.tsx
+pnpm test -- --run agri_admin_web/src/pages/Playground/traceMetrics.test.ts agri_admin_web/src/pages/Playground/LlmContextInspector.test.tsx
 ```
 
 Expected: all pass.
@@ -350,7 +350,7 @@ Expected: all pass.
 Run:
 
 ```bash
-pnpm test -- --run admin-web/src/pages/Playground/traceMetrics.test.ts admin-web/src/pages/Playground/LlmContextInspector.test.tsx
+pnpm test -- --run agri_admin_web/src/pages/Playground/traceMetrics.test.ts agri_admin_web/src/pages/Playground/LlmContextInspector.test.tsx
 ```
 
 Expected: all pass.
@@ -372,6 +372,6 @@ Expected: no new failures. If existing unrelated lint failures appear, record th
 Commit all branch changes with:
 
 ```bash
-git add backend/app/context backend/app/agent/runtime backend/tests admin-web/src/pages/Playground docs/specs docs/farm-manager-design-spec/01_正式设计/03_Context工程.md docs/superpowers/plans/2026-07-26-context-engine-observability-plan.md
+git add backend/app/context backend/app/agent/runtime backend/tests agri_admin_web/src/pages/Playground docs/specs docs/farm-manager-design-spec/01_正式设计/03_Context工程.md docs/superpowers/plans/2026-07-26-context-engine-observability-plan.md
 git commit -m "feat: improve context engine observability"
 ```

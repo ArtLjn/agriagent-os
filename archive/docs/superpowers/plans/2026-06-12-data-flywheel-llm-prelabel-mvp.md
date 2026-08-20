@@ -1606,7 +1606,7 @@ import {
 Run:
 
 ```bash
-cd /Users/ljn/Documents/demo/explore/admin-web
+cd /Users/ljn/Documents/demo/explore/agri_admin_web
 pnpm exec vitest run src/api/dataFlywheel.test.ts
 ```
 
@@ -1710,7 +1710,7 @@ export async function rejectSamplePrelabel(
 Run:
 
 ```bash
-cd /Users/ljn/Documents/demo/explore/admin-web
+cd /Users/ljn/Documents/demo/explore/agri_admin_web
 pnpm exec vitest run src/api/dataFlywheel.test.ts
 ```
 
@@ -1720,7 +1720,7 @@ Expected: PASS.
 
 ```bash
 cd /Users/ljn/Documents/demo/explore
-git add admin-web/src/api/dataFlywheel.ts admin-web/src/api/dataFlywheel.test.ts
+git add agri_admin_web/src/api/dataFlywheel.ts agri_admin_web/src/api/dataFlywheel.test.ts
 git commit -m "feat: add data flywheel prelabel frontend api"
 ```
 
@@ -1937,7 +1937,7 @@ it('驳回 AI 预判不会保存人工标签', async () => {
 Run:
 
 ```bash
-cd /Users/ljn/Documents/demo/explore/admin-web
+cd /Users/ljn/Documents/demo/explore/agri_admin_web
 pnpm exec vitest run src/pages/DataFlywheel/index.test.tsx
 ```
 
@@ -2186,7 +2186,7 @@ Pass props into `AnnotationPanel`:
 Run:
 
 ```bash
-cd /Users/ljn/Documents/demo/explore/admin-web
+cd /Users/ljn/Documents/demo/explore/agri_admin_web
 pnpm exec vitest run src/pages/DataFlywheel/index.test.tsx
 ```
 
@@ -2196,7 +2196,7 @@ Expected: PASS.
 
 ```bash
 cd /Users/ljn/Documents/demo/explore
-git add admin-web/src/pages/DataFlywheel/components/AnnotationPanel.tsx admin-web/src/pages/DataFlywheel/index.tsx admin-web/src/pages/DataFlywheel/index.test.tsx
+git add agri_admin_web/src/pages/DataFlywheel/components/AnnotationPanel.tsx agri_admin_web/src/pages/DataFlywheel/index.tsx agri_admin_web/src/pages/DataFlywheel/index.test.tsx
 git commit -m "feat: add data flywheel ai prelabel card"
 ```
 
@@ -2228,7 +2228,7 @@ Expected: PASS.
 Run:
 
 ```bash
-cd /Users/ljn/Documents/demo/explore/admin-web
+cd /Users/ljn/Documents/demo/explore/agri_admin_web
 pnpm exec vitest run \
   src/api/dataFlywheel.test.ts \
   src/pages/DataFlywheel/index.test.tsx \
@@ -2252,7 +2252,7 @@ Expected: PASS.
 Run:
 
 ```bash
-cd /Users/ljn/Documents/demo/explore/admin-web
+cd /Users/ljn/Documents/demo/explore/agri_admin_web
 pnpm run lint
 ```
 
@@ -2285,7 +2285,7 @@ If Task 7 required scoped fixes, inspect the exact changed files and commit only
 ```bash
 cd /Users/ljn/Documents/demo/explore
 git status --short
-git add backend/app/models/data_flywheel.py backend/app/models/__init__.py backend/alembic/versions/20260612_agent_data_flywheel_prelabels.py backend/app/services/data_flywheel_judge_service.py backend/app/services/data_flywheel_service.py backend/app/api/admin_data_flywheel.py backend/tests/test_agent_data_flywheel_models.py backend/tests/services/test_data_flywheel_judge_service.py backend/tests/services/test_data_flywheel_service.py backend/tests/api/test_admin_data_flywheel.py admin-web/src/api/dataFlywheel.ts admin-web/src/api/dataFlywheel.test.ts admin-web/src/pages/DataFlywheel/index.tsx admin-web/src/pages/DataFlywheel/components/AnnotationPanel.tsx admin-web/src/pages/DataFlywheel/index.test.tsx
+git add backend/app/models/data_flywheel.py backend/app/models/__init__.py backend/alembic/versions/20260612_agent_data_flywheel_prelabels.py backend/app/services/data_flywheel_judge_service.py backend/app/services/data_flywheel_service.py backend/app/api/admin_data_flywheel.py backend/tests/test_agent_data_flywheel_models.py backend/tests/services/test_data_flywheel_judge_service.py backend/tests/services/test_data_flywheel_service.py backend/tests/api/test_admin_data_flywheel.py agri_admin_web/src/api/dataFlywheel.ts agri_admin_web/src/api/dataFlywheel.test.ts agri_admin_web/src/pages/DataFlywheel/index.tsx agri_admin_web/src/pages/DataFlywheel/components/AnnotationPanel.tsx agri_admin_web/src/pages/DataFlywheel/index.test.tsx
 git commit -m "fix: enforce data flywheel prelabel safety boundary"
 ```
 

@@ -32,7 +32,7 @@
   - 确认已有 endpoint 继续使用 `require_admin`。
 - Read-only check: `backend/app/api/admin_users.py`
   - 确认已有 endpoint 继续使用 `require_admin`。
-- Read-only check: `../../../../admin-web/src/api/client.ts`
+- Read-only check: `../../../../agri_admin_web/src/api/client.ts`
   - 确认请求 interceptor 注入 `Authorization: Bearer <token>`，401 时清 token 并跳转 `/login`。
 
 ---
@@ -1038,8 +1038,8 @@ git commit -m "test: verify public route whitelist behavior"
 **Files:**
 - Read: `backend/app/api/admin_stats.py`
 - Read: `backend/app/api/admin_users.py`
-- Read: `../../../../admin-web/src/api/client.ts`
-- Read: `../../../../admin-web/src/stores/authStore.ts`
+- Read: `../../../../agri_admin_web/src/api/client.ts`
+- Read: `../../../../agri_admin_web/src/stores/authStore.ts`
 - Modify: `openspec/changes/harden-api-auth-classification/tasks.md`
 
 - [ ] **Step 1: Verify existing admin routers still use require_admin**
@@ -1057,7 +1057,7 @@ Expected output includes endpoint-level `Depends(require_admin)` lines in both f
 Run:
 
 ```bash
-cd /Users/ljn/Documents/demo/explore && rg -n "Authorization|Bearer|clearToken|/login|status === 401" admin-web/src/api/client.ts admin-web/src/stores/authStore.ts
+cd /Users/ljn/Documents/demo/explore && rg -n "Authorization|Bearer|clearToken|/login|status === 401" agri_admin_web/src/api/client.ts agri_admin_web/src/stores/authStore.ts
 ```
 
 Expected output includes:

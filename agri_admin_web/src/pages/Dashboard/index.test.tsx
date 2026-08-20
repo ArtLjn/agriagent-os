@@ -11,7 +11,7 @@ vi.mock('../../api/dashboard', () => ({
 const mockedGetSummary = vi.mocked(dashboardApi.getSummary);
 
 describe('Dashboard', () => {
-  it('使用 v2 农场仪表板接口渲染概览，而不是请求不存在的管理员统计接口', async () => {
+  it('使用 agri_backend_v2 农场仪表板接口渲染概览，而不是请求不存在的管理员统计接口', async () => {
     mockedGetSummary.mockResolvedValueOnce({
       farm_id: 1,
       name: '管理员农场的农场',

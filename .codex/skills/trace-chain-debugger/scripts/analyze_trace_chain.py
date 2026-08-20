@@ -160,27 +160,27 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--request-id", help="完整 request_id 或前缀")
     parser.add_argument("--session-id", help="session_id")
     parser.add_argument(
-        "--turn-id", help="旧版 agent_turns.id 或 v2 Agent 的字符串 turn_id"
+        "--turn-id", help="旧版 agent_turns.id 或 agri_backend_v2 Agent 的字符串 turn_id"
     )
-    parser.add_argument("--trace-id", help="v2 Trace 的正式 trace_id，精确召回一轮")
-    parser.add_argument("--conversation-id", help="v2 conversation_id，召回整段会话")
+    parser.add_argument("--trace-id", help="agri_backend_v2 Trace 的正式 trace_id，精确召回一轮")
+    parser.add_argument("--conversation-id", help="agri_backend_v2 conversation_id，召回整段会话")
     parser.add_argument("--farm-id", type=int, help="可选 farm_id 过滤")
     parser.add_argument(
-        "--v2",
+        "--agri_backend_v2",
         action="store_true",
-        help="按 v2 Agent 的 HTTP/Mongo trace 接口查询",
+        help="按 agri_backend_v2 Agent 的 HTTP/Mongo trace 接口查询",
     )
     parser.add_argument(
-        "--v2-base-url",
+        "--agri_backend_v2-base-url",
         default=os.getenv("V2_AGENT_BASE_URL", "http://127.0.0.1:8000"),
-        help="v2 Agent 地址，默认 http://127.0.0.1:8000",
+        help="agri_backend_v2 Agent 地址，默认 http://127.0.0.1:8000",
     )
     parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT, help="会话最近轮数")
     parser.add_argument(
         "--include-payload", action="store_true", help="展示输入输出摘要"
     )
     parser.add_argument(
-        "--include-events", action="store_true", help="召回并展示 v2 SSE 事件时间线"
+        "--include-events", action="store_true", help="召回并展示 agri_backend_v2 SSE 事件时间线"
     )
     parser.add_argument("--json", action="store_true", help="输出 JSON")
     return parser.parse_args()
@@ -254,21 +254,21 @@ async def build_report(project: Path, args: argparse.Namespace) -> ChainReport:
 
 
 def should_use_v2(project: Path, args: argparse.Namespace) -> bool:
-    """识别 v2 请求，避免用 archive/backend 的旧表模型误查。"""
+    """识别 agri_backend_v2 请求，避免用 archive/backend 的旧表模型误查。"""
     if args.v2:
         return True
     if args.trace_id is not None or args.conversation_id is not None:
         return True
-    return (project / "v2" / "agent" / "main.py").exists() and (
+    return (project / "agri_backend_v2" / "agent" / "main.py").exists() and (
         args.turn_id is not None and not str(args.turn_id).isdigit()
     )
 
 
 class V2ApiError(RuntimeError):
-    """保留 v2 HTTP 错误类别，避免把接口不可用伪装成空数据。"""
+    """保留 agri_backend_v2 HTTP 错误类别，避免把接口不可用伪装成空数据。"""
 
     def __init__(self, path: str, status_code: int | None, kind: str) -> None:
-        super().__init__(f"v2 API {kind}: {path}")
+        super().__init__(f"agri_backend_v2 API {kind}: {path}")
         self.path = path
         self.status_code = status_code
         self.kind = kind
@@ -407,7 +407,7 @@ def _clear_auto_authorization(base_url: str) -> None:
 
 
 async def build_v2_report(args: argparse.Namespace) -> ChainReport:
-    """按 trace_id、turn_id 或 conversation_id 只读召回 v2 证据。"""
+    """按 trace_id、turn_id 或 conversation_id 只读召回 agri_backend_v2 证据。"""
     base_url = v2_api_base_url(args.v2_base_url)
     evidence = {
         "trace_summary": "not_requested",
@@ -419,12 +419,12 @@ async def build_v2_report(args: argparse.Namespace) -> ChainReport:
     try:
         targets, resolution, list_status = await resolve_v2_targets(base_url, args)
         if not targets:
-            evidence["trace_summary"] = "missing(v2)"
-            evidence["trace_nodes"] = "missing(v2)"
+            evidence["trace_summary"] = "missing(agri_backend_v2)"
+            evidence["trace_nodes"] = "missing(agri_backend_v2)"
             if args.include_events:
-                evidence["trace_events"] = "missing(v2)"
+                evidence["trace_events"] = "missing(agri_backend_v2)"
             errors = [
-                "v2 未找到匹配的 trace_id、turn_id、request_id 或 conversation_id"
+                "agri_backend_v2 未找到匹配的 trace_id、turn_id、request_id 或 conversation_id"
             ]
             if list_status:
                 errors.append(list_status)
@@ -440,7 +440,7 @@ async def build_v2_report(args: argparse.Namespace) -> ChainReport:
         if args.conversation_id:
             conversation_ids = [args.conversation_id]
         messages: list[MessageItem] = []
-        message_status = "missing(v2)"
+        message_status = "missing(agri_backend_v2)"
         if conversation_ids:
             messages, message_status = await fetch_v2_messages(
                 base_url, conversation_ids[0], args.limit
@@ -475,7 +475,7 @@ async def build_v2_report(args: argparse.Namespace) -> ChainReport:
         evidence["trace_nodes"] = combine_v2_statuses(trace_statuses, "trace_nodes")
         evidence["trace_events"] = combine_v2_statuses(event_statuses, "trace_events")
         if args.conversation_id and not targets:
-            evidence["trace_summary"] = "missing(v2)"
+            evidence["trace_summary"] = "missing(agri_backend_v2)"
 
         errors = collect_errors(all_nodes, all_events)
         errors = list(dict.fromkeys([*trace_errors, *errors]))[:20]
@@ -506,7 +506,7 @@ async def build_v2_report(args: argparse.Namespace) -> ChainReport:
         return ChainReport(
             target={**target_dict(args), "v2_base_url": base_url},
             status=EvidenceStatus(
-                "not_applicable(v2)",
+                "not_applicable(agri_backend_v2)",
                 evidence["trace_nodes"],
                 evidence["trace_events"],
             ),
@@ -535,7 +535,7 @@ async def build_v2_report(args: argparse.Namespace) -> ChainReport:
             args,
             base_url,
             evidence,
-            [f"v2 trace 查询失败: {preview(str(exc))}"],
+            [f"agri_backend_v2 trace 查询失败: {preview(str(exc))}"],
             {"resolution": "error"},
         )
     except Exception as exc:  # noqa: BLE001
@@ -544,7 +544,7 @@ async def build_v2_report(args: argparse.Namespace) -> ChainReport:
             args,
             base_url,
             evidence,
-            [f"v2 trace 查询失败: {preview(str(exc))}"],
+            [f"agri_backend_v2 trace 查询失败: {preview(str(exc))}"],
             {"resolution": "error"},
         )
 
@@ -615,12 +615,12 @@ async def fetch_v2_trace(
         )
     except V2ApiError as exc:
         if exc.status_code == 404:
-            gaps.append("trace_summary=missing(v2)")
+            gaps.append("trace_summary=missing(agri_backend_v2)")
         else:
             errors.append(f"summary: {preview(str(exc))}")
 
     nodes_data: dict[str, Any] = {}
-    nodes_status = "missing(v2)"
+    nodes_status = "missing(agri_backend_v2)"
     try:
         nodes_data = await v2_call(
             base_url,
@@ -752,7 +752,7 @@ async def v2_paginate(
             document = await v2_call(base_url, path, query)
         except V2ApiError as exc:
             if exc.status_code == 404:
-                return items, "missing(v2)"
+                return items, "missing(agri_backend_v2)"
             return items, v2_error_status(exc)
         page_items = document.get("items") or []
         items.extend(item for item in page_items if isinstance(item, dict))
@@ -792,7 +792,7 @@ def v2_get_json(url: str, authorization: str | None = None) -> dict[str, Any]:
 
 def v2_api_base_url(value: str) -> str:
     base = value.rstrip("/")
-    return base if base.endswith("/api/v2") else f"{base}/api/v2"
+    return base if base.endswith("/api/agri_backend_v2") else f"{base}/api/agri_backend_v2"
 
 
 def v2_api_url(base_url: str, path: str, params: dict[str, Any]) -> str:
@@ -844,7 +844,7 @@ def unique_v2_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def v2_error_status(exc: V2ApiError, *, missing: bool = False) -> str:
     if exc.status_code == 404:
-        return "missing(v2)" if missing else "not_available(v2_api)"
+        return "missing(agri_backend_v2)" if missing else "not_available(v2_api)"
     if exc.status_code in {401, 403}:
         return f"unavailable(code=v2_auth_{exc.status_code})"
     if exc.status_code is None:
@@ -854,7 +854,7 @@ def v2_error_status(exc: V2ApiError, *, missing: bool = False) -> str:
 
 def combine_v2_statuses(statuses: list[str], evidence_name: str) -> str:
     if not statuses:
-        return "missing(v2)"
+        return "missing(agri_backend_v2)"
     if any(
         status.startswith("error") or status.startswith("unavailable")
         for status in statuses
@@ -870,7 +870,7 @@ def combine_v2_statuses(statuses: list[str], evidence_name: str) -> str:
         return "ok(v2_api)"
     if any(status.startswith("partial") for status in statuses):
         return next(status for status in statuses if status.startswith("partial"))
-    return f"missing(v2,source={evidence_name})"
+    return f"missing(agri_backend_v2,source={evidence_name})"
 
 
 def split_v2_timeline(
@@ -942,7 +942,7 @@ def v2_turn_from_summary(
     seqs = [item.seq for item in events if item.seq is not None]
     metrics = summary.get("metrics") or {}
     return TurnItem(
-        source="v2",
+        source="agri_backend_v2",
         id=turn_id,
         request_id=summary.get("request_id") or trace_id,
         session_id=summary.get("conversation_id"),
@@ -1017,13 +1017,13 @@ def sse_diagnostics(events: list[EventItem]) -> dict[str, Any]:
 def v2_message_gaps(messages: list[MessageItem], turns: list[TurnItem]) -> list[str]:
     gaps: list[str] = []
     if turns and not messages:
-        gaps.append("conversation_messages=missing(v2)")
+        gaps.append("conversation_messages=missing(agri_backend_v2)")
     if messages and any(item.turn_id is None for item in messages) and len(turns) > 1:
         gaps.append(
             "conversation_messages.turn_id=not_available(v2_api); cannot_exactly_bind_messages_to_turns"
         )
     if turns and any(item.reply_preview is None for item in turns):
-        gaps.append("assistant_message=missing(v2)")
+        gaps.append("assistant_message=missing(agri_backend_v2)")
     return gaps
 
 
@@ -1125,7 +1125,7 @@ def build_v2_recall_suggestions(
         for status in evidence.values()
     ):
         suggestions.append(
-            "先确认 v2 Agent、Mongo 和鉴权环境一致，再重新召回缺失的数据源。"
+            "先确认 agri_backend_v2 Agent、Mongo 和鉴权环境一致，再重新召回缺失的数据源。"
         )
     if any(
         node.status not in (None, "success") or node.error_message for node in nodes
@@ -1169,13 +1169,13 @@ def v2_empty_report(
     gaps = [
         f"{key}={value}"
         for key, value in evidence.items()
-        if value in {"missing(v2)", "not_available(v2_api)"}
+        if value in {"missing(agri_backend_v2)", "not_available(v2_api)"}
     ]
     return ChainReport(
         target={**target_dict(args), "v2_base_url": base_url},
         status=EvidenceStatus(
-            "not_applicable(v2)",
-            evidence.get("trace_nodes", "missing(v2)"),
+            "not_applicable(agri_backend_v2)",
+            evidence.get("trace_nodes", "missing(agri_backend_v2)"),
             evidence.get("trace_events", "not_requested"),
         ),
         resolved={"resolution": resolution},
@@ -1185,7 +1185,7 @@ def v2_empty_report(
         events=[],
         errors=errors,
         suggestions=[
-            "确认目标 ID、v2 Agent 地址和鉴权后重试；不可用接口不能当作空数据。"
+            "确认目标 ID、agri_backend_v2 Agent 地址和鉴权后重试；不可用接口不能当作空数据。"
         ],
         conversation_overview={},
         turn_overview=[],
@@ -1209,7 +1209,7 @@ def node_from_v2(
 ) -> TraceNode:
     token_usage = doc.get("token_usage")
     return TraceNode(
-        source="v2-mongo",
+        source="agri_backend_v2-mongo",
         storage_id=None,
         request_id=request_id,
         session_id=target.get("conversation_id"),
@@ -1241,7 +1241,7 @@ def node_from_v2(
 def message_from_v2(target: dict[str, Any], doc: dict[str, Any]) -> MessageItem:
     meta = coerce_meta(doc.get("meta"))
     return MessageItem(
-        source="v2-mongo",
+        source="agri_backend_v2-mongo",
         storage_id=str(doc.get("id") or doc.get("_id") or doc.get("mysql_id") or "")
         or None,
         role=doc.get("role"),
@@ -1274,14 +1274,14 @@ def build_v2_suggestions(
             )
     if messages and messages[-1].role == "user":
         suggestions.append(
-            "会话以当前 user 消息结束，没有对应 assistant 最终消息；当前 v2 trace 状态把未完成链路误判为 success。"
+            "会话以当前 user 消息结束，没有对应 assistant 最终消息；当前 agri_backend_v2 trace 状态把未完成链路误判为 success。"
         )
     if any((node.duration_ms or 0) > 5000 for node in nodes):
         suggestions.append(
             "存在超过 5s 的慢节点：本轮主要耗时集中在 LLM，需检查 provider 响应和重复工具规划。"
         )
     if not suggestions:
-        suggestions.append("v2 trace 未显示明显错误，可继续核对最终回复与用户意图。")
+        suggestions.append("agri_backend_v2 trace 未显示明显错误，可继续核对最终回复与用户意图。")
     return suggestions
 
 

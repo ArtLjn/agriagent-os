@@ -2,8 +2,8 @@
 
 当前智能填写的场景识别存在两个问题：
 
-1. **mobile-app 工作台写死 `scene="ledger.record"`**（`mobile-app/lib/features/record_flow/record_flow_controller.dart:15`），用户输入"招个工人"或"种 5 亩番茄"会被强行按记账场景解析，4 个场景注册表只有 1 个真正被使用。
-2. **admin-web 用前端正则识别场景**（`admin-web/src/pages/Operations/smartCreateModel.ts:70-88`），但正则覆盖不全，自然说法频繁 miss。例如用户输入"我家来了一个人王树 100 工资"，因 worker 正则未匹配"来了一个人"，且"工资"在 ledger 词表中，被错误路由到 `ledger.record`。
+1. **mobile-app 工作台写死 `scene="ledger.record"`**（`../../../../agri_mobile_app/lib/features/record_flow/record_flow_controller.dart:15`），用户输入"招个工人"或"种 5 亩番茄"会被强行按记账场景解析，4 个场景注册表只有 1 个真正被使用。
+2. **admin-web 用前端正则识别场景**（`../../../../agri_admin_web/src/pages/Operations/smartCreateModel.ts:70-88`），但正则覆盖不全，自然说法频繁 miss。例如用户输入"我家来了一个人王树 100 工资"，因 worker 正则未匹配"来了一个人"，且"工资"在 ledger 词表中，被错误路由到 `ledger.record`。
 
 需要在保留正则快速路径的同时，引入 LLM 兜底识别，提升召回率并统一两端路由逻辑。
 
@@ -43,13 +43,13 @@
 
 **前端 admin-web**：
 
-- 修改 `admin-web/src/pages/Operations/smartCreateModel.ts` 的 `inferSmartFillScene` 补充正则
-- 修改 `admin-web/src/pages/Operations/index.tsx` 的 `inferredScene === 'unsupported'` 分支：改为调 `/smart-fill/parse` 不传 scene 让后端兜底
+- 修改 `../../../../agri_admin_web/src/pages/Operations/smartCreateModel.ts` 的 `inferSmartFillScene` 补充正则
+- 修改 `../../../../agri_admin_web/src/pages/Operations/index.tsx` 的 `inferredScene === 'unsupported'` 分支：改为调 `/smart-fill/parse` 不传 scene 让后端兜底
 
 **前端 mobile-app**：
 
-- 修改 `mobile-app/lib/features/record_flow/record_flow_controller.dart` 去掉写死 scene
-- 修改 `mobile-app/lib/data/repositories/workbench_repository.dart` 的 `parseSmartFill` 签名（scene 改为可选）
+- 修改 `../../../../agri_mobile_app/lib/features/record_flow/record_flow_controller.dart` 去掉写死 scene
+- 修改 `../../../../agri_mobile_app/lib/data/repositories/workbench_repository.dart` 的 `parseSmartFill` 签名（scene 改为可选）
 
 **API 兼容性**：
 

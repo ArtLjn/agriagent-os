@@ -1,4 +1,4 @@
-"""每日建议 v2 生成结果校验测试。"""
+"""每日建议 agri_backend_v2 生成结果校验测试。"""
 
 from datetime import date
 

@@ -219,7 +219,7 @@ def fingerprint_candidates(candidates: list[DailyAdviceCandidate]) -> str:
 def build_daily_advice_item_skeletons(
     candidates: list[DailyAdviceCandidate],
 ) -> list[AdviceItem]:
-    """把候选信号转换为确定性的 v2 建议骨架。"""
+    """把候选信号转换为确定性的 agri_backend_v2 建议骨架。"""
     return [_build_daily_advice_item_skeleton(candidate) for candidate in candidates]
 
 

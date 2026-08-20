@@ -28,7 +28,7 @@
 
 ## Impact
 
-- **前端代码**：`admin-web/src/` 新增 6 个页面组件、2 个 API 模块、1 个 Gantt 图组件、侧边栏布局调整
+- **前端代码**：`../../../../agri_admin_web/src/` 新增 6 个页面组件、2 个 API 模块、1 个 Gantt 图组件、侧边栏布局调整
 - **后端 API**：完全消费 `admin-trace-system` change 已定义的 API 端点，无后端改动
 - **依赖**：可能新增图表库（Ant Design Charts 或 ECharts，用于 Token Dashboard 图表）
-- **构建**：`admin-web/` 构建产物增大，但不影响移动端
+- **构建**：`../../../../agri_admin_web/` 构建产物增大，但不影响移动端

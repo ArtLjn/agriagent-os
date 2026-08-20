@@ -45,6 +45,6 @@ export function formatMoney(value?: string | number | null): string {
   return `¥ ${amount.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-export function createClientRequestId(prefix = 'admin-web'): string {
+export function createClientRequestId(prefix = 'agri_admin_web'): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }

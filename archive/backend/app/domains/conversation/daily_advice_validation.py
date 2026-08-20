@@ -1,4 +1,4 @@
-"""每日建议 v2 生成结果硬校验入口。"""
+"""每日建议 agri_backend_v2 生成结果硬校验入口。"""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ def validate_daily_advice_payload(
     *,
     generation_mode: str = "llm",
 ) -> DailyAdviceValidationResult:
-    """校验 LLM 生成的每日建议 v2 payload。"""
+    """校验 LLM 生成的每日建议 agri_backend_v2 payload。"""
     issues: list[DailyAdviceValidationIssue] = []
     candidate_by_id = {candidate.id: candidate for candidate in candidates}
 

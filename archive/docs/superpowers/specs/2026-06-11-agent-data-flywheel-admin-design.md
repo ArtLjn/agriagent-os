@@ -414,14 +414,14 @@ MVP 可以新增两张轻量表，不改变在线聊天热路径。
 
 ### 新增文件
 
-- `../../../../admin-web/src/pages/DataFlywheel/index.tsx`
-- `../../../../admin-web/src/api/dataFlywheel.ts`
-- `../../../../admin-web/src/pages/DataFlywheel/components/SampleQueueTable.tsx`
-- `../../../../admin-web/src/pages/DataFlywheel/components/SampleDetailPanel.tsx`
-- `../../../../admin-web/src/pages/DataFlywheel/components/AnnotationPanel.tsx`
-- `../../../../admin-web/src/pages/DataFlywheel/components/ToolComparison.tsx`
-- `../../../../admin-web/src/pages/DataFlywheel/components/PendingLifecycleView.tsx`
-- `../../../../admin-web/src/pages/DataFlywheel/components/CaseDraftPreview.tsx`
+- `../../../../agri_admin_web/src/pages/DataFlywheel/index.tsx`
+- `../../../../agri_admin_web/src/api/dataFlywheel.ts`
+- `../../../../agri_admin_web/src/pages/DataFlywheel/components/SampleQueueTable.tsx`
+- `../../../../agri_admin_web/src/pages/DataFlywheel/components/SampleDetailPanel.tsx`
+- `../../../../agri_admin_web/src/pages/DataFlywheel/components/AnnotationPanel.tsx`
+- `../../../../agri_admin_web/src/pages/DataFlywheel/components/ToolComparison.tsx`
+- `../../../../agri_admin_web/src/pages/DataFlywheel/components/PendingLifecycleView.tsx`
+- `../../../../agri_admin_web/src/pages/DataFlywheel/components/CaseDraftPreview.tsx`
 
 ### 复用组件和工具
 

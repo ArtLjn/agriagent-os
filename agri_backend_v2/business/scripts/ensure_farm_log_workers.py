@@ -10,7 +10,7 @@ if _PARENT not in sys.path:
 
 from sqlalchemy import create_engine, text
 
-from agent.infra.logging import setup_logging
+from agent.platforms.logging import setup_logging
 from business.config import settings
 
 setup_logging(app_name="scripts")

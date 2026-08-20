@@ -139,8 +139,8 @@ flowchart TD
 | 活动 Turn | Redis `turn:<turn_id>` Hash | `turn_store.py`、`worker.py` | `turn_state_ttl_seconds`，默认 1 天 | 只表示执行态，不是会话历史 |
 | SSE 事件 | Redis `events:<turn_id>` Stream | `publish_event()`、`stream_events()` | Turn TTL | 只用于实时和重放 |
 | 用户可见历史 | Mongo `conversationMessages` | `chat_store.append_message/load_recent/get_conversation` | 长期保留策略 | 当前 Runtime 不以它为短记忆主读源 |
-| 当前短时记忆 | `../../agent/core/data/conversations/<memory_key>.json` | `memory.snapshot()`、`_persist_memory()` | 本地文件长期存在 | 多 Worker/多实例不一致 |
-| 当前长期记忆 | `../../agent/core/data/memory.json` | `load_long_term()` | 本地文件长期存在 | 当前没有稳定写入流程，不能视为已启用 |
+| 当前短时记忆 | `../../agent/platforms/legacy_json/data/conversations/<memory_key>.json` | `memory.snapshot()`、`_persist_memory()` | 本地文件长期存在 | 多 Worker/多实例不一致 |
+| 当前长期记忆 | `../../agent/platforms/legacy_json/data/memory.json` | `load_long_term()` | 本地文件长期存在 | 当前没有稳定写入流程，不能视为已启用 |
 
 结论：当前 Session 的“运行态”保存在 Redis Turn；当前短时记忆保存在本地 JSON；当前用户可见历史保存在 Mongo。这是迁移前状态，不是目标架构。生产 Context 不能继续同时把本地 JSON 和 Mongo 当作两个平级事实源。
 
@@ -438,19 +438,19 @@ stateDiagram-v2
 
 | 文件/目录 | 改动方向 | 边界 |
 |---|---|---|
-| `../../agent/core/context.py` | ContextBundle、Block、预算和动态重建 | 不直接访问 Mongo/Redis |
-| `../../agent/core/memory.py` | 改为 Memory adapter/Projection 入口 | 不暴露本地文件给 Runtime |
-| `../../agent/core/summarizer.py` | 独立 summary、CAS、幂等、失败状态 | 不覆盖新 revision |
-| `../../agent/core/react.py` | 消费 Context/Memory 接口，移除存储细节 | 保留 ReAct 和终态语义 |
-| `../../agent/core/turn.py` | 增加 snapshot/revision/source 状态 | 不混淆 TurnStatus 与 Context 状态 |
-| `../../agent/infra/chat_store.py` | Conversation State、消息事实源、索引 | 只负责 Mongo adapter |
-| `../../agent/infra/turn_store.py` | 保存 revision、reset generation 和回放状态 | Redis 只做在线状态 |
-| `../../agent/infra/worker.py` | 恢复和幂等持久化 | 不重复写最终消息 |
+| `../../agent/domains/harness/context/builder.py` | ContextBundle、Block、预算和动态重建 | 不直接访问 Mongo/Redis |
+| `../../agent/domains/harness/memory/service.py` | 改为 Memory adapter/Projection 入口 | 不暴露本地文件给 Runtime |
+| `../../agent/domains/harness/context/summarizer.py` | 独立 summary、CAS、幂等、失败状态 | 不覆盖新 revision |
+| `../../agent/domains/harness/runtime/engine.py` | 消费 Context/Memory 接口，移除存储细节 | 保留 ReAct 和终态语义 |
+| `../../agent/domains/harness/runtime/turn.py` | 增加 snapshot/revision/source 状态 | 不混淆 TurnStatus 与 Context 状态 |
+| `../../agent/platforms/persistence/mongo/chat_store.py` | Conversation State、消息事实源、索引 | 只负责 Mongo adapter |
+| `../../agent/platforms/persistence/redis/turn_store.py` | 保存 revision、reset generation 和回放状态 | Redis 只做在线状态 |
+| `../../agent/application/worker.py` | 恢复和幂等持久化 | 不重复写最终消息 |
 | `../../agent/api/chat.py` | 暴露 source/revision 元数据 | 保持现有请求兼容 |
 | `../../agent/api/reset.py` | reset generation 和 active view 清理 | 默认不删可见历史 |
-| `../../agent/infra/trace/` | Context、Memory、summary、budget trace | 脱敏、有界 |
+| `../../agent/domains/harness/observability/trace/` | Context、Memory、summary、budget trace | 脱敏、有界 |
 | `../../agent/prompts/` | 保持静态 contract 和版本 | 不注入动态业务事实 |
-| `../../agent/skills/` | 增加 context dependency 元数据 | 不在 Skill 内拼 Context |
+| `../../agent/tools/` | 增加 context dependency 元数据 | 不在 Skill 内拼 Context |
 
 ## 9. 迁移范围与开关
 
@@ -544,8 +544,8 @@ Mongo Conversation Snapshot
 
 | 已落地 | 证据/边界 |
 |---|---|
-| `ConversationSnapshot`、`ContextBlock`、`ContextBundle`、`MemoryObservation`、`MemoryHit` | `../../agent/core/context_models.py`，含 JSON round-trip、租户字段和 revision |
-| `conversationStates` adapter | `../../agent/infra/chat_store.py`，含租户过滤、唯一索引、revision CAS、幂等和 unavailable |
+| `ConversationSnapshot`、`ContextBlock`、`ContextBundle`、`MemoryObservation`、`MemoryHit` | `../../agent/domains/harness/context/models.py`，含 JSON round-trip、租户字段和 revision |
+| `conversationStates` adapter | `../../agent/platforms/persistence/mongo/chat_store.py`，含租户过滤、唯一索引、revision CAS、幂等和 unavailable |
 | Session View 读取入口 | `memory.get_session_view()`；Mongo 由 `memory_mongo_read` 控制，legacy JSON fallback 明确标记 source status |
 | Short Memory 注入 | `session_summary`、`recent_turns`、`pending_action`、`active_task_state` 独立 Block；工具原始 payload 不进入历史投影 |
 | Context 预算 | messages、Tool Schema、response reserve、safety margin，支持 required 保留和低优先级 Block drop reason |
@@ -553,6 +553,8 @@ Mongo Conversation Snapshot
 | 长时记忆 | 仅保留 `search()` 空结果和 observation 占位，未接入事实抽取、审核、向量检索或自动写入 |
 
 本轮尚未宣称完成：摘要生成的 Mongo CAS/并发 Worker 流程、candidate Tool Schema 灰度、真实 Mongo/Redis/Worker/SSE replay、legacy JSON shadow-read 与迁移归档。配置开关默认关闭，打开 `conversation_state_v2` 或 `memory_mongo_read` 前必须补齐对应 smoke evidence。
+
+目录对齐状态：`agent/core`、`agent/infra`、`agent/skills` 已删除；Context、Runtime、Memory、Control、Trace 位于 `agent/domains/harness`，平台适配位于 `agent/platforms`，具体 Tool 位于 `agent/tools`，启动和 Worker 位于 `agent/bootstrap`、`agent/application`。
 
 ## 14. TODO 清单（持续更新）
 

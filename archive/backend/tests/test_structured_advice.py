@@ -1,4 +1,4 @@
-"""测试每日建议结构化返回 — AdviceItem schema + v2 响应兼容。"""
+"""测试每日建议结构化返回 — AdviceItem schema + agri_backend_v2 响应兼容。"""
 
 from datetime import datetime
 from unittest.mock import AsyncMock, patch
@@ -72,7 +72,7 @@ class TestAdviceItemSchema:
         assert item.icon == "📋"
 
     def test_compact_only_defaults_priority(self) -> None:
-        """v2 compact-only 输入缺省 priority 时默认常规优先级。"""
+        """agri_backend_v2 compact-only 输入缺省 priority 时默认常规优先级。"""
         item = AdviceItem(
             compact={
                 "title": "巡田记录",
@@ -87,7 +87,7 @@ class TestAdviceItemSchema:
         assert item.detail == "建议今天完成一次基础巡田并补齐记录。"
 
     def test_compact_input_keeps_outer_priority(self) -> None:
-        """v2 compact 输入存在外层 priority 时保留外层值。"""
+        """agri_backend_v2 compact 输入存在外层 priority 时保留外层值。"""
         item = AdviceItem(
             priority=1,
             compact={
@@ -148,7 +148,7 @@ class TestDailyAdviceResponseSchema:
 
 
 class TestDailyAdviceV2Empty:
-    """测试无候选时的 v2 empty 响应。"""
+    """测试无候选时的 agri_backend_v2 empty 响应。"""
 
     @pytest.mark.asyncio
     @patch("app.domains.conversation.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
@@ -182,7 +182,7 @@ class TestDailyAdviceV2Empty:
 
 
 class TestDailyAdviceFallback:
-    """测试 v2 生成失败时的候选 skeleton fallback。"""
+    """测试 agri_backend_v2 生成失败时的候选 skeleton fallback。"""
 
     @pytest.mark.asyncio
     @patch("app.domains.conversation.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
@@ -225,7 +225,7 @@ class TestRefreshDailyAdvice:
     async def test_refresh_returns_structured_items(
         self, mock_invoke: AsyncMock
     ) -> None:
-        """refresh_daily_advice 也返回 v2 结构化 items。"""
+        """refresh_daily_advice 也返回 agri_backend_v2 结构化 items。"""
         from sqlalchemy import create_engine
         from sqlalchemy.orm import sessionmaker
 

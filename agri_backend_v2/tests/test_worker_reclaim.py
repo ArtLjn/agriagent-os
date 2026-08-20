@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from agent.infra import worker
+from agent.application import worker
 
 
 @pytest.mark.asyncio

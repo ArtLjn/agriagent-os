@@ -7,8 +7,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from agent.infra.trace import collector
-from agent.infra.trace.context import clear_trace, init_trace
+from agent.domains.harness.observability.trace import collector
+from agent.domains.harness.observability.trace.context import clear_trace, init_trace
 
 
 class _FakeEventCollection:

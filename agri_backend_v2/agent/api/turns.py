@@ -7,10 +7,10 @@ from fastapi.responses import StreamingResponse
 
 from agent.api import api_router
 from agent.auth import parse_identity
-from agent.infra.sse import sse_event
-from agent.infra.turn_store import get_turn, publish_event, stream_events
-from agent.infra.coordination import scope_hash
-from agent.infra.turn_store import remove_from_queues, update_turn
+from agent.platforms.persistence.redis.sse import sse_event
+from agent.platforms.persistence.redis.turn_store import get_turn, publish_event, stream_events
+from agent.platforms.persistence.redis.coordination import scope_hash
+from agent.platforms.persistence.redis.turn_store import remove_from_queues, update_turn
 
 
 @api_router.get("/turns/{turn_id}")

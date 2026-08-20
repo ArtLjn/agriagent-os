@@ -12,18 +12,18 @@ from pydantic import BaseModel
 
 from agent.api import api_router
 from agent.auth import ensure_mcp_credentials, parse_identity
-from agent.core.turn import Turn
-from agent.infra.chat_store import append_message
-from agent.infra.coordination import (
+from agent.domains.harness.runtime.turn import Turn
+from agent.platforms.persistence.mongo.chat_store import append_message
+from agent.platforms.persistence.redis.coordination import (
     CoordinationError,
     TurnAdmissionError,
     admit_turn,
     release_turn,
     scope_hash,
 )
-from agent.infra.sse import sse_event
-from agent.infra.trace.context import trace_id_for_turn
-from agent.infra.turn_store import (
+from agent.platforms.persistence.redis.sse import sse_event
+from agent.domains.harness.observability.trace.context import trace_id_for_turn
+from agent.platforms.persistence.redis.turn_store import (
     claim_idempotency,
     dispatch_turn,
     get_turn,
@@ -137,7 +137,7 @@ async def chat(
             )
             await dispatch_turn(turn.turn_id)
     except TurnAdmissionError as exc:
-        from agent.infra.turn_store import release_idempotency
+        from agent.platforms.persistence.redis.turn_store import release_idempotency
 
         await release_idempotency(scope, request_id)
         status_code = 409 if exc.code.startswith("conversation") else 429
@@ -146,7 +146,7 @@ async def chat(
             detail={"code": exc.code, "message": str(exc)},
         ) from exc
     except CoordinationError as exc:
-        from agent.infra.turn_store import release_idempotency
+        from agent.platforms.persistence.redis.turn_store import release_idempotency
 
         await release_idempotency(scope, request_id)
         raise HTTPException(
@@ -158,12 +158,12 @@ async def chat(
     except Exception as exc:
         if admission is not None:
             if admission.queued:
-                from agent.infra.turn_store import remove_from_queues
+                from agent.platforms.persistence.redis.turn_store import remove_from_queues
 
                 await remove_from_queues(turn.turn_id, scope)
             else:
                 await release_turn(admission.lease)
-        from agent.infra.turn_store import release_idempotency
+        from agent.platforms.persistence.redis.turn_store import release_idempotency
 
         await release_idempotency(scope, request_id)
         raise HTTPException(

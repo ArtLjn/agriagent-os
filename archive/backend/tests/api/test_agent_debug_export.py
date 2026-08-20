@@ -101,7 +101,7 @@ def test_get_session_debug_export_v2():
 
     assert response.status_code == 200
     body = response.json()
-    assert body["format"] == "farm-manager.chat-session-debug.v2"
+    assert body["format"] == "farm-manager.chat-session-debug.agri_backend_v2"
     assert "messages" in body
     assert "turns" in body
     assert "events" in body
@@ -118,7 +118,7 @@ def test_admin_simulated_user_debug_export_reads_target_farm():
 
     assert response.status_code == 200
     body = response.json()
-    assert body["format"] == "farm-manager.chat-session-debug.v2"
+    assert body["format"] == "farm-manager.chat-session-debug.agri_backend_v2"
     assert body["messages"][0]["content"] == "模拟用户作物"
 
 

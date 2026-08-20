@@ -16,9 +16,9 @@ This design covers four areas:
 ## Source Of Truth
 
 - Backend API: existing routes in `backend/app/api` and `backend/app/modules/auth`.
-- Mobile API client and repositories: `../../../../mobile-app/lib/data/api` and
-  `../../../../mobile-app/lib/data/repositories`.
-- Mobile visual baseline: current Flutter screens in `../../../../mobile-app/lib/features`
+- Mobile API client and repositories: `../../../../agri_mobile_app/lib/data/api` and
+  `../../../../agri_mobile_app/lib/data/repositories`.
+- Mobile visual baseline: current Flutter screens in `../../../../agri_mobile_app/lib/features`
   and UI references under `../../ui`.
 - Backend base URL for local verification: `http://localhost:8099`, passed with
   `--dart-define=API_BASE_URL=http://localhost:8099`.

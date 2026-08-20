@@ -74,13 +74,13 @@
 
 ### 修改 admin-web debug export
 
-- Modify: `../../../../admin-web/src/api/agent.ts`
+- Modify: `../../../../agri_admin_web/src/api/agent.ts`
   - 类型增加 `pending_plan` 或兼容字段。
-- Modify: `../../../../admin-web/src/pages/Playground/sessionDebugExport.ts`
+- Modify: `../../../../agri_admin_web/src/pages/Playground/sessionDebugExport.ts`
   - 导出 router diagnostics、pending plans、skill call I/O。
-- Modify: `../../../../admin-web/src/pages/Playground/sessionDebugExport.test.ts`
+- Modify: `../../../../agri_admin_web/src/pages/Playground/sessionDebugExport.test.ts`
   - 覆盖新增 debug JSON 字段。
-- Modify: `../../../../admin-web/src/pages/Playground/index.tsx`
+- Modify: `../../../../agri_admin_web/src/pages/Playground/index.tsx`
   - 传递 timeline/router/pending plan 到 export builder。
 
 ### 新增/修改测试
@@ -94,7 +94,7 @@
 - Modify: `backend/tests/test_tool_selector.py`
 - Modify: `backend/tests/context/test_policy.py`
 - Modify: `backend/tests/skills/test_create_operation_work_order.py`
-- Modify: `../../../../admin-web/src/pages/Playground/sessionDebugExport.test.ts`
+- Modify: `../../../../agri_admin_web/src/pages/Playground/sessionDebugExport.test.ts`
 
 ---
 
@@ -1570,8 +1570,8 @@ git commit -m "feat: drive context from router dependencies"
 **Files:**
 - Modify: `backend/app/agent/runtime/nodes.py`
 - Create: `backend/tests/agent/router/test_router_trace.py`
-- Modify: `../../../../admin-web/src/pages/Playground/sessionDebugExport.ts`
-- Modify: `../../../../admin-web/src/pages/Playground/sessionDebugExport.test.ts`
+- Modify: `../../../../agri_admin_web/src/pages/Playground/sessionDebugExport.ts`
+- Modify: `../../../../agri_admin_web/src/pages/Playground/sessionDebugExport.test.ts`
 
 - [ ] **Step 1: 写 router trace 红灯测试**
 
@@ -1633,7 +1633,7 @@ This token usage must not be accumulated by `TraceCollector` because only `node_
 
 - [ ] **Step 3: 写 admin export 红灯测试**
 
-Append to `../../../../admin-web/src/pages/Playground/sessionDebugExport.test.ts`:
+Append to `../../../../agri_admin_web/src/pages/Playground/sessionDebugExport.test.ts`:
 
 ```typescript
   it('导出 router diagnostics 和 pending plans', () => {
@@ -1701,7 +1701,7 @@ Append to `../../../../admin-web/src/pages/Playground/sessionDebugExport.test.ts
 
 - [ ] **Step 4: 扩展 debug export 类型与 builder**
 
-Modify `../../../../admin-web/src/pages/Playground/sessionDebugExport.ts`:
+Modify `../../../../agri_admin_web/src/pages/Playground/sessionDebugExport.ts`:
 
 ```typescript
 export interface SessionDebugRouterDiagnostic {
@@ -1763,7 +1763,7 @@ Run:
 cd /Users/ljn/Documents/demo/explore/backend
 poetry run pytest tests/agent/router/test_router_trace.py -v
 
-cd /Users/ljn/Documents/demo/explore/admin-web
+cd /Users/ljn/Documents/demo/explore/agri_admin_web
 npx vitest run src/pages/Playground/sessionDebugExport.test.ts
 ```
 
@@ -1775,7 +1775,7 @@ Run:
 
 ```bash
 cd /Users/ljn/Documents/demo/explore
-git add backend/app/agent/runtime/nodes.py backend/tests/agent/router/test_router_trace.py admin-web/src/pages/Playground/sessionDebugExport.ts admin-web/src/pages/Playground/sessionDebugExport.test.ts
+git add backend/app/agent/runtime/nodes.py backend/tests/agent/router/test_router_trace.py agri_admin_web/src/pages/Playground/sessionDebugExport.ts agri_admin_web/src/pages/Playground/sessionDebugExport.test.ts
 git commit -m "feat: export router diagnostics in debug data"
 ```
 
@@ -2802,7 +2802,7 @@ Expected: PASS。
 Run:
 
 ```bash
-cd /Users/ljn/Documents/demo/explore/admin-web
+cd /Users/ljn/Documents/demo/explore/agri_admin_web
 npx vitest run src/pages/Playground/sessionDebugExport.test.ts src/pages/Playground/index.test.ts
 npx tsc --noEmit -p tsconfig.app.json
 npx eslint src/pages/Playground/sessionDebugExport.ts src/pages/Playground/sessionDebugExport.test.ts src/pages/Playground/index.tsx src/api/agent.ts

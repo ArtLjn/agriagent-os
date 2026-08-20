@@ -23,9 +23,9 @@ _PARENT = str(Path(__file__).resolve().parent.parent)
 if _PARENT not in sys.path:
     sys.path.insert(0, _PARENT)
 
-from agent.core import hitl
-from agent.core.turn import Turn
-from agent.skills import loader as skill_loader
+from agent.domains.harness.control import approval as hitl
+from agent.domains.harness.runtime.turn import Turn
+from agent.domains.harness.tools import loader as skill_loader
 
 
 def _make_turn() -> Turn:

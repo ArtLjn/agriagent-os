@@ -13,7 +13,7 @@ status: draft
 | 创建日期 | 2026-07-15 |
 | 状态 | draft（待评审） |
 | 关联后端 | [backend/app/api/crop.py](../../backend/app/api/crop.py)、[backend/app/services/crop_service.py](../../backend/app/services/crop_service.py) |
-| 关联前端 | [admin-web/src/pages/CropTemplates/SystemLibrary.tsx](../../../admin-web/src/pages/CropTemplates/SystemLibrary.tsx)、[admin-web/src/api/crops.ts](../../../admin-web/src/api/crops.ts) |
+| 关联前端 | [admin-web/src/pages/CropTemplates/SystemLibrary.tsx](../../../agri_admin_web/src/pages/CropTemplates/SystemLibrary.tsx)、[admin-web/src/api/crops.ts](../../../agri_admin_web/src/api/crops.ts) |
 
 ---
 
@@ -43,11 +43,11 @@ status: draft
 
 ### 1.3 前端能力盘点
 
-[admin-web/src/pages/CropTemplates/SystemLibrary.tsx](../../../admin-web/src/pages/CropTemplates/SystemLibrary.tsx)：
+[admin-web/src/pages/CropTemplates/SystemLibrary.tsx](../../../agri_admin_web/src/pages/CropTemplates/SystemLibrary.tsx)：
 
-- 工具栏（[:141-167](../../../admin-web/src/pages/CropTemplates/SystemLibrary.tsx#L141-L167)）：只有「分类筛选 / 导入所选 / 刷新」3 个动作
-- 表格列（[:101-133](../../../admin-web/src/pages/CropTemplates/SystemLibrary.tsx#L101-L133)）：ID / 名称 / 分类 / 品种 / 生长阶段；**无操作列**
-- [admin-web/src/api/crops.ts](../../../admin-web/src/api/crops.ts) 只声明了 `listSystemCropTemplates` 和 `importSystemCropTemplate`
+- 工具栏（[:141-167](../../../agri_admin_web/src/pages/CropTemplates/SystemLibrary.tsx#L141-L167)）：只有「分类筛选 / 导入所选 / 刷新」3 个动作
+- 表格列（[:101-133](../../../agri_admin_web/src/pages/CropTemplates/SystemLibrary.tsx#L101-L133)）：ID / 名称 / 分类 / 品种 / 生长阶段；**无操作列**
+- [admin-web/src/api/crops.ts](../../../agri_admin_web/src/api/crops.ts) 只声明了 `listSystemCropTemplates` 和 `importSystemCropTemplate`
 
 **缺口**：admin-web 完全没有系统模版写操作 UI 和 API 调用函数。
 
@@ -153,7 +153,7 @@ def delete_system_template(template_id: int, db: Session = Depends(get_db)):
 
 ### 3.3 前端 API 层
 
-[admin-web/src/api/crops.ts](../../../admin-web/src/api/crops.ts) 新增 3 个函数：
+[admin-web/src/api/crops.ts](../../../agri_admin_web/src/api/crops.ts) 新增 3 个函数：
 
 ```typescript
 export async function createSystemTemplate(payload: CropTemplatePayload): Promise<CropTemplate> {
@@ -173,7 +173,7 @@ export async function deleteSystemTemplate(id: number): Promise<void> {
 
 ### 3.4 前端页面
 
-[SystemLibrary.tsx](../../../admin-web/src/pages/CropTemplates/SystemLibrary.tsx) 改造：
+[SystemLibrary.tsx](../../../agri_admin_web/src/pages/CropTemplates/SystemLibrary.tsx) 改造：
 
 #### 工具栏新增「新建系统模版」按钮
 
@@ -203,7 +203,7 @@ export async function deleteSystemTemplate(id: number): Promise<void> {
 
 #### 抽离共享表单组件
 
-当前农场模版编辑表单内联在 [pages/Crops/index.tsx:222-272](../../../admin-web/src/pages/Crops/index.tsx#L222-L272) 的 Modal 中。抽离为 `pages/CropTemplates/TemplateForm.tsx`，被 `Crops/index.tsx` 和 `SystemLibrary.tsx` 共同复用。
+当前农场模版编辑表单内联在 [pages/Crops/index.tsx:222-272](../../../agri_admin_web/src/pages/Crops/index.tsx#L222-L272) 的 Modal 中。抽离为 `pages/CropTemplates/TemplateForm.tsx`，被 `Crops/index.tsx` 和 `SystemLibrary.tsx` 共同复用。
 
 字段保持现有 5 个（name / variety / category / stages[name, duration_days, order_index, key_tasks]），不引入新字段。
 

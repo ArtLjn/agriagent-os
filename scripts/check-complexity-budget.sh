@@ -75,7 +75,7 @@ fi
 
 echo ""
 echo "检查包管理器锁文件混用..."
-for dir in admin-web farm-index/app; do
+for dir in agri_admin_web agri_home_index/app; do
   if [ -f "$dir/package-lock.json" ] && [ -f "$dir/pnpm-lock.yaml" ]; then
     maybe_fail "$dir 同时存在 package-lock.json 和 pnpm-lock.yaml；项目脚本使用 pnpm 时应移除 npm lock。"
   fi
@@ -161,7 +161,7 @@ echo ""
 echo "检查过度抽象关键词密度..."
 ABSTRACT_MATCHES=$(rg -n \
   '\b(Protocol|ABC|abstractmethod|Factory|Strategy|Adapter|Provider|Manager|Registry|Plugin|Hook|Extension|Facade)\b' \
-  backend/app admin-web/src farm-index/app/src mobile-app/lib \
+  backend/app agri_admin_web/src agri_home_index/app/src agri_mobile_app/lib \
   --glob '*.py' --glob '*.ts' --glob '*.tsx' --glob '*.dart' \
   --glob '!**/__pycache__/**' 2>/dev/null || true)
 ABSTRACT_COUNT=$(printf "%s" "$ABSTRACT_MATCHES" | sed '/^$/d' | wc -l | tr -d ' ')

@@ -1,4 +1,4 @@
-"""每日建议 v2 生成、重试与 fallback 测试。"""
+"""每日建议 agri_backend_v2 生成、重试与 fallback 测试。"""
 
 import json
 from datetime import datetime
@@ -231,7 +231,7 @@ async def test_retry_exhausted_returns_candidate_fallback(
     mock_composer,
     mock_collect_candidates,
 ) -> None:
-    """三次生成都不通过时，应返回候选 skeleton fallback 并缓存完整 v2 JSON。"""
+    """三次生成都不通过时，应返回候选 skeleton fallback 并缓存完整 agri_backend_v2 JSON。"""
     candidate = _candidate("weather:hot:2")
     mock_collect_candidates.return_value = [candidate]
 

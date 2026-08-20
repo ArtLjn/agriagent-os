@@ -207,7 +207,7 @@ def test_public_tool_names_are_unique():
 
 def test_source_skill_still_maps_to_business_mcp():
     source = _load_skill(
-        Path("/Users/ljn/Documents/demo/explore/v2/agent/skills/manage-crop-cycle")
+        Path("//agent/skills/manage-crop-cycle")
     )
 
     assert source is not None

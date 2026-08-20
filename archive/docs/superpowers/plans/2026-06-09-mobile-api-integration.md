@@ -12,50 +12,50 @@
 
 ## 文件结构
 
-- Create: `../../../../mobile-app/lib/data/session/session_store.dart`
+- Create: `../../../../agri_mobile_app/lib/data/session/session_store.dart`
   - 负责 token 持久化、读取、清除。
-- Create: `../../../../mobile-app/lib/data/session/app_session.dart`
+- Create: `../../../../agri_mobile_app/lib/data/session/app_session.dart`
   - 负责组合 `ApiClient`、`AuthRepository` 和 `SessionStore`，提供登录、注册、恢复、退出。
-- Create: `mobile-app/lib/shared/state/async_view_state.dart`
+- Create: `../../../../agri_mobile_app/lib/shared/state/async_view_state.dart`
   - 页面通用 loading/data/empty/error 状态。
-- Modify: `../../../../mobile-app/lib/data/api/api_client.dart`
+- Modify: `../../../../agri_mobile_app/lib/data/api/api_client.dart`
   - 增加 `baseUrl` 暴露、`health()`、统一错误文案辅助方法。
-- Modify: `../../../../mobile-app/lib/app/app_dependencies.dart`
+- Modify: `../../../../agri_mobile_app/lib/app/app_dependencies.dart`
   - 扩展依赖接口，暴露 session、repository 和退出登录。
-- Modify: `../../../../mobile-app/lib/features/auth/auth_flow.dart`
+- Modify: `../../../../agri_mobile_app/lib/features/auth/auth_flow.dart`
   - 启动时恢复 token，登录失败不放行进入主应用。
-- Modify: `../../../../mobile-app/lib/features/shell/app_shell.dart`
+- Modify: `../../../../agri_mobile_app/lib/features/shell/app_shell.dart`
   - 将 dependencies 传入首页、芽芽、账本、我的、记录页。
-- Create: `../../../../mobile-app/lib/features/profile/profile_controller.dart`
+- Create: `../../../../agri_mobile_app/lib/features/profile/profile_controller.dart`
   - 加载 profile/settings/version 并映射页面模型。
-- Modify: `../../../../mobile-app/lib/features/profile/profile_screen.dart`
+- Modify: `../../../../agri_mobile_app/lib/features/profile/profile_screen.dart`
   - 展示真实个人资料、设置、版本、退出登录。
-- Create: `../../../../mobile-app/lib/features/yaya/yaya_controller.dart`
-- Modify: `../../../../mobile-app/lib/data/repositories/yaya_repository.dart`
+- Create: `../../../../agri_mobile_app/lib/features/yaya/yaya_controller.dart`
+- Modify: `../../../../agri_mobile_app/lib/data/repositories/yaya_repository.dart`
   - 流式聊天、历史会话、消息加载。
-- Modify: `../../../../mobile-app/lib/features/yaya/yaya_screen.dart`
+- Modify: `../../../../agri_mobile_app/lib/features/yaya/yaya_screen.dart`
   - 接入真实发送、历史抽屉和会话消息。
-- Create: `../../../../mobile-app/lib/features/home/home_controller.dart`
+- Create: `../../../../agri_mobile_app/lib/features/home/home_controller.dart`
   - 加载每日建议、天气、作业单、未结人工摘要。
-- Modify: `../../../../mobile-app/lib/features/home/home_screen.dart`
+- Modify: `../../../../agri_mobile_app/lib/features/home/home_screen.dart`
   - 真实数据绑定和空/错/加载状态。
-- Create: `../../../../mobile-app/lib/features/billing/billing_controller.dart`
+- Create: `../../../../agri_mobile_app/lib/features/billing/billing_controller.dart`
   - 加载成本列表、年度汇总、欠款提醒。
-- Modify: `../../../../mobile-app/lib/features/billing/billing_screen.dart`
+- Modify: `../../../../agri_mobile_app/lib/features/billing/billing_screen.dart`
   - 真实账本只读数据绑定。
-- Create: `../../../../mobile-app/lib/features/record_flow/record_flow_controller.dart`
+- Create: `../../../../agri_mobile_app/lib/features/record_flow/record_flow_controller.dart`
   - smart-fill 解析、draft 映射、保存目标选择。
-- Modify: `../../../../mobile-app/lib/features/workbench/workbench_screen.dart`
+- Modify: `../../../../agri_mobile_app/lib/features/workbench/workbench_screen.dart`
   - 将 AI 记录入口改为提交自然语言后进入确认页。
-- Modify: `../../../../mobile-app/lib/features/record_flow/record_ai_confirm_screen.dart`
+- Modify: `../../../../agri_mobile_app/lib/features/record_flow/record_ai_confirm_screen.dart`
   - 使用解析结果展示确认页。
-- Modify: `../../../../mobile-app/lib/features/record_flow/record_manual_edit_screen.dart`
+- Modify: `../../../../agri_mobile_app/lib/features/record_flow/record_manual_edit_screen.dart`
   - 支持编辑 draft 必填字段。
-- Modify: `../../../../mobile-app/lib/features/record_flow/record_save_success_screen.dart`
+- Modify: `../../../../agri_mobile_app/lib/features/record_flow/record_save_success_screen.dart`
   - 展示真实保存结果。
-- Modify: `../../../../mobile-app/pubspec.yaml`
+- Modify: `../../../../agri_mobile_app/pubspec.yaml`
   - 增加 `flutter_secure_storage` 依赖。
-- Modify/Create tests under `mobile-app/test/...`
+- Modify/Create tests under `../../../../agri_mobile_app/test/...`
   - 覆盖 session、auth、profile、Yaya、home、billing、record flow、API 路径隐藏和本地后端联通。
 
 ---
@@ -63,26 +63,26 @@
 ### Task 1: 后端联通和 Session 地基
 
 **Files:**
-- Modify: `../../../../mobile-app/pubspec.yaml`
-- Modify: `../../../../mobile-app/lib/data/api/api_client.dart`
-- Create: `../../../../mobile-app/lib/data/session/session_store.dart`
-- Create: `../../../../mobile-app/lib/data/session/app_session.dart`
-- Test: `../../../../mobile-app/test/data/session/app_session_test.dart`
-- Test: `../../../../mobile-app/test/data/api/backend_connectivity_test.dart`
+- Modify: `../../../../agri_mobile_app/pubspec.yaml`
+- Modify: `../../../../agri_mobile_app/lib/data/api/api_client.dart`
+- Create: `../../../../agri_mobile_app/lib/data/session/session_store.dart`
+- Create: `../../../../agri_mobile_app/lib/data/session/app_session.dart`
+- Test: `../../../../agri_mobile_app/test/data/session/app_session_test.dart`
+- Test: `../../../../agri_mobile_app/test/data/api/backend_connectivity_test.dart`
 
 - [ ] **Step 1: 增加 token 存储依赖**
 
 Run:
 
 ```bash
-cd mobile-app && flutter pub add flutter_secure_storage
+cd agri_mobile_app && flutter pub add flutter_secure_storage
 ```
 
 Expected: `pubspec.yaml` 出现 `flutter_secure_storage`，`flutter pub get` 成功。
 
 - [ ] **Step 2: 编写 session 失败测试**
 
-Create `../../../../mobile-app/test/data/session/app_session_test.dart`:
+Create `../../../../agri_mobile_app/test/data/session/app_session_test.dart`:
 
 ```dart
 import 'package:dio/dio.dart';
@@ -142,14 +142,14 @@ void main() {
 Run:
 
 ```bash
-cd mobile-app && flutter test test/data/session/app_session_test.dart
+cd agri_mobile_app && flutter test test/data/session/app_session_test.dart
 ```
 
 Expected: FAIL，提示找不到 `AppSession` 或 `SessionStore`。
 
 - [ ] **Step 4: 实现 token 存储**
 
-Create `../../../../mobile-app/lib/data/session/session_store.dart`:
+Create `../../../../agri_mobile_app/lib/data/session/session_store.dart`:
 
 ```dart
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -203,7 +203,7 @@ class MemorySessionStore implements SessionStore {
 
 - [ ] **Step 5: 实现会话协调器**
 
-Create `../../../../mobile-app/lib/data/session/app_session.dart`:
+Create `../../../../agri_mobile_app/lib/data/session/app_session.dart`:
 
 ```dart
 import '../api/api_client.dart';
@@ -262,7 +262,7 @@ class AppSession {
 
 - [ ] **Step 6: 增加 ApiClient 联通辅助**
 
-Modify `../../../../mobile-app/lib/data/api/api_client.dart`:
+Modify `../../../../agri_mobile_app/lib/data/api/api_client.dart`:
 
 ```dart
 class ApiClient {
@@ -303,7 +303,7 @@ Keep the existing methods in the file and add the new members without removing
 
 - [ ] **Step 7: 编写本地后端联通测试**
 
-Create `../../../../mobile-app/test/data/api/backend_connectivity_test.dart`:
+Create `../../../../agri_mobile_app/test/data/api/backend_connectivity_test.dart`:
 
 ```dart
 import 'package:farm_manager_app/data/api/api_client.dart';
@@ -322,7 +322,7 @@ void main() {
 Run:
 
 ```bash
-cd mobile-app && flutter test test/data/session/app_session_test.dart test/data/api/backend_connectivity_test.dart
+cd agri_mobile_app && flutter test test/data/session/app_session_test.dart test/data/api/backend_connectivity_test.dart
 ```
 
 Expected: PASS。
@@ -346,7 +346,7 @@ cd backend && poetry run uvicorn app.main:app --host 0.0.0.0 --port 8099
 Run:
 
 ```bash
-git add mobile-app/pubspec.yaml mobile-app/pubspec.lock mobile-app/lib/data/api/api_client.dart mobile-app/lib/data/session mobile-app/test/data/session/app_session_test.dart mobile-app/test/data/api/backend_connectivity_test.dart
+git add agri_mobile_app/pubspec.yaml agri_mobile_app/pubspec.lock agri_mobile_app/lib/data/api/api_client.dart agri_mobile_app/lib/data/session agri_mobile_app/test/data/session/app_session_test.dart agri_mobile_app/test/data/api/backend_connectivity_test.dart
 git commit -m "feat: add mobile session foundation"
 ```
 
@@ -357,15 +357,15 @@ Expected: commit 成功。
 ### Task 2: AuthFlow 恢复、失败拦截和退出登录
 
 **Files:**
-- Modify: `../../../../mobile-app/lib/app/app_dependencies.dart`
-- Modify: `../../../../mobile-app/lib/features/auth/auth_flow.dart`
-- Modify: `../../../../mobile-app/lib/features/shell/app_shell.dart`
-- Modify: `../../../../mobile-app/test/support/fake_app_dependencies.dart`
-- Modify: `../../../../mobile-app/test/features/auth/auth_flow_test.dart`
+- Modify: `../../../../agri_mobile_app/lib/app/app_dependencies.dart`
+- Modify: `../../../../agri_mobile_app/lib/features/auth/auth_flow.dart`
+- Modify: `../../../../agri_mobile_app/lib/features/shell/app_shell.dart`
+- Modify: `../../../../agri_mobile_app/test/support/fake_app_dependencies.dart`
+- Modify: `../../../../agri_mobile_app/test/features/auth/auth_flow_test.dart`
 
 - [ ] **Step 1: 改写 AuthFlow 测试预期**
 
-Modify `../../../../mobile-app/test/features/auth/auth_flow_test.dart`:
+Modify `../../../../agri_mobile_app/test/features/auth/auth_flow_test.dart`:
 
 ```dart
 testWidgets('登录接口失败时停留在登录页并展示错误', (tester) async {
@@ -413,14 +413,14 @@ Remove the old test named `登录接口失败时仍放行进入主应用方便�
 Run:
 
 ```bash
-cd mobile-app && flutter test test/features/auth/auth_flow_test.dart
+cd agri_mobile_app && flutter test test/features/auth/auth_flow_test.dart
 ```
 
 Expected: FAIL，提示 `restoreResult`、`restoreCalls`、`logoutCalls` 或退出入口不存在。
 
 - [ ] **Step 3: 扩展 AppDependencies**
 
-Modify `../../../../mobile-app/lib/app/app_dependencies.dart`:
+Modify `../../../../agri_mobile_app/lib/app/app_dependencies.dart`:
 
 ```dart
 abstract class AppDependencies {
@@ -480,7 +480,7 @@ import '../data/session/session_store.dart';
 
 - [ ] **Step 4: 扩展 FakeAppDependencies**
 
-Modify `../../../../mobile-app/test/support/fake_app_dependencies.dart`:
+Modify `../../../../agri_mobile_app/test/support/fake_app_dependencies.dart`:
 
 ```dart
 class FakeAppDependencies implements AppDependencies {
@@ -516,7 +516,7 @@ Keep the existing login/register/loadAppOverview fields and methods.
 
 - [ ] **Step 5: 修改 AuthFlow 启动恢复逻辑**
 
-Modify `../../../../mobile-app/lib/features/auth/auth_flow.dart`:
+Modify `../../../../agri_mobile_app/lib/features/auth/auth_flow.dart`:
 
 ```dart
 enum AuthStep { restoring, login, register, setup, app }
@@ -555,7 +555,7 @@ to `LoginScreen`.
 
 - [ ] **Step 6: 将退出登录回调传入 AppShell**
 
-Modify `../../../../mobile-app/lib/features/shell/app_shell.dart`:
+Modify `../../../../agri_mobile_app/lib/features/shell/app_shell.dart`:
 
 ```dart
 const ProfileScreen()
@@ -584,7 +584,7 @@ import '../auth/auth_flow.dart';
 
 - [ ] **Step 7: 给 ProfileScreen 增加退出入口**
 
-Modify `../../../../mobile-app/lib/features/profile/profile_screen.dart` constructor:
+Modify `../../../../agri_mobile_app/lib/features/profile/profile_screen.dart` constructor:
 
 ```dart
 class ProfileScreen extends StatelessWidget {
@@ -611,7 +611,7 @@ if (onLogout != null) ...[
 Run:
 
 ```bash
-cd mobile-app && flutter test test/features/auth/auth_flow_test.dart
+cd agri_mobile_app && flutter test test/features/auth/auth_flow_test.dart
 ```
 
 Expected: PASS。
@@ -621,7 +621,7 @@ Expected: PASS。
 Run:
 
 ```bash
-git add mobile-app/lib/app/app_dependencies.dart mobile-app/lib/features/auth/auth_flow.dart mobile-app/lib/features/shell/app_shell.dart mobile-app/lib/features/profile/profile_screen.dart mobile-app/test/support/fake_app_dependencies.dart mobile-app/test/features/auth/auth_flow_test.dart
+git add agri_mobile_app/lib/app/app_dependencies.dart agri_mobile_app/lib/features/auth/auth_flow.dart agri_mobile_app/lib/features/shell/app_shell.dart agri_mobile_app/lib/features/profile/profile_screen.dart agri_mobile_app/test/support/fake_app_dependencies.dart agri_mobile_app/test/features/auth/auth_flow_test.dart
 git commit -m "fix: require valid mobile auth session"
 ```
 
@@ -632,14 +632,14 @@ Expected: commit 成功。
 ### Task 3: 个人页真实数据绑定
 
 **Files:**
-- Create: `../../../../mobile-app/lib/features/profile/profile_controller.dart`
-- Modify: `../../../../mobile-app/lib/features/profile/profile_screen.dart`
-- Test: `../../../../mobile-app/test/features/profile/profile_controller_test.dart`
-- Modify: `../../../../mobile-app/test/features/profile/profile_screen_test.dart`
+- Create: `../../../../agri_mobile_app/lib/features/profile/profile_controller.dart`
+- Modify: `../../../../agri_mobile_app/lib/features/profile/profile_screen.dart`
+- Test: `../../../../agri_mobile_app/test/features/profile/profile_controller_test.dart`
+- Modify: `../../../../agri_mobile_app/test/features/profile/profile_screen_test.dart`
 
 - [ ] **Step 1: 编写 profile controller 测试**
 
-Create `../../../../mobile-app/test/features/profile/profile_controller_test.dart`:
+Create `../../../../agri_mobile_app/test/features/profile/profile_controller_test.dart`:
 
 ```dart
 import 'package:dio/dio.dart';
@@ -680,14 +680,14 @@ void main() {
 Run:
 
 ```bash
-cd mobile-app && flutter test test/features/profile/profile_controller_test.dart
+cd agri_mobile_app && flutter test test/features/profile/profile_controller_test.dart
 ```
 
 Expected: FAIL，提示找不到 `ProfileController`。
 
 - [ ] **Step 3: 实现 ProfileController**
 
-Create `../../../../mobile-app/lib/features/profile/profile_controller.dart`:
+Create `../../../../agri_mobile_app/lib/features/profile/profile_controller.dart`:
 
 ```dart
 import '../../data/repositories/profile_repository.dart';
@@ -807,7 +807,7 @@ Keep current layout, replace hard-coded city/version/phone/nickname values with
 
 - [ ] **Step 5: 更新 AppShell 传入 ProfileRepository**
 
-Modify `../../../../mobile-app/lib/features/shell/app_shell.dart`:
+Modify `../../../../agri_mobile_app/lib/features/shell/app_shell.dart`:
 
 ```dart
 ProfileScreen(
@@ -838,7 +838,7 @@ and implement it on `BackendAppDependencies` and `FakeAppDependencies`.
 Run:
 
 ```bash
-cd mobile-app && flutter test test/features/profile/profile_controller_test.dart test/features/profile/profile_screen_test.dart
+cd agri_mobile_app && flutter test test/features/profile/profile_controller_test.dart test/features/profile/profile_screen_test.dart
 ```
 
 Expected: PASS。
@@ -848,7 +848,7 @@ Expected: PASS。
 Run:
 
 ```bash
-git add mobile-app/lib/features/profile mobile-app/lib/features/shell/app_shell.dart mobile-app/lib/app/app_dependencies.dart mobile-app/test/features/profile mobile-app/test/support/fake_app_dependencies.dart
+git add agri_mobile_app/lib/features/profile agri_mobile_app/lib/features/shell/app_shell.dart agri_mobile_app/lib/app/app_dependencies.dart agri_mobile_app/test/features/profile agri_mobile_app/test/support/fake_app_dependencies.dart
 git commit -m "feat: bind mobile profile to backend"
 ```
 
@@ -859,19 +859,19 @@ Expected: commit 成功。
 ### Task 4: 芽芽流式聊天和历史会话
 
 **Files:**
-- Modify: `../../../../mobile-app/lib/data/repositories/yaya_repository.dart`
-- Create: `../../../../mobile-app/lib/features/yaya/yaya_controller.dart`
-- Modify: `../../../../mobile-app/lib/features/yaya/yaya_screen.dart`
-- Modify: `../../../../mobile-app/lib/features/shell/app_shell.dart`
-- Modify: `../../../../mobile-app/lib/app/app_dependencies.dart`
-- Modify: `../../../../mobile-app/test/data/repositories/app_api_integration_test.dart`
-- Test: `../../../../mobile-app/test/features/yaya/yaya_controller_test.dart`
-- Modify: `../../../../mobile-app/test/features/yaya/yaya_copy_test.dart`
-- Modify: `../../../../mobile-app/test/support/fake_app_dependencies.dart`
+- Modify: `../../../../agri_mobile_app/lib/data/repositories/yaya_repository.dart`
+- Create: `../../../../agri_mobile_app/lib/features/yaya/yaya_controller.dart`
+- Modify: `../../../../agri_mobile_app/lib/features/yaya/yaya_screen.dart`
+- Modify: `../../../../agri_mobile_app/lib/features/shell/app_shell.dart`
+- Modify: `../../../../agri_mobile_app/lib/app/app_dependencies.dart`
+- Modify: `../../../../agri_mobile_app/test/data/repositories/app_api_integration_test.dart`
+- Test: `../../../../agri_mobile_app/test/features/yaya/yaya_controller_test.dart`
+- Modify: `../../../../agri_mobile_app/test/features/yaya/yaya_copy_test.dart`
+- Modify: `../../../../agri_mobile_app/test/support/fake_app_dependencies.dart`
 
 - [ ] **Step 1: 编写 YayaRepository 流式接口测试**
 
-Modify `../../../../mobile-app/test/data/repositories/app_api_integration_test.dart` by adding a streaming response to `RecordingAdapter` or creating a small local adapter in the same test file:
+Modify `../../../../agri_mobile_app/test/data/repositories/app_api_integration_test.dart` by adding a streaming response to `RecordingAdapter` or creating a small local adapter in the same test file:
 
 ```dart
 class StreamingAdapter implements HttpClientAdapter {
@@ -942,14 +942,14 @@ test('芽芽流式接口解析 SSE content、skills 和 done', () async {
 Run:
 
 ```bash
-cd mobile-app && flutter test test/data/repositories/app_api_integration_test.dart
+cd agri_mobile_app && flutter test test/data/repositories/app_api_integration_test.dart
 ```
 
 Expected: FAIL，提示 `streamMessage` 或 `YayaStreamEvent` 不存在。
 
 - [ ] **Step 3: 实现 YayaRepository.streamMessage 和 SSE 解析**
 
-Modify `../../../../mobile-app/lib/data/repositories/yaya_repository.dart`:
+Modify `../../../../agri_mobile_app/lib/data/repositories/yaya_repository.dart`:
 
 ```dart
 import 'dart:async';
@@ -1045,7 +1045,7 @@ Keep existing `loadConversations` and `loadMessages` methods unchanged.
 
 - [ ] **Step 4: 编写 YayaController 流式测试**
 
-Create `../../../../mobile-app/test/features/yaya/yaya_controller_test.dart`:
+Create `../../../../agri_mobile_app/test/features/yaya/yaya_controller_test.dart`:
 
 ```dart
 import 'package:dio/dio.dart';
@@ -1131,14 +1131,14 @@ If importing `ConversationSummary` from the integration test is invalid, remove 
 Run:
 
 ```bash
-cd mobile-app && flutter test test/features/yaya/yaya_controller_test.dart
+cd agri_mobile_app && flutter test test/features/yaya/yaya_controller_test.dart
 ```
 
 Expected: FAIL，提示找不到 `YayaController`。
 
 - [ ] **Step 6: 实现 YayaController 增量消息**
 
-Create `../../../../mobile-app/lib/features/yaya/yaya_controller.dart`:
+Create `../../../../agri_mobile_app/lib/features/yaya/yaya_controller.dart`:
 
 ```dart
 import 'package:flutter/foundation.dart';
@@ -1315,7 +1315,7 @@ Render empty state text `暂无历史会话` when list is empty. Render each ite
 
 - [ ] **Step 10: AppShell 传入 YayaRepository**
 
-Modify `../../../../mobile-app/lib/features/shell/app_shell.dart`:
+Modify `../../../../agri_mobile_app/lib/features/shell/app_shell.dart`:
 
 ```dart
 YayaScreen(repository: widget.dependencies.yaya),
@@ -1328,7 +1328,7 @@ Expose `YayaRepository get yaya;` from `AppDependencies` and implement in fake d
 Run:
 
 ```bash
-cd mobile-app && flutter test test/data/repositories/app_api_integration_test.dart test/features/yaya/yaya_controller_test.dart test/features/yaya/yaya_copy_test.dart
+cd agri_mobile_app && flutter test test/data/repositories/app_api_integration_test.dart test/features/yaya/yaya_controller_test.dart test/features/yaya/yaya_copy_test.dart
 ```
 
 Expected: PASS。
@@ -1338,7 +1338,7 @@ Expected: PASS。
 Run:
 
 ```bash
-git add mobile-app/lib/data/repositories/yaya_repository.dart mobile-app/lib/features/yaya mobile-app/lib/features/shell/app_shell.dart mobile-app/lib/app/app_dependencies.dart mobile-app/test/data/repositories/app_api_integration_test.dart mobile-app/test/features/yaya mobile-app/test/support/fake_app_dependencies.dart
+git add agri_mobile_app/lib/data/repositories/yaya_repository.dart agri_mobile_app/lib/features/yaya agri_mobile_app/lib/features/shell/app_shell.dart agri_mobile_app/lib/app/app_dependencies.dart agri_mobile_app/test/data/repositories/app_api_integration_test.dart agri_mobile_app/test/features/yaya agri_mobile_app/test/support/fake_app_dependencies.dart
 git commit -m "feat: stream yaya chat from backend"
 ```
 
@@ -1348,17 +1348,17 @@ Expected: commit 成功。
 ### Task 5: 首页和账本只读数据绑定
 
 **Files:**
-- Create: `../../../../mobile-app/lib/features/home/home_controller.dart`
-- Modify: `../../../../mobile-app/lib/features/home/home_screen.dart`
-- Create: `../../../../mobile-app/lib/features/billing/billing_controller.dart`
-- Modify: `../../../../mobile-app/lib/features/billing/billing_screen.dart`
-- Modify: `../../../../mobile-app/lib/features/shell/app_shell.dart`
-- Test: `../../../../mobile-app/test/features/home/home_controller_test.dart`
-- Test: `../../../../mobile-app/test/features/billing/billing_controller_test.dart`
+- Create: `../../../../agri_mobile_app/lib/features/home/home_controller.dart`
+- Modify: `../../../../agri_mobile_app/lib/features/home/home_screen.dart`
+- Create: `../../../../agri_mobile_app/lib/features/billing/billing_controller.dart`
+- Modify: `../../../../agri_mobile_app/lib/features/billing/billing_screen.dart`
+- Modify: `../../../../agri_mobile_app/lib/features/shell/app_shell.dart`
+- Test: `../../../../agri_mobile_app/test/features/home/home_controller_test.dart`
+- Test: `../../../../agri_mobile_app/test/features/billing/billing_controller_test.dart`
 
 - [ ] **Step 1: 编写首页 controller 测试**
 
-Create `../../../../mobile-app/test/features/home/home_controller_test.dart`:
+Create `../../../../agri_mobile_app/test/features/home/home_controller_test.dart`:
 
 ```dart
 import 'package:dio/dio.dart';
@@ -1397,7 +1397,7 @@ void main() {
 
 - [ ] **Step 2: 编写账本 controller 测试**
 
-Create `../../../../mobile-app/test/features/billing/billing_controller_test.dart`:
+Create `../../../../agri_mobile_app/test/features/billing/billing_controller_test.dart`:
 
 ```dart
 import 'package:dio/dio.dart';
@@ -1438,14 +1438,14 @@ void main() {
 Run:
 
 ```bash
-cd mobile-app && flutter test test/features/home/home_controller_test.dart test/features/billing/billing_controller_test.dart
+cd agri_mobile_app && flutter test test/features/home/home_controller_test.dart test/features/billing/billing_controller_test.dart
 ```
 
 Expected: FAIL，提示 controller 不存在。
 
 - [ ] **Step 4: 实现 HomeController**
 
-Create `../../../../mobile-app/lib/features/home/home_controller.dart`:
+Create `../../../../agri_mobile_app/lib/features/home/home_controller.dart`:
 
 ```dart
 import '../../data/repositories/dashboard_repository.dart';
@@ -1504,7 +1504,7 @@ class HomeViewModel {
 
 - [ ] **Step 5: 实现 BillingController**
 
-Create `../../../../mobile-app/lib/features/billing/billing_controller.dart`:
+Create `../../../../agri_mobile_app/lib/features/billing/billing_controller.dart`:
 
 ```dart
 import '../../data/api/api_models.dart';
@@ -1594,7 +1594,7 @@ Use `FutureBuilder` to render:
 
 - [ ] **Step 7: AppShell 传入 repository**
 
-Modify `../../../../mobile-app/lib/features/shell/app_shell.dart`:
+Modify `../../../../agri_mobile_app/lib/features/shell/app_shell.dart`:
 
 ```dart
 HomeScreen(repository: widget.dependencies.dashboard),
@@ -1609,7 +1609,7 @@ from `AppDependencies` and fake dependencies.
 Run:
 
 ```bash
-cd mobile-app && flutter test test/features/home test/features/billing
+cd agri_mobile_app && flutter test test/features/home test/features/billing
 ```
 
 Expected: PASS。
@@ -1619,7 +1619,7 @@ Expected: PASS。
 Run:
 
 ```bash
-git add mobile-app/lib/features/home mobile-app/lib/features/billing mobile-app/lib/features/shell/app_shell.dart mobile-app/lib/app/app_dependencies.dart mobile-app/test/features/home mobile-app/test/features/billing mobile-app/test/support/fake_app_dependencies.dart
+git add agri_mobile_app/lib/features/home agri_mobile_app/lib/features/billing agri_mobile_app/lib/features/shell/app_shell.dart agri_mobile_app/lib/app/app_dependencies.dart agri_mobile_app/test/features/home agri_mobile_app/test/features/billing agri_mobile_app/test/support/fake_app_dependencies.dart
 git commit -m "feat: bind mobile dashboard and billing data"
 ```
 
@@ -1630,18 +1630,18 @@ Expected: commit 成功。
 ### Task 6: 记录流 smart-fill 解析和保守保存
 
 **Files:**
-- Create: `../../../../mobile-app/lib/features/record_flow/record_flow_controller.dart`
-- Modify: `../../../../mobile-app/lib/features/workbench/workbench_screen.dart`
-- Modify: `../../../../mobile-app/lib/features/record_flow/record_ai_confirm_screen.dart`
-- Modify: `../../../../mobile-app/lib/features/record_flow/record_manual_edit_screen.dart`
-- Modify: `../../../../mobile-app/lib/features/record_flow/record_save_success_screen.dart`
-- Modify: `../../../../mobile-app/lib/features/shell/app_shell.dart`
-- Test: `../../../../mobile-app/test/features/record_flow/record_flow_controller_test.dart`
-- Modify: `../../../../mobile-app/test/features/record_flow/record_flow_test.dart`
+- Create: `../../../../agri_mobile_app/lib/features/record_flow/record_flow_controller.dart`
+- Modify: `../../../../agri_mobile_app/lib/features/workbench/workbench_screen.dart`
+- Modify: `../../../../agri_mobile_app/lib/features/record_flow/record_ai_confirm_screen.dart`
+- Modify: `../../../../agri_mobile_app/lib/features/record_flow/record_manual_edit_screen.dart`
+- Modify: `../../../../agri_mobile_app/lib/features/record_flow/record_save_success_screen.dart`
+- Modify: `../../../../agri_mobile_app/lib/features/shell/app_shell.dart`
+- Test: `../../../../agri_mobile_app/test/features/record_flow/record_flow_controller_test.dart`
+- Modify: `../../../../agri_mobile_app/test/features/record_flow/record_flow_test.dart`
 
 - [ ] **Step 1: 编写 record flow controller 测试**
 
-Create `../../../../mobile-app/test/features/record_flow/record_flow_controller_test.dart`:
+Create `../../../../agri_mobile_app/test/features/record_flow/record_flow_controller_test.dart`:
 
 ```dart
 import 'package:dio/dio.dart';
@@ -1727,14 +1727,14 @@ void main() {
 Run:
 
 ```bash
-cd mobile-app && flutter test test/features/record_flow/record_flow_controller_test.dart
+cd agri_mobile_app && flutter test test/features/record_flow/record_flow_controller_test.dart
 ```
 
 Expected: FAIL，提示找不到 `RecordFlowController`。
 
 - [ ] **Step 3: 实现 RecordFlowController**
 
-Create `../../../../mobile-app/lib/features/record_flow/record_flow_controller.dart`:
+Create `../../../../agri_mobile_app/lib/features/record_flow/record_flow_controller.dart`:
 
 ```dart
 import '../../data/repositories/billing_repository.dart';
@@ -1933,7 +1933,7 @@ String field(String key, String fallback) {
 
 - [ ] **Step 7: AppShell 创建 RecordFlowController**
 
-Modify `../../../../mobile-app/lib/features/shell/app_shell.dart`:
+Modify `../../../../agri_mobile_app/lib/features/shell/app_shell.dart`:
 
 ```dart
 late final recordFlowController = RecordFlowController(
@@ -1949,7 +1949,7 @@ dependencies.
 
 - [ ] **Step 8: 更新记录流 widget 测试**
 
-Modify `../../../../mobile-app/test/features/record_flow/record_flow_test.dart` to create a
+Modify `../../../../agri_mobile_app/test/features/record_flow/record_flow_test.dart` to create a
 fake controller or use `RecordingAdapter` responses, then assert:
 
 ```dart
@@ -1964,7 +1964,7 @@ expect(find.textContaining('/smart-fill'), findsNothing);
 Run:
 
 ```bash
-cd mobile-app && flutter test test/features/record_flow
+cd agri_mobile_app && flutter test test/features/record_flow
 ```
 
 Expected: PASS。
@@ -1974,7 +1974,7 @@ Expected: PASS。
 Run:
 
 ```bash
-git add mobile-app/lib/features/record_flow mobile-app/lib/features/workbench mobile-app/lib/features/shell/app_shell.dart mobile-app/lib/app/app_dependencies.dart mobile-app/test/features/record_flow mobile-app/test/support/fake_app_dependencies.dart
+git add agri_mobile_app/lib/features/record_flow agri_mobile_app/lib/features/workbench agri_mobile_app/lib/features/shell/app_shell.dart agri_mobile_app/lib/app/app_dependencies.dart agri_mobile_app/test/features/record_flow agri_mobile_app/test/support/fake_app_dependencies.dart
 git commit -m "feat: connect record flow to smart fill"
 ```
 
@@ -1985,12 +1985,12 @@ Expected: commit 成功。
 ### Task 7: 全量回归和 localhost:8099 冒烟
 
 **Files:**
-- Modify: `../../../../mobile-app/README.md`
-- Modify: `../../../../mobile-app/test/data/api_path_visibility_test.dart`
+- Modify: `../../../../agri_mobile_app/README.md`
+- Modify: `../../../../agri_mobile_app/test/data/api_path_visibility_test.dart`
 
 - [ ] **Step 1: 更新 README 运行说明**
 
-Modify `../../../../mobile-app/README.md`:
+Modify `../../../../agri_mobile_app/README.md`:
 
 ```markdown
 ## 连接本地后端
@@ -2033,7 +2033,7 @@ Assert no rendered text contains these fragments.
 Run:
 
 ```bash
-cd mobile-app && flutter test
+cd agri_mobile_app && flutter test
 ```
 
 Expected: PASS。
@@ -2053,7 +2053,7 @@ Expected: HTTP 2xx。
 Run:
 
 ```bash
-cd mobile-app && flutter run --dart-define=API_BASE_URL=http://localhost:8099
+cd agri_mobile_app && flutter run --dart-define=API_BASE_URL=http://localhost:8099
 ```
 
 Expected:
@@ -2069,7 +2069,7 @@ Expected:
 Run:
 
 ```bash
-cd mobile-app && flutter analyze
+cd agri_mobile_app && flutter analyze
 ```
 
 Expected: `No issues found!`
@@ -2079,7 +2079,7 @@ Expected: `No issues found!`
 Run:
 
 ```bash
-git add mobile-app/README.md mobile-app/test/data/api_path_visibility_test.dart
+git add agri_mobile_app/README.md agri_mobile_app/test/data/api_path_visibility_test.dart
 git commit -m "test: verify mobile backend integration"
 ```
 

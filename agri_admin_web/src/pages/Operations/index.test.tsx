@@ -126,7 +126,7 @@ describe('Operations 页面查询参数', () => {
     }));
   });
 
-  it('用户设置页只调用当前用户和用户设置 v2 接口', async () => {
+  it('用户设置页只调用当前用户和用户设置 agri_backend_v2 接口', async () => {
     render(
       <MemoryRouter initialEntries={['/operations?tab=settings']}>
         <Operations />

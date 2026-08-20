@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 日常同步 v2 — 上传 v2 代码并重启 Business、Agent 服务
+# 日常同步 agri_backend_v2 — 上传 agri_backend_v2 代码并重启 Business、Agent 服务
 # 用法: bash deploy/server-sync.sh
 set -euo pipefail
 
@@ -36,7 +36,7 @@ if ! ssh -o ConnectTimeout=8 -o BatchMode=yes "${SERVER}" "true" 2>/dev/null; th
     die "无法免密登录 ${SERVER}。请先配置: ssh-copy-id ${SERVER}"
 fi
 
-# --- 1. 本地打包 v2 代码 ---
+# --- 1. 本地打包 agri_backend_v2 代码 ---
 log "打包 v2 代码..."
 COPYFILE_DISABLE=1 tar czf "${ARCHIVE}" \
     --exclude='__pycache__' \
@@ -44,17 +44,17 @@ COPYFILE_DISABLE=1 tar czf "${ARCHIVE}" \
     --exclude='*.pyo' \
     --exclude='*.egg-info' \
     --exclude='.DS_Store' \
-    --exclude='v2/.venv' \
-    --exclude='v2/.pytest_cache' \
-    --exclude='v2/.ruff_cache' \
-    --exclude='v2/logs' \
-    --exclude='v2/.env' \
-    --exclude='v2/.env.*' \
-    --exclude='v2/._*' \
-    --exclude='v2/.claude' \
-    --exclude='v2/.git' \
+    --exclude='agri_backend_v2/.venv' \
+    --exclude='agri_backend_v2/.pytest_cache' \
+    --exclude='agri_backend_v2/.ruff_cache' \
+    --exclude='agri_backend_v2/logs' \
+    --exclude='agri_backend_v2/.env' \
+    --exclude='agri_backend_v2/.env.*' \
+    --exclude='agri_backend_v2/._*' \
+    --exclude='agri_backend_v2/.claude' \
+    --exclude='agri_backend_v2/.git' \
     -C "${PROJECT_ROOT}" \
-    v2
+    agri_backend_v2
 
 log "上传 v2 代码..."
 ssh -o ConnectTimeout=8 "${SERVER}" "rm -f '${ARCHIVE}'" 2>/dev/null || true

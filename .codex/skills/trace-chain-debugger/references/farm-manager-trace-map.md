@@ -17,7 +17,7 @@
 
 ## 本地事件
 
-- 默认目录：`data/agent-events/dt=<date>/farm_id=<id>/session_id=<id>/events.jsonl`。
+- 默认目录：`../../../../archive/data/agent-events/dt=<date>/farm_id=<id>/session_id=<id>/events.jsonl`。
 - 常见事件：`message.user`、`message.assistant`、`tool.call.finished`。
 - 如果 `agent_turns.event_file` 存在，优先按 `event_seq_start/event_seq_end` 读取对应事件片段。
 - 如果 MySQL `agent_turns` 不可用，使用 Mongo `conversationMessages.meta.event_file` 和 `meta.event_seq_range` 读取事件片段。

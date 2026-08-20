@@ -33,7 +33,7 @@
 ## 5. Seed 数据（需人工审核）
 
 - [x] 5.1 编写 `backend/app/seed/system_crop_templates.py`：以 Python 数据结构定义 10-20 个系统模版（水稻、小麦、玉米、大豆、番茄、辣椒、黄瓜、西瓜、草莓、生菜等），每个含分类、品种、生育阶段
-- [ ] 5.2 生育阶段内容由产品/农业顾问审核签字，记录审核人在 `docs/design/crop-template-system-library.md` 中
+- [ ] 5.2 生育阶段内容由产品/农业顾问审核签字，记录审核人在 `../../../../archive/docs/design/crop-template-system-library.md` 中
 - [x] 5.3 编写 alembic data migration 调用 seed 模块，写入 `farm_id IS NULL` 记录；要求 idempotent（已存在则跳过）
 - [x] 5.4 seed 加载脚本单测：重复执行不产生重复；删除后重新加载行为正确
 
@@ -47,7 +47,7 @@
 ## 7. Admin Web 前端
 
 - [x] 7.1 在 [admin-web/src/api/crops.ts](admin-web/src/api/crops.ts) 新增 `listSystemCropTemplates(category?)`、`importSystemCropTemplate(id)`、`createCropTemplate` 返回类型补充 `already_exists` 字段
-- [x] 7.2 新增页面 `admin-web/src/pages/CropTemplates/SystemLibrary.tsx`：按作物分类展示系统模版，支持多选 + 一键导入到当前 farm
+- [x] 7.2 新增页面 `../../../../agri_admin_web/src/pages/CropTemplates/SystemLibrary.tsx`：按作物分类展示系统模版，支持多选 + 一键导入到当前 farm
 - [x] 7.3 「我的模版库」列表（既有页面）补充提示：当用户尝试创建已存在模版时（API 返回 `already_exists: true`），用 toast 提示「已有相同模版，已为你定位」而非静默
 - [x] 7.4 新建模版流程加引导：当用户点击「新建模版」时，先弹「是否从系统模版库选择？」二级入口，避免新用户从零手填
 - [x] 7.5 前端单测 [admin-web/src/pages/CropTemplates/SystemLibrary.test.tsx](admin-web/src/pages/CropTemplates/SystemLibrary.test.tsx)：覆盖列表展示、分类筛选、多选导入、重复导入提示

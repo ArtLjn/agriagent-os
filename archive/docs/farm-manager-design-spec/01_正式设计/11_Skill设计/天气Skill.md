@@ -359,7 +359,7 @@ GET /locations/regions?province=江苏省&city=苏州市
 ```json
 {
   "version": "2026-06-22",
-  "source": "generated from mobile-app city picker; calibrated with pfinal/city region.sql bd09ll coordinates converted to WGS84 approximation; manual overrides for verified farm-manager hot spots",
+  "source": "generated from agri_mobile_app city picker; calibrated with pfinal/city region.sql bd09ll coordinates converted to WGS84 approximation; manual overrides for verified farm-manager hot spots",
   "source_urls": [
     "https://github.com/pfinal/city",
     "https://raw.githubusercontent.com/pfinal/city/master/region.sql"

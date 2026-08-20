@@ -312,7 +312,7 @@ for f in $(find backend/app \
 done
 
 # TypeScript 文件
-for frontend_dir in admin-web/src farm-index/app/src frontend/src; do
+for frontend_dir in agri_admin_web/src farm-index/app/src frontend/src; do
   if [ ! -d "$frontend_dir" ]; then
     continue
   fi
@@ -333,7 +333,7 @@ if [ -d "mobile-app/lib" ]; then
       echo "⚠️  BASELINE: $f 有 ${lines} 行（上限 500，历史超限，需专项拆分）"
       WARNINGS=$((WARNINGS + 1))
     fi
-  done < <(find mobile-app/lib -name "*.dart" -type f 2>/dev/null)
+  done < <(find agri_mobile_app/lib -name "*.dart" -type f 2>/dev/null)
 fi
 
 # ── TODO/FIXME 检查 ──
@@ -342,7 +342,7 @@ TODO_TARGETS=""
 if [ -d "backend/app" ]; then
   TODO_TARGETS="$TODO_TARGETS backend/app"
 fi
-for frontend_dir in admin-web/src farm-index/app/src frontend/src mobile-app/lib; do
+for frontend_dir in agri_admin_web/src farm-index/app/src frontend/src agri_mobile_app/lib; do
   if [ -d "$frontend_dir" ]; then
     TODO_TARGETS="$TODO_TARGETS $frontend_dir"
   fi

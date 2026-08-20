@@ -37,11 +37,11 @@ Admin API：
 - 修改 `backend/app/api/admin_stats.py`：新增 `user_id`/`farm_id` 过滤和管理员鉴权。
 
 前端：
-- 修改 `../../../../admin-web/src/api/admin.ts`：更新 token stats 和 config 类型。
-- 修改 `../../../../admin-web/src/api/users.ts`：新增 quota API。
-- 修改 `../../../../admin-web/src/pages/TokenDashboard/index.tsx`：用户筛选、月/周进度、去掉硬编码 `QUOTA_LIMIT`。
-- 修改 `../../../../admin-web/src/pages/Users/index.tsx`：用户列表和详情展示配额。
-- 修改 `../../../../admin-web/src/pages/ConfigKeys/index.tsx`：展示月/周默认限额和 `reject`。
+- 修改 `../../../../agri_admin_web/src/api/admin.ts`：更新 token stats 和 config 类型。
+- 修改 `../../../../agri_admin_web/src/api/users.ts`：新增 quota API。
+- 修改 `../../../../agri_admin_web/src/pages/TokenDashboard/index.tsx`：用户筛选、月/周进度、去掉硬编码 `QUOTA_LIMIT`。
+- 修改 `../../../../agri_admin_web/src/pages/Users/index.tsx`：用户列表和详情展示配额。
+- 修改 `../../../../agri_admin_web/src/pages/ConfigKeys/index.tsx`：展示月/周默认限额和 `reject`。
 
 测试：
 - 修改 `backend/tests/services/test_quota_service.py`。
@@ -1262,15 +1262,15 @@ git commit -m "feat: add admin user quota APIs"
 ## Task 6: 前端管理页面
 
 **Files:**
-- Modify: `../../../../admin-web/src/api/admin.ts`
-- Modify: `../../../../admin-web/src/api/users.ts`
-- Modify: `../../../../admin-web/src/pages/TokenDashboard/index.tsx`
-- Modify: `../../../../admin-web/src/pages/Users/index.tsx`
-- Modify: `../../../../admin-web/src/pages/ConfigKeys/index.tsx`
+- Modify: `../../../../agri_admin_web/src/api/admin.ts`
+- Modify: `../../../../agri_admin_web/src/api/users.ts`
+- Modify: `../../../../agri_admin_web/src/pages/TokenDashboard/index.tsx`
+- Modify: `../../../../agri_admin_web/src/pages/Users/index.tsx`
+- Modify: `../../../../agri_admin_web/src/pages/ConfigKeys/index.tsx`
 
 - [ ] **Step 1: 更新 admin API 类型**
 
-在 `../../../../admin-web/src/api/admin.ts` 将 `TokenQuotaConfig` 改为：
+在 `../../../../agri_admin_web/src/api/admin.ts` 将 `TokenQuotaConfig` 改为：
 
 ```ts
 export interface TokenQuotaConfig {
@@ -1307,7 +1307,7 @@ export async function getDailyTokenStats(
 
 - [ ] **Step 2: 更新 users API 类型**
 
-在 `../../../../admin-web/src/api/users.ts` 追加：
+在 `../../../../agri_admin_web/src/api/users.ts` 追加：
 
 ```ts
 export interface UserQuotaStatus {
@@ -1363,7 +1363,7 @@ export interface UserQuotaOverviewResponse {
 
 - [ ] **Step 3: TokenDashboard 改造**
 
-在 `../../../../admin-web/src/pages/TokenDashboard/index.tsx`：
+在 `../../../../agri_admin_web/src/pages/TokenDashboard/index.tsx`：
 - 删除 `const QUOTA_LIMIT = 10000;`
 - 新增用户选择状态：
 
@@ -1394,7 +1394,7 @@ Promise.all([
 
 - [ ] **Step 4: Users 页面改造**
 
-在 `../../../../admin-web/src/pages/Users/index.tsx` 中加载列表后并行请求 quota overview：
+在 `../../../../agri_admin_web/src/pages/Users/index.tsx` 中加载列表后并行请求 quota overview：
 
 ```ts
 const quotaRes = await usersApi.getQuotaOverview({ page, size });
@@ -1449,7 +1449,7 @@ const quotaRes = await usersApi.getQuota(userId);
 
 - [ ] **Step 5: ConfigKeys 页面改造**
 
-在 `../../../../admin-web/src/pages/ConfigKeys/index.tsx` 替换 Token 配额展示：
+在 `../../../../agri_admin_web/src/pages/ConfigKeys/index.tsx` 替换 Token 配额展示：
 
 ```tsx
 <Descriptions.Item label="月默认限额">
@@ -1470,7 +1470,7 @@ const quotaRes = await usersApi.getQuota(userId);
 Run:
 
 ```bash
-cd admin-web && pnpm build
+cd agri_admin_web && pnpm build
 ```
 
 Expected: PASS，TypeScript 无错误。
@@ -1478,7 +1478,7 @@ Expected: PASS，TypeScript 无错误。
 - [ ] **Step 7: 提交**
 
 ```bash
-git add admin-web/src/api/admin.ts admin-web/src/api/users.ts admin-web/src/pages/TokenDashboard/index.tsx admin-web/src/pages/Users/index.tsx admin-web/src/pages/ConfigKeys/index.tsx
+git add agri_admin_web/src/api/admin.ts agri_admin_web/src/api/users.ts agri_admin_web/src/pages/TokenDashboard/index.tsx agri_admin_web/src/pages/Users/index.tsx agri_admin_web/src/pages/ConfigKeys/index.tsx
 git commit -m "feat: add user token quota admin UI"
 ```
 
@@ -1512,7 +1512,7 @@ Expected: PASS。
 Run:
 
 ```bash
-cd admin-web && pnpm build
+cd agri_admin_web && pnpm build
 ```
 
 Expected: PASS。

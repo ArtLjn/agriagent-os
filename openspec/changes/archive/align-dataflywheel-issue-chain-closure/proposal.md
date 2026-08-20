@@ -36,7 +36,7 @@ DataFlywheel 已完成每日质检和 ReviewIssueChain MVP，但当前实现仍�
 ## Impact
 
 - **admin-web**：
-  - 修改 `admin-web/src/pages/DataFlywheel/` 信息架构和按钮权限。
+  - 修改 `../../../../agri_admin_web/src/pages/DataFlywheel/` 信息架构和按钮权限。
   - `IssueChainReviewPanel` 增加完整标签、chain case draft、chain repair pack 操作。
   - 高级搜索内 `AnnotationPanel` 相关 final 标注和闭环按钮下线或禁用。
 - **backend**：
