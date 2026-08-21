@@ -291,6 +291,18 @@ Turn final_answer
 
 模型不能直接把自己的推测写入 `memoryRecords`。摘要、天气临时结果、审批前参数、失败工具返回和未确认的业务意图只能留在当前 Session 或 Trace。
 
+当前 Turn Finalizer 的提交顺序固定为：用户 prompt 以
+`turn:{turn_id}:user:prompt` 幂等写入 `conversationMessages`；assistant 终态以
+`turn:{turn_id}:assistant:{message_kind}` 幂等写入；assistant 消息成功或幂等命中后才推进
+`conversationStates`；随后以 `turn:{turn_id}:memory-observation` 幂等追加
+`memoryObservations`。Mongo 消息写入失败时不派发新 Turn，assistant 消息写入失败时不推进
+Session revision。`memoryObservations` 只是待处理事件，不代表长期事实已写入。
+
+错误边界如下：正常完成、超时、失败和审批拒绝会保存对应的 assistant 可见终态；取消或
+审批过期且没有 assistant 终态时只清理 pending action，不伪造消息和 observation；业务
+commit 已成功但回复收尾失败时保留 commit 事实并标记消息持久化不完整，恢复流程不得重复
+执行 commit。
+
 Long Memory 的标准读取接口是：
 
 ```python
@@ -551,7 +563,7 @@ Mongo Conversation Snapshot
 | Short Memory 注入 | `session_summary`、`recent_turns`、`pending_action`、`active_task_state` 独立 Block；工具原始 payload 不进入历史投影 |
 | Context 预算 | messages、Tool Schema、response reserve、safety margin，支持 required 保留和低优先级 Block drop reason |
 | reset 语义 | `/api/v2/reset` 清理 active state 并递增 `reset_generation`；Mongo 可见消息不删除 |
-| 长时记忆 | 仅保留 `search()` 空结果和 observation 占位，未接入事实抽取、审核、向量检索或自动写入 |
+| 长时记忆 | `search()` 仍为空结果；已持久化受控 `memoryObservations` 事件，但未接入事实抽取、审核、向量检索或 `memoryRecords` 自动写入 |
 
 本轮尚未宣称完成：candidate Tool Schema 灰度、真实 Mongo/Redis/Worker/SSE replay、历史数据导入校验。摘要 Mongo CAS、并发保护和 Context 压缩流程已完成 focused tests；Long-term Memory 仍为空实现。
 
@@ -574,8 +586,8 @@ Mongo Conversation Snapshot
 ### Runtime、Tool 与持久化边界
 
 - [ ] 4.3 增加 Skill Context dependency 和 candidate Tool Schema 选择入口。
-- [ ] 4.4 将用户消息、assistant 最终消息、observation 和 Memory observation 幂等提交。
-- [ ] 4.5 明确错误、超时、取消、审批过期和 commit 后收尾失败的 Session Memory 写入边界。
+- [x] 4.4 将用户消息、assistant 最终消息、observation 和 Memory observation 幂等提交。
+- [x] 4.5 明确错误、超时、取消、审批过期和 commit 后收尾失败的 Session Memory 写入边界。
 
 ### API、恢复与降级
 

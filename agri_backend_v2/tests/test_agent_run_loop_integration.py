@@ -135,8 +135,9 @@ class _FakeStore:
         state = self.turns.get(turn_id)
         return dict(state) if state else None
 
-    async def append_message(self, **message: Any) -> None:
+    async def append_message(self, **message: Any) -> str:
         self.messages.append(message)
+        return f"message-{len(self.messages)}"
 
     async def publish_event(self, turn_id: str, event: dict[str, Any]) -> int:
         events = self.events.setdefault(turn_id, [])

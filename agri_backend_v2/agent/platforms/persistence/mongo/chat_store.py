@@ -38,6 +38,8 @@ _collection: AsyncIOMotorCollection | None = None
 _indexes_initialized = False
 _state_collection: AsyncIOMotorCollection | None = None
 _state_indexes_initialized = False
+_observation_collection: AsyncIOMotorCollection | None = None
+_observation_indexes_initialized = False
 _UNSET = object()
 
 
@@ -53,6 +55,12 @@ def _state_collection_name() -> str:
     state_cfg = getattr(context, "conversation_state", None)
     configured = getattr(state_cfg, "collection", "conversationStates")
     return settings.mongodb.collections.get("conversation_states", configured)
+
+
+def _observation_collection_name() -> str:
+    return settings.mongodb.collections.get(
+        "memory_observations", "memoryObservations"
+    )
 
 
 def get_collection() -> AsyncIOMotorCollection | None:
@@ -111,6 +119,35 @@ def get_state_collection() -> AsyncIOMotorCollection | None:
             logger.warning("conversation state Mongo client init failed: %s", exc)
             return None
     return _state_collection
+
+
+def get_observation_collection() -> AsyncIOMotorCollection | None:
+    """返回 MemoryObservation 事件集合；不等同于长期事实集合。"""
+    global _client, _observation_collection
+    if not settings.mongodb.enabled:
+        return None
+    if _observation_collection is None:
+        if not settings.mongodb.uri or not settings.mongodb.database:
+            logger.warning(
+                "mongodb enabled but uri/database missing; memory observation unavailable"
+            )
+            return None
+        try:
+            if _client is None:
+                _client = AsyncIOMotorClient(
+                    settings.mongodb.uri,
+                    tls=settings.mongodb.tls,
+                    connectTimeoutMS=settings.mongodb.connect_timeout_ms,
+                    serverSelectionTimeoutMS=settings.mongodb.server_selection_timeout_ms,
+                    maxPoolSize=settings.mongodb.max_pool_size,
+                )
+            _observation_collection = _client[settings.mongodb.database][
+                _observation_collection_name()
+            ]
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("memory observation Mongo client init failed: %s", exc)
+            return None
+    return _observation_collection
 
 
 def _state_filter(
@@ -228,9 +265,40 @@ async def ensure_indexes() -> None:
             [("conversationId", 1), ("turnId", 1), ("createdAt", 1)],
             name="idx_messages_turn_created",
         )
+        await coll.create_index(
+            [("farmId", 1), ("conversationId", 1), ("idempotencyKey", 1)],
+            name="uniq_message_idempotency_key",
+            unique=True,
+            partialFilterExpression={"idempotencyKey": {"$exists": True}},
+        )
         _indexes_initialized = True
     except Exception as exc:  # noqa: BLE001
         logger.warning("conversation message index init failed (non-fatal): %s", exc)
+
+
+async def ensure_observation_indexes() -> dict[str, Any]:
+    """初始化 observation 事件的租户与幂等索引。"""
+    global _observation_indexes_initialized
+    if _observation_indexes_initialized:
+        return {"ok": True, "status": "ready", "source_status": "mongo"}
+    coll = get_observation_collection()
+    if coll is None:
+        return _unavailable_result("ensure_observation_indexes")
+    try:
+        await coll.create_index(
+            [("userId", 1), ("farmId", 1), ("conversationId", 1), ("observationId", 1)],
+            name="uniq_memory_observation_id",
+            unique=True,
+        )
+        await coll.create_index(
+            [("userId", 1), ("farmId", 1), ("conversationId", 1), ("createdAt", -1)],
+            name="idx_memory_observation_created",
+        )
+        _observation_indexes_initialized = True
+        return {"ok": True, "status": "ready", "source_status": "mongo"}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("memory observation index init failed: %s", exc)
+        return _unavailable_result("ensure_observation_indexes", exc)
 
 
 async def ensure_state_indexes() -> dict[str, Any]:
@@ -702,37 +770,125 @@ async def append_message(
     meta: dict[str, Any] | None = None,
     user_id: str | None = None,
     farm_id: int | None = None,
+    idempotency_key: str | None = None,
 ) -> str | None:
-    """Insert one message document. Returns MongoDB _id as string, or None if disabled."""
+    """幂等追加用户可见消息，返回 MongoDB _id；不可用时返回 None。"""
     coll = get_collection()
     if coll is None:
         return None
     await ensure_indexes()
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
-    doc: dict[str, Any] = {
-        "farmId": farm_id if farm_id is not None else _DEFAULT_FARM_ID,
-        "conversationId": conversation_id,
-        "sessionId": conversation_id,  # archive 习惯，sessionId = conversationId
-        "role": role,
-        "content": content,
-        "createdAt": now,
-    }
-    if user_id:
-        doc["userId"] = user_id
-    if turn_id is not None:
-        doc["turnId"] = turn_id
-    if trace_id is not None:
-        doc["traceId"] = trace_id
-    if message_kind is not None:
-        doc["messageKind"] = message_kind
-    if meta:
-        doc["meta"] = meta
+    tenant_farm_id = farm_id if farm_id is not None else _DEFAULT_FARM_ID
     try:
+        if idempotency_key:
+            existing = await coll.find_one(
+                {
+                    "farmId": tenant_farm_id,
+                    "conversationId": conversation_id,
+                    "idempotencyKey": idempotency_key,
+                },
+                projection={"_id": 1},
+            )
+            if existing is not None:
+                return str(existing.get("_id"))
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+        doc: dict[str, Any] = {
+            "farmId": tenant_farm_id,
+            "conversationId": conversation_id,
+            "sessionId": conversation_id,  # archive 习惯，sessionId = conversationId
+            "role": role,
+            "content": content,
+            "createdAt": now,
+        }
+        if user_id:
+            doc["userId"] = user_id
+        if turn_id is not None:
+            doc["turnId"] = turn_id
+        if trace_id is not None:
+            doc["traceId"] = trace_id
+        if message_kind is not None:
+            doc["messageKind"] = message_kind
+        if meta:
+            doc["meta"] = meta
+        if idempotency_key:
+            doc["idempotencyKey"] = idempotency_key
         result = await coll.insert_one(doc)
         return str(result.inserted_id)
     except Exception as exc:  # noqa: BLE001
+        if idempotency_key:
+            try:
+                existing = await coll.find_one(
+                    {
+                        "farmId": tenant_farm_id,
+                        "conversationId": conversation_id,
+                        "idempotencyKey": idempotency_key,
+                    },
+                    projection={"_id": 1},
+                )
+            except Exception:  # noqa: BLE001
+                existing = None
+            if existing is not None:
+                return str(existing.get("_id"))
         logger.warning("mongo insert failed (non-fatal): %s", exc)
         return None
+
+
+async def append_observation(
+    *,
+    observation_id: str,
+    user_id: str,
+    farm_id: int,
+    conversation_id: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    """幂等追加 MemoryObservation 事件，不写入长期事实。"""
+    coll = get_observation_collection()
+    if coll is None:
+        return _unavailable_result("append_observation")
+    indexes = await ensure_observation_indexes()
+    if indexes.get("status") == "unavailable":
+        return indexes
+    tenant_filter = {
+        "userId": user_id,
+        "farmId": farm_id,
+        "conversationId": conversation_id,
+        "observationId": observation_id,
+    }
+    try:
+        existing = await coll.find_one(tenant_filter)
+        if existing is not None:
+            return {
+                "ok": True,
+                "status": "idempotent",
+                "source_status": "mongo",
+                "observation_id": observation_id,
+            }
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+        document = {
+            **tenant_filter,
+            "createdAt": now,
+            **payload,
+        }
+        result = await coll.insert_one(document)
+        return {
+            "ok": True,
+            "status": "ready",
+            "source_status": "mongo",
+            "observation_id": observation_id,
+            "document_id": str(result.inserted_id),
+        }
+    except Exception as exc:  # noqa: BLE001
+        try:
+            existing = await coll.find_one(tenant_filter)
+        except Exception:  # noqa: BLE001
+            existing = None
+        if existing is not None:
+            return {
+                "ok": True,
+                "status": "idempotent",
+                "source_status": "mongo",
+                "observation_id": observation_id,
+            }
+        return _unavailable_result("append_observation", exc)
 
 
 async def load_recent(

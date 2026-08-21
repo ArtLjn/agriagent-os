@@ -30,8 +30,8 @@
 
 - [x] 4.1 在 `react.py` 中通过 application/Memory adapter 获取 snapshot，移除 Runtime 对具体 JSON/Mongo 存储的直接调用
 - [ ] 4.3 为 Skill metadata 增加 Context dependency 和 candidate tool schema 选择入口，保留全量暴露兼容开关
-- [ ] 4.4 将已完成 Turn 的用户消息、assistant 最终消息、observation 和 Memory observation 以幂等方式提交
-- [ ] 4.5 明确错误、超时、取消、审批过期和 commit 后收尾失败时的 Session Memory 写入边界
+- [x] 4.4 将已完成 Turn 的用户消息、assistant 最终消息、observation 和 Memory observation 以幂等方式提交
+- [x] 4.5 明确错误、超时、取消、审批过期和 commit 后收尾失败时的 Session Memory 写入边界
 
 ## 5. API、reset 与恢复
 

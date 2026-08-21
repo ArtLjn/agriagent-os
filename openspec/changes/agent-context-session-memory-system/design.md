@@ -95,12 +95,19 @@ memoryRecords          后续长期记忆事实；第一阶段仅保留 MemorySe
 | Short Memory recent turns | Mongo `conversationMessages` | 用户消息和最终答复终态写入 | `get_session_view()` | `recent_turns` system block |
 | Short Memory summary | `conversationStates.summary` | 窗口/预算超阈值后 CAS 写入 | `get_session_view()` | `session_summary` system block |
 | Short Memory pending/task | Redis Turn + `conversationStates` | 审批/计划状态变化 | `get_session_view()` + Turn restore | `pending_action`/`active_task_state` |
-| Long Memory observation | Mongo `memoryObservations` 或队列 | Turn finalization 后幂等追加 | Memory worker | 默认不注入 |
+| Long Memory observation | Mongo `memoryObservations` | 两条用户可见消息和 Turn 终态确认后按 `turn_id` 幂等追加 | Memory worker | 默认不注入 |
 | Long Memory facts | Mongo `memoryRecords` | 确认/提交/审核后 upsert | `MemoryService.search()` | 按需 `memory_hits` block |
 
 注入顺序必须保持：静态 system contract → Tool Schema → hot context → pending/task → session summary → recent turns → 当前 user task；同一 Turn 的 observation 作为动态内容追加。Long Memory hits 只在 ContextPolicy/Skill dependency 触发时追加，且低于当前任务和最近观察的优先级。
 
 Short Memory 不能直接注入完整 Tool payload；Long Memory 不能直接注入未经确认的摘要。两者均需通过 MemoryService 返回带 `source_status`、`revision`、`scope` 和 token 预算信息的投影。
+
+Turn 提交边界固定为：用户 prompt 先以 `turn:{turn_id}:user:prompt` 幂等写入
+`conversationMessages`，写入失败则不派发 Worker；Worker 生成 assistant 终态后以
+`turn:{turn_id}:assistant:{message_kind}` 幂等写入 assistant 消息，只有消息落库成功或
+幂等命中后才推进 `conversationStates`。两条消息和 Session state 成功后，再以
+`turn:{turn_id}:memory-observation` 写入 `memoryObservations`。Observation 只是待处理
+事件，不等于长期事实。
 
 ### D3. ContextBundle 与 ContextBlock
 
@@ -211,6 +218,11 @@ Long Memory 的写入链路固定为 `Turn Finalizer -> MemoryObservation -> eli
 - Worker 重启从 Redis Turn 状态和 Mongo Conversation Snapshot 恢复，不依赖本地进程内列表；
 - SSE 重连只重放同一 Turn 事件，不重新创建 Turn 或追加重复消息；
 - 版本冲突时拒绝旧写入并记录 `stale_context`，不能静默覆盖新状态。
+
+终态边界：正常完成、超时、失败和审批拒绝都有 assistant 可见终态，按上述顺序写入；
+用户取消或审批过期若没有 assistant 终态，只清理 pending action 并推进必要的 Session
+revision，不伪造 assistant 消息或 observation；commit 已成功但回复收尾失败时保留业务
+提交事实，标记消息持久化不完整，禁止重复执行业务 commit。
 
 ### D9. Runtime 依赖 Memory/Context 服务接口
 

@@ -85,4 +85,4 @@ async def test_conversation_messages_expose_turn_and_trace_links(monkeypatch) ->
             "meta": {"source": "agent_chat"},
         }
     ]
-    assert len(collection.indexes) == 2
+    assert len(collection.indexes) == 3

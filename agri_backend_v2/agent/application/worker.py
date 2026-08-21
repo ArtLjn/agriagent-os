@@ -48,7 +48,7 @@ _worker_stop: asyncio.Event | None = None
 _consumer_prefix = f"worker-{uuid.uuid4().hex[:10]}"
 
 
-async def _persist_session_state(turn: Turn) -> None:
+async def _persist_session_state(turn: Turn) -> dict:
     """在 Mongo 可见消息落库后推进 Session state；失败不伪装成成功。"""
     result = await memory.persist_session_turn(
         conversation_id=turn.conversation_id,
@@ -71,6 +71,69 @@ async def _persist_session_state(turn: Turn) -> None:
         turn.conversation_revision = int(
             result.get("conversation_revision", turn.conversation_revision) or 0
         )
+    return result
+
+
+async def _persist_observation(turn: Turn, *, assistant_answer: str) -> dict:
+    """消息和 Session state 成功后提交一次受控 observation 事件。"""
+    result = await memory.observe(
+        user_id=turn.user_id,
+        farm_id=turn.farm_id,
+        conversation_id=turn.conversation_id,
+        turn_id=turn.turn_id,
+        user_input=turn.user_input,
+        assistant_answer=assistant_answer,
+        conversation_revision=turn.conversation_revision,
+        idempotency_key=f"turn:{turn.turn_id}:memory-observation",
+        metadata={
+            "turn_status": turn.status,
+            "stop_reason": turn.stop_reason.value if turn.stop_reason else None,
+            "error_code": turn.error_code,
+        },
+    )
+    if not result.get("persisted"):
+        logger.warning(
+            "memory observation persistence incomplete turn_id=%s status=%s code=%s",
+            turn.turn_id,
+            result.get("status"),
+            result.get("code"),
+        )
+    return result
+
+
+async def _persist_visible_assistant_message(
+    turn: Turn,
+    *,
+    content: str,
+    message_kind: str,
+    trace_id: str,
+) -> bool:
+    """先保证 assistant 事实消息幂等落库，再推进 Session 与 observation。"""
+    message_id = await append_message(
+        conversation_id=turn.conversation_id,
+        role="assistant",
+        content=content,
+        turn_id=turn.turn_id,
+        trace_id=trace_id,
+        message_kind=message_kind,
+        user_id=turn.user_id,
+        farm_id=turn.farm_id,
+        idempotency_key=f"turn:{turn.turn_id}:assistant:{message_kind}",
+    )
+    if not message_id:
+        await update_turn(
+            turn.turn_id,
+            message_persistence_status="unavailable",
+            error_code="conversation_message_persist_failed",
+        )
+        logger.error(
+            "assistant message persistence failed; session state not advanced turn_id=%s",
+            turn.turn_id,
+        )
+        return False
+    await _persist_session_state(turn)
+    await _persist_observation(turn, assistant_answer=content)
+    return True
 
 
 async def _ensure_group() -> None:
@@ -250,16 +313,14 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
             final_answer=final_answer,
         )
         if final_answer:
-            await append_message(
-                conversation_id=turn.conversation_id,
-                role="assistant",
+            await _persist_visible_assistant_message(
+                turn,
                 content=final_answer,
-                turn_id=turn.turn_id,
-                trace_id=trace_id,
                 message_kind="final_answer",
-                user_id=turn.user_id,
-                farm_id=turn.farm_id,
+                trace_id=trace_id,
             )
+        elif turn.status == "cancelled":
+            turn.pending_approval = None
             await _persist_session_state(turn)
     except TimeoutError:
         error_info = turn.record_error(
@@ -304,17 +365,12 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
             turn.turn_id,
             {"type": "done", "data": {"status": "timeout", "turn_id": turn.turn_id}},
         )
-        await append_message(
-            conversation_id=turn.conversation_id,
-            role="assistant",
+        await _persist_visible_assistant_message(
+            turn,
             content=timeout_answer,
-            turn_id=turn.turn_id,
-            trace_id=trace_id,
             message_kind="error_answer",
-            user_id=turn.user_id,
-            farm_id=turn.farm_id,
+            trace_id=trace_id,
         )
-        await _persist_session_state(turn)
     except Exception as exc:
         logger.exception("turn worker failed turn_id=%s", turn.turn_id)
         error_info = turn.record_error(
@@ -347,17 +403,12 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
             turn.turn_id,
             {"type": "done", "data": {"status": "failed", "turn_id": turn.turn_id}},
         )
-        await append_message(
-            conversation_id=turn.conversation_id,
-            role="assistant",
+        await _persist_visible_assistant_message(
+            turn,
             content=failure_answer,
-            turn_id=turn.turn_id,
-            trace_id=trace_id,
             message_kind="error_answer",
-            user_id=turn.user_id,
-            farm_id=turn.farm_id,
+            trace_id=trace_id,
         )
-        await _persist_session_state(turn)
     finally:
         renew_stop.set()
         await renew_task

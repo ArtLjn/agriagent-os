@@ -114,7 +114,7 @@ async def chat(
                 trace_id=trace_id,
                 client_request_id=request_id,
             )
-            await append_message(
+            prompt_message_id = await append_message(
                 conversation_id=conv_id,
                 role="user",
                 content=req.message,
@@ -123,7 +123,30 @@ async def chat(
                 message_kind="prompt",
                 user_id=identity["user_id"],
                 farm_id=identity["farm_id"],
+                idempotency_key=f"turn:{turn.turn_id}:user:prompt",
             )
+            if not prompt_message_id:
+                await update_turn(
+                    turn.turn_id,
+                    status="failed",
+                    error_code="conversation_message_persist_failed",
+                )
+                if admission.queued:
+                    from agent.platforms.persistence.redis.turn_store import remove_from_queues
+
+                    await remove_from_queues(turn.turn_id, scope)
+                else:
+                    await release_turn(admission.lease)
+                from agent.platforms.persistence.redis.turn_store import release_idempotency
+
+                await release_idempotency(scope, request_id)
+                raise HTTPException(
+                    503,
+                    {
+                        "code": "conversation_message_persist_failed",
+                        "message": "用户消息未能持久化，Turn 未派发",
+                    },
+                )
             await publish_event(
                 turn.turn_id,
                 {

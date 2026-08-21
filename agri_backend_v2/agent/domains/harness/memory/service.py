@@ -212,10 +212,48 @@ async def observe(
     user_input: str,
     assistant_answer: str,
     metadata: dict[str, Any] | None = None,
+    conversation_revision: int = 0,
+    idempotency_key: str | None = None,
 ) -> dict[str, Any]:
-    """长期记忆 observation 占位，不把未确认内容沉淀为事实。"""
-    del user_id, farm_id, conversation_id, turn_id, user_input, assistant_answer, metadata
-    return {"accepted": False, "persisted": False, "status": "deferred"}
+    """幂等保存受控 observation 事件，但不把它升级为长期事实。"""
+    from agent.config import settings
+
+    if not settings.mongodb.enabled:
+        return {
+            "accepted": False,
+            "persisted": False,
+            "status": "unavailable",
+            "source_status": "unavailable",
+            "code": "memory_observation_unavailable",
+        }
+
+    from agent.platforms.persistence.mongo import chat_store
+
+    observation_id = idempotency_key or f"turn:{turn_id}:memory-observation"
+    result = await chat_store.append_observation(
+        observation_id=observation_id,
+        user_id=user_id,
+        farm_id=farm_id,
+        conversation_id=conversation_id,
+        payload={
+            "turnId": turn_id,
+            "conversationRevision": conversation_revision,
+            "scope": "conversation",
+            "status": "pending",
+            "sourceStatus": "mongo",
+            "userInputSummary": user_input[:500],
+            "assistantResponseSummary": assistant_answer[:500],
+            "metadata": metadata or {},
+        },
+    )
+    return {
+        "accepted": False,
+        "persisted": result.get("status") in {"ready", "idempotent"},
+        "status": result.get("status", "unavailable"),
+        "source_status": result.get("source_status", "unavailable"),
+        "observation_id": observation_id,
+        "code": result.get("code"),
+    }
 
 
 async def persist_session_turn(

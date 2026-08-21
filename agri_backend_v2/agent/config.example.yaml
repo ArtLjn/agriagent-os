@@ -47,6 +47,7 @@ mongodb:
   max_pool_size: 20
   collections:
     conversation_messages: "conversationMessages"
+    memory_observations: "memoryObservations"
     trace_records: "traceRecords"
     trace_request_summaries: "traceRequestSummaries"
     trace_events: "traceEvents"
