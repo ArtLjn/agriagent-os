@@ -37,7 +37,7 @@
 
 - [x] 5.1 更新 `/api/v2/chat`、conversation detail 和 Turn state，使 response 暴露 conversation revision、reset generation 和 source status
 - [x] 5.2 更新 `/api/v2/reset`，实现 active Context/pending action/summary 清理和 generation 递增，保留默认可见历史
-- [ ] 5.3 为 Worker 重启、SSE `after_seq` 重连和幂等 request 验证同一 Turn 不重复执行、不重复写消息
+- [x] 5.3 为 Worker 重启、SSE `after_seq` 重连和幂等 request 验证同一 Turn 不重复执行、不重复写消息
 - [ ] 5.4 增加 Mongo 不可用、Redis 不可用和 source divergence 的结构化错误/降级行为；不再提供本地 JSON fallback
 
 ## 6. Trace 与运行指标

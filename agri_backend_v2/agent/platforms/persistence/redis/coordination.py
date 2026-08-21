@@ -10,6 +10,7 @@ import hashlib
 import logging
 import uuid
 from dataclasses import dataclass
+from typing import Literal
 
 from agent.config import settings
 from agent.platforms.persistence.redis.redis_store import eval_script, key
@@ -117,6 +118,21 @@ if redis.call('GET', KEYS[1]) ~= ARGV[1] then
 end
 return redis.call('PEXPIRE', KEYS[1], ARGV[2])
 """
+
+_CLAIM_RECOVERED_LEASE_SCRIPT = """
+local lock_key = KEYS[1]
+local global_key = KEYS[2]
+local user_key = KEYS[3]
+if redis.call('EXISTS', lock_key) == 1 then
+  return 1
+end
+redis.call('SET', lock_key, ARGV[1], 'PX', ARGV[2])
+redis.call('SADD', global_key, ARGV[3])
+redis.call('SADD', user_key, ARGV[3])
+return 0
+"""
+
+LeaseState = Literal["owned", "held", "missing"]
 
 
 class CoordinationError(RuntimeError):
@@ -306,10 +322,37 @@ async def renew_turn(lease: TurnLease) -> bool:
 
 
 async def owns_turn_lease(lease: TurnLease) -> bool:
-    client = __import__("agent.platforms.persistence.redis.redis_store", fromlist=["get_client"]).get_client()
+    return await inspect_turn_lease(lease) == "owned"
+
+
+async def inspect_turn_lease(lease: TurnLease) -> LeaseState:
+    """区分当前 Worker 持有、其他 Worker 持有和 lease 已丢失。"""
+    client = __import__(
+        "agent.platforms.persistence.redis.redis_store", fromlist=["get_client"]
+    ).get_client()
     if client is None:
-        return False
-    return await client.get(lease.lock_key) == lease.token
+        return "missing"
+    owner = await client.get(lease.lock_key)
+    if owner == lease.token:
+        return "owned"
+    return "held" if owner else "missing"
+
+
+async def claim_recovered_lease(lease: TurnLease) -> bool:
+    """只为尚未开始执行、且 lease 已丢失的 Turn 恢复执行槽位。"""
+    try:
+        result = await eval_script(
+            _CLAIM_RECOVERED_LEASE_SCRIPT,
+            [lease.lock_key, lease.global_key, lease.user_key],
+            [
+                lease.token,
+                settings.redis.conversation_lock_ttl_ms,
+                lease.turn_id,
+            ],
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise CoordinationError("redis coordination unavailable") from exc
+    return result == 0
 
 
 async def release_turn(lease: TurnLease) -> bool:

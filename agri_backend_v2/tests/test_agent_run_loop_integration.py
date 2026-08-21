@@ -341,7 +341,7 @@ def fake_runtime(monkeypatch: pytest.MonkeyPatch) -> _FakeStore:
 
     monkeypatch.setattr(worker, "get_turn", store.get_turn)
     monkeypatch.setattr(worker, "mark_running", lambda _turn_id: _true())
-    monkeypatch.setattr(worker, "owns_turn_lease", lambda _lease: _true())
+    monkeypatch.setattr(worker, "inspect_turn_lease", lambda _lease: _owned())
     monkeypatch.setattr(worker, "update_turn", store.update_turn)
     monkeypatch.setattr(worker, "publish_event", store.publish_event)
     monkeypatch.setattr(worker, "create_approval", store.create_approval)
@@ -377,6 +377,10 @@ async def _true() -> bool:
     return True
 
 
+async def _owned() -> str:
+    return "owned"
+
+
 async def _post_chat(
     client: httpx.AsyncClient,
     *,
@@ -385,7 +389,7 @@ async def _post_chat(
     after_seq: int = 0,
 ) -> httpx.Response:
     return await client.post(
-        f"/api/agri_backend_v2/chat?after_seq={after_seq}",
+        f"/api/v2/chat?after_seq={after_seq}",
         headers={"Authorization": "Bearer fake"},
         json={
             "message": "执行集成测试",
@@ -437,6 +441,7 @@ async def test_chat_worker_normal_chain_and_after_seq_reconnect(
         assert all("reset_generation" in event for event in first)
         assert all("source_status" in event for event in first)
         assert len(fake_runtime.business_calls) == 1
+        assert len(fake_runtime.messages) == 2
         assert len(fake_runtime.dispatches) == 1
         assert len(fake_runtime.worker_runs) == 0
 
@@ -456,6 +461,7 @@ async def test_chat_worker_normal_chain_and_after_seq_reconnect(
     assert all(event["seq"] > observation_seq for event in replay)
     assert [event["type"] for event in replay].count("done") == 1
     assert len(fake_runtime.business_calls) == 1
+    assert len(fake_runtime.messages) == 2
     assert len(fake_runtime.dispatches) == 1
     assert len(fake_runtime.events[next(iter(fake_runtime.events))]) == len(first)
 
@@ -477,7 +483,7 @@ async def test_chat_worker_hitl_approval_result_and_commit(
         await asyncio.wait_for(fake_runtime.approval_required.wait(), timeout=1)
         turn_id = next(iter(fake_runtime.turns))
         approval_response = await client.post(
-            "/api/agri_backend_v2/approve",
+            "/api/v2/approve",
             headers={"Authorization": "Bearer fake"},
             json={"turn_id": turn_id, "decision": True, "reason": "测试批准"},
         )

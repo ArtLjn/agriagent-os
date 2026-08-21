@@ -15,7 +15,8 @@ from agent.domains.harness.runtime.turn import StopReason, Turn, TurnPhase
 from agent.platforms.persistence.mongo.chat_store import append_message
 from agent.platforms.persistence.redis.coordination import (
     TurnLease,
-    owns_turn_lease,
+    claim_recovered_lease,
+    inspect_turn_lease,
     promote_turn,
     release_turn,
     renew_until_done,
@@ -53,6 +54,10 @@ def _state_int(value: object, fallback: int = 0) -> int:
         return int(value if value not in (None, "") else fallback)
     except (TypeError, ValueError):
         return fallback
+
+
+def _state_bool(value: object) -> bool:
+    return value is True or str(value).lower() in {"1", "true", "yes"}
 
 
 async def _persist_session_state(turn: Turn) -> dict:
@@ -160,6 +165,100 @@ async def _persist_visible_assistant_message(
     return True
 
 
+async def _finish_assistant_persistence(
+    turn: Turn,
+    *,
+    content: str,
+    message_kind: str,
+    trace_id: str,
+) -> bool:
+    """完成 assistant 事实、Session state 和 observation 后清除收尾标记。"""
+    persisted = await _persist_visible_assistant_message(
+        turn,
+        content=content,
+        message_kind=message_kind,
+        trace_id=trace_id,
+    )
+    if persisted:
+        await update_turn(turn.turn_id, finalization_pending=False)
+    return persisted
+
+
+async def _recover_pending_finalization(state: dict[str, str]) -> bool:
+    """只恢复终态 Turn 的可见消息收尾，不重新进入 Runtime。"""
+    content = state.get("final_answer", "")
+    if not content:
+        await update_turn(state["turn_id"], finalization_pending=False)
+        return True
+    turn = _turn_from_state(state)
+    turn.status = state.get("status", turn.status)
+    return await _finish_assistant_persistence(
+        turn,
+        content=content,
+        message_kind="error_answer" if state.get("status") != "completed" else "final_answer",
+        trace_id=state.get("trace_id") or trace_id_for_turn(turn.turn_id),
+    )
+
+
+async def _recover_interrupted_turn(turn: Turn, state: dict[str, str]) -> None:
+    """Worker 丢失 lease 后只收口，不重新执行可能已提交的 Tool。"""
+    error_info = turn.record_error(
+        "worker_restarted",
+        "执行 Worker 已中断，本轮未自动重试业务操作。",
+        phase=TurnPhase.TERMINAL,
+        stop_reason=StopReason.PIPELINE_CRASH,
+        status="timeout",
+    )
+    turn.pending_approval = None
+    answer = "本轮执行被 Worker 中断，系统未自动重复执行操作，请确认当前业务状态后重试。"
+    trace_id = state.get("trace_id") or trace_id_for_turn(turn.turn_id)
+    await update_turn(
+        turn.turn_id,
+        status="timeout",
+        phase=turn.phase.value,
+        stop_reason=turn.stop_reason.value,
+        error_code=error_info["code"],
+        error_message=error_info["message"],
+        error_details=error_info,
+        final_answer=answer,
+        finalization_pending=True,
+        pending_approval=None,
+    )
+    await publish_event(turn.turn_id, {"type": "error", "data": error_info})
+    await publish_event(
+        turn.turn_id,
+        {"type": "final_answer", "data": {"text": answer}},
+    )
+    await publish_event(
+        turn.turn_id,
+        {"type": "done", "data": {"status": "timeout", "turn_id": turn.turn_id}},
+    )
+    await _finish_assistant_persistence(
+        turn,
+        content=answer,
+        message_kind="error_answer",
+        trace_id=trace_id,
+    )
+
+
+async def _prepare_execution_lease(
+    turn: Turn, state: dict[str, str], lease: TurnLease
+) -> bool:
+    """按 Turn 状态选择排队提升、首次恢复、并发跳过或中断收口。"""
+    lease_state = await inspect_turn_lease(lease)
+    status = state.get("status", "")
+    if lease_state == "held":
+        return False
+    if lease_state == "owned":
+        return True
+    if status in {"accepted", "queued"}:
+        if status == "queued":
+            return await promote_turn(lease)
+        return await claim_recovered_lease(lease)
+    await _recover_interrupted_turn(turn, state)
+    return False
+
+
 async def _ensure_group() -> None:
     client = get_client()
     if client is None:
@@ -190,6 +289,9 @@ def _turn_from_state(state: dict[str, str]) -> Turn:
         scope=state.get("scope", ""),
         agent_token=settings.auth.agent_service_token,
         task_state=_decode_json_field(state.get("task_state")),
+        pending_approval=_decode_json_field(state.get("pending_approval")),
+        final_answer=state.get("final_answer") or None,
+        finalization_pending=_state_bool(state.get("finalization_pending")),
         conversation_revision=_state_int(state.get("conversation_revision")),
         summary_revision=_state_int(state.get("summary_revision")),
         reset_generation=_state_int(state.get("reset_generation")),
@@ -231,7 +333,6 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
     }:
         return
     state = current_state
-    owns_lease = await owns_turn_lease(lease)
     queue_wait_ms: int | None = None
     if state.get("queued") == "1" and state.get("status") in {"accepted", "queued"}:
         queue_entered_at = float(state.get("queue_entered_at") or time.time())
@@ -250,18 +351,7 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
                 },
             )
             return
-        if not owns_lease and not await promote_turn(lease):
-            await update_turn(turn.turn_id, status="queued")
-            return
-    elif not owns_lease:
-        await update_turn(turn.turn_id, status="timeout", error_code="lease_expired")
-        await publish_event(
-            turn.turn_id,
-            {
-                "type": "timeout",
-                "data": {"code": "lease_expired", "turn_id": turn.turn_id},
-            },
-        )
+    if not await _prepare_execution_lease(turn, state, lease):
         return
     if not await mark_running(turn.turn_id):
         return
@@ -351,6 +441,12 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
                     await _persist_session_state(turn)
                 if event_type == "final_answer":
                     final_answer = event.get("data", {}).get("text", "")
+                if event_type == "done" and final_answer:
+                    await update_turn(
+                        turn.turn_id,
+                        final_answer=final_answer,
+                        finalization_pending=True,
+                    )
                 await publish_event(turn.turn_id, event)
         await update_turn(
             turn.turn_id,
@@ -361,9 +457,10 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
             error_message=turn.error_message or turn.error or "",
             error_details=turn.error_details,
             final_answer=final_answer,
+            finalization_pending=bool(final_answer),
         )
         if final_answer:
-            await _persist_visible_assistant_message(
+            await _finish_assistant_persistence(
                 turn,
                 content=final_answer,
                 message_kind="final_answer",
@@ -392,6 +489,7 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
             error_message=error_info["message"],
             error_details=error_info,
             final_answer=timeout_answer,
+            finalization_pending=True,
         )
         await publish_event(
             turn.turn_id,
@@ -415,7 +513,7 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
             turn.turn_id,
             {"type": "done", "data": {"status": "timeout", "turn_id": turn.turn_id}},
         )
-        await _persist_visible_assistant_message(
+        await _finish_assistant_persistence(
             turn,
             content=timeout_answer,
             message_kind="error_answer",
@@ -440,6 +538,7 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
             error_message=error_info["message"],
             error_details=error_info,
             final_answer=failure_answer,
+            finalization_pending=True,
         )
         await publish_event(
             turn.turn_id,
@@ -453,7 +552,7 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
             turn.turn_id,
             {"type": "done", "data": {"status": "failed", "turn_id": turn.turn_id}},
         )
-        await _persist_visible_assistant_message(
+        await _finish_assistant_persistence(
             turn,
             content=failure_answer,
             message_kind="error_answer",
@@ -556,12 +655,29 @@ async def _reclaim_messages(client, consumer: str) -> list[tuple[str, dict[str, 
 async def _process_messages(client, consumer, stream, messages) -> None:
     for message_id, fields in messages:
         turn_id = fields.get("turn_id")
+        acknowledge = True
         try:
             state = await get_turn(turn_id) if turn_id else None
             if state:
-                await _run_turn(_turn_from_state(state), state)
+                if _state_bool(state.get("finalization_pending")):
+                    await _recover_pending_finalization(state)
+                else:
+                    await _run_turn(_turn_from_state(state), state)
+                latest = await get_turn(turn_id)
+                acknowledge = not (
+                    latest and _state_bool(latest.get("finalization_pending"))
+                )
+        except Exception:
+            acknowledge = False
+            logger.exception(
+                "agent turn processing failed; leave message pending "
+                "turn_id=%s consumer=%s",
+                turn_id,
+                consumer,
+            )
         finally:
-            await client.xack(stream, settings.redis.dispatch_group, message_id)
+            if acknowledge:
+                await client.xack(stream, settings.redis.dispatch_group, message_id)
 
 
 async def start() -> None:
