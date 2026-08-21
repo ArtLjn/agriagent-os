@@ -60,6 +60,8 @@ from agent.domains.harness.observability.trace import (
     trace_commit_state,
     trace_catalog_recall,
     trace_context_build,
+    trace_context_budget_error,
+    trace_summary_compaction,
     trace_approval,
     trace_llm_call,
     trace_skill_router,
@@ -274,16 +276,6 @@ def _setup_turn_runtime(
         )
     # 兼容旧调用方对 load_all 的注入，再在 Runtime 边界统一构建 Registry。
     registry = SkillRegistry.from_skills(skill_loader.load_all())
-    if route_result is None:
-        trace_skill_router(
-            registry_count=len(registry.all()),
-            exposed_tool_count=len(registry.exposed_tools()),
-            candidate_skills=[item["name"] for item in registry.router_catalog()],
-            selection_status="disabled",
-            decision_source="main_agent",
-            router_mode="main_agent",
-            router_status="disabled",
-        )
     tools_schema = (
         registry.tools_for_router_skills(route_result.selected_skills)
         if route_result is not None and route_result.status == "selected"
@@ -368,7 +360,14 @@ def _setup_turn_runtime(
         tool_schema_mode=turn.context_bundle.tool_schema_mode,
         selected_skills=turn.context_bundle.selected_skills,
         context_dependencies=turn.context_bundle.context_dependencies,
+        memory_revision=turn.context_bundle.memory_revision,
+        estimation_mode=turn.context_bundle.budget.estimation_mode,
     )
+    if turn.context_bundle.budget.decision.value == "exceeded":
+        trace_context_budget_error(
+            budget=turn.context_bundle.budget.to_dict(),
+            code="context_budget_exceeded",
+        )
     return registry, tools_schema, registry, verify.CallTracker(), {"plan": None}
 
 
@@ -389,6 +388,29 @@ def _build_skill_router() -> SkillRouter:
     )
 
 
+async def _summarize_with_trace(
+    turn: Turn, *, force: bool, reason: str
+) -> summarizer.SummaryResult:
+    """统一摘要压缩调用与 Trace 收口，避免同步/异步分支漏记状态。"""
+    started = time.perf_counter()
+    result = await summarizer.maybe_summarize_async(
+        turn.conversation_id,
+        force=force,
+        user_id=turn.user_id,
+        farm_id=turn.farm_id,
+        source_conversation_revision=turn.context_bundle.conversation_revision,
+    )
+    trace_summary_compaction(
+        source_conversation_revision=turn.context_bundle.conversation_revision,
+        summary_revision=result.summary_revision,
+        status=result.status,
+        reason=reason,
+        duration_ms=int((time.perf_counter() - started) * 1000),
+        error_code=result.error_code,
+    )
+    return result
+
+
 async def _try_compress_context(turn: Turn) -> AsyncGenerator[dict, None]:
     """检查 token 用量，超阈值触发压缩。"""
     usage = tokenizer.compute_usage(
@@ -400,12 +422,8 @@ async def _try_compress_context(turn: Turn) -> AsyncGenerator[dict, None]:
     yield sse.context_usage(usage.used, usage.total, usage.percent, usage.level, step=0)
     if tokenizer.must_compress(usage):
         yield sse.context_compressing("hard", usage.percent)
-        summary_result = await summarizer.maybe_summarize_async(
-            turn.conversation_id,
-            force=True,
-            user_id=turn.user_id,
-            farm_id=turn.farm_id,
-            source_conversation_revision=turn.context_bundle.conversation_revision,
+        summary_result = await _summarize_with_trace(
+            turn, force=True, reason="hard_threshold"
         )
         if summary_result.summary:
             turn.memory_snapshot = await memory.get_session_view(
@@ -437,13 +455,7 @@ async def _try_compress_context(turn: Turn) -> AsyncGenerator[dict, None]:
     elif tokenizer.should_compress(usage):
         # soft 阈值：异步压缩，不阻塞当前 turn
         asyncio.create_task(
-            summarizer.maybe_summarize_async(
-                turn.conversation_id,
-                force=False,
-                user_id=turn.user_id,
-                farm_id=turn.farm_id,
-                source_conversation_revision=turn.context_bundle.conversation_revision,
-            )
+            _summarize_with_trace(turn, force=False, reason="soft_threshold")
         )
 
 
@@ -517,24 +529,23 @@ async def _run_single_reasoning_step(
         for tool in tools_schema
         if isinstance(tool, dict) and isinstance(tool.get("function"), dict)
     ]
-    trace_skill_router(
-        registry_count=len(skill_index.all())
-        if isinstance(skill_index, SkillRegistry)
-        else len(skill_index),
-        exposed_tool_count=len(tools_schema),
-        candidate_tools=candidate_tools,
-        selected_tools=[
-            str(call.get("name"))
-            for call in llm_result.tool_calls
-            if call.get("name")
-        ],
-        selected_tool_calls=selected_tool_calls,
-        selection_status="selected" if llm_result.tool_calls else "none",
-        decision_source=(
-            "llm_tool_call" if llm_result.tool_calls else "llm_no_tool_call"
-        ),
-        step_index=turn.step_count,
-    )
+    if llm_result.tool_calls:
+        trace_skill_router(
+            registry_count=len(skill_index.all())
+            if isinstance(skill_index, SkillRegistry)
+            else len(skill_index),
+            exposed_tool_count=len(tools_schema),
+            candidate_tools=candidate_tools,
+            selected_tools=[
+                str(call.get("name"))
+                for call in llm_result.tool_calls
+                if call.get("name")
+            ],
+            selected_tool_calls=selected_tool_calls,
+            selection_status="selected",
+            decision_source="llm_tool_call",
+            step_index=turn.step_count,
+        )
 
     # ── 写入已提交但收尾轮仍请求工具 ──
     if turn.finalization_pending and llm_result.tool_calls:

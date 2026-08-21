@@ -52,6 +52,9 @@ mongodb:
     trace_request_summaries: "traceRequestSummaries"
     trace_events: "traceEvents"
 
+trace:
+  max_payload_chars: 32000
+
 # Session/Short Memory/Context 配置。Mongo 是 Session/Short Memory 的唯一事实源。
 context:
   conversation_state:

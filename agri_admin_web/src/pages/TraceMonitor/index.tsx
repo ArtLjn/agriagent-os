@@ -149,6 +149,7 @@ function displayList(value: unknown): string {
 
 function statusTagColor(status: string | null | undefined): string {
   if (status === 'success') return 'success';
+  if (status === 'partial' || status === 'fallback') return 'warning';
   if (status === 'blocked') return 'warning';
   if (status === 'failed' || status === 'error') return 'error';
   if (status === 'timeout') return 'orange';
@@ -166,16 +167,45 @@ function summaryFromTimeline(
   if (timeline?.summary) return timeline.summary;
   if (!timeline) return item.summary;
   const nodes = timeline.rounds.flatMap((round) => round.nodes);
-  const rootNode = nodes.find((node) => node.status && node.status !== 'success');
+  const finalizationWarning = nodes.find(
+    (node) =>
+      node.node_type === 'persistence_state' &&
+      node.error_message === 'turn_finalization_incomplete',
+  );
+  const completedOutcome = nodes.some((node) => {
+    if (node.node_type !== 'turn') return false;
+    const output = node.output_data;
+    return Boolean(output && typeof output === 'object' && output.status === 'completed');
+  });
+  const isPartial = Boolean(finalizationWarning && completedOutcome);
+  const rootNode = nodes.find(
+    (node) => node.status && node.status !== 'success' && node !== finalizationWarning,
+  );
   const totalDuration = nodes.reduce((sum, node) => sum + (node.duration_ms || 0), 0);
   return {
     ...item.summary,
     node_count: nodes.length || item.node_count,
     total_duration_ms: totalDuration || item.total_duration_ms,
-    status: rootNode ? rootNode.status : item.summary.status ?? 'success',
-    status_reason: rootNode?.error_code ?? item.summary.status_reason ?? null,
-    error_count: nodes.filter((node) => node.status && node.status !== 'success').length,
-    root_error: rootNode
+    status: isPartial ? 'partial' : rootNode ? rootNode.status : item.summary.status ?? 'success',
+    status_reason: isPartial
+      ? 'turn_finalization_incomplete'
+      : rootNode?.error_code ?? item.summary.status_reason ?? null,
+    error_count: nodes.filter(
+      (node) =>
+        node.status &&
+        node.status !== 'success' &&
+        node !== finalizationWarning,
+    ).length,
+    root_error: isPartial
+      ? {
+          node_id: finalizationWarning?.id,
+          node_type: finalizationWarning?.node_type,
+          node_name: finalizationWarning?.node_name,
+          code: finalizationWarning?.error_code ?? finalizationWarning?.error_message,
+          message: '可见回复已完成，但 Session state 收尾未完成',
+          recover: finalizationWarning?.recover,
+        }
+      : rootNode
       ? {
           node_id: rootNode.id,
           node_type: rootNode.node_type,
@@ -208,6 +238,7 @@ function TraceRequestOverview({ item }: { item: TraceItem }) {
           <Metric label="status_reason" value={summary.status_reason} />
           <Metric label="node_count" value={summary.node_count} />
           <Metric label="error_count" value={summary.error_count ?? 0} />
+          <Metric label="warning_count" value={summary.warning_count ?? 0} />
           <Metric label="duration_ms" value={metricNumber(summary.total_duration_ms)} />
           <Metric label="started_at" value={formatTraceTime(summary.started_at)} />
           <Metric label="ended_at" value={formatTraceTime(summary.ended_at)} />

@@ -70,6 +70,24 @@ def test_session_view_reports_unavailable_without_mongo(monkeypatch) -> None:
     assert view["summary"] is None
 
 
+def test_mongo_unavailable_does_not_fallback_to_local_history(monkeypatch) -> None:
+    from agent import config
+    from agent.platforms.persistence.mongo import chat_store
+
+    monkeypatch.setattr(config.settings.mongodb, "enabled", True)
+    monkeypatch.setattr(
+        chat_store,
+        "get_conversation_state",
+        lambda *_args, **_kwargs: _async_value(
+            {"status": "unavailable", "source_status": "unavailable"}
+        ),
+    )
+    view = __import__("asyncio").run(memory.get_session_view("conv-unavailable"))
+
+    assert view["source_status"] == "unavailable"
+    assert view["messages"] == []
+
+
 def test_recent_projection_keeps_complete_turns() -> None:
     history = [
         {"role": "user", "content": "第一轮"},
@@ -83,6 +101,41 @@ def test_recent_projection_keeps_complete_turns() -> None:
         {"role": "user", "content": "第二轮"},
         {"role": "assistant", "content": "答复二"},
     ]
+
+
+def test_multiturn_projection_combines_summary_pending_and_recent_complete_turns() -> None:
+    history = []
+    for index in range(4):
+        history.extend(
+            [
+                {"role": "user", "content": f"问题 {index}"},
+                {"role": "assistant", "content": f"答复 {index}"},
+            ]
+        )
+    recent = memory.project_recent_turns(history, recent_turn_limit=2)
+    bundle = context.build_context_bundle(
+        "继续处理",
+        {
+            "conversation_id": "conv-multiturn",
+            "conversation_revision": 4,
+            "summary_revision": 1,
+            "summary": "前两轮已经确认农场范围。",
+            "messages": recent,
+            "pending_action": {"type": "write_confirm", "status": "pending"},
+            "source_status": "mongo",
+        },
+    )
+
+    included = {
+        item.key for item in bundle.blocks if item.status == ContextBlockStatus.INCLUDED
+    }
+    assert recent == [
+        {"role": "user", "content": "问题 2"},
+        {"role": "assistant", "content": "答复 2"},
+        {"role": "user", "content": "问题 3"},
+        {"role": "assistant", "content": "答复 3"},
+    ]
+    assert {"session_summary", "recent_turns", "pending_action"} <= included
 
 
 def test_session_actions_receive_lifecycle_metadata(monkeypatch) -> None:
@@ -110,3 +163,7 @@ def test_session_actions_receive_lifecycle_metadata(monkeypatch) -> None:
     assert task["status"] == "active"
     assert task["source_turn_id"] == "turn-1"
     assert task["expires_at"]
+
+
+async def _async_value(value):
+    return value

@@ -89,6 +89,13 @@ class AuthCfg:
     delegation_audience: str = "farm-manager-business-mcp"
 
 
+@dataclass
+class TraceCfg:
+    """Trace 脱敏、大小和回放安全配置。"""
+
+    max_payload_chars: int = 32000
+
+
 def _default_feature_flags() -> dict[str, bool]:
     """返回 Context 迁移开关的默认值。"""
 
@@ -154,6 +161,7 @@ class Settings:
     mongodb: MongoCfg = field(default_factory=MongoCfg)
     business_mcp: BusinessMcpCfg = field(default_factory=BusinessMcpCfg)
     auth: AuthCfg = field(default_factory=AuthCfg)
+    trace: TraceCfg = field(default_factory=TraceCfg)
     context: ContextCfg = field(default_factory=ContextCfg)
     environment: str = "development"
     default_farm_id: int = 1
@@ -202,6 +210,7 @@ def _build_settings() -> Settings:
     redis_raw = raw.get("redis", {}) or {}
     mcp_raw = raw.get("business_mcp", {}) or {}
     auth_raw = raw.get("auth", {}) or {}
+    trace_raw = raw.get("trace", {}) or {}
     context_raw, state_raw = _context_raw(raw)
     feature_flags_raw = dict(raw.get("feature_flags", {}) or {})
     feature_flags_raw.update(context_raw.get("feature_flags", {}) or {})
@@ -337,6 +346,9 @@ def _build_settings() -> Settings:
             delegation_audience=auth_raw.get(
                 "delegation_audience", "farm-manager-business-mcp"
             ),
+        ),
+        trace=TraceCfg(
+            max_payload_chars=max(1024, int(trace_raw.get("max_payload_chars", 32000))),
         ),
         context=ContextCfg(
             conversation_state=state_cfg,

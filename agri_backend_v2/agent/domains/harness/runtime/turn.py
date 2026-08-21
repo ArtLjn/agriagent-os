@@ -55,6 +55,8 @@ class StopReason(str, Enum):
     APPROVAL_EXPIRED = "approval_expired"
     USER_CANCELLED = "user_cancelled"
     TURN_TIMEOUT = "turn_timeout"
+    CONTEXT_UNAVAILABLE = "context_unavailable"
+    SOURCE_DIVERGENCE = "source_divergence"
     PIPELINE_CRASH = "pipeline_crash"
 
 

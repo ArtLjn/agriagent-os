@@ -39,6 +39,10 @@ from agent.domains.harness.observability.trace.context import (
     get_step_index,
     new_span_id,
 )
+from agent.domains.harness.observability.trace.safety import (
+    safe_token_usage,
+    sanitize_payload,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -106,16 +110,9 @@ def _get_event_collection():
 
 def _truncate(value: Any) -> Any:
     """限制 trace 数据体积。"""
-    import json
-
-    serialized = json.dumps(value, ensure_ascii=False, default=str)
-    if len(serialized) <= _MAX_TRACE_JSON_LEN:
-        return value
-    return {
-        "__truncated": True,
-        "__original_len": len(serialized),
-        "preview": serialized[:_MAX_TRACE_JSON_LEN],
-    }
+    trace_cfg = getattr(settings, "trace", None)
+    limit = int(getattr(trace_cfg, "max_payload_chars", _MAX_TRACE_JSON_LEN))
+    return sanitize_payload(value, max_chars=limit)
 
 
 def record(
@@ -182,14 +179,14 @@ def record(
         "start_time": datetime.fromtimestamp(start_time, tz=timezone.utc),
         "end_time": datetime.fromtimestamp(end_time, tz=timezone.utc),
         "duration_ms": duration_ms,
-        "token_usage": token_usage,
+        "token_usage": safe_token_usage(token_usage),
         "status": status or ("error" if error_message else "success"),
         "error_message": error_message,
         "attributes": _truncate(attributes or {}),
         "resource": _truncate(resource or {}),
         "sampling": {
             "level": int(getattr(trace, "sampling_level", 1)),
-            "redacted": False,
+            "redacted": True,
         },
         "created_at": datetime.now(timezone.utc),
     }
@@ -652,6 +649,8 @@ def trace_context_build(
     tool_schema_mode: str = "all",
     selected_skills: list[str] | None = None,
     context_dependencies: list[str] | None = None,
+    memory_revision: int = 0,
+    estimation_mode: str = "approximate",
 ) -> None:
     """记录模型实际上下文装配的摘要，不重复保存对话全文。"""
     record(
@@ -668,6 +667,8 @@ def trace_context_build(
             "budget": budget or {},
             "selected_skills": selected_skills or [],
             "context_dependencies": context_dependencies or [],
+            "memory_revision": memory_revision,
+            "estimation_mode": estimation_mode,
         },
         duration_ms=duration_ms,
         phase="setup",
@@ -678,10 +679,127 @@ def trace_context_build(
             "compressed": compressed,
             "conversation_revision": conversation_revision,
             "summary_revision": summary_revision,
+            "memory_revision": memory_revision,
             "source_status": source_status,
             "tool_schema_mode": tool_schema_mode,
+            "estimation_mode": estimation_mode,
             "selected_skill_count": len(selected_skills or []),
         },
+    )
+
+
+def trace_summary_compaction(
+    *,
+    source_conversation_revision: int,
+    summary_revision: int,
+    status: str,
+    reason: str,
+    duration_ms: int = 0,
+    error_code: str | None = None,
+) -> None:
+    """记录摘要 claim/commit/失败，不记录摘要全文。"""
+    record(
+        node_type="summary_compaction",
+        node_name="memory.summary_compaction",
+        output_data={
+            "source_conversation_revision": source_conversation_revision,
+            "summary_revision": summary_revision,
+            "status": status,
+            "reason": reason,
+            "error_code": error_code,
+        },
+        duration_ms=duration_ms,
+        status="error" if error_code else "success",
+        error_message=error_code,
+        phase="memory",
+    )
+
+
+def trace_memory_read(
+    *, source_status: str, memory_revision: int = 0, hit_count: int = 0
+) -> None:
+    """记录 Short/Long Memory 读取状态和命中数量。"""
+    record(
+        node_type="memory_read",
+        node_name="memory.get_session_view",
+        output_data={
+            "source_status": source_status,
+            "memory_revision": memory_revision,
+            "hit_count": hit_count,
+        },
+        phase="memory",
+        status="error" if source_status in {"unavailable", "divergent"} else "success",
+        error_message=(
+            f"memory_source_{source_status}"
+            if source_status in {"unavailable", "divergent"}
+            else None
+        ),
+    )
+
+
+def trace_memory_observe(*, status: str, source_status: str, idempotent: bool) -> None:
+    """记录 observation 是否落库，区别 accepted、unavailable 和幂等命中。"""
+    record(
+        node_type="memory_observe",
+        node_name="memory.observe",
+        output_data={
+            "status": status,
+            "source_status": source_status,
+            "idempotent": idempotent,
+        },
+        phase="finalizing",
+        status="error" if source_status == "unavailable" else "success",
+        error_message="memory_observation_unavailable"
+        if source_status == "unavailable"
+        else None,
+    )
+
+
+def trace_context_source_divergence(
+    *, sources: dict[str, Any], code: str = "context_source_divergence"
+) -> None:
+    """记录事实源版本/状态不一致，禁止把它解释成业务不存在。"""
+    record(
+        node_type="context_source_divergence",
+        node_name="context.source_consistency",
+        output_data={"code": code, "sources": sources},
+        phase="setup",
+        status="error",
+        error_message=code,
+    )
+
+
+def trace_context_budget_error(*, budget: dict[str, Any], code: str) -> None:
+    """记录 required block 或输出预留导致的预算错误。"""
+    record(
+        node_type="context_budget_error",
+        node_name="context.budget",
+        output_data={"code": code, "budget": budget},
+        phase="setup",
+        status="error",
+        error_message=code,
+    )
+
+
+def trace_persistence_state(
+    *, message_status: str, session_status: str, observation_status: str
+) -> None:
+    """记录终态消息、Session 和 observation 的收尾状态。"""
+    incomplete = any(
+        value not in {"ready", "idempotent", "skipped"}
+        for value in (message_status, session_status, observation_status)
+    )
+    record(
+        node_type="persistence_state",
+        node_name="turn.finalization",
+        output_data={
+            "message_status": message_status,
+            "session_status": session_status,
+            "observation_status": observation_status,
+        },
+        phase="finalizing",
+        status="fallback" if incomplete else "success",
+        error_message="turn_finalization_incomplete" if incomplete else None,
     )
 
 

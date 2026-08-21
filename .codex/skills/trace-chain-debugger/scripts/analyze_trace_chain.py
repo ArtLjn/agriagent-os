@@ -172,6 +172,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--agri_backend_v2-base-url",
+        dest="v2_base_url",
         default=os.getenv("V2_AGENT_BASE_URL", "http://127.0.0.1:8000"),
         help="agri_backend_v2 Agent 地址，默认 http://127.0.0.1:8000",
     )
@@ -255,7 +256,7 @@ async def build_report(project: Path, args: argparse.Namespace) -> ChainReport:
 
 def should_use_v2(project: Path, args: argparse.Namespace) -> bool:
     """识别 agri_backend_v2 请求，避免用 archive/backend 的旧表模型误查。"""
-    if args.v2:
+    if getattr(args, "v2", False) or getattr(args, "agri_backend_v2", False):
         return True
     if args.trace_id is not None or args.conversation_id is not None:
         return True

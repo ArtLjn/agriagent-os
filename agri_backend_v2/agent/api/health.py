@@ -12,6 +12,7 @@ from agent.config import settings
 from agent.deps import pending_approvals
 from agent.platforms.persistence.redis.redis_store import get_client, key, status as redis_status
 from agent.platforms.persistence.redis.turn_store import pending_approval_count
+from agent.platforms.persistence.mongo import chat_store
 
 logger = logging.getLogger(__name__)
 
@@ -19,11 +20,17 @@ logger = logging.getLogger(__name__)
 @api_router.get("/health")
 async def health() -> dict:
     redis = await redis_status()
+    mongo = await chat_store.status()
+    dependencies_ok = (
+        (not redis["enabled"] or redis["reachable"])
+        and (not mongo["enabled"] or mongo["reachable"])
+    )
     return {
-        "status": "ok" if not redis["enabled"] or redis["reachable"] else "degraded",
+        "status": "ok" if dependencies_ok else "degraded",
         "pending_approvals": await pending_approval_count(),
         "active_turns": await _active_turn_count(),
         "redis": redis,
+        "mongo": mongo,
     }
 
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../shared/app_identity.dart';
+import '../../shared/assets/app_assets.dart';
 import '../../shared/widgets/card_panel.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
@@ -20,32 +21,44 @@ class AuthPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
+      resizeToAvoidBottomInset: true,
       body: DecoratedBox(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFFFFFFFF),
-              Color(0xFFF0F6FF),
+              Color(0xFFF9FCFF),
+              Color(0xFFF1F7FF),
               AppColors.background
             ],
-            stops: [0, 0.42, 1],
+            stops: [0, 0.52, 1],
           ),
         ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(24, 18, 24, bottomPadding),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 430),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: children,
+        child: Stack(
+          children: [
+            const Positioned.fill(
+                child: IgnorePointer(
+                    child: CustomPaint(
+              painter: _AuthBackdropPainter(),
+            ))),
+            SafeArea(
+              child: SingleChildScrollView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: EdgeInsets.fromLTRB(20, 16, 20, bottomPadding),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 430),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: children,
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -68,107 +81,110 @@ class AuthBrandHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     if (compact) {
       return SizedBox(
-        height: 168,
-        child: Stack(
-          clipBehavior: Clip.none,
+        height: 148,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Positioned(
-              right: -24,
-              top: -32,
-              child: _FloatingCardsScene(width: 164, height: 112),
-            ),
-            Positioned(
-              left: 0,
-              top: 8,
-              child: Row(
-                children: [
-                  const AuthLogo(size: 40),
-                  const SizedBox(width: 12),
-                  Text(
-                    AppIdentity.displayName,
-                    style: AppTextStyles.sectionTitle.copyWith(fontSize: 18),
-                  ),
-                ],
-              ),
-            ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 20,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      color: AppColors.ink,
-                      fontSize: 28,
-                      height: 34 / 28,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    subtitle,
-                    style: AppTextStyles.body.copyWith(
-                      color: AppColors.subtle,
-                      fontSize: 16,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            _AuthBrandRow(compact: true),
+            const Spacer(),
+            _AuthTitle(title: title, subtitle: subtitle, compact: true),
           ],
         ),
       );
     }
 
     return SizedBox(
-      height: 180,
-      child: Stack(
-        clipBehavior: Clip.none,
+      height: 166,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Positioned(
-            right: -34,
-            top: -18,
-            child: _FloatingCardsScene(width: 178, height: 132),
-          ),
-          Positioned(
-            left: 0,
-            top: 18,
-            child: AuthLogo(size: 58),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 18,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: AppColors.ink,
-                    fontSize: 36,
-                    height: 42 / 36,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  subtitle,
-                  style: AppTextStyles.body.copyWith(
-                    color: AppColors.subtle,
-                    fontSize: 16,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          const _AuthBrandRow(showName: false),
+          const Spacer(),
+          _AuthTitle(title: title, subtitle: subtitle),
         ],
       ),
+    );
+  }
+}
+
+class _AuthBrandRow extends StatelessWidget {
+  const _AuthBrandRow({this.compact = false, this.showName = true});
+
+  final bool compact;
+  final bool showName;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        AuthLogo(size: compact ? 42 : 48),
+        if (showName) ...[
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                AppIdentity.displayName,
+                style: AppTextStyles.sectionTitle.copyWith(
+                  fontSize: compact ? 17 : 18,
+                ),
+              ),
+              Text(
+                AppIdentity.tagline,
+                style: AppTextStyles.small.copyWith(color: AppColors.subtle),
+              ),
+            ],
+          ),
+        ],
+        const Spacer(),
+        SizedBox(
+          width: compact ? 104 : 122,
+          height: compact ? 76 : 86,
+          child: _FloatingCardsScene(
+            width: compact ? 104 : 122,
+            height: compact ? 76 : 86,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AuthTitle extends StatelessWidget {
+  const _AuthTitle({
+    required this.title,
+    required this.subtitle,
+    this.compact = false,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            color: AppColors.ink,
+            fontSize: compact ? 28 : 30,
+            height: compact ? 34 / 28 : 36 / 30,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          subtitle,
+          style: AppTextStyles.body.copyWith(
+            color: AppColors.subtle,
+            fontSize: compact ? 14 : 15,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -278,7 +294,7 @@ class AuthSurfaceCard extends StatelessWidget {
   }
 }
 
-class AuthInputField extends StatelessWidget {
+class AuthInputField extends StatefulWidget {
   const AuthInputField({
     super.key,
     required this.label,
@@ -292,6 +308,11 @@ class AuthInputField extends StatelessWidget {
     this.labelGap = 10,
     this.labelFontSize = 15,
     this.obscureText = false,
+    this.showObscureToggle = false,
+    this.keyboardType,
+    this.textInputAction,
+    this.autofillHints,
+    this.onSubmitted,
   });
 
   final String label;
@@ -305,38 +326,109 @@ class AuthInputField extends StatelessWidget {
   final double labelGap;
   final double labelFontSize;
   final bool obscureText;
+  final bool showObscureToggle;
+  final TextInputType? keyboardType;
+  final TextInputAction? textInputAction;
+  final Iterable<String>? autofillHints;
+  final ValueChanged<String>? onSubmitted;
+
+  @override
+  State<AuthInputField> createState() => _AuthInputFieldState();
+}
+
+class _AuthInputFieldState extends State<AuthInputField> {
+  late final FocusNode _focusNode;
+  late bool _obscured;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode = FocusNode()..addListener(_handleFocusChanged);
+    _obscured = widget.obscureText;
+  }
+
+  @override
+  void dispose() {
+    _focusNode
+      ..removeListener(_handleFocusChanged)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _handleFocusChanged() => setState(() {});
 
   @override
   Widget build(BuildContext context) {
+    final borderColor = _focusNode.hasFocus ? AppColors.blue : AppColors.line;
+    final fillColor = _focusNode.hasFocus
+        ? AppColors.blueSoft.withValues(alpha: 0.42)
+        : AppColors.surface;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          label,
-          style: AppTextStyles.sectionTitle.copyWith(fontSize: labelFontSize),
+          widget.label,
+          style: AppTextStyles.sectionTitle
+              .copyWith(fontSize: widget.labelFontSize),
         ),
-        SizedBox(height: labelGap),
-        Container(
-          height: height,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+        SizedBox(height: widget.labelGap),
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          height: widget.height,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.line),
+            color: fillColor,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: borderColor,
+              width: _focusNode.hasFocus ? 1.5 : 1,
+            ),
+            boxShadow: _focusNode.hasFocus
+                ? [
+                    BoxShadow(
+                      color: AppColors.blue.withValues(alpha: 0.08),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : null,
           ),
           child: Row(
             children: [
-              Icon(icon, size: 20, color: AppColors.subtle),
-              const SizedBox(width: 12),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: _focusNode.hasFocus
+                      ? AppColors.blue.withValues(alpha: 0.12)
+                      : AppColors.surface2,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  widget.icon,
+                  size: 18,
+                  color:
+                      _focusNode.hasFocus ? AppColors.blue : AppColors.subtle,
+                ),
+              ),
+              const SizedBox(width: 10),
               Expanded(
                 child: Semantics(
-                  label: label,
+                  label: widget.label,
                   child: TextField(
-                    controller: controller,
-                    readOnly: readOnly,
-                    onTap: onTap,
-                    obscureText: obscureText,
+                    controller: widget.controller,
+                    focusNode: _focusNode,
+                    readOnly: widget.readOnly,
+                    onTap: widget.onTap,
+                    onSubmitted: widget.onSubmitted,
+                    keyboardType: widget.keyboardType,
+                    textInputAction: widget.textInputAction,
+                    autofillHints: widget.autofillHints,
+                    obscureText: _obscured,
                     maxLines: 1,
+                    cursorColor: AppColors.blue,
                     style: AppTextStyles.body.copyWith(
                       color: AppColors.ink,
                       fontSize: 15,
@@ -345,7 +437,7 @@ class AuthInputField extends StatelessWidget {
                       border: InputBorder.none,
                       isDense: true,
                       contentPadding: EdgeInsets.zero,
-                      hintText: placeholder,
+                      hintText: widget.placeholder,
                       hintStyle: AppTextStyles.body.copyWith(
                         color: AppColors.subtle,
                         fontSize: 15,
@@ -354,9 +446,23 @@ class AuthInputField extends StatelessWidget {
                   ),
                 ),
               ),
-              if (trailing != null) ...[
-                const SizedBox(width: 10),
-                trailing!,
+              if (widget.showObscureToggle) ...[
+                const SizedBox(width: 4),
+                IconButton(
+                  onPressed: () => setState(() => _obscured = !_obscured),
+                  icon: Icon(
+                    _obscured ? LucideIcons.eyeOff : LucideIcons.eye,
+                    size: 19,
+                    color: AppColors.subtle,
+                  ),
+                  tooltip: _obscured ? '显示密码' : '隐藏密码',
+                  padding: EdgeInsets.zero,
+                  constraints:
+                      const BoxConstraints(minWidth: 40, minHeight: 40),
+                ),
+              ] else if (widget.trailing != null) ...[
+                const SizedBox(width: 8),
+                widget.trailing!,
               ],
             ],
           ),
@@ -371,35 +477,55 @@ class AuthPrimaryButton extends StatelessWidget {
     super.key,
     required this.label,
     required this.onTap,
+    this.isLoading = false,
   });
 
   final String label;
   final VoidCallback onTap;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Container(
-        height: 52,
-        decoration: BoxDecoration(
-          color: AppColors.blue,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x1A2F73F6),
-              blurRadius: 18,
-              offset: Offset(0, 8),
+    return SizedBox(
+      height: 54,
+      child: Semantics(
+        button: true,
+        enabled: !isLoading,
+        label: label,
+        onTap: isLoading ? null : onTap,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: isLoading ? null : onTap,
+          child: Container(
+            height: 54,
+            decoration: BoxDecoration(
+              color: AppColors.blue,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x1A2F73F6),
+                  blurRadius: 18,
+                  offset: Offset(0, 8),
+                ),
+              ],
             ),
-          ],
-        ),
-        child: Center(
-          child: Text(
-            label,
-            style: AppTextStyles.sectionTitle.copyWith(
-              color: Colors.white,
-              fontSize: 18,
+            child: Center(
+              child: isLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Text(
+                      label,
+                      style: AppTextStyles.sectionTitle.copyWith(
+                        color: Colors.white,
+                        fontSize: 17,
+                      ),
+                    ),
             ),
           ),
         ),
@@ -425,21 +551,68 @@ class AuthTextLink extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Semantics(
+        button: true,
+        label: '$prefix$action',
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                prefix,
+                style: AppTextStyles.body.copyWith(color: AppColors.muted),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                action,
+                style: AppTextStyles.body.copyWith(
+                  color: AppColors.blue,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class AuthErrorBanner extends StatelessWidget {
+  const AuthErrorBanner({super.key, required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      liveRegion: true,
+      label: message,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.redSoft,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.red.withValues(alpha: 0.14)),
+        ),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              prefix,
-              style: AppTextStyles.body.copyWith(color: AppColors.muted),
+            const Padding(
+              padding: EdgeInsets.only(top: 1),
+              child: Icon(
+                LucideIcons.circleAlert,
+                size: 16,
+                color: AppColors.red,
+              ),
             ),
-            const SizedBox(width: 6),
-            Text(
-              action,
-              style: AppTextStyles.body.copyWith(
-                color: AppColors.blue,
-                fontWeight: FontWeight.w800,
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                message,
+                style: AppTextStyles.small.copyWith(color: AppColors.red),
               ),
             ),
           ],
@@ -471,7 +644,15 @@ class AuthLogo extends StatelessWidget {
           ),
         ],
       ),
-      child: CustomPaint(painter: _AuthLogoPainter(accent: accent)),
+      child: Padding(
+        padding: EdgeInsets.all(size * 0.12),
+        child: Image.asset(
+          AppAssets.brandLogo,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) =>
+              CustomPaint(painter: _AuthLogoPainter(accent: accent)),
+        ),
+      ),
     );
   }
 }
@@ -503,6 +684,45 @@ class DataNotice extends StatelessWidget {
       ),
     );
   }
+}
+
+class _AuthBackdropPainter extends CustomPainter {
+  const _AuthBackdropPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final blueGlow = Paint()..color = AppColors.blue.withValues(alpha: 0.045);
+    final greenGlow = Paint()..color = AppColors.green.withValues(alpha: 0.035);
+    final line = Paint()
+      ..color = AppColors.blue.withValues(alpha: 0.09)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+
+    canvas.drawCircle(
+      Offset(size.width * 0.98, size.height * 0.06),
+      size.width * 0.34,
+      blueGlow,
+    );
+    canvas.drawCircle(
+      Offset(size.width * 0.02, size.height * 0.88),
+      size.width * 0.26,
+      greenGlow,
+    );
+    canvas.drawArc(
+      Rect.fromCenter(
+        center: Offset(size.width * 0.92, size.height * 0.18),
+        width: size.width * 0.58,
+        height: size.width * 0.58,
+      ),
+      2.1,
+      1.8,
+      false,
+      line,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _AuthBackdropPainter oldDelegate) => false;
 }
 
 class CapabilityChip extends StatelessWidget {

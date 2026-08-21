@@ -38,26 +38,26 @@
 - [x] 5.1 更新 `/api/v2/chat`、conversation detail 和 Turn state，使 response 暴露 conversation revision、reset generation 和 source status
 - [x] 5.2 更新 `/api/v2/reset`，实现 active Context/pending action/summary 清理和 generation 递增，保留默认可见历史
 - [x] 5.3 为 Worker 重启、SSE `after_seq` 重连和幂等 request 验证同一 Turn 不重复执行、不重复写消息
-- [ ] 5.4 增加 Mongo 不可用、Redis 不可用和 source divergence 的结构化错误/降级行为；不再提供本地 JSON fallback
+- [x] 5.4 增加 Mongo 不可用、Redis 不可用和 source divergence 的结构化错误/降级行为；不再提供本地 JSON fallback
 
 ## 6. Trace 与运行指标
 
 - [x] 6.1 扩展 `trace_context_build` 记录 Block、预算、summary/memory revision、tool schema mode 和 source status
-- [ ] 6.2 增加 summary compaction、memory read/observe、context source divergence 和 budget error Trace 节点/属性
-- [ ] 6.3 扩展 Trace summary 聚合 Context token、reserve、压缩/丢弃计数、摘要次数、fallback 次数和持久化状态
-- [ ] 6.4 增加敏感字段脱敏、payload 上限和不记录隐藏思维链/凭证的回归检查
+- [x] 6.2 增加 summary compaction、memory read/observe、context source divergence 和 budget error Trace 节点/属性
+- [x] 6.3 扩展 Trace summary 聚合 Context token、reserve、压缩/丢弃计数、摘要次数、fallback 次数和持久化状态
+- [x] 6.4 增加敏感字段脱敏、payload 上限和不记录隐藏思维链/凭证的回归检查
 
 ## 7. 迁移与灰度
 
-- [ ] 7.1 完成 Mongo Conversation snapshot 的历史数据导入校验和 source divergence 指标
+- [x] 7.1 完成 Mongo Conversation snapshot 的历史数据导入校验和 source divergence 指标
 - [ ] 7.2 完成 Conversation state、摘要 CAS 的真实灰度验收，验证重启、多 Worker、摘要冲突和历史一致性
-- [ ] 7.3 完成 Mongo-only Context 读取验收；持久化不可用时返回 unavailable，不提供本地文件 fallback
+- [x] 7.3 完成 Mongo-only Context 读取验收；持久化不可用时返回 unavailable，不提供本地文件 fallback
 - [ ] 7.4 灰度启用 LLM Skill Router 的 candidate 模式，基于回放集比较 Skill 召回、工具误调用和 token 成本
 - [ ] 7.5 完成 Mongo 历史数据导入校验与归档策略，确认可回滚且不删除用户可见历史
 
 ## 8. 验收与门禁
 
-- [ ] 8.1 增加多轮追问、工具结果摘要、摘要回注、pending action、reset 和跨租户隔离测试
+- [x] 8.1 增加多轮追问、工具结果摘要、摘要回注、pending action、reset 和跨租户隔离测试
 - [x] 8.2 增加 token budget、Tool Schema budget、response reserve、required overflow 和 drop reason 测试
 - [ ] 8.3 增加真实 Redis/Mongo/Worker/SSE replay smoke，验证历史事实源与 Agent Context 一致
 - [ ] 8.4 运行 v2 Agent focused tests、Ruff、格式化、复杂度和层依赖检查

@@ -180,3 +180,27 @@ async def test_pending_finalization_recovery_does_not_enter_runtime(
     run_turn.assert_not_awaited()
     finish.assert_awaited_once()
     client.xack.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_context_source_failure_finalizes_without_entering_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    turn = Turn(turn_id="turn-1", conversation_id="conversation-1")
+    update_turn = AsyncMock()
+    publish_event = AsyncMock()
+    finish = AsyncMock(return_value=True)
+    monkeypatch.setattr(worker, "update_turn", update_turn)
+    monkeypatch.setattr(worker, "publish_event", publish_event)
+    monkeypatch.setattr(worker, "_finish_assistant_persistence", finish)
+
+    await worker._finalize_context_failure(
+        turn,
+        code="context_source_unavailable",
+        message="Mongo unavailable",
+        trace_id="trace-1",
+    )
+
+    assert update_turn.await_args.kwargs["error_code"] == "context_source_unavailable"
+    assert publish_event.await_count == 3
+    finish.assert_awaited_once()

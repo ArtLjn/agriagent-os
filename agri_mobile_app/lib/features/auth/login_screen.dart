@@ -72,6 +72,8 @@ class _LoginScreenState extends State<LoginScreen> {
               placeholder: '请输入手机号',
               icon: LucideIcons.smartphone,
               controller: phoneController,
+              keyboardType: TextInputType.phone,
+              textInputAction: TextInputAction.next,
             ),
             const SizedBox(height: 24),
             AuthInputField(
@@ -80,11 +82,9 @@ class _LoginScreenState extends State<LoginScreen> {
               icon: LucideIcons.lockKeyhole,
               controller: passwordController,
               obscureText: true,
-              trailing: Icon(
-                LucideIcons.eyeOff,
-                size: 20,
-                color: AppColors.subtle,
-              ),
+              showObscureToggle: true,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _submit(),
             ),
             const SizedBox(height: 10),
             Align(
@@ -99,16 +99,13 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             const SizedBox(height: 28),
             if (errorMessage != null) ...[
-              Text(
-                errorMessage!,
-                textAlign: TextAlign.center,
-                style: AppTextStyles.body.copyWith(color: AppColors.red),
-              ),
+              AuthErrorBanner(message: errorMessage!),
               const SizedBox(height: 12),
             ],
             AuthPrimaryButton(
               label: isSubmitting ? '登录中' : '登录',
               onTap: _submit,
+              isLoading: isSubmitting,
             ),
             const SizedBox(height: 22),
             AuthTextLink(

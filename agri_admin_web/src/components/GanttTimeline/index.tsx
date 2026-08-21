@@ -68,11 +68,13 @@ function StatsBar({
   totalPhases,
   success,
   error,
+  warning,
 }: {
   totalNodes: number;
   totalPhases: number;
   success: number;
   error: number;
+  warning: number;
 }) {
   return (
     <div
@@ -95,6 +97,9 @@ function StatsBar({
       </span>
       <span style={{ color: TEXT_DIM }}>
         失败: <strong style={{ color: '#ff4d4f' }}>{error}</strong>
+      </span>
+      <span style={{ color: TEXT_DIM }}>
+        告警: <strong style={{ color: '#faad14' }}>{warning}</strong>
       </span>
     </div>
   );
@@ -134,6 +139,7 @@ function RoundDivider({
   roundDuration,
   successCount,
   errorCount,
+  warningCount,
   isExpanded,
   onToggle,
 }: {
@@ -145,6 +151,7 @@ function RoundDivider({
   roundDuration: number;
   successCount: number;
   errorCount: number;
+  warningCount: number;
   isExpanded: boolean;
   onToggle: () => void;
 }) {
@@ -191,7 +198,7 @@ function RoundDivider({
         requestId: {recordId}
       </span>
       <span style={{ marginLeft: 'auto', fontSize: 12, color: TEXT_DIM }}>
-        {nodeCount} 节点 | {roundDuration}ms | ✓{successCount} ✗{errorCount}
+        {nodeCount} 节点 | {roundDuration}ms | ✓{successCount} ✗{errorCount} !{warningCount}
       </span>
       <span style={{ marginLeft: 10, fontSize: 11, color: '#8b949e' }}>
         {isExpanded ? '点击收起 ▲' : '点击展开 ▼'}
@@ -497,11 +504,13 @@ export function GanttTimeline({ rounds, onNodeClick }: GanttTimelineProps) {
     let totalNodes = 0;
     let success = 0;
     let error = 0;
+    let warning = 0;
     for (const round of rounds) {
       totalNodes += round.nodes.length;
       for (const node of round.nodes) {
         if (node.status === 'success') success++;
-        else if (node.status === 'error') error++;
+        else if (['failed', 'error', 'timeout', 'cancelled'].includes(node.status)) error++;
+        else warning++;
       }
     }
     return {
@@ -509,6 +518,7 @@ export function GanttTimeline({ rounds, onNodeClick }: GanttTimelineProps) {
       totalPhases: rounds.length,
       success,
       error,
+      warning,
     };
   }, [rounds]);
 
@@ -546,6 +556,9 @@ export function GanttTimeline({ rounds, onNodeClick }: GanttTimelineProps) {
         const roundDur = round.nodes.reduce((s, n) => s + (n.duration_ms || 0), 0);
         const successCount = round.nodes.filter((n) => n.status === 'success').length;
         const errorCount = round.nodes.filter((n) => n.status === 'error').length;
+        const warningCount = round.nodes.filter(
+          (n) => n.status !== 'success' && !['failed', 'error', 'timeout', 'cancelled'].includes(n.status),
+        ).length;
         const phaseLabel = getPhaseLabel(round.nodes, rIdx);
         const rowSegments = new Map(
           buildTimelineSegments(round.nodes).map((segment) => [segment.nodeIndex, segment]),
@@ -562,6 +575,7 @@ export function GanttTimeline({ rounds, onNodeClick }: GanttTimelineProps) {
               roundDuration={roundDur}
               successCount={successCount}
               errorCount={errorCount}
+              warningCount={warningCount}
               isExpanded={isExpanded}
               onToggle={() => toggleRound(rIdx)}
             />

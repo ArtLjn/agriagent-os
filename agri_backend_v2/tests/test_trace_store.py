@@ -10,6 +10,29 @@ from agent.domains.harness.observability.trace import store
 from agent.api import api_router
 
 
+def test_raw_trace_summary_marks_completed_finalization_warning_as_partial() -> None:
+    status = store._compute_status(
+        [
+            {
+                "node_type": "persistence_state",
+                "status": "fallback",
+                "error_message": "turn_finalization_incomplete",
+                "output_data": {
+                    "message_status": "ready",
+                    "session_status": "unavailable",
+                },
+            },
+            {
+                "node_type": "turn",
+                "status": "success",
+                "output_data": {"status": "completed"},
+            },
+        ]
+    )
+
+    assert status == "partial"
+
+
 class FakeCursor:
     def __init__(self, documents: list[dict]) -> None:
         self.documents = list(documents)

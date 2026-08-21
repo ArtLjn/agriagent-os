@@ -32,6 +32,11 @@ class FakeCollection:
         return None
 
     async def update_one(self, filter_doc, update_doc, *, upsert):
+        overlapping_paths = set(update_doc.get("$set", {})) & set(
+            update_doc.get("$setOnInsert", {})
+        )
+        if overlapping_paths:
+            raise AssertionError(f"conflicting upsert paths: {overlapping_paths}")
         for document in self.documents:
             if all(document.get(key) == value for key, value in filter_doc.items()):
                 document.update(deepcopy(update_doc.get("$set", {})))
@@ -93,6 +98,7 @@ async def test_state_is_tenant_scoped_and_has_unique_indexes(fake_state_store) -
     assert saved["ok"] is True
     assert saved["conversation_revision"] == 1
     assert saved["summary_status"] == "ready"
+    assert fake_state_store.documents[0]["farmUid"] == "farm-a"
     assert (
         await chat_store.get_conversation_state(
             "conversation-1", user_id="user-2", farm_id=1

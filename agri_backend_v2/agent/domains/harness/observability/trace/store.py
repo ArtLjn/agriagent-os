@@ -632,7 +632,18 @@ async def get_trace_summary(
                 }
             )
             if doc:
-                return _summary_doc_to_full_api(doc)
+                summary = _summary_doc_to_full_api(doc)
+                if _needs_summary_reconciliation(summary):
+                    coll = _get_trace_collection()
+                    if coll is not None:
+                        nodes = await coll.find(
+                            _trace_selector(request_id, user_id, farm_uid)
+                        ).to_list(length=500)
+                        rebuilt = _build_summary_from_nodes(nodes, request_id)
+                        if rebuilt is not None:
+                            rebuilt["node_breakdown"] = _build_node_breakdown(nodes)
+                            return rebuilt
+                return summary
         except Exception:
             pass
 
@@ -678,7 +689,8 @@ def _build_summary_from_nodes(
     status = _compute_status(ordered)
     root_error = _find_root_error(ordered)
     metrics = _compute_metrics(ordered)
-    error_count = sum(1 for n in ordered if _node_has_error(n))
+    warning_count = int(_has_completed_turn_with_finalization_warning(ordered))
+    error_count = sum(1 for n in ordered if _node_has_error(n)) - warning_count
 
     return {
         "request_id": request_id,
@@ -693,12 +705,24 @@ def _build_summary_from_nodes(
         "total_duration_ms": metrics["total_duration_ms"],
         "status": status,
         "error_count": error_count,
+        "warning_count": warning_count,
         "root_error": root_error,
         "started_at": _format_datetime(started_at),
         "ended_at": _format_datetime(ended_at),
         "status_reason": _status_reason(root_error, status),
         "metrics": metrics,
     }
+
+
+def _needs_summary_reconciliation(summary: dict[str, Any]) -> bool:
+    """识别旧版将可见结果成功误标为 failed 的收尾摘要。"""
+    if summary.get("status") != "failed":
+        return False
+    root_error = summary.get("root_error") or {}
+    return (
+        root_error.get("node_type") == "persistence_state"
+        and root_error.get("message") == "turn_finalization_incomplete"
+    )
 
 
 def _compute_metrics(nodes: list[dict[str, Any]]) -> dict[str, Any]:
@@ -723,6 +747,20 @@ def _compute_metrics(nodes: list[dict[str, Any]]) -> dict[str, Any]:
         "router_calls": 0,
         "context_builds": 0,
         "catalog_recalls": 0,
+        "context_message_tokens": 0,
+        "context_tool_schema_tokens": 0,
+        "context_response_reserve_tokens": 0,
+        "context_safety_margin_tokens": 0,
+        "context_used_tokens": 0,
+        "context_compressed_blocks": 0,
+        "context_dropped_blocks": 0,
+        "summary_compaction_count": 0,
+        "memory_reads": 0,
+        "memory_observations": 0,
+        "source_divergence_count": 0,
+        "budget_error_count": 0,
+        "persistence_incomplete_count": 0,
+        "fallback_count": 0,
     }
     root_duration_ms = 0
     for node in nodes:
@@ -755,6 +793,48 @@ def _compute_metrics(nodes: list[dict[str, Any]]) -> dict[str, Any]:
             metrics["router_calls"] += 1
         elif node_type == "catalog_recall":
             metrics["catalog_recalls"] += 1
+        elif node_type == "summary_compaction":
+            metrics["summary_compaction_count"] += 1
+        elif node_type == "memory_read":
+            metrics["memory_reads"] += 1
+        elif node_type == "memory_observe":
+            metrics["memory_observations"] += 1
+        elif node_type == "context_source_divergence":
+            metrics["source_divergence_count"] += 1
+        elif node_type == "context_budget_error":
+            metrics["budget_error_count"] += 1
+        elif node_type == "persistence_state":
+            metrics["persistence_incomplete_count"] += 1
+            if str(node.get("status") or "") == "fallback":
+                metrics["fallback_count"] += 1
+
+        if node_type == "context_build":
+            output = node.get("output_data")
+            if isinstance(output, str):
+                try:
+                    import json
+
+                    output = json.loads(output)
+                except json.JSONDecodeError:
+                    output = None
+            budget = output.get("budget") if isinstance(output, dict) else None
+            if isinstance(budget, dict):
+                for field in (
+                    "message_tokens",
+                    "tool_schema_tokens",
+                    "response_reserve_tokens",
+                    "safety_margin_tokens",
+                    "used_tokens",
+                ):
+                    metrics[f"context_{field}"] += int(budget.get(field) or 0)
+            blocks = output.get("blocks") if isinstance(output, dict) else None
+            if isinstance(blocks, list):
+                metrics["context_compressed_blocks"] += sum(
+                    1 for block in blocks if block.get("status") == "compressed"
+                )
+                metrics["context_dropped_blocks"] += sum(
+                    1 for block in blocks if block.get("status") == "dropped"
+                )
         elif node_type in {"reflection", "reflection_check"}:
             metrics["reflection_duration_ms"] += duration
         elif node_type == "mcp_call":
@@ -808,12 +888,56 @@ def _compute_status(nodes: list[dict[str, Any]]) -> str:
     if statuses & blocked_statuses:
         return "blocked"
     if statuses & failed_statuses:
+        if _has_completed_turn_with_finalization_warning(nodes):
+            return "partial"
         return "failed"
     # Check root error
     for n in nodes:
         if _node_has_error(n):
+            if _has_completed_turn_with_finalization_warning(nodes):
+                return "partial"
             return "failed"
     return "success"
+
+
+def _has_completed_turn_with_finalization_warning(
+    nodes: list[dict[str, Any]],
+) -> bool:
+    """把可见结果成功、Session 补写失败标成 partial，而不是 failed。"""
+    warning = next(
+        (
+            node
+            for node in nodes
+            if node.get("node_type") == "persistence_state"
+            and node.get("error_message") == "turn_finalization_incomplete"
+        ),
+        None,
+    )
+    if warning is None:
+        return False
+    output = warning.get("output_data")
+    if isinstance(output, str):
+        try:
+            import json
+
+            output = json.loads(output)
+        except (json.JSONDecodeError, ValueError):
+            output = None
+    if not isinstance(output, dict) or output.get("message_status") != "ready":
+        return False
+    for node in reversed(nodes):
+        if node.get("node_type") != "turn":
+            continue
+        outcome = node.get("output_data")
+        if isinstance(outcome, str):
+            try:
+                import json
+
+                outcome = json.loads(outcome)
+            except (json.JSONDecodeError, ValueError):
+                outcome = None
+        return isinstance(outcome, dict) and outcome.get("status") == "completed"
+    return False
 
 
 def _find_root_error(nodes: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -872,6 +996,8 @@ def _node_has_error(node: dict[str, Any]) -> bool:
 def _status_reason(root_error: dict[str, Any] | None, status: str) -> str | None:
     if status == "success":
         return None
+    if status == "partial" and root_error and root_error.get("node_type") == "persistence_state":
+        return "turn_finalization_incomplete"
     if root_error:
         return str(root_error.get("code") or root_error.get("node_name") or status)
     return status
@@ -972,6 +1098,7 @@ def _summary_doc_to_api(doc: dict[str, Any]) -> dict[str, Any]:
         "total_duration_ms": int(doc.get("total_duration_ms") or 0),
         "status": doc.get("status", "success"),
         "error_count": int(doc.get("error_count") or 0),
+        "warning_count": int(doc.get("warning_count") or 0),
         "root_error": doc.get("root_error"),
         "started_at": _format_datetime(doc.get("started_at")),
         "ended_at": _format_datetime(doc.get("ended_at")),

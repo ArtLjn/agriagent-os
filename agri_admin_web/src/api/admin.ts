@@ -61,6 +61,7 @@ export interface TraceRequestSummary {
   status?: string;
   status_reason?: string | null;
   error_count?: number;
+  warning_count?: number;
   root_error?: TraceRootError | null;
   metrics?: TraceMetrics;
   started_at?: string | null;

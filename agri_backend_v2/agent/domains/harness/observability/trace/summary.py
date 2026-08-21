@@ -57,7 +57,9 @@ def build_trace_request_summary(nodes: list[dict[str, Any]]) -> dict[str, Any] |
         "ended_at": _format_datetime(ended_at),
         "status": status,
         "status_reason": _status_reason(root_error, status),
-        "error_count": _error_count(ordered),
+        "error_count": _error_count(ordered)
+        - _finalization_warning_count(ordered),
+        "warning_count": _finalization_warning_count(ordered),
         "root_error": root_error,
         "metrics": metrics,
         "node_breakdown": node_breakdown,
@@ -85,6 +87,7 @@ def summary_to_mongo_doc(summary: dict[str, Any]) -> dict[str, Any]:
         "status": summary["status"],
         "status_reason": summary.get("status_reason"),
         "error_count": summary["error_count"],
+        "warning_count": summary.get("warning_count", 0),
         "root_error": summary.get("root_error"),
         "metrics": summary.get("metrics") or {},
         "node_breakdown": summary.get("node_breakdown") or [],
@@ -116,6 +119,7 @@ def summary_from_mongo_doc(doc: dict[str, Any]) -> dict[str, Any]:
         "status": str(doc.get("status") or "success"),
         "status_reason": doc.get("status_reason"),
         "error_count": int(doc.get("error_count") or 0),
+        "warning_count": int(doc.get("warning_count") or 0),
         "root_error": doc.get("root_error"),
         "metrics": doc.get("metrics") or {},
         "node_breakdown": doc.get("node_breakdown") or [],
@@ -144,6 +148,20 @@ def _metrics(nodes: list[dict[str, Any]]) -> dict[str, Any]:
         "router_calls": 0,
         "context_builds": 0,
         "catalog_recalls": 0,
+        "context_message_tokens": 0,
+        "context_tool_schema_tokens": 0,
+        "context_response_reserve_tokens": 0,
+        "context_safety_margin_tokens": 0,
+        "context_used_tokens": 0,
+        "context_compressed_blocks": 0,
+        "context_dropped_blocks": 0,
+        "summary_compaction_count": 0,
+        "memory_reads": 0,
+        "memory_observations": 0,
+        "source_divergence_count": 0,
+        "budget_error_count": 0,
+        "persistence_incomplete_count": 0,
+        "fallback_count": 0,
     }
     root_duration_ms = 0
     for node in nodes:
@@ -176,6 +194,48 @@ def _metrics(nodes: list[dict[str, Any]]) -> dict[str, Any]:
             metrics["router_calls"] += 1
         elif node_type == "catalog_recall":
             metrics["catalog_recalls"] += 1
+        elif node_type == "summary_compaction":
+            metrics["summary_compaction_count"] += 1
+        elif node_type == "memory_read":
+            metrics["memory_reads"] += 1
+        elif node_type == "memory_observe":
+            metrics["memory_observations"] += 1
+        elif node_type == "context_source_divergence":
+            metrics["source_divergence_count"] += 1
+        elif node_type == "context_budget_error":
+            metrics["budget_error_count"] += 1
+        elif node_type == "persistence_state":
+            metrics["persistence_incomplete_count"] += 1
+            if str(node.get("status") or "") == "fallback":
+                metrics["fallback_count"] += 1
+
+        if node_type == "context_build":
+            output = _json_value(node.get("output_data"))
+            budget = output.get("budget") if isinstance(output, dict) else None
+            if isinstance(budget, dict):
+                metrics["context_message_tokens"] += _int_value(
+                    budget.get("message_tokens")
+                )
+                metrics["context_tool_schema_tokens"] += _int_value(
+                    budget.get("tool_schema_tokens")
+                )
+                metrics["context_response_reserve_tokens"] += _int_value(
+                    budget.get("response_reserve_tokens")
+                )
+                metrics["context_safety_margin_tokens"] += _int_value(
+                    budget.get("safety_margin_tokens")
+                )
+                metrics["context_used_tokens"] += _int_value(
+                    budget.get("used_tokens")
+                )
+            blocks = output.get("blocks") if isinstance(output, dict) else None
+            if isinstance(blocks, list):
+                metrics["context_compressed_blocks"] += sum(
+                    1 for block in blocks if block.get("status") == "compressed"
+                )
+                metrics["context_dropped_blocks"] += sum(
+                    1 for block in blocks if block.get("status") == "dropped"
+                )
         elif node_type in {"reflection", "reflection_check"}:
             metrics["reflection_duration_ms"] += duration
         elif node_type == "mcp_call":
@@ -274,13 +334,43 @@ def _request_status(
     if statuses & _BLOCKED_STATUSES:
         return "blocked"
     if statuses & _FAILED_STATUSES:
+        if _has_completed_turn_with_finalization_warning(nodes):
+            return "partial"
         return "failed"
+    if _has_completed_turn_with_finalization_warning(nodes):
+        return "partial"
     return "failed" if root_error else "success"
+
+
+def _has_completed_turn_with_finalization_warning(nodes: list[dict[str, Any]]) -> bool:
+    """把可见结果成功、Session 补写失败标成 partial，而不是 failed。"""
+    warning = next(
+        (
+            node
+            for node in nodes
+            if node.get("node_type") == "persistence_state"
+            and node.get("error_message") == "turn_finalization_incomplete"
+        ),
+        None,
+    )
+    if warning is None:
+        return False
+    output = _json_value(warning.get("output_data"))
+    if not isinstance(output, dict) or output.get("message_status") != "ready":
+        return False
+    for node in reversed(nodes):
+        if node.get("node_type") != "turn":
+            continue
+        outcome = _json_value(node.get("output_data"))
+        return isinstance(outcome, dict) and outcome.get("status") == "completed"
+    return False
 
 
 def _status_reason(root_error: dict[str, Any] | None, status: str) -> str | None:
     if status == "success":
         return None
+    if status == "partial" and root_error and root_error.get("node_type") == "persistence_state":
+        return "turn_finalization_incomplete"
     if root_error:
         return str(root_error.get("code") or root_error.get("node_name") or status)
     return status
@@ -288,6 +378,10 @@ def _status_reason(root_error: dict[str, Any] | None, status: str) -> str | None
 
 def _error_count(nodes: list[dict[str, Any]]) -> int:
     return sum(1 for node in nodes if _node_has_error(node))
+
+
+def _finalization_warning_count(nodes: list[dict[str, Any]]) -> int:
+    return int(_has_completed_turn_with_finalization_warning(nodes))
 
 
 def _first_time(nodes: list[dict[str, Any]]) -> datetime | None:

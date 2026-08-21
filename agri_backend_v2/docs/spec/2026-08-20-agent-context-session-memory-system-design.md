@@ -566,7 +566,7 @@ Mongo Conversation Snapshot
 
 后续实现应按 OpenSpec tasks 的 1～8 组顺序推进，每组完成后只用对应 focused evidence 标记完成，不能以静态代码存在替代真实 Worker、存储和 SSE 验收。
 
-## 13. 当前实现状态（2026-08-20）
+## 13. 当前实现状态（2026-08-21）
 
 本轮按“Session + Short Memory + Context 优先、Long-term Memory 延后”的范围完成了第一段可运行闭环：
 
@@ -580,10 +580,15 @@ Mongo Conversation Snapshot
 | reset 语义 | `/api/v2/reset` 清理 active state 并递增 `reset_generation`；Mongo 可见消息不删除 |
 | API 状态元数据 | `/api/v2/chat`、`/conversations/{id}`、`/turns/{id}` 及 SSE replay 统一暴露 `conversation_revision`、`summary_revision`、`reset_generation`、`source_status`；`context_source_status` 作为兼容别名 |
 | Worker 恢复与幂等 | Redis Stream pending 支持 XAUTOCLAIM/XCLAIM 恢复；重复 dispatch 通过 lease 三态检查避免并发重跑，执行中断只收口，`finalization_pending` 只补 assistant/Session/observation |
+| 存储降级与事实源一致性 | Mongo health/source status、Redis/Mongo unavailable、revision divergence 均返回结构化状态；Mongo-only Context 不读取本地 JSON，漂移时终止当前 Turn，不带空历史执行 Tool |
+| Trace 收尾与展示语义 | 修复 `conversationStates` 首次 upsert 的 `farmUid` modifier 冲突；可见回复已完成但 Session state 收尾失败时汇总为 `partial`，前端显示为告警；Main Agent 不再记录 disabled/空工具选择节点 |
+| Trace 安全与指标 | Trace payload 递归脱敏、隐藏推理链过滤和大小上限；新增 summary compaction、memory read/observe、source divergence、budget error、persistence state 节点及 Context budget 聚合 |
+| 历史迁移校验 | `scripts/migrate_conversation_snapshots.py` 默认 dry-run，只创建缺失 state 候选，不覆盖已有 state、不删除消息；真实 Mongo dry-run 扫描 80 个会话，发现 15 个 incomplete_turn divergence |
+| Router 回放评估 | `scripts/evaluate_skill_router.py` 提供 Skill recall、误调用率、Tool Schema token 成本三项灰度门槛；尚未接入真实脱敏回放集和生产 candidate 开关 |
 | Skill Router | 支持 `llm_router` 与 `main_agent` 双模式；前者由可插拔 LLM Backend 读取轻量 Skill Metadata，后者直接由 Main Agent 从全量 Tool 路由；Registry 展开 Tool，ContextBundle 保存选中 Skill/dependency | 尚未完成 candidate 灰度与回放评估；Router 失败回退 `all` |
 | 长时记忆 | `search()` 仍为空结果；已持久化受控 `memoryObservations` 事件，但未接入事实抽取、审核、向量检索或 `memoryRecords` 自动写入 |
 
-本轮尚未宣称完成：candidate Tool Schema 灰度、真实 Mongo/Redis/Worker/SSE replay、历史数据导入校验。当前 `skill_router_mode=main_agent`、`tool_schema_mode=all` 为默认兼容模式；切换 `llm_router` 后由可插拔 LLM Backend 先读取轻量 Skill Metadata，再由 Registry 展开 Tool Schema，不能把 ContextBuilder 内的规则过滤当作 Router。摘要 Mongo CAS、并发保护、Context 压缩、API 状态元数据和模拟 Worker 恢复已完成 focused tests；真实 Redis/Mongo/Worker smoke 仍待 8.3，Long-term Memory 仍为空实现。
+本轮尚未宣称完成：真实多 Worker/Worker 重启/SSE replay smoke、candidate Tool Schema 真实灰度、历史数据写入归档和脱敏回放集评估。当前 `skill_router_mode=main_agent`、`tool_schema_mode=all` 为默认兼容模式；切换 `llm_router` 后由可插拔 LLM Backend 先读取轻量 Skill Metadata，再由 Registry 展开 Tool Schema，不能把 ContextBuilder 内的规则过滤当作 Router。摘要 Mongo CAS、并发保护、Context 压缩、API 状态元数据、存储降级和模拟 Worker 恢复已完成 focused tests；Long-term Memory 仍为空实现。
 
 目录对齐状态：`agent/core`、`agent/infra`、`agent/skills` 已删除；Context、Runtime、Memory、Control、Trace 位于 `agent/domains/harness`，平台适配位于 `agent/platforms`，具体 Tool 位于 `agent/tools`，启动和 Worker 位于 `agent/bootstrap`、`agent/application`。
 
@@ -611,24 +616,24 @@ Mongo Conversation Snapshot
 
 - [x] 5.1 让 `/api/v2/chat`、conversation detail 和 Turn state 暴露 revision、reset generation、source status；已覆盖 Turn 类型归一化、conversation state unavailable、SSE replay 元数据透传。
 - [x] 5.3 验证 Worker 重启、SSE `after_seq` 重连和幂等 request 不重复执行或写消息；已覆盖 lease 三态、pending finalization 收尾、消息/observation 幂等和 XAUTOCLAIM/XCLAIM 恢复替身。
-- [ ] 5.4 完成 Mongo/Redis 不可用和 source divergence 的结构化降级；不提供本地 JSON fallback。
+- [x] 5.4 完成 Mongo/Redis 不可用和 source divergence 的结构化降级；不提供本地 JSON fallback。已补充 health/source status、revision divergence 和失败前不进入 Tool Runtime 的测试。
 
 ### Trace 与安全观测
 
-- [ ] 6.2 增加 summary compaction、memory read/observe、source divergence、budget error Trace 节点。
-- [ ] 6.3 聚合 Context token、reserve、压缩/丢弃、摘要、fallback 和持久化状态指标。
-- [ ] 6.4 增加敏感字段脱敏、payload 上限和不记录隐藏思维链/凭证的回归检查。
+- [x] 6.2 增加 summary compaction、memory read/observe、source divergence、budget error Trace 节点。
+- [x] 6.3 聚合 Context token、reserve、压缩/丢弃、摘要、fallback 和持久化状态指标。
+- [x] 6.4 增加敏感字段脱敏、payload 上限和不记录隐藏思维链/凭证的回归检查。
 
 ### 迁移与灰度
 
-- [ ] 7.1 完成 Mongo snapshot 历史数据导入校验和 divergence 指标。
+- [x] 7.1 完成 Mongo snapshot 历史数据导入校验和 divergence 指标；真实 dry-run 扫描 80 个会话，报告 15 个 `incomplete_turn`，未写入或删除数据。
 - [ ] 7.2 灰度启用摘要 CAS 和 Conversation state，完成真实重启、多 Worker 和摘要冲突验收。
-- [ ] 7.3 完成 Mongo-only Context 读取验收；持久化不可用时返回 unavailable。
+- [x] 7.3 完成 Mongo-only Context 读取验收；真实 Mongo 空会话读取返回 `source_status=mongo`，不可用回归返回 `unavailable`，无本地 JSON fallback。
 - [ ] 7.4 灰度启用 LLM Skill Router 的 candidate 模式，并比较 Skill 召回、工具误调用和 token 成本。
 - [ ] 7.5 完成 Mongo 历史数据导入校验与归档策略，保证可回滚且不删除用户可见历史。
 
 ### 最终验收
 
-- [ ] 8.1 补齐多轮追问、工具结果摘要、摘要回注、pending action、reset、跨租户隔离测试。
+- [x] 8.1 补齐多轮追问、工具结果摘要、摘要回注、pending action、reset、跨租户隔离测试。
 - [ ] 8.3 完成真实 Redis/Mongo/Worker/SSE replay smoke。
 - [ ] 8.4 通过 v2 Agent focused tests、Ruff、格式化、复杂度和层依赖门禁。

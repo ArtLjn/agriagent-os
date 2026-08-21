@@ -6,6 +6,7 @@ import 'package:farm_manager_app/features/auth/auth_flow.dart';
 import 'package:farm_manager_app/features/auth/auth_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../support/api_test_fixtures.dart'
     show RecordingAdapter, settingsResponse, userResponse, versionResponse;
@@ -139,6 +140,22 @@ void main() {
 
     expect(dependencies.lastPhone, '13800138000');
     expect(dependencies.lastPassword, 'password');
+  });
+
+  testWidgets('密码输入支持显隐切换并保持登录页布局', (tester) async {
+    await pumpAuthFlow(tester);
+
+    final passwordField = find.byType(TextField).at(1);
+    expect(tester.widget<TextField>(passwordField).obscureText, isTrue);
+
+    await tester.tap(find.byIcon(LucideIcons.eyeOff));
+    await tester.pump();
+
+    expect(tester.widget<TextField>(passwordField).obscureText, isFalse);
+    expect(
+      tester.widget<IconButton>(find.byType(IconButton).last).tooltip,
+      '隐藏密码',
+    );
   });
 
   testWidgets('注册页调用后端注册后进入首次设置', (tester) async {

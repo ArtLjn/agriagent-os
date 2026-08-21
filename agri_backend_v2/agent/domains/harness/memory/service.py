@@ -14,6 +14,63 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+def source_divergence(
+    session_view: dict[str, Any],
+    *,
+    redis_conversation_revision: int = 0,
+    redis_summary_revision: int = 0,
+) -> dict[str, Any] | None:
+    """比较已加载 Session View 与 Redis Turn 快照，返回可解释差异。"""
+    if session_view.get("source_status") == "divergent":
+        return session_view.get("source_divergence") or {
+            "code": "context_source_divergence",
+            "sources": {"mongo": "divergent"},
+        }
+    if session_view.get("source_status") == "unavailable":
+        return {
+            "code": "context_source_unavailable",
+            "sources": {"mongo": "unavailable", "redis": "available"},
+        }
+    mongo_revision = int(session_view.get("conversation_revision", 0) or 0)
+    mongo_summary_revision = int(session_view.get("summary_revision", 0) or 0)
+    if (
+        redis_conversation_revision > 0
+        and mongo_revision > 0
+        and redis_conversation_revision != mongo_revision
+    ):
+        return {
+            "code": "conversation_revision_divergence",
+            "sources": {
+                "mongo": {"conversation_revision": mongo_revision},
+                "redis": {"conversation_revision": redis_conversation_revision},
+            },
+        }
+    if (
+        redis_summary_revision > 0
+        and mongo_summary_revision > 0
+        and redis_summary_revision != mongo_summary_revision
+    ):
+        return {
+            "code": "summary_revision_divergence",
+            "sources": {
+                "mongo": {"summary_revision": mongo_summary_revision},
+                "redis": {"summary_revision": redis_summary_revision},
+            },
+        }
+    source_revision = session_view.get("summary_source_conversation_revision")
+    if source_revision is not None and int(source_revision or 0) > mongo_revision:
+        return {
+            "code": "summary_source_revision_ahead",
+            "sources": {
+                "mongo": {
+                    "conversation_revision": mongo_revision,
+                    "summary_source_conversation_revision": int(source_revision),
+                }
+            },
+        }
+    return None
+
+
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -146,7 +203,7 @@ async def get_session_view(
         )
         state = state or {}
         summary_status = state.get("summary_status", "empty")
-        return {
+        view = {
             **empty_session_view(
                 conversation_id,
                 user_id=user_id,
@@ -176,6 +233,11 @@ async def get_session_view(
             "pending_action": state.get("pending_action"),
             "task_state": state.get("task_state"),
         }
+        divergence = source_divergence(view)
+        if divergence:
+            view["source_status"] = "divergent"
+            view["source_divergence"] = divergence
+        return view
     except Exception as exc:  # noqa: BLE001
         logger.warning(
             "session view read failed conversation=%s error=%s",

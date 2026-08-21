@@ -316,6 +316,29 @@ def fake_runtime(monkeypatch: pytest.MonkeyPatch) -> _FakeStore:
     async def no_op(*_args: Any, **_kwargs: Any) -> None:
         return None
 
+    async def empty_session_view(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        return {
+            "conversation_id": "fake",
+            "messages": [],
+            "summary": None,
+            "conversation_revision": 0,
+            "summary_revision": 0,
+            "reset_generation": 0,
+            "source_status": "empty",
+        }
+
+    async def persisted_session_turn(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        return {
+            "status": "ready",
+            "source_status": "empty",
+            "conversation_revision": 1,
+            "summary_revision": 0,
+            "reset_generation": 0,
+        }
+
+    async def persisted_observation(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        return {"status": "ready", "source_status": "empty", "persisted": True}
+
     async def renew_until_done(_lease, stop: asyncio.Event) -> None:
         await stop.wait()
 
@@ -356,6 +379,11 @@ def fake_runtime(monkeypatch: pytest.MonkeyPatch) -> _FakeStore:
     monkeypatch.setattr(worker, "clear_trace", lambda: None)
     monkeypatch.setattr(worker, "trace_turn_outcome", lambda *_args: None)
     monkeypatch.setattr(worker, "run_turn", react.run_turn)
+    monkeypatch.setattr(worker.memory, "get_session_view", empty_session_view)
+    monkeypatch.setattr(
+        worker.memory, "persist_session_turn", persisted_session_turn
+    )
+    monkeypatch.setattr(worker.memory, "observe", persisted_observation)
 
     monkeypatch.setattr(react, "_setup_turn_runtime", setup_runtime)
     monkeypatch.setattr(react, "_skill_router_enabled", lambda: False)

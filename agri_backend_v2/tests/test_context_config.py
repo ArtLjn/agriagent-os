@@ -36,6 +36,7 @@ def test_context_config_defaults_are_stable(tmp_path, monkeypatch):
     assert settings.context.skill_router_backend == "llm"
     assert settings.context.skill_router_max_skills == 3
     assert settings.context.skill_router_timeout_seconds == 12.0
+    assert settings.trace.max_payload_chars == 32000
     assert settings.conversation_state is settings.context.conversation_state
     assert settings.context.feature_flags == {
         "candidate_tool_schema": False,

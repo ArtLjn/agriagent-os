@@ -76,6 +76,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
               placeholder: '请输入手机号',
               icon: LucideIcons.smartphone,
               controller: phoneController,
+              keyboardType: TextInputType.phone,
+              textInputAction: TextInputAction.next,
             ),
             const SizedBox(height: 20),
             AuthInputField(
@@ -84,11 +86,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
               icon: LucideIcons.lockKeyhole,
               controller: passwordController,
               obscureText: true,
-              trailing: Icon(
-                LucideIcons.eyeOff,
-                size: 20,
-                color: AppColors.subtle,
-              ),
+              showObscureToggle: true,
+              textInputAction: TextInputAction.next,
             ),
             const SizedBox(height: 20),
             AuthInputField(
@@ -96,19 +95,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
               placeholder: '请输入昵称',
               icon: LucideIcons.userRound,
               controller: nicknameController,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _submit(),
             ),
             const SizedBox(height: 24),
             if (errorMessage != null) ...[
-              Text(
-                errorMessage!,
-                textAlign: TextAlign.center,
-                style: AppTextStyles.body.copyWith(color: AppColors.red),
-              ),
+              AuthErrorBanner(message: errorMessage!),
               const SizedBox(height: 12),
             ],
             AuthPrimaryButton(
               label: isSubmitting ? '注册中' : '注册并进入',
               onTap: _submit,
+              isLoading: isSubmitting,
             ),
             const SizedBox(height: 18),
             AuthTextLink(

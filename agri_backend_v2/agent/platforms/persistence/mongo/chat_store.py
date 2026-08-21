@@ -150,6 +150,36 @@ def get_observation_collection() -> AsyncIOMotorCollection | None:
     return _observation_collection
 
 
+async def status() -> dict[str, Any]:
+    """返回 Mongo 持久化边界状态，区分 disabled、unavailable 和 ready。"""
+    if not settings.mongodb.enabled:
+        return {
+            "enabled": False,
+            "reachable": False,
+            "source_status": "unavailable",
+            "code": "mongo_not_configured",
+        }
+    collection = get_collection()
+    if collection is None or _client is None:
+        return {
+            "enabled": True,
+            "reachable": False,
+            "source_status": "unavailable",
+            "code": "mongo_config_missing",
+        }
+    try:
+        await _client.admin.command("ping")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("mongodb health check failed: %s", exc)
+        return {
+            "enabled": True,
+            "reachable": False,
+            "source_status": "unavailable",
+            "code": "mongo_unavailable",
+        }
+    return {"enabled": True, "reachable": True, "source_status": "mongo"}
+
+
 def _state_filter(
     conversation_id: str,
     *,
@@ -482,13 +512,20 @@ async def save_conversation_state(
         base_doc = {
             **tenant_filter,
             "sessionId": conversation_id,
-            "farmUid": farm_uid or "",
             "conversationRevision": 0,
             "summaryRevision": 0,
             "resetGeneration": 0,
             "summaryStatus": "ready",
             "createdAt": now,
         }
+        # Mongo 不允许同一个 upsert 路径同时出现在 `$set` 和
+        # `$setOnInsert`。`farmUid` 等可选状态字段必须只由一个 modifier
+        # 负责，否则首次 Turn 的消息虽已落库，Conversation state 会因
+        # Mongo code 40 失败，最终被错误展示为 finalization incomplete。
+        for field_name in set_doc:
+            base_doc.pop(field_name, None)
+        if advance_conversation_revision:
+            base_doc.pop("conversationRevision", None)
         update_doc: dict[str, Any] = {
             "$set": set_doc,
             "$setOnInsert": base_doc,

@@ -30,6 +30,10 @@ from agent.domains.harness.observability.trace import (
     init_trace,
     trace_queue_wait,
     trace_turn_outcome,
+    trace_memory_observe,
+    trace_memory_read,
+    trace_context_source_divergence,
+    trace_persistence_state,
 )
 from agent.domains.harness.observability.trace.context import trace_id_for_turn
 from agent.platforms.persistence.redis.turn_store import (
@@ -127,6 +131,11 @@ async def _persist_observation(turn: Turn, *, assistant_answer: str) -> dict:
             result.get("status"),
             result.get("code"),
         )
+    trace_memory_observe(
+        status=str(result.get("status") or "unknown"),
+        source_status=str(result.get("source_status") or "unavailable"),
+        idempotent=result.get("status") == "idempotent",
+    )
     return result
 
 
@@ -150,6 +159,11 @@ async def _persist_visible_assistant_message(
         idempotency_key=f"turn:{turn.turn_id}:assistant:{message_kind}",
     )
     if not message_id:
+        trace_persistence_state(
+            message_status="unavailable",
+            session_status="not_started",
+            observation_status="not_started",
+        )
         await update_turn(
             turn.turn_id,
             message_persistence_status="unavailable",
@@ -160,8 +174,15 @@ async def _persist_visible_assistant_message(
             turn.turn_id,
         )
         return False
-    await _persist_session_state(turn)
-    await _persist_observation(turn, assistant_answer=content)
+    session_result = await _persist_session_state(turn)
+    observation_result = await _persist_observation(
+        turn, assistant_answer=content
+    )
+    trace_persistence_state(
+        message_status="ready",
+        session_status=str(session_result.get("status") or "unavailable"),
+        observation_status=str(observation_result.get("status") or "unavailable"),
+    )
     return True
 
 
@@ -232,6 +253,51 @@ async def _recover_interrupted_turn(turn: Turn, state: dict[str, str]) -> None:
     await publish_event(
         turn.turn_id,
         {"type": "done", "data": {"status": "timeout", "turn_id": turn.turn_id}},
+    )
+    await _finish_assistant_persistence(
+        turn,
+        content=answer,
+        message_kind="error_answer",
+        trace_id=trace_id,
+    )
+
+
+async def _finalize_context_failure(
+    turn: Turn, *, code: str, message: str, trace_id: str
+) -> None:
+    """事实源不可用或漂移时结束 Turn，禁止带空历史进入 Tool Runtime。"""
+    stop_reason = (
+        StopReason.SOURCE_DIVERGENCE
+        if "divergence" in code
+        else StopReason.CONTEXT_UNAVAILABLE
+    )
+    error_info = turn.record_error(
+        code,
+        message,
+        phase=TurnPhase.TERMINAL,
+        stop_reason=stop_reason,
+        status="failed",
+    )
+    answer = "当前会话上下文暂不可可靠读取，本轮未执行业务操作，请稍后重试。"
+    await update_turn(
+        turn.turn_id,
+        status="failed",
+        phase=turn.phase.value,
+        stop_reason=turn.stop_reason.value,
+        error_code=error_info["code"],
+        error_message=error_info["message"],
+        error_details=error_info,
+        final_answer=answer,
+        finalization_pending=True,
+    )
+    await publish_event(turn.turn_id, {"type": "error", "data": error_info})
+    await publish_event(
+        turn.turn_id,
+        {"type": "final_answer", "data": {"text": answer}},
+    )
+    await publish_event(
+        turn.turn_id,
+        {"type": "done", "data": {"status": "failed", "turn_id": turn.turn_id}},
     )
     await _finish_assistant_persistence(
         turn,
@@ -385,6 +451,45 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
             farm_id=turn.farm_id,
             source_status="unavailable",
         )
+    trace_memory_read(
+        source_status=str(turn.memory_snapshot.get("source_status") or "empty"),
+        memory_revision=_state_int(
+            turn.memory_snapshot.get("conversation_revision")
+        ),
+        hit_count=len(turn.memory_snapshot.get("messages") or []),
+    )
+    divergence = memory.source_divergence(
+        turn.memory_snapshot,
+        redis_conversation_revision=_state_int(state.get("conversation_revision")),
+        redis_summary_revision=_state_int(state.get("summary_revision")),
+    )
+    if divergence:
+        divergence_code = str(
+            divergence.get("code") or "context_source_divergence"
+        )
+        trace_context_source_divergence(
+            sources=divergence.get("sources") or {},
+            code=divergence_code,
+        )
+        await _finalize_context_failure(
+            turn,
+            code=divergence_code,
+            message=(
+                "Mongo Conversation state 与 Redis Turn 版本不一致。"
+                if divergence_code == "conversation_revision_divergence"
+                else "Mongo Conversation state 暂不可用。"
+            ),
+            trace_id=trace_id,
+        )
+        return
+    if turn.context_source_status == "unavailable":
+        await _finalize_context_failure(
+            turn,
+            code="context_source_unavailable",
+            message="Mongo Conversation state 暂不可用。",
+            trace_id=trace_id,
+        )
+        return
     turn.conversation_revision = _state_int(
         turn.memory_snapshot.get("conversation_revision")
     )
