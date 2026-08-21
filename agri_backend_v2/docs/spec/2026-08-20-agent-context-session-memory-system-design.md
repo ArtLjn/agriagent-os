@@ -592,6 +592,19 @@ Mongo Conversation Snapshot
 
 目录对齐状态：`agent/core`、`agent/infra`、`agent/skills` 已删除；Context、Runtime、Memory、Control、Trace 位于 `agent/domains/harness`，平台适配位于 `agent/platforms`，具体 Tool 位于 `agent/tools`，启动和 Worker 位于 `agent/bootstrap`、`agent/application`。
 
+Memory 目录按职责拆分为：
+
+```text
+agent/domains/harness/memory/
+├── models.py       # Session View、租户范围和 Memory 边界契约
+├── short_term.py   # Mongo Session View、最近完整 Turn、state CAS/reset
+├── long_term.py    # observation/search 端口；当前不自动写入长期事实
+├── policy.py       # Short/Long Memory 的 Context 注入决策
+└── service.py      # Memory Service 稳定门面，只转发不承载存储实现
+```
+
+`service.py` 仍保留是因为它代表 Memory Service 的应用边界，不是旧存储兼容层；Runtime、Worker、API 通过该边界调用，具体实现分别归属上述四个职责模块。
+
 ## 14. TODO 清单（持续更新）
 
 > 这是一份面向评审和实施的直观清单，状态以同目录的

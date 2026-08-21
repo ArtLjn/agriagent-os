@@ -1,27 +1,18 @@
 # AGENTS.md — 项目地图
 
-> Agent 入口文件。控制在 80 行以内，详细内容放 rules/ 和 docs/。
+> Agent 入口文件。控制在 80 行以内，详细内容放 `.claude/rules/` 和模块文档。
 
 ## 项目简介
 farm-manager，FastAPI 后端 + React+TS 前端
 
 ## 快速导航
-| 你想做什么 | 去哪里看 |
-|-----------|---------|
-| 了解系统架构 | docs/architecture/overview.md |
-| 了解系统演进路线图 | docs/farm-manager-design-spec/06_项目管理/01_里程碑与路线图.md |
-| 了解 Agent 平台目标架构 | docs/architecture/overview.md#agent-平台边界 |
-| 了解 Agent 开发硬规范 | docs/agent/agent-development-standard.md |
-| 了解模块边界和依赖规则 | docs/architecture/boundaries.md |
-| 了解兼容入口保留理由 | docs/architecture/compatibility-entries.md |
-| 了解 Python 编码规范 | .claude/rules/python-style.md |
+| 后端说明 | agri_backend_v2/README.md |
+| Skill 规范 | agri_backend_v2/docs/spec/2026-08-07-skill-md-yaml-standard.md |
+| 上下文架构 | agri_backend_v2/docs/spec/2026-08-10-context-prompt-cache-architecture.md |
 | 了解前端编码规范 | .claude/rules/frontend-style.md |
-| 了解 Codex 编码行为规范 | docs/conventions/codex-coding-standard.md |
 | 了解安全规范 | .claude/rules/security.md |
 | 了解文档同步规则 | .claude/rules/docs-sync.md |
-| 了解 Skill 书写规范 | .claude/rules/skill-writing.md |
-| 了解当前迭代任务 | docs/plans/current-sprint.md |
-| 了解设计文档模板 | docs/design/TEMPLATE.md |
+| 了解当前交接状态 | .claude/LAST_HANDOFF.md |
 
 <!-- Guide+Sensor 配对说明：以下每条规则都应对应 scripts/ 中的检查脚本。
      运行 bash scripts/check-guide-sensor-pairing.sh 验证配对完整性。 -->
@@ -33,10 +24,16 @@ farm-manager，FastAPI 后端 + React+TS 前端
 5. 使用结构化日志，禁止 console.log / print 调试
 6. 错误信息必须含 code 字段和上下文
 7. 修改代码后必须运行复杂度预算检查；新增抽象、生成物入库、大文件和工作区污染由 check-complexity-budget.sh 拦截
+8. Python 业务函数必须有简短 docstring 或关键路径注释，说明业务目的、状态转换、外部调用边界或异常原因；纯数据映射和显而易见的转发函数不写复述性注释
+9. 禁止散落硬编码业务规则；状态值、权限、URL、超时、限额、模型参数和协议字段集中到配置、常量或枚举，并在使用处说明来源；普通局部变量和一次性字面量不强行抽常量
+10. 禁止冗余函数业务；不要为单次一行转发、改名包装或无边界的逻辑拆函数，新增函数必须有清晰职责、调用方和可测试价值；发现无调用方的 dead code 直接删除
 
 ## Codex 写代码前必须确认
 - 默认不要直接在 `main` 分支修改代码；除非用户明确要求热修或只做本地检查，开发任务应使用 `codex/*` 分支或独立 worktree，提交后通过 GitHub PR 审核合并
 - 关键业务、兼容、协议、并发、安全逻辑必须写“为什么”的注释；普通代码不写复述性注释
+- Python 函数注释优先解释“为什么”和业务约束，不要只翻译函数名；涉及多个状态或副作用时，必须标注关键业务分支
+- 业务规则不得通过散落字面量实现；先查找现有配置、枚举和领域常量，确无归属时再在边界清晰的模块级常量中声明
+- 重构前先确认函数是否真实复用；不要为了降低单函数行数制造一组没有独立业务含义的碎片函数
 - 默认不新增碎片文件；不要为了绕 1000 行硬预算拆出 20-50 行小文件，只有边界清晰、超过 1000 行硬阈值、3 处以上复用或隔离外部依赖时才拆
 - 新增文件或抽象时，最终说明必须交代调用方、边界和不能留在原文件的理由
 

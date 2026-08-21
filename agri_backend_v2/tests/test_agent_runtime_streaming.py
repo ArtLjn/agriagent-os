@@ -38,6 +38,49 @@ class _ReadSkill(Skill):
         return SkillResult(data={"skill": self.name})
 
 
+def test_build_identity_headers_declares_turn_identity(monkeypatch) -> None:
+    delegated = {}
+
+    def fake_create_delegation_token(identity, **kwargs):
+        delegated.update(identity=identity, **kwargs)
+        return "delegated-token"
+
+    monkeypatch.setattr(react, "create_delegation_token", fake_create_delegation_token)
+    turn = Turn(
+        user_input="身份头测试",
+        conversation_id="conversation-1",
+        turn_id="turn-1",
+        user_id="user-1",
+        farm_uid="farm-1",
+        farm_id=9,
+        role="manager",
+        token_id="source-token",
+        scope="farm:read",
+        agent_token="agent-token",
+    )
+
+    headers = react._build_identity_headers(turn)
+
+    assert headers == {
+        "Authorization": "Bearer agent-token",
+        "X-Delegation-Token": "delegated-token",
+        "X-Farm-Uid": "farm-1",
+        "X-User-Id": "user-1",
+        "X-Farm-Id": "9",
+    }
+    assert delegated == {
+        "identity": {
+            "user_id": "user-1",
+            "farm_uid": "farm-1",
+            "role": "manager",
+            "token_id": "source-token",
+            "scope": "farm:read",
+        },
+        "conversation_id": "conversation-1",
+        "turn_id": "turn-1",
+    }
+
+
 def test_skill_registry_indexes_and_rejects_duplicate_names() -> None:
     first = _ReadSkill("first")
     registry = SkillRegistry.from_skills([first])

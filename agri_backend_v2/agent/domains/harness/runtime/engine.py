@@ -39,6 +39,7 @@ import logging
 import time
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from dataclasses import dataclass, field
+from typing import NamedTuple
 
 from agent.auth import create_delegation_token
 from agent.config import settings
@@ -108,6 +109,16 @@ class _LlmResult:
     tool_calls: list[dict] = field(default_factory=list)
 
 
+class _TurnRuntime(NamedTuple):
+    """单个 Turn 的运行时依赖，按名称访问而不是依赖元组位置。"""
+
+    registry: SkillRegistry
+    tools_schema: list[dict]
+    skill_registry: SkillRegistry
+    tracker: verify.CallTracker
+    plan_box: dict
+
+
 # ── 主入口 ────────────────────────────────────────────────
 
 
@@ -125,36 +136,7 @@ async def run_turn(
     )
 
     try:
-        route_result: SkillRoute | None = None
-        if _skill_router_enabled():
-            router_registry = SkillRegistry.from_skills(skill_loader.load_all())
-            route_result = await _build_skill_router().route(
-                turn.user_input, router_registry
-            )
-            trace_skill_router(
-                registry_count=len(router_registry.all()),
-                exposed_tool_count=len(router_registry.exposed_tools()),
-                candidate_skills=[
-                    item["name"] for item in router_registry.router_catalog()
-                ],
-                selected_skills=list(route_result.selected_skills),
-                selection_status=route_result.status,
-                decision_source=route_result.decision_source,
-                duration_ms=route_result.duration_ms,
-                router_mode="llm_skill_router",
-                router_status=route_result.status,
-                router_error=route_result.error,
-                metadata_version=route_result.metadata_version,
-            )
-        if route_result is None:
-            _registry, tools_schema, skill_registry, tracker, plan_box = (
-                _setup_turn_runtime(turn)
-            )
-        else:
-            _registry, tools_schema, skill_registry, tracker, plan_box = (
-                _setup_turn_runtime(turn, route_result=route_result)
-            )
-        turn.set_phase(TurnPhase.REASONING)
+        runtime = await _prepare_turn_runtime(turn)
 
         async for ev in _try_compress_context(turn):
             yield ev
@@ -166,67 +148,12 @@ async def run_turn(
         return
 
     try:
-        identity_headers = {
-            "Authorization": f"Bearer {turn.agent_token}",
-            "X-Delegation-Token": create_delegation_token(
-                {
-                    "user_id": turn.user_id,
-                    "farm_uid": turn.farm_uid,
-                    "role": turn.role,
-                    "token_id": turn.token_id,
-                    "scope": turn.scope,
-                },
-                conversation_id=turn.conversation_id,
-                turn_id=turn.turn_id,
-            ),
-            "X-Farm-Uid": turn.farm_uid,
-            "X-User-Id": turn.user_id,
-            "X-Farm-Id": str(turn.farm_id),
-        }
-        async with BusinessClient(headers=identity_headers) as business:
-            skill_ctx = SkillContext(
-                business_client=business,
-                turn=turn,
-                user_id=turn.user_id,
-                farm_id=turn.farm_id,
-                farm_uid=turn.farm_uid,
-                agent_token=turn.agent_token,
-            )
-
-            while turn.status == "running" and (
-                turn.step_count < turn.max_steps or turn.finalization_pending
-            ):
-                turn.set_phase(TurnPhase.REASONING)
-                turn.step_count += 1
-                increment_step()
-
-                async for ev in _run_single_reasoning_step(
-                    turn=turn,
-                    tools_schema=tools_schema,
-                    tracker=tracker,
-                    plan_box=plan_box,
-                    skill_index=skill_registry,
-                    skill_ctx=skill_ctx,
-                    approval_waiter=approval_waiter,
-                ):
-                    yield ev
-
-                # 写入成功后清空 tools，下一轮只允许生成最终答复
-                if turn.finalization_pending:
-                    tools_schema = []
-
-                if turn.status != "running":
-                    break
-
-            if turn.status == "running":
-                turn.set_phase(TurnPhase.FINALIZING)
-                finalizer = (
-                    _finalize_requested_error(turn)
-                    if turn.finalization_request is not None
-                    else _finalize_turn(turn)
-                )
-                async for ev in finalizer:
-                    yield ev
+        async for ev in _execute_turn_pipeline(
+            turn=turn,
+            runtime=runtime,
+            approval_waiter=approval_waiter,
+        ):
+            yield ev
 
     except Exception as exc:
         logger.exception("run_turn pipeline crashed")
@@ -234,6 +161,139 @@ async def run_turn(
         yield ev
 
     yield sse.done(turn.status, turn.turn_id)
+
+
+async def _prepare_turn_runtime(
+    turn: Turn,
+) -> _TurnRuntime:
+    """准备路由、Skill Registry、上下文和 ReAct 所需的运行时状态。"""
+    route_result = await _route_turn_skills(turn)
+    if route_result is None:
+        runtime = _setup_turn_runtime(turn)
+    else:
+        runtime = _setup_turn_runtime(turn, route_result=route_result)
+    turn.set_phase(TurnPhase.REASONING)
+    return _TurnRuntime(*runtime)
+
+
+async def _route_turn_skills(turn: Turn) -> SkillRoute | None:
+    """按配置选择本轮 Skill；主 Agent 模式跳过额外的 Router LLM。"""
+    if not _skill_router_enabled():
+        return None
+
+    router_registry = SkillRegistry.from_skills(skill_loader.load_all())
+    route_result = await _build_skill_router().route(turn.user_input, router_registry)
+    trace_skill_router(
+        registry_count=len(router_registry.all()),
+        exposed_tool_count=len(router_registry.exposed_tools()),
+        candidate_skills=[item["name"] for item in router_registry.router_catalog()],
+        selected_skills=list(route_result.selected_skills),
+        selection_status=route_result.status,
+        decision_source=route_result.decision_source,
+        duration_ms=route_result.duration_ms,
+        router_mode="llm_skill_router",
+        router_status=route_result.status,
+        router_error=route_result.error,
+        metadata_version=route_result.metadata_version,
+    )
+    return route_result
+
+
+def _build_identity_headers(turn: Turn) -> dict[str, str]:
+    """构造 Business MCP 请求所需的用户和 Agent 委托身份头。"""
+    delegation_identity = {
+        "user_id": turn.user_id,
+        "farm_uid": turn.farm_uid,
+        "role": turn.role,
+        "token_id": turn.token_id,
+        "scope": turn.scope,
+    }
+    return {
+        "Authorization": f"Bearer {turn.agent_token}",
+        "X-Delegation-Token": create_delegation_token(
+            delegation_identity,
+            conversation_id=turn.conversation_id,
+            turn_id=turn.turn_id,
+        ),
+        "X-Farm-Uid": turn.farm_uid,
+        "X-User-Id": turn.user_id,
+        "X-Farm-Id": str(turn.farm_id),
+    }
+
+
+async def _execute_turn_pipeline(
+    *,
+    turn: Turn,
+    runtime: _TurnRuntime,
+    approval_waiter: ApprovalWaiter,
+) -> AsyncGenerator[dict, None]:
+    """在已准备好的运行时中建立 Business MCP 会话并执行 ReAct 管道。"""
+    async with BusinessClient(headers=_build_identity_headers(turn)) as business:
+        skill_ctx = SkillContext(
+            business_client=business,
+            turn=turn,
+            user_id=turn.user_id,
+            farm_id=turn.farm_id,
+            farm_uid=turn.farm_uid,
+            agent_token=turn.agent_token,
+        )
+        async for ev in _run_turn_loop(
+            turn=turn,
+            tools_schema=runtime.tools_schema,
+            tracker=runtime.tracker,
+            plan_box=runtime.plan_box,
+            skill_registry=runtime.skill_registry,
+            skill_ctx=skill_ctx,
+            approval_waiter=approval_waiter,
+        ):
+            yield ev
+
+
+async def _run_turn_loop(
+    *,
+    turn: Turn,
+    tools_schema: list[dict],
+    tracker: verify.CallTracker,
+    plan_box: dict,
+    skill_registry: SkillRegistry,
+    skill_ctx: SkillContext,
+    approval_waiter: ApprovalWaiter,
+) -> AsyncGenerator[dict, None]:
+    """执行 ReAct 单步循环，并在循环结束时统一选择终态收尾器。"""
+    while turn.status == "running" and (
+        turn.step_count < turn.max_steps or turn.finalization_pending
+    ):
+        turn.set_phase(TurnPhase.REASONING)
+        turn.step_count += 1
+        increment_step()
+
+        async for ev in _run_single_reasoning_step(
+            turn=turn,
+            tools_schema=tools_schema,
+            tracker=tracker,
+            plan_box=plan_box,
+            skill_index=skill_registry,
+            skill_ctx=skill_ctx,
+            approval_waiter=approval_waiter,
+        ):
+            yield ev
+
+        # 写入成功后清空 tools，下一轮只允许生成最终答复。
+        if turn.finalization_pending:
+            tools_schema = []
+
+        if turn.status != "running":
+            break
+
+    if turn.status == "running":
+        turn.set_phase(TurnPhase.FINALIZING)
+        finalizer = (
+            _finalize_requested_error(turn)
+            if turn.finalization_request is not None
+            else _finalize_turn(turn)
+        )
+        async for ev in finalizer:
+            yield ev
 
 
 def _pipeline_error_event(turn: Turn, exc: Exception) -> dict:
@@ -262,7 +322,7 @@ def _setup_turn_runtime(
     turn: Turn,
     *,
     route_result: SkillRoute | None = None,
-) -> tuple[SkillRegistry, list[dict], SkillRegistry, verify.CallTracker, dict]:
+) -> _TurnRuntime:
     """加载 skills、构建 tools schema、初始化 tracker。"""
     router_started = time.perf_counter()
     # Worker 可在进入 Runtime 前注入 Mongo-backed Session View；直接调用
@@ -368,7 +428,13 @@ def _setup_turn_runtime(
             budget=turn.context_bundle.budget.to_dict(),
             code="context_budget_exceeded",
         )
-    return registry, tools_schema, registry, verify.CallTracker(), {"plan": None}
+    return _TurnRuntime(
+        registry=registry,
+        tools_schema=tools_schema,
+        skill_registry=registry,
+        tracker=verify.CallTracker(),
+        plan_box={"plan": None},
+    )
 
 
 def _skill_router_enabled() -> bool:

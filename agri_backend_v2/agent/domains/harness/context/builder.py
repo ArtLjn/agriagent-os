@@ -36,6 +36,7 @@ from agent.domains.harness.context.models import (
 )
 from agent.prompts import render_system_prompt
 from agent.domains.harness.context import tokenizer
+from agent.domains.harness.memory.policy import resolve_memory_policy
 
 
 def _format_memory(long_term: dict[str, Any]) -> str:
@@ -121,6 +122,10 @@ def build_context_bundle(
     tools_schema = tools_schema or []
     selected_skills = selected_skills or []
     context_dependencies = context_dependencies or []
+    memory_policy = resolve_memory_policy(
+        include_long_term=include_long_term,
+        context_dependencies=context_dependencies,
+    )
     user_id = user_id or str(memory_snapshot.get("user_id", ""))
     farm_uid = farm_uid or str(memory_snapshot.get("farm_uid", ""))
     farm_id = farm_id if farm_id is not None else memory_snapshot.get("farm_id")
@@ -224,7 +229,9 @@ def build_context_bundle(
         ),
         block(
             "memory_hits",
-            memory_snapshot.get("memory_hits") if include_long_term else None,
+            memory_snapshot.get("memory_hits")
+            if memory_policy.include_long_term
+            else None,
             ContextSource.MEMORY_RECORDS,
             priority=20,
             version=memory_snapshot.get("memory_revision", 0),
