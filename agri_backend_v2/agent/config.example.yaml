@@ -65,7 +65,13 @@ context:
   response_reserve_tokens: 4096
   safety_margin_tokens: 1024
   max_tool_result_summary_chars: 1200
+  # 实际路由开关：修改后重启 Agent。
+  skill_router_mode: "main_agent" # main_agent | llm_router
+  # main_agent 使用全量 Tool；llm_router 使用 Router 选中的候选 Tool。
   tool_schema_mode: "all"
+  skill_router_backend: "llm"
+  skill_router_max_skills: 3
+  skill_router_timeout_seconds: 12
   feature_flags:
     candidate_tool_schema: false
     long_term_memory_observation: false

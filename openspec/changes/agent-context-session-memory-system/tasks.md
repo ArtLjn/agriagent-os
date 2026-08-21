@@ -29,7 +29,7 @@
 ## 4. Runtime、Tool Schema 与持久化边界
 
 - [x] 4.1 在 `react.py` 中通过 application/Memory adapter 获取 snapshot，移除 Runtime 对具体 JSON/Mongo 存储的直接调用
-- [ ] 4.3 为 Skill metadata 增加 Context dependency 和 candidate tool schema 选择入口，保留全量暴露兼容开关
+- [x] 4.3 增加位于 ContextBuilder 之前的可插拔 Skill Router：默认提供 LLM-based Backend，输入轻量 Skill Metadata，输出候选 Skill/Capability；由 SkillRegistry 展开 Tool Schema，ContextBuilder 按 Skill Context dependency 注入上下文；支持 `llm_router` 与 `main_agent` 双模式，并保留全量暴露兼容开关
 - [x] 4.4 将已完成 Turn 的用户消息、assistant 最终消息、observation 和 Memory observation 以幂等方式提交
 - [x] 4.5 明确错误、超时、取消、审批过期和 commit 后收尾失败时的 Session Memory 写入边界
 
@@ -52,7 +52,7 @@
 - [ ] 7.1 完成 Mongo Conversation snapshot 的历史数据导入校验和 source divergence 指标
 - [ ] 7.2 完成 Conversation state、摘要 CAS 的真实灰度验收，验证重启、多 Worker、摘要冲突和历史一致性
 - [ ] 7.3 完成 Mongo-only Context 读取验收；持久化不可用时返回 unavailable，不提供本地文件 fallback
-- [ ] 7.4 灰度启用 candidate tool schema，基于回放集比较工具召回、误调用和 token 成本
+- [ ] 7.4 灰度启用 LLM Skill Router 的 candidate 模式，基于回放集比较 Skill 召回、工具误调用和 token 成本
 - [ ] 7.5 完成 Mongo 历史数据导入校验与归档策略，确认可回滚且不删除用户可见历史
 
 ## 8. 验收与门禁

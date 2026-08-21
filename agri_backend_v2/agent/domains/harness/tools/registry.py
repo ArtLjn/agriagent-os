@@ -270,6 +270,54 @@ class SkillRegistry:
         """只返回允许模型直接调用的工具 Schema。"""
         return [skill.to_openai_tool() for skill in self.exposed()]
 
+    def router_catalog(self) -> list[dict[str, Any]]:
+        """返回去重后的轻量 Skill Metadata，不包含 Tool 参数 Schema。"""
+        catalog: dict[str, dict[str, Any]] = {}
+        for skill in self.exposed():
+            name = skill.router_name
+            if not name:
+                continue
+            metadata_skill = getattr(skill, "_source", skill)
+            item = catalog.setdefault(
+                name,
+                {
+                    "name": name,
+                    "description": metadata_skill.description,
+                    "capabilities": list(metadata_skill.capabilities),
+                    "context_dependencies": list(
+                        metadata_skill.context_dependencies
+                    ),
+                    "risk_levels": [],
+                },
+            )
+            risk_levels = item["risk_levels"]
+            if skill.risk_level not in risk_levels:
+                risk_levels.append(skill.risk_level)
+        return [catalog[name] for name in sorted(catalog)]
+
+    def tools_for_router_skills(self, skill_names: tuple[str, ...]) -> list[dict[str, Any]]:
+        """将 Router 选中的 Skill 展开为模型可见的 Tool Schema。"""
+        selected = set(skill_names)
+        return [
+            skill.to_openai_tool()
+            for skill in self.exposed()
+            if skill.router_name in selected
+        ]
+
+    def context_dependencies_for_router_skills(
+        self, skill_names: tuple[str, ...]
+    ) -> tuple[str, ...]:
+        """汇总选中 Skill 的 Context dependency，保持稳定去重顺序。"""
+        selected = set(skill_names)
+        dependencies: list[str] = []
+        for skill in self.exposed():
+            if skill.router_name not in selected:
+                continue
+            for dependency in skill.context_dependencies:
+                if dependency not in dependencies:
+                    dependencies.append(dependency)
+        return tuple(dependencies)
+
     def snapshot(self) -> dict[str, tuple[Any, ...]]:
         """返回排序后的能力快照，用于迁移前后集合比较。"""
         exposed = self.exposed()

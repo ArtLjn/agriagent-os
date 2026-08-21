@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 from agent import config as config_module
@@ -31,6 +32,10 @@ def test_context_config_defaults_are_stable(tmp_path, monkeypatch):
     assert settings.context.summary_hard_ratio == 0.80
     assert settings.context.max_tool_result_summary_chars == 1200
     assert settings.context.tool_schema_mode == "all"
+    assert settings.context.skill_router_mode == "main_agent"
+    assert settings.context.skill_router_backend == "llm"
+    assert settings.context.skill_router_max_skills == 3
+    assert settings.context.skill_router_timeout_seconds == 12.0
     assert settings.conversation_state is settings.context.conversation_state
     assert settings.context.feature_flags == {
         "candidate_tool_schema": False,
@@ -59,6 +64,10 @@ def test_context_config_yaml_and_environment_overrides(tmp_path, monkeypatch):
                 "safety_margin_tokens": 512,
                 "max_tool_result_summary_chars": 800,
                 "tool_schema_mode": "candidate",
+                "skill_router_mode": "llm_router",
+                "skill_router_backend": "llm",
+                "skill_router_max_skills": 2,
+                "skill_router_timeout_seconds": 8,
                 "feature_flags": {
                     "candidate_tool_schema": True,
                 },
@@ -80,6 +89,10 @@ def test_context_config_yaml_and_environment_overrides(tmp_path, monkeypatch):
     assert settings.context.safety_margin_tokens == 512
     assert settings.context.max_tool_result_summary_chars == 800
     assert settings.context.tool_schema_mode == "candidate"
+    assert settings.context.skill_router_mode == "llm_router"
+    assert settings.context.skill_router_backend == "llm"
+    assert settings.context.skill_router_max_skills == 2
+    assert settings.context.skill_router_timeout_seconds == 8.0
     assert settings.context.feature_flags["candidate_tool_schema"] is True
 
     monkeypatch.setenv(
@@ -95,6 +108,10 @@ def test_context_config_yaml_and_environment_overrides(tmp_path, monkeypatch):
     monkeypatch.setenv("CONTEXT__SUMMARY_HARD_RATIO", "0.85")
     monkeypatch.setenv("CONTEXT__MAX_TOOL_RESULT_SUMMARY_CHARS", "600")
     monkeypatch.setenv("CONTEXT__TOOL_SCHEMA_MODE", "all")
+    monkeypatch.setenv("CONTEXT__SKILL_ROUTER_MODE", "main_agent")
+    monkeypatch.setenv("CONTEXT__SKILL_ROUTER_BACKEND", "llm")
+    monkeypatch.setenv("CONTEXT__SKILL_ROUTER_MAX_SKILLS", "4")
+    monkeypatch.setenv("CONTEXT__SKILL_ROUTER_TIMEOUT_SECONDS", "6")
     monkeypatch.setenv("FEATURE_FLAGS__CANDIDATE_TOOL_SCHEMA", "true")
 
     settings = config_module._build_settings()
@@ -110,4 +127,16 @@ def test_context_config_yaml_and_environment_overrides(tmp_path, monkeypatch):
     assert settings.context.summary_hard_ratio == 0.85
     assert settings.context.max_tool_result_summary_chars == 600
     assert settings.context.tool_schema_mode == "all"
+    assert settings.context.skill_router_mode == "main_agent"
+    assert settings.context.skill_router_max_skills == 4
+    assert settings.context.skill_router_timeout_seconds == 6.0
     assert settings.context.feature_flags["candidate_tool_schema"] is True
+
+
+def test_context_config_rejects_unknown_skill_router_mode(tmp_path, monkeypatch):
+    with pytest.raises(ValueError, match="invalid_skill_router_mode"):
+        _build_from(
+            tmp_path,
+            monkeypatch,
+            {"context": {"skill_router_mode": "discovery"}},
+        )

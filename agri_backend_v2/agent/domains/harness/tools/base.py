@@ -57,6 +57,33 @@ class Skill:
         return self._meta.get("description", "")
 
     @property
+    def router_name(self) -> str:
+        """返回 Router 使用的 Skill 名称，不暴露操作级 Tool 名称。"""
+        return str(getattr(self, "_router_name", "") or self._meta.get("name", ""))
+
+    @property
+    def capabilities(self) -> tuple[str, ...]:
+        """返回给 Skill Router 的轻量能力标签。"""
+        raw = self._meta.get("capabilities") or self._meta.get("triggers") or []
+        if not isinstance(raw, list):
+            return ()
+        return tuple(str(item) for item in raw if isinstance(item, str) and item)
+
+    @property
+    def context_dependencies(self) -> tuple[str, ...]:
+        """返回 ContextBuilder 可消费的上下文依赖键。"""
+        context = self._meta.get("context") or {}
+        if isinstance(context, dict):
+            raw = context.get("dependencies") or []
+        else:
+            raw = self._meta.get("context_dependencies") or []
+        if not raw:
+            raw = self._meta.get("context_dependencies") or []
+        if not isinstance(raw, list):
+            return ()
+        return tuple(str(item) for item in raw if isinstance(item, str) and item)
+
+    @property
     def risk_level(self) -> str:
         return self._meta.get("risk_level", "read")
 
@@ -297,6 +324,7 @@ class OperationSkill(McpSkill):
 
     def __init__(self, source: Skill, operation: str) -> None:
         self._source = source
+        self._router_name = source.router_name
         self.operation = operation
         source_config = source._meta.get("operations", {}).get(operation, {})
         self._meta = deepcopy(source._meta)

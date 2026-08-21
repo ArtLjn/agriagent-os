@@ -15,6 +15,7 @@ import yaml
 
 # agent/config.yaml 的位置（与 agent/ 包同级）。
 _CONFIG_FILE = Path(__file__).resolve().parent / "config.yaml"
+_SKILL_ROUTER_MODES = frozenset({"main_agent", "llm_router"})
 
 
 @dataclass
@@ -115,6 +116,10 @@ class ContextCfg:
     safety_margin_tokens: int = 1024
     max_tool_result_summary_chars: int = 1200
     tool_schema_mode: str = "all"
+    skill_router_mode: str = "main_agent"
+    skill_router_backend: str = "llm"
+    skill_router_max_skills: int = 3
+    skill_router_timeout_seconds: float = 12.0
     feature_flags: dict[str, bool] = field(default_factory=_default_feature_flags)
 
     @property
@@ -333,6 +338,24 @@ def _build_settings() -> Settings:
                 context_raw.get("max_tool_result_summary_chars", 1200)
             ),
             tool_schema_mode=str(context_raw.get("tool_schema_mode", "all")),
+            skill_router_mode=str(
+                context_raw.get(
+                    "skill_router_mode",
+                    "llm_router"
+                    if context_raw.get("tool_schema_mode") == "candidate"
+                    or feature_flags.get("candidate_tool_schema", False)
+                    else "main_agent",
+                )
+            ),
+            skill_router_backend=str(
+                context_raw.get("skill_router_backend", "llm")
+            ),
+            skill_router_max_skills=max(
+                1, int(context_raw.get("skill_router_max_skills", 3))
+            ),
+            skill_router_timeout_seconds=max(
+                0.1, float(context_raw.get("skill_router_timeout_seconds", 12.0))
+            ),
             feature_flags=feature_flags,
         ),
         environment=str(raw.get("environment", "development")),
@@ -430,6 +453,12 @@ def _build_settings() -> Settings:
             "CONTEXT__MAX_TOOL_RESULT_SUMMARY_CHARS"
         ),
         "tool_schema_mode": os.getenv("CONTEXT__TOOL_SCHEMA_MODE"),
+        "skill_router_mode": os.getenv("CONTEXT__SKILL_ROUTER_MODE"),
+        "skill_router_backend": os.getenv("CONTEXT__SKILL_ROUTER_BACKEND"),
+        "skill_router_max_skills": os.getenv("CONTEXT__SKILL_ROUTER_MAX_SKILLS"),
+        "skill_router_timeout_seconds": os.getenv(
+            "CONTEXT__SKILL_ROUTER_TIMEOUT_SECONDS"
+        ),
     }
     if context_env["conversation_state_collection"]:
         settings.context.conversation_state.collection = context_env[
@@ -467,6 +496,18 @@ def _build_settings() -> Settings:
         )
     if context_env["tool_schema_mode"]:
         settings.context.tool_schema_mode = context_env["tool_schema_mode"]
+    if context_env["skill_router_mode"]:
+        settings.context.skill_router_mode = context_env["skill_router_mode"]
+    if context_env["skill_router_backend"]:
+        settings.context.skill_router_backend = context_env["skill_router_backend"]
+    if context_env["skill_router_max_skills"]:
+        settings.context.skill_router_max_skills = max(
+            1, int(context_env["skill_router_max_skills"])
+        )
+    if context_env["skill_router_timeout_seconds"]:
+        settings.context.skill_router_timeout_seconds = max(
+            0.1, float(context_env["skill_router_timeout_seconds"])
+        )
 
     feature_flag_prefixes = (
         "FEATURE_FLAGS__",
@@ -479,6 +520,12 @@ def _build_settings() -> Settings:
             if env := os.getenv(f"{prefix}{name.upper()}"):
                 settings.context.feature_flags[name] = _env_bool(env)
                 break
+    if settings.context.skill_router_mode not in _SKILL_ROUTER_MODES:
+        raise ValueError(
+            "invalid_skill_router_mode: "
+            f"{settings.context.skill_router_mode}; "
+            "expected main_agent or llm_router"
+        )
     return settings
 
 

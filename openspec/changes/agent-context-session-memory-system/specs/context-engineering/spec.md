@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: ContextBundle 构建
-系统 SHALL 通过 Context 工程模块构建 Agent 输入上下文。上下文 SHALL 表示为结构化 `ContextBundle`，包含 `system_contract`、`tool_schema`、`task_input`、`hot_context`、`pending_action`、`session_summary`、`recent_turns`、`memory_hits` 和动态观察等 ContextBlock；每个 Block 记录来源、用途、优先级、required、可压缩性、token 估算、版本和过期策略。
+系统 SHALL 通过 Context 工程模块构建 Agent 输入上下文。ContextBuilder SHALL 消费 Skill Router 和 SkillRegistry 的结果，不负责替代 Skill Router 做能力理解。上下文 SHALL 表示为结构化 `ContextBundle`，包含 `system_contract`、`tool_schema`、`task_input`、`hot_context`、`pending_action`、`session_summary`、`recent_turns`、`memory_hits` 和动态观察等 ContextBlock；每个 Block 记录来源、用途、优先级、required、可压缩性、token 估算、版本和过期策略。
 
 #### Scenario: 构建聊天上下文
 - **WHEN** Agent 处理聊天请求
@@ -23,7 +23,7 @@ Context 工程 SHALL 在注入 Prompt 前执行 token 预算分配。系统 MUST
 - **THEN** 系统 SHALL 使用配置的保守估算器，并在 Context trace 中标记 `estimation_mode=approximate`
 
 ### Requirement: 上下文选择器
-系统 SHALL 为农场状态、种植周期、种植单元、作业单、工人、人工未结摘要、天气、账务、会话历史、用户设置、短时记忆、长期记忆和检索结果提供独立 selector。Selector SHALL 可独立测试，并可由 Skill metadata 的 context dependencies 触发；selector 输出必须形成有来源和预算属性的 ContextBlock。
+系统 SHALL 为农场状态、种植周期、种植单元、作业单、工人、人工未结摘要、天气、账务、会话历史、用户设置、短时记忆、长期记忆和检索结果提供独立 selector。Selector SHALL 可独立测试，并可由 Skill Router 选中的 Skill metadata 的 Context dependencies 触发；selector 输出必须形成有来源和预算属性的 ContextBlock。
 
 #### Scenario: 新增账务上下文
 - **WHEN** 开发者调整账务摘要注入逻辑
@@ -46,4 +46,4 @@ Context Builder SHALL 记录每次请求选中的 block、被压缩的 block、�
 
 #### Scenario: 查看 Skill 触发的上下文
 - **WHEN** 开发者查看一次 `update_crop_cycle` 请求 trace
-- **THEN** trace shows which context blocks were selected because of `update_crop_cycle` context dependencies
+- **THEN** trace SHALL 记录 Router 选中了哪些 Skill，以及哪些 Context Block 是由 `update_crop_cycle` 的 Context dependency 触发的

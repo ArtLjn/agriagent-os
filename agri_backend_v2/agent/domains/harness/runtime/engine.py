@@ -47,6 +47,7 @@ from agent.domains.harness.context import summarizer, tokenizer
 from agent.domains.harness.control import approval as hitl
 from agent.domains.harness.memory import service as memory
 from agent.domains.harness.runtime import planner, verify
+from agent.domains.harness.router import SkillRoute, SkillRouter
 from agent.domains.harness.runtime.turn import StopReason, Turn, TurnPhase
 from agent.platforms.persistence.redis import sse
 from agent.domains.harness.runtime.error_policy import LlmStreamError, classify_exception
@@ -122,9 +123,35 @@ async def run_turn(
     )
 
     try:
-        _registry, tools_schema, skill_registry, tracker, plan_box = (
-            _setup_turn_runtime(turn)
-        )
+        route_result: SkillRoute | None = None
+        if _skill_router_enabled():
+            router_registry = SkillRegistry.from_skills(skill_loader.load_all())
+            route_result = await _build_skill_router().route(
+                turn.user_input, router_registry
+            )
+            trace_skill_router(
+                registry_count=len(router_registry.all()),
+                exposed_tool_count=len(router_registry.exposed_tools()),
+                candidate_skills=[
+                    item["name"] for item in router_registry.router_catalog()
+                ],
+                selected_skills=list(route_result.selected_skills),
+                selection_status=route_result.status,
+                decision_source=route_result.decision_source,
+                duration_ms=route_result.duration_ms,
+                router_mode="llm_skill_router",
+                router_status=route_result.status,
+                router_error=route_result.error,
+                metadata_version=route_result.metadata_version,
+            )
+        if route_result is None:
+            _registry, tools_schema, skill_registry, tracker, plan_box = (
+                _setup_turn_runtime(turn)
+            )
+        else:
+            _registry, tools_schema, skill_registry, tracker, plan_box = (
+                _setup_turn_runtime(turn, route_result=route_result)
+            )
         turn.set_phase(TurnPhase.REASONING)
 
         async for ev in _try_compress_context(turn):
@@ -231,6 +258,8 @@ def _pipeline_error_event(turn: Turn, exc: Exception) -> dict:
 
 def _setup_turn_runtime(
     turn: Turn,
+    *,
+    route_result: SkillRoute | None = None,
 ) -> tuple[SkillRegistry, list[dict], SkillRegistry, verify.CallTracker, dict]:
     """加载 skills、构建 tools schema、初始化 tracker。"""
     router_started = time.perf_counter()
@@ -245,7 +274,29 @@ def _setup_turn_runtime(
         )
     # 兼容旧调用方对 load_all 的注入，再在 Runtime 边界统一构建 Registry。
     registry = SkillRegistry.from_skills(skill_loader.load_all())
-    tools_schema = registry.exposed_tools()
+    if route_result is None:
+        trace_skill_router(
+            registry_count=len(registry.all()),
+            exposed_tool_count=len(registry.exposed_tools()),
+            candidate_skills=[item["name"] for item in registry.router_catalog()],
+            selection_status="disabled",
+            decision_source="main_agent",
+            router_mode="main_agent",
+            router_status="disabled",
+        )
+    tools_schema = (
+        registry.tools_for_router_skills(route_result.selected_skills)
+        if route_result is not None and route_result.status == "selected"
+        else registry.exposed_tools()
+    )
+    selected_skills = (
+        list(route_result.selected_skills)
+        if route_result is not None and route_result.status == "selected"
+        else []
+    )
+    context_dependencies = registry.context_dependencies_for_router_skills(
+        tuple(selected_skills)
+    )
     # 注入 make_plan 工具，让 LLM 可以一次性规划多步任务
     tools_schema.append(planner.MAKE_PLAN_TOOL_SCHEMA)
     turn.business_tools = tools_schema
@@ -264,6 +315,11 @@ def _setup_turn_runtime(
         exposed_tool_count=len(tools_schema),
         candidate_tools=candidate_tools,
         duration_ms=int((time.perf_counter() - router_started) * 1000),
+        router_mode=(
+            "llm_skill_router"
+            if route_result is not None
+            else "all_tools"
+        ),
     )
     context_started = time.perf_counter()
     turn.context_bundle = context.build_context_bundle(
@@ -274,6 +330,13 @@ def _setup_turn_runtime(
         farm_uid=turn.farm_uid,
         farm_id=turn.farm_id,
         tools_schema=tools_schema,
+        selected_skills=selected_skills,
+        context_dependencies=list(context_dependencies),
+        tool_schema_mode=(
+            "candidate"
+            if route_result is not None and route_result.status == "selected"
+            else "all"
+        ),
     )
     turn.messages = context.bundle_to_messages(turn.context_bundle)
     turn.conversation_revision = turn.context_bundle.conversation_revision
@@ -303,8 +366,27 @@ def _setup_turn_runtime(
         summary_revision=turn.context_bundle.summary_revision,
         source_status=str(turn.context_bundle.source_status),
         tool_schema_mode=turn.context_bundle.tool_schema_mode,
+        selected_skills=turn.context_bundle.selected_skills,
+        context_dependencies=turn.context_bundle.context_dependencies,
     )
     return registry, tools_schema, registry, verify.CallTracker(), {"plan": None}
+
+
+def _skill_router_enabled() -> bool:
+    """只有显式 llm_router 模式才调用额外的 Router LLM。"""
+    return settings.context.skill_router_mode == "llm_router"
+
+
+def _build_skill_router() -> SkillRouter:
+    """通过配置装配 Router；后端替换不影响 Runtime 后续边界。"""
+    if settings.context.skill_router_backend != "llm":
+        raise ValueError(
+            f"unsupported_skill_router_backend:{settings.context.skill_router_backend}"
+        )
+    return SkillRouter(
+        max_skills=settings.context.skill_router_max_skills,
+        timeout_seconds=settings.context.skill_router_timeout_seconds,
+    )
 
 
 async def _try_compress_context(turn: Turn) -> AsyncGenerator[dict, None]:

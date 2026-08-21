@@ -11,6 +11,7 @@ import pytest
 
 from agent.config import settings
 from agent.domains.harness.runtime import engine as react
+from agent.domains.harness.router import SkillRoute
 from agent.domains.harness.runtime.turn import StopReason, Turn, TurnPhase
 from agent.platforms.persistence.redis import sse, turn_store
 from agent.domains.harness.observability import trace as trace_infra
@@ -127,6 +128,66 @@ def test_runtime_keeps_registry_as_the_skill_lookup(monkeypatch) -> None:
     assert lookup is registry
     assert "runtime-lookup" in registry
     assert registry.get("runtime-lookup") is skill
+
+
+def test_setup_runtime_expands_only_router_selected_skills(monkeypatch) -> None:
+    selected = _ReadSkill("selected-skill")
+    excluded = _ReadSkill("excluded-skill")
+    monkeypatch.setattr(react.skill_loader, "load_all", lambda: [selected, excluded])
+    monkeypatch.setattr(
+        react.memory,
+        "empty_session_view",
+        lambda conversation_id, **_kwargs: {
+            "conversation_id": conversation_id,
+            "source_status": "empty",
+        },
+    )
+
+    turn = Turn(user_input="只需要一个能力")
+    route = SkillRoute(selected_skills=("selected-skill",), status="selected")
+    registry, tools, _lookup, _tracker, _plan_box = react._setup_turn_runtime(
+        turn, route_result=route
+    )
+
+    names = [tool["function"]["name"] for tool in tools]
+    assert registry.get("selected-skill") is selected
+    assert "selected-skill" in names
+    assert "excluded-skill" not in names
+    assert "make_plan" in names
+    assert turn.context_bundle.tool_schema_mode == "candidate"
+    assert turn.context_bundle.selected_skills == ["selected-skill"]
+
+
+def test_setup_runtime_main_agent_exposes_all_tools(monkeypatch) -> None:
+    first = _ReadSkill("first-skill")
+    second = _ReadSkill("second-skill")
+    monkeypatch.setattr(react.skill_loader, "load_all", lambda: [first, second])
+    monkeypatch.setattr(
+        react.memory,
+        "empty_session_view",
+        lambda conversation_id, **_kwargs: {
+            "conversation_id": conversation_id,
+            "source_status": "empty",
+        },
+    )
+
+    turn = Turn(user_input="由主 Agent 选择能力")
+    registry, tools, _lookup, _tracker, _plan_box = react._setup_turn_runtime(turn)
+
+    names = [tool["function"]["name"] for tool in tools]
+    assert registry.get("first-skill") is first
+    assert registry.get("second-skill") is second
+    assert {"first-skill", "second-skill", "make_plan"}.issubset(names)
+    assert turn.context_bundle.tool_schema_mode == "all"
+    assert turn.context_bundle.selected_skills == []
+
+
+def test_runtime_supports_main_agent_and_llm_router_modes(monkeypatch) -> None:
+    monkeypatch.setattr(settings.context, "skill_router_mode", "main_agent")
+    assert react._skill_router_enabled() is False
+
+    monkeypatch.setattr(settings.context, "skill_router_mode", "llm_router")
+    assert react._skill_router_enabled() is True
 
 
 def test_turn_records_structured_error_without_breaking_legacy_fields() -> None:

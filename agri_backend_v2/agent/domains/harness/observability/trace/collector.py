@@ -549,6 +549,11 @@ def trace_skill_router(
     exposed_tool_count: int,
     selected_tools: list[str] | None = None,
     candidate_tools: list[str] | None = None,
+    selected_skills: list[str] | None = None,
+    candidate_skills: list[str] | None = None,
+    router_status: str | None = None,
+    router_error: str | None = None,
+    metadata_version: str = "",
     selected_tool_calls: list[dict[str, Any]] | None = None,
     selection_status: str = "selected",
     decision_source: str = "llm_tool_call",
@@ -558,6 +563,8 @@ def trace_skill_router(
 ) -> None:
     """记录 LLM 返回后的真实 Skill 选择结果。"""
     resolved_selected_tools = list(dict.fromkeys(selected_tools or []))
+    resolved_selected_skills = list(dict.fromkeys(selected_skills or []))
+    resolved_candidate_skills = list(dict.fromkeys(candidate_skills or []))
     record(
         node_type="skill_router",
         node_name="skill_router.r1",
@@ -565,15 +572,20 @@ def trace_skill_router(
             "registry_skill_count": registry_count,
             "exposed_tool_count": exposed_tool_count,
             "candidate_tools": candidate_tools or [],
+            "candidate_skills": resolved_candidate_skills,
+            "metadata_version": metadata_version,
             "router_mode": router_mode,
         },
         output_data={
             "schema_version": 2,
             "selection_status": selection_status,
             "selected_tools": resolved_selected_tools,
+            "selected_skills": resolved_selected_skills,
             "selected_tool_calls": selected_tool_calls or [],
             "decision_source": decision_source,
             "candidate_count": exposed_tool_count,
+            "router_status": router_status or selection_status,
+            "router_error": router_error,
         },
         duration_ms=duration_ms,
         phase="reasoning",
@@ -582,6 +594,8 @@ def trace_skill_router(
             "registry_skill_count": registry_count,
             "exposed_tool_count": exposed_tool_count,
             "selected_tool_count": len(resolved_selected_tools),
+            "selected_skill_count": len(resolved_selected_skills),
+            "candidate_skill_count": len(resolved_candidate_skills),
             "selection_status": selection_status,
             "decision_source": decision_source,
             "router_mode": router_mode,
@@ -636,6 +650,8 @@ def trace_context_build(
     summary_revision: int = 0,
     source_status: str = "",
     tool_schema_mode: str = "all",
+    selected_skills: list[str] | None = None,
+    context_dependencies: list[str] | None = None,
 ) -> None:
     """记录模型实际上下文装配的摘要，不重复保存对话全文。"""
     record(
@@ -650,6 +666,8 @@ def trace_context_build(
             "compressed": compressed,
             "blocks": blocks or [],
             "budget": budget or {},
+            "selected_skills": selected_skills or [],
+            "context_dependencies": context_dependencies or [],
         },
         duration_ms=duration_ms,
         phase="setup",
@@ -662,6 +680,7 @@ def trace_context_build(
             "summary_revision": summary_revision,
             "source_status": source_status,
             "tool_schema_mode": tool_schema_mode,
+            "selected_skill_count": len(selected_skills or []),
         },
     )
 

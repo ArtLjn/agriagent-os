@@ -109,6 +109,9 @@ def build_context_bundle(
     tools_schema: list[dict[str, Any]] | None = None,
     observations: list[str] | None = None,
     include_long_term: bool = False,
+    tool_schema_mode: str = "all",
+    selected_skills: list[str] | None = None,
+    context_dependencies: list[str] | None = None,
 ) -> ContextBundle:
     """从 Session View 构建结构化 ContextBundle。
 
@@ -116,6 +119,8 @@ def build_context_bundle(
     完成。长期记忆只有显式开启时才有机会进入候选块。
     """
     tools_schema = tools_schema or []
+    selected_skills = selected_skills or []
+    context_dependencies = context_dependencies or []
     user_id = user_id or str(memory_snapshot.get("user_id", ""))
     farm_uid = farm_uid or str(memory_snapshot.get("farm_uid", ""))
     farm_id = farm_id if farm_id is not None else memory_snapshot.get("farm_id")
@@ -297,7 +302,9 @@ def build_context_bundle(
         blocks=blocks,
         budget=budget,
         source_status=source_status,
-        tool_schema_mode="all",
+        tool_schema_mode=tool_schema_mode,
+        selected_skills=selected_skills,
+        context_dependencies=context_dependencies,
     )
 
 

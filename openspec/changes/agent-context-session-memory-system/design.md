@@ -23,7 +23,7 @@ POST /chat
 - `summarizer.py` 生成的摘要以孤立 assistant 消息保存，经过 `_dialogue_messages()` 后可能被丢弃；
 - `long_term` 目前只有读取入口，没有稳定的观察、审核和写入生命周期；
 - Context usage 只统计 messages，没有统计 Tool Schema、工具结果和模型输出预留；
-- 每个 Turn 默认暴露全部可用 Skill Schema，缺少活跃工具候选和 schema 预算治理；
+- 每个 Turn 默认暴露全部可用 Skill Schema，缺少位于 ContextBuilder 之前的 Skill Router、活跃能力候选和 schema 预算治理；
 - `react.py` 同时承担 Runtime、Context、Memory 和持久化职责，后续修复容易形成跨层耦合。
 
 ### 设计约束
@@ -98,7 +98,7 @@ memoryRecords          后续长期记忆事实；第一阶段仅保留 MemorySe
 | Long Memory observation | Mongo `memoryObservations` | 两条用户可见消息和 Turn 终态确认后按 `turn_id` 幂等追加 | Memory worker | 默认不注入 |
 | Long Memory facts | Mongo `memoryRecords` | 确认/提交/审核后 upsert | `MemoryService.search()` | 按需 `memory_hits` block |
 
-注入顺序必须保持：静态 system contract → Tool Schema → hot context → pending/task → session summary → recent turns → 当前 user task；同一 Turn 的 observation 作为动态内容追加。Long Memory hits 只在 ContextPolicy/Skill dependency 触发时追加，且低于当前任务和最近观察的优先级。
+能力与上下文构建顺序必须保持：用户请求 → LLM Skill Router → Selected Skill IDs → Skill Registry → ContextBuilder。ContextBuilder 再按选中的 Skill 和其 Context dependency 注入 Tool Schema、hot context、pending/task、session summary、recent turns 和当前 user task；同一 Turn 的 observation 作为动态内容追加。Long Memory hits 只在选中 Skill 的 Context dependency 或 ContextPolicy 明确触发时追加，且低于当前任务和最近观察的优先级。
 
 Short Memory 不能直接注入完整 Tool payload；Long Memory 不能直接注入未经确认的摘要。两者均需通过 MemoryService 返回带 `source_status`、`revision`、`scope` 和 token 预算信息的投影。
 
@@ -205,11 +205,29 @@ max_tool_result_summary_chars = 1200
 
 Long Memory 的写入链路固定为 `Turn Finalizer -> MemoryObservation -> eligibility check -> optional review/fact extraction -> memoryRecords upsert`；读取链路固定为 `ContextPolicy -> MemoryService.search(scope, query, dependencies) -> memory_hits Block`。Long Memory 不写入 `recent_turns`，也不默认注入每个请求。
 
-### D7. 工具 Schema 按需暴露
+### D7. LLM Skill Router 与按需 Tool Schema
 
-`SkillLoader` 负责发现，`SkillRegistry` 负责运行时能力索引，Context/Policy 层负责决定当前候选工具集合。第一阶段允许保留兼容的全量模式，但必须记录 `tool_schema_mode=all|candidate`；切换到 candidate 模式后，按请求意图、Skill metadata 和安全策略计算候选集合。
+Skill 路由采用独立的 LLM-based Skill Router，而不是让 ContextBuilder 直接按规则过滤全部 Tool。Router 位于 ContextBuilder 之前，定位为 Semantic Capability Planner，只回答“完成当前请求需要哪些 Skill/Capability”，不执行 Tool、不生成最终 Tool 参数、不维护完整 Agent State，也不参与用户多轮对话。
 
-写工具、HITL 后继动作和有依赖的工具不得因为预算裁剪而失去安全约束；被裁剪的工具必须在 Trace 中记录原因。
+Router 输入只包含当前用户请求和轻量 Skill Metadata，例如 `name`、`description`、`capabilities`、适用意图和安全标签；不得把完整 Tool Schema、完整 Conversation Memory 或隐藏执行轨迹传给 Router。Router 输出为可解释的候选 Skill ID 集合，当前规模默认选择 Top 1~3 个 Skill，并返回结构化失败或 `fallback` 状态。
+
+标准链路固定为：
+
+```text
+User Request
+  -> LLM Skill Router
+  -> Selected Skill IDs
+  -> SkillRegistry
+  -> Relevant Tool Schemas
+  -> ContextBuilder
+  -> Main Agent
+```
+
+SkillRegistry 负责从选中的 Skill 展开对应 Tool Schema；ContextBuilder 负责根据 Skill 的 Context dependency 选择 Context Block，并继续执行 token 预算、压缩和丢弃决策。写工具、HITL 后继动作和有依赖的工具不得因为预算裁剪而失去安全约束；被 Router 排除、预算裁剪或 fallback 暴露的 Skill/Tool 必须在 Trace 中记录原因。
+
+第一阶段允许保留兼容的全量模式，但必须记录 `tool_schema_mode=all|candidate`。其中 `candidate` 表示“由 Skill Router 选出的 Skill 集合展开后的 Tool Schema”，不是对 53 个 Tool Schema 做一次简单的规则过滤。Router 不可用时可以按策略回退 `all`，但必须记录 `skill_router_status=fallback`。
+
+路由模式通过 `skill_router_mode` 显式切换：`llm_router` 启用 SkillRouter，`main_agent` 不调用前置 Router，直接把全量 exposed Tool Schema 交给 Main Agent 自己完成能力路由。`SkillRouter` 只依赖稳定的 Backend 协议，当前默认提供 `llm` Backend；替换规则、向量或远程 Router Backend 不得改变 Registry、ContextBuilder 和 Tool Executor 契约。
 
 ### D8. reset、过期和重启语义
 
@@ -238,6 +256,7 @@ revision，不伪造 assistant 消息或 observation；commit 已成功但回复
 - 候选/保留/压缩/丢弃 Block；
 - 每个 Block token 估算和 drop reason；
 - Tool Schema 数量、版本和暴露模式；
+- Skill Router 的输入 metadata 版本、选中 Skill、候选数量、排除原因、耗时、失败和 fallback 状态；
 - Context source：Mongo、Redis、fallback 或 unavailable；
 - summary 触发原因、耗时、CAS 结果和失败分类。
 
@@ -248,7 +267,7 @@ Trace 只保存脱敏摘要，不保存凭证、完整隐藏思维链或无限�
 - **[Mongo 读取增加延迟]** → 对 `conversationStates` 和消息分页建立索引；在单 Turn 内缓存不可变 Snapshot；必要时使用 Redis 只读缓存，但 Redis 不是事实源。
 - **[摘要有损导致实体 ID 丢失]** → 最近完整 Turn 原文优先；摘要 schema 强制保留实体 ID、状态、待办和来源范围；为关键 ID 增加回归测试。
 - **[摘要任务与 Turn 写入竞争]** → 使用 `source_conversation_revision` CAS 和幂等 summary key，禁止无版本覆盖。
-- **[全量工具 Schema 迁移后模型召回下降]** → 先 shadow 记录 candidate 集合与全量选择结果，按评测集灰度切换。
+- **[Skill Router 漏召回导致能力缺失]** → 先 shadow 记录 Router 选中 Skill、全量暴露结果和 Main Agent 实际调用，按回放集评估后灰度切换；保留 `all` 回退。
 - **[Conversation snapshot 与活动 Turn 不一致]** → 记录 source divergence；以 Mongo Conversation snapshot 为事实源，Redis 只提供活动 Turn 和 replay 状态。
 - **[Context trace 增加 payload 成本]** → 只记录 block metadata、hash、token 和受控 preview；不逐 token 记录。
 - **[reset 后用户仍能看到旧历史产生歧义]** → API 返回明确的 `reset_generation` 和“仅重置 Agent 工作记忆”语义；硬删除单独设计。
@@ -275,12 +294,13 @@ Trace 只保存脱敏摘要，不保存凭证、完整隐藏思维链或无限�
 3. 完成真实重启、多 Worker 和 source divergence 验收；
 4. 不保留本地 JSON fallback 或对应 feature flag。
 
-### Phase 3：预算与按需工具 Schema
+### Phase 3：Skill Router 与按需工具 Schema
 
 1. 接入真实模型 tokenizer 或校准估算器；
 2. 计入 messages、tools、tool results 和 response reserve；
 3. 启用最近 Turn + summary 的压缩策略；
-4. 先灰度 candidate tool schema，再逐步关闭全量暴露。
+4. 增加 LLM Skill Router，先 shadow 记录 selected Skill 与全量暴露差异；
+5. 灰度 `candidate` 模式，再逐步关闭全量暴露。
 
 ### Phase 4：长期 Memory 与数据治理
 
@@ -292,6 +312,7 @@ Trace 只保存脱敏摘要，不保存凭证、完整隐藏思维链或无限�
 
 - 运行时只保留业务能力开关：`candidate_tool_schema`、`long_term_memory_observation`；Session/Short Memory 不通过迁移开关切换事实源；
 - 发现 Context 质量下降时可退回全量 Tool Schema，但保留 Trace 和预算统计；
+- Skill Router 失败或漏召回风险升高时回退 `tool_schema_mode=all`，不删除 Router Trace；
 - 发现 Mongo 读异常时必须返回 `unavailable`，由 application 明确选择继续当前 Turn 或终止；
 - 任何回滚不得删除已写入的 Mongo 消息、摘要或 Trace。
 
@@ -301,4 +322,4 @@ Trace 只保存脱敏摘要，不保存凭证、完整隐藏思维链或无限�
 - 是否由 Agent 服务提供摘要 LLM，还是由独立 Memory Worker 提供低成本模型，需要结合部署资源和成本确认；
 - 当前各模型真实 Context Window 和 tokenizer 是否都能通过网关 usage 获取，需要先完成模型校准；
 - `reset` 是否需要追加“硬删除可见历史”的管理员接口，不属于本次第一阶段；
-- candidate Tool Schema 的初始召回策略采用 metadata 规则、LLM router 还是两者混合，需要基于现有 Skill 数量和回放集确定。
+- Skill Router 第一阶段采用 LLM 读取 15 个 Skill Metadata 并选择 Top 1~3 个 Skill；不引入 Vector DB、BM25、RRF 或复杂 Reranker，后续以回放集指标决定是否增加检索召回。

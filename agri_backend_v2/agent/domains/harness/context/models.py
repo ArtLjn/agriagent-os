@@ -262,6 +262,8 @@ class ContextBundle(SerializableModel):
     budget: TokenBudget = field(default_factory=TokenBudget)
     source_status: SourceStatus = SourceStatus.EMPTY
     tool_schema_mode: str = "all"
+    selected_skills: list[str] = field(default_factory=list)
+    context_dependencies: list[str] = field(default_factory=list)
 
     _enum_fields: ClassVar[dict[str, type[Enum]]] = {
         "source_status": SourceStatus,

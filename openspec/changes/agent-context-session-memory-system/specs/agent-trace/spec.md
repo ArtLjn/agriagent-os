@@ -8,14 +8,14 @@ Agent Trace SHALL 覆盖 Agent 请求生命周期中的 admission、context_buil
 - **THEN** trace 中包含上下文构建、工具候选、LLM 调用、工具调用、记忆观察和回复格式化事件，且能按 parent span 还原执行顺序
 
 ### Requirement: Trace 关联 Prompt 和 Context
-LLM 调用 trace SHALL 记录 Prompt 版本、ContextBundle 摘要、conversation/summary/memory revision、token 预算使用、Tool Schema 模式、被注入的 ContextBlock 类型及其保留/压缩/丢弃结果。
+LLM 调用 trace SHALL 记录 Prompt 版本、ContextBundle 摘要、conversation/summary/memory revision、token 预算使用、Tool Schema 模式、Skill Router 选中 Skill、被注入的 ContextBlock 类型及其保留/压缩/丢弃结果。
 
 #### Scenario: 调试 Prompt 版本
 - **WHEN** 开发者查看某次 LLM 调用 trace
 - **THEN** 可以看到该请求使用的 Prompt 版本、Context source、摘要版本、预算结果和上下文摘要
 
 ### Requirement: Trace 支持评测回放
-Trace SHALL 提供足够信息用于构建评测回放样本，包括用户输入摘要、ContextBlock 摘要、Prompt 版本、工具候选与调用、回复摘要、revision、预算决策和错误信息。
+Trace SHALL 提供足够信息用于构建评测回放样本，包括用户输入摘要、Router 选中 Skill、ContextBlock 摘要、Prompt 版本、工具候选与调用、回复摘要、revision、预算决策和错误信息。
 
 #### Scenario: 从失败请求生成回放用例
 - **WHEN** 某次线上请求出现错误工具调用或上下文缺失

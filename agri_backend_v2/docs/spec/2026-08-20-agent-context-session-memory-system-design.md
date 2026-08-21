@@ -42,7 +42,7 @@ status: proposed
 | 摘要 | `conversationStates.summary` + CAS | 需要继续完成真实 Worker 并发验收 | P0 |
 | 长期 Memory | 只有读取入口，无沉淀生命周期 | 只是占位，不能宣称已有长期记忆 | P2 |
 | Context usage | 只估算 messages | 未计 Tool Schema、Tool payload、response reserve | P1 |
-| Tool Schema | 默认暴露所有 exposed skills | 没有 active candidate/schema budget | P2 |
+| Tool Schema | 已实现 LLM Skill Router、Registry 按 Skill 展开和 `all/candidate` 开关；默认仍为 `all` | 尚未完成 candidate 灰度与回放评估 | P2 |
 | Turn 状态 | Redis Hash + Event Stream | 已可恢复，但缺少 Context snapshot/revision 关联 | P0 |
 | Trace | 已有 context build 和 LLM token usage | 缺少 Block、revision、source divergence、budget decision | P1 |
 
@@ -108,8 +108,10 @@ flowchart TD
     T --> W["Worker"]
     W --> M["Memory Service Adapter"]
     M --> S["Mongo Conversation Snapshot"]
-    W --> C["ContextBuilder"]
-    C --> L["LLM + active Tool Schema"]
+    W --> R["LLM Skill Router"]
+    R --> SR["Skill Registry"]
+    SR --> C["ContextBuilder"]
+    C --> L["LLM + Router-selected Tool Schema"]
     L --> X["Tool / HITL / Observation"]
     X --> C
     L --> F["Turn Finalizer"]
@@ -118,6 +120,11 @@ flowchart TD
     T --> R["Redis SSE Replay"]
     W --> Q["Trace Records / Events / Summary"]
 ```
+
+路由模式由 `context.skill_router_mode` 控制：`llm_router` 走图中的 Router → Registry
+选择链；`main_agent` 跳过前置 Router，Registry 直接向 ContextBuilder 提供全部 exposed
+Tool Schema，由 Main Agent 自己完成能力路由。两种模式共用 Tool Executor、HITL、Context
+预算和 Trace 契约。
 
 | 存储 | 唯一职责 | 不负责什么 |
 |---|---|---|
@@ -239,7 +246,7 @@ source_status
 
 ```text
 system_contract       system：静态、最高优先级、可缓存
-tool_schema           API tools：当前候选工具 Schema
+tool_schema           API tools：Router 选中 Skill 展开的工具 Schema
 hot_context           system：可信用户/农场/时间
 pending_action        system：未过期的待审批状态
 active_task_state     system：当前多步任务状态
@@ -400,10 +407,17 @@ context:
   response_reserve_tokens: 4096
   safety_margin_tokens: 1024
   max_tool_result_summary_chars: 1200
-  tool_schema_mode: all
+  skill_router_mode: main_agent # main_agent | llm_router
+  skill_router_backend: llm
+  skill_router_max_skills: 3
+  skill_router_timeout_seconds: 12
+  tool_schema_mode: all # 兼容/观测字段；实际开关由 skill_router_mode 控制
 ```
 
-`tool_schema_mode=all` 仅用于兼容和灰度；目标值为 `candidate`。切换前必须用回放集比较工具召回和误调用。
+`skill_router_mode=main_agent` 是默认 Baseline：跳过前置 Router，向 Main Agent 暴露全部 exposed Tool Schema。
+切换为 `skill_router_mode=llm_router` 后，先调用 LLM Backend 选择 Skill，再由 Registry 展开候选 Tool
+Schema；运行时 ContextBundle 会记录 `tool_schema_mode=candidate`。修改 `agent/config.yaml` 或对应环境变量后必须重启 Agent。
+`tool_schema_mode` 保留用于兼容和观测，不单独决定是否调用 Router。
 
 ## 7. Session Memory 生命周期
 
@@ -491,10 +505,11 @@ stateDiagram-v2
 - Mongo 不可用时返回 `unavailable`，由 application 按策略决定当前 Turn 是否继续；
 - 完成多 Worker、重启、Mongo 故障和一致性验收后进入生产运行。
 
-### Phase 3：预算与候选工具
+### Phase 3：Skill Router 与按需工具
 
 - 真实计算 message/tool/result/reserve；
 - 最近 Turn + summary 压缩；
+- LLM Skill Router shadow 运行，记录 selected Skill 与全量暴露差异；
 - candidate Tool Schema 灰度。
 
 ### Phase 4：长期 Memory
@@ -563,9 +578,10 @@ Mongo Conversation Snapshot
 | Short Memory 注入 | `session_summary`、`recent_turns`、`pending_action`、`active_task_state` 独立 Block；工具原始 payload 不进入历史投影 |
 | Context 预算 | messages、Tool Schema、response reserve、safety margin，支持 required 保留和低优先级 Block drop reason |
 | reset 语义 | `/api/v2/reset` 清理 active state 并递增 `reset_generation`；Mongo 可见消息不删除 |
+| Skill Router | 支持 `llm_router` 与 `main_agent` 双模式；前者由可插拔 LLM Backend 读取轻量 Skill Metadata，后者直接由 Main Agent 从全量 Tool 路由；Registry 展开 Tool，ContextBundle 保存选中 Skill/dependency | 尚未完成 candidate 灰度与回放评估；Router 失败回退 `all` |
 | 长时记忆 | `search()` 仍为空结果；已持久化受控 `memoryObservations` 事件，但未接入事实抽取、审核、向量检索或 `memoryRecords` 自动写入 |
 
-本轮尚未宣称完成：candidate Tool Schema 灰度、真实 Mongo/Redis/Worker/SSE replay、历史数据导入校验。摘要 Mongo CAS、并发保护和 Context 压缩流程已完成 focused tests；Long-term Memory 仍为空实现。
+本轮尚未宣称完成：candidate Tool Schema 灰度、真实 Mongo/Redis/Worker/SSE replay、历史数据导入校验。当前 `skill_router_mode=main_agent`、`tool_schema_mode=all` 为默认兼容模式；切换 `llm_router` 后由可插拔 LLM Backend 先读取轻量 Skill Metadata，再由 Registry 展开 Tool Schema，不能把 ContextBuilder 内的规则过滤当作 Router。摘要 Mongo CAS、并发保护和 Context 压缩流程已完成 focused tests；Long-term Memory 仍为空实现。
 
 目录对齐状态：`agent/core`、`agent/infra`、`agent/skills` 已删除；Context、Runtime、Memory、Control、Trace 位于 `agent/domains/harness`，平台适配位于 `agent/platforms`，具体 Tool 位于 `agent/tools`，启动和 Worker 位于 `agent/bootstrap`、`agent/application`。
 
@@ -585,7 +601,7 @@ Mongo Conversation Snapshot
 
 ### Runtime、Tool 与持久化边界
 
-- [ ] 4.3 增加 Skill Context dependency 和 candidate Tool Schema 选择入口。
+- [x] 4.3 增加位于 ContextBuilder 之前的可插拔 Skill Router：默认提供 LLM-based Backend，支持 `llm_router` 与 `main_agent` 双模式；由 Registry 展开 Tool Schema，ContextBuilder 按 Skill Context dependency 注入上下文，并保留全量暴露兼容开关。
 - [x] 4.4 将用户消息、assistant 最终消息、observation 和 Memory observation 幂等提交。
 - [x] 4.5 明确错误、超时、取消、审批过期和 commit 后收尾失败的 Session Memory 写入边界。
 
@@ -606,7 +622,7 @@ Mongo Conversation Snapshot
 - [ ] 7.1 完成 Mongo snapshot 历史数据导入校验和 divergence 指标。
 - [ ] 7.2 灰度启用摘要 CAS 和 Conversation state，完成真实重启、多 Worker 和摘要冲突验收。
 - [ ] 7.3 完成 Mongo-only Context 读取验收；持久化不可用时返回 unavailable。
-- [ ] 7.4 灰度启用 candidate Tool Schema，并比较工具召回、误调用和 token 成本。
+- [ ] 7.4 灰度启用 LLM Skill Router 的 candidate 模式，并比较 Skill 召回、工具误调用和 token 成本。
 - [ ] 7.5 完成 Mongo 历史数据导入校验与归档策略，保证可回滚且不删除用户可见历史。
 
 ### 最终验收

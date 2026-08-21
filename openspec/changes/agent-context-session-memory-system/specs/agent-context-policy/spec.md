@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Agent 上下文分层策略
-系统 SHALL 将 Agent 上下文分为热上下文、工作记忆和按需检索上下文三层，并在每次 LLM 调用前基于请求、活跃工具候选、会话 snapshot 和 token budget 构建最终 `ContextBundle`。ContextBundle MUST 区分 required、priority、compressible 和 source。
+系统 SHALL 将 Agent 上下文分为热上下文、工作记忆和按需检索上下文三层，并在每次 LLM 调用前基于请求、Skill Router 选中的能力、会话 snapshot 和 token budget 构建最终 `ContextBundle`。ContextBundle MUST 区分 required、priority、compressible 和 source。
 
 #### Scenario: 构建三层上下文
 - **WHEN** Agent 处理一次聊天请求
@@ -37,9 +37,32 @@ Context 工程 MUST 在调用 LLM 前对最终上下文执行 token 预算控制
 - **WHEN** Agent 回复缺少某项业务背景
 - **THEN** 开发者可以通过 Trace 判断该 Block 是否未被选择、被压缩、被预算丢弃、读取失败或来自 fallback
 
+### Requirement: LLM Skill Router
+系统 SHALL 在 ContextBuilder 之前提供 LLM-based Skill Router。Router SHALL 只接收当前用户请求和轻量 Skill Metadata，输出候选 Skill/Capability，不得执行 Tool、生成最终 Tool 参数或接收完整 Tool Schema、完整 Memory 和隐藏执行轨迹。
+
+#### Scenario: 选择单一业务能力
+- **WHEN** 用户请求只涉及天气只读查询
+- **THEN** Router SHALL 从 Skill Metadata 中选择天气及必要位置能力，并输出结构化 Skill ID 集合，而不是直接选择或执行具体 Tool
+
+#### Scenario: 组合能力
+- **WHEN** 用户请求同时需要位置解析和天气查询
+- **THEN** Router SHALL 返回位置与天气 Skill，SkillRegistry 再展开对应 Tool Schema，ContextBuilder 再根据这些 Skill 的 Context dependency 构建 ContextBundle
+
+#### Scenario: Router 不可用
+- **WHEN** Router 超时、返回非法 Skill ID 或无法完成路由
+- **THEN** 系统 SHALL 返回结构化 Router failure，并按配置回退全量 Tool Schema；回退必须记录 `skill_router_status=fallback`
+
+#### Scenario: Main Agent 负责路由
+- **WHEN** `skill_router_mode=main_agent`
+- **THEN** 系统 SHALL 不调用前置 Skill Router，直接向 Main Agent 暴露全量 exposed Tool Schema，并记录 `skill_router_status=disabled`、`decision_source=main_agent`
+
+#### Scenario: 可替换 Router Backend
+- **WHEN** 系统替换 SkillRouter Backend
+- **THEN** Backend 只能改变 Skill 选择实现，不得改变 SkillRegistry 展开、ContextBuilder 注入、HITL 和 Tool Executor 契约
+
 ### Requirement: 活跃工具 Schema 选择
-系统 SHALL 支持按请求意图、Skill metadata、风险策略和 Context budget 选择活跃 Tool Schema；全量暴露模式只能作为兼容或灰度模式，并必须被观测。
+SkillRegistry SHALL 将 Router 选中的 Skill IDs 展开为活跃 Tool Schema；全量暴露模式只能作为兼容或灰度模式，并必须被观测。Tool Schema 的最终注入仍 SHALL 受 Context budget、风险策略、HITL 后继动作和 dependency 约束。
 
 #### Scenario: Candidate tool schema
-- **WHEN** 请求只涉及天气只读查询
-- **THEN** 系统 SHALL 优先暴露天气和必要位置能力，并记录 `tool_schema_mode`、候选数量和被排除原因
+- **WHEN** Router 选择天气与位置 Skill
+- **THEN** 系统 SHALL 只展开对应 Skill 的 Tool Schema，并记录 `tool_schema_mode`、Router 选中 Skill、候选数量和被排除原因
