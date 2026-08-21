@@ -34,6 +34,13 @@ _EVENT_STATUS_AFTER = {
 }
 
 
+def _int_value(value: Any, fallback: int = 0) -> int:
+    try:
+        return int(value if value not in (None, "") else fallback)
+    except (TypeError, ValueError):
+        return fallback
+
+
 def turn_key(turn_id: str) -> str:
     return key("turn", turn_id)
 
@@ -114,6 +121,11 @@ async def save_turn(
             "token_id": turn.token_id,
             "scope": turn.scope,
             "conversation_id": turn.conversation_id,
+            "conversation_revision": str(turn.conversation_revision),
+            "summary_revision": str(turn.summary_revision),
+            "reset_generation": str(turn.reset_generation),
+            "source_status": turn.context_source_status,
+            "context_source_status": turn.context_source_status,
             "trace_id": stable_trace_id,
             # request_id 只是兼容别名；幂等使用独立的 client_request_id，不能使用 Trace 主键。
             "request_id": stable_trace_id,
@@ -271,6 +283,36 @@ async def publish_event(turn_id: str, event: dict[str, Any]) -> int:
         or data.get("status")
         or _EVENT_STATUS_AFTER.get(event_type, status_before)
     )
+    conversation_revision = _int_value(
+        event.get("conversation_revision")
+        or data.get("conversation_revision")
+        or state.get("conversation_revision")
+    )
+    summary_revision = _int_value(
+        event.get("summary_revision")
+        or data.get("summary_revision")
+        or state.get("summary_revision")
+    )
+    reset_generation = _int_value(
+        event.get("reset_generation")
+        or data.get("reset_generation")
+        or state.get("reset_generation")
+    )
+    source_status = str(
+        event.get("source_status")
+        or data.get("source_status")
+        or state.get("source_status")
+        or state.get("context_source_status")
+        or "empty"
+    )
+    data = {
+        **data,
+        "conversation_revision": conversation_revision,
+        "summary_revision": summary_revision,
+        "reset_generation": reset_generation,
+        "source_status": source_status,
+        "context_source_status": source_status,
+    }
     occurred_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     event_id = str(event.get("event_id") or f"evt_{uuid.uuid4().hex}")
     trace_context = get_trace()
@@ -303,6 +345,11 @@ async def publish_event(turn_id: str, event: dict[str, Any]) -> int:
         "terminal": terminal,
         "status_before": status_before,
         "status_after": status_after,
+        "conversation_revision": conversation_revision,
+        "summary_revision": summary_revision,
+        "reset_generation": reset_generation,
+        "source_status": source_status,
+        "context_source_status": source_status,
     }
     await client.xadd(
         event_key(turn_id),
@@ -328,6 +375,11 @@ async def publish_event(turn_id: str, event: dict[str, Any]) -> int:
             "terminal": "1" if terminal else "0",
             "status_before": status_before,
             "status_after": status_after,
+            "conversation_revision": str(conversation_revision),
+            "summary_revision": str(summary_revision),
+            "reset_generation": str(reset_generation),
+            "source_status": source_status,
+            "context_source_status": source_status,
         },
         maxlen=settings.redis.event_stream_maxlen,
         approximate=False,
@@ -386,6 +438,32 @@ async def read_events(turn_id: str, after_seq: int = 0) -> list[dict[str, Any]]:
                 "terminal": fields.get("terminal") == "1",
                 "status_before": fields.get("status_before", ""),
                 "status_after": fields.get("status_after", ""),
+                "conversation_revision": _int_value(
+                    fields.get(
+                        "conversation_revision", state.get("conversation_revision", "0")
+                    )
+                ),
+                "summary_revision": _int_value(
+                    fields.get("summary_revision", state.get("summary_revision", "0"))
+                ),
+                "reset_generation": _int_value(
+                    fields.get("reset_generation", state.get("reset_generation", "0"))
+                ),
+                "source_status": fields.get(
+                    "source_status",
+                    state.get("source_status")
+                    or state.get("context_source_status")
+                    or "empty",
+                ),
+                "context_source_status": fields.get(
+                    "context_source_status",
+                    fields.get(
+                        "source_status",
+                        state.get("source_status")
+                        or state.get("context_source_status")
+                        or "empty",
+                    ),
+                ),
             }
         )
     return events

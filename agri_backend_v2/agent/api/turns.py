@@ -26,8 +26,17 @@ async def turn_status(
         if name in turn:
             try:
                 turn[name] = int(turn[name])
-            except ValueError:
+            except (TypeError, ValueError):
                 pass
+    for name in ("conversation_revision", "summary_revision", "reset_generation"):
+        try:
+            turn[name] = int(turn.get(name, 0) or 0)
+        except (TypeError, ValueError):
+            turn[name] = 0
+    turn["source_status"] = str(
+        turn.get("source_status") or turn.get("context_source_status") or "empty"
+    )
+    turn["context_source_status"] = turn["source_status"]
     if "pending_approval" in turn:
         import json
 
@@ -51,9 +60,32 @@ async def turn_events(
 
     async def event_stream():
         async for event in stream_events(turn_id, after_seq=after_seq):
+            payload = {**event["data"], "seq": event["seq"]}
+            for field in (
+                "event_id",
+                "trace_id",
+                "request_id",
+                "turn_id",
+                "conversation_id",
+                "event_type",
+                "occurred_at",
+                "phase",
+                "step",
+                "step_index",
+                "terminal",
+                "status_before",
+                "status_after",
+                "conversation_revision",
+                "summary_revision",
+                "reset_generation",
+                "source_status",
+                "context_source_status",
+            ):
+                if field in event:
+                    payload[field] = event[field]
             yield sse_event(
                 event["type"],
-                {**event["data"], "seq": event["seq"]},
+                payload,
             )
 
     return StreamingResponse(

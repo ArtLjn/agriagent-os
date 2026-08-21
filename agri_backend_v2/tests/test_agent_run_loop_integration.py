@@ -123,6 +123,11 @@ class _FakeStore:
             "role": turn.role,
             "token_id": turn.token_id,
             "scope": turn.scope,
+            "conversation_revision": turn.conversation_revision,
+            "summary_revision": turn.summary_revision,
+            "reset_generation": turn.reset_generation,
+            "source_status": turn.context_source_status,
+            "context_source_status": turn.context_source_status,
             "scope_hash": kwargs["scope_hash"],
             "lease_token": kwargs["lease_token"],
             "status": "accepted",
@@ -149,6 +154,28 @@ class _FakeStore:
             "data": dict(event.get("data") or {}),
             "terminal": event["type"] == "done",
         }
+        state = self.turns[turn_id]
+        for metadata_field in (
+            "conversation_revision",
+            "summary_revision",
+            "reset_generation",
+        ):
+            item[metadata_field] = int(state.get(metadata_field, 0) or 0)
+        item["source_status"] = str(
+            state.get("source_status")
+            or state.get("context_source_status")
+            or "empty"
+        )
+        item["context_source_status"] = item["source_status"]
+        item["data"].update(
+            {
+                "conversation_revision": item["conversation_revision"],
+                "summary_revision": item["summary_revision"],
+                "reset_generation": item["reset_generation"],
+                "source_status": item["source_status"],
+                "context_source_status": item["context_source_status"],
+            }
+        )
         events.append(item)
         async with self.changed:
             self.changed.notify_all()
@@ -267,7 +294,7 @@ def fake_runtime(monkeypatch: pytest.MonkeyPatch) -> _FakeStore:
         }
         yield {"type": "done", "tool_calls": []}
 
-    def setup_runtime(_turn: Turn):
+    def setup_runtime(_turn: Turn, **_kwargs: Any):
         return (
             registry,
             registry.exposed_tools(),
@@ -331,6 +358,7 @@ def fake_runtime(monkeypatch: pytest.MonkeyPatch) -> _FakeStore:
     monkeypatch.setattr(worker, "run_turn", react.run_turn)
 
     monkeypatch.setattr(react, "_setup_turn_runtime", setup_runtime)
+    monkeypatch.setattr(react, "_skill_router_enabled", lambda: False)
     monkeypatch.setattr(react, "chat_stream", fake_llm)
     monkeypatch.setattr(react, "BusinessClient", BusinessClient)
     monkeypatch.setattr(
@@ -405,6 +433,9 @@ async def test_chat_worker_normal_chain_and_after_seq_reconnect(
         )
         assert types.count("done") == 1
         assert first[-1]["type"] == "done"
+        assert all("conversation_revision" in event for event in first)
+        assert all("reset_generation" in event for event in first)
+        assert all("source_status" in event for event in first)
         assert len(fake_runtime.business_calls) == 1
         assert len(fake_runtime.dispatches) == 1
         assert len(fake_runtime.worker_runs) == 0

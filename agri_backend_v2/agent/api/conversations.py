@@ -8,7 +8,11 @@ from fastapi import Header, HTTPException, Query
 
 from agent.api import api_router
 from agent.auth import parse_identity
-from agent.platforms.persistence.mongo.chat_store import get_conversation, list_conversations
+from agent.platforms.persistence.mongo.chat_store import (
+    get_conversation,
+    get_conversation_state,
+    list_conversations,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -52,11 +56,29 @@ async def conversation_detail(
             user_id=identity["user_id"],
             farm_id=identity["farm_id"],
         )
-        if not result.get("items"):
+        state = await get_conversation_state(
+            conversation_id,
+            user_id=identity["user_id"],
+            farm_id=identity["farm_id"],
+        )
+        if not result.get("items") and state is None:
             raise HTTPException(
                 404, {"detail": "conversation not found", "code": "not_found"}
             )
-        return result
+        state = state or {}
+        source_status = str(
+            state.get("source_status")
+            or state.get("context_source_status")
+            or "empty"
+        )
+        return {
+            **result,
+            "conversation_revision": int(state.get("conversation_revision", 0) or 0),
+            "summary_revision": int(state.get("summary_revision", 0) or 0),
+            "reset_generation": int(state.get("reset_generation", 0) or 0),
+            "source_status": source_status,
+            "context_source_status": source_status,
+        }
     except HTTPException:
         raise
     except Exception as exc:

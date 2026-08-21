@@ -578,10 +578,11 @@ Mongo Conversation Snapshot
 | Short Memory 注入 | `session_summary`、`recent_turns`、`pending_action`、`active_task_state` 独立 Block；工具原始 payload 不进入历史投影 |
 | Context 预算 | messages、Tool Schema、response reserve、safety margin，支持 required 保留和低优先级 Block drop reason |
 | reset 语义 | `/api/v2/reset` 清理 active state 并递增 `reset_generation`；Mongo 可见消息不删除 |
+| API 状态元数据 | `/api/agri_backend_v2/chat`、`/conversations/{id}`、`/turns/{id}` 及 SSE replay 统一暴露 `conversation_revision`、`summary_revision`、`reset_generation`、`source_status`；`context_source_status` 作为兼容别名 |
 | Skill Router | 支持 `llm_router` 与 `main_agent` 双模式；前者由可插拔 LLM Backend 读取轻量 Skill Metadata，后者直接由 Main Agent 从全量 Tool 路由；Registry 展开 Tool，ContextBundle 保存选中 Skill/dependency | 尚未完成 candidate 灰度与回放评估；Router 失败回退 `all` |
 | 长时记忆 | `search()` 仍为空结果；已持久化受控 `memoryObservations` 事件，但未接入事实抽取、审核、向量检索或 `memoryRecords` 自动写入 |
 
-本轮尚未宣称完成：candidate Tool Schema 灰度、真实 Mongo/Redis/Worker/SSE replay、历史数据导入校验。当前 `skill_router_mode=main_agent`、`tool_schema_mode=all` 为默认兼容模式；切换 `llm_router` 后由可插拔 LLM Backend 先读取轻量 Skill Metadata，再由 Registry 展开 Tool Schema，不能把 ContextBuilder 内的规则过滤当作 Router。摘要 Mongo CAS、并发保护和 Context 压缩流程已完成 focused tests；Long-term Memory 仍为空实现。
+本轮尚未宣称完成：candidate Tool Schema 灰度、真实 Mongo/Redis/Worker/SSE replay、历史数据导入校验。当前 `skill_router_mode=main_agent`、`tool_schema_mode=all` 为默认兼容模式；切换 `llm_router` 后由可插拔 LLM Backend 先读取轻量 Skill Metadata，再由 Registry 展开 Tool Schema，不能把 ContextBuilder 内的规则过滤当作 Router。摘要 Mongo CAS、并发保护、Context 压缩和 API 状态元数据已完成 focused tests；Long-term Memory 仍为空实现。
 
 目录对齐状态：`agent/core`、`agent/infra`、`agent/skills` 已删除；Context、Runtime、Memory、Control、Trace 位于 `agent/domains/harness`，平台适配位于 `agent/platforms`，具体 Tool 位于 `agent/tools`，启动和 Worker 位于 `agent/bootstrap`、`agent/application`。
 
@@ -607,7 +608,7 @@ Mongo Conversation Snapshot
 
 ### API、恢复与降级
 
-- [ ] 5.1 让 `/api/v2/chat`、conversation detail 和 Turn state 暴露 revision、reset generation、source status。
+- [x] 5.1 让 `/api/v2/chat`、conversation detail 和 Turn state 暴露 revision、reset generation、source status；已覆盖 Turn 类型归一化、conversation state unavailable、SSE replay 元数据透传。
 - [ ] 5.3 验证 Worker 重启、SSE `after_seq` 重连和幂等 request 不重复执行或写消息。
 - [ ] 5.4 完成 Mongo/Redis 不可用和 source divergence 的结构化降级；不提供本地 JSON fallback。
 

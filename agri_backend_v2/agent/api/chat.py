@@ -210,6 +210,11 @@ async def chat(
                 "terminal",
                 "status_before",
                 "status_after",
+                "conversation_revision",
+                "summary_revision",
+                "reset_generation",
+                "source_status",
+                "context_source_status",
             ):
                 if field in event:
                     payload[field] = event[field]

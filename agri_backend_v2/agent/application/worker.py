@@ -48,6 +48,13 @@ _worker_stop: asyncio.Event | None = None
 _consumer_prefix = f"worker-{uuid.uuid4().hex[:10]}"
 
 
+def _state_int(value: object, fallback: int = 0) -> int:
+    try:
+        return int(value if value not in (None, "") else fallback)
+    except (TypeError, ValueError):
+        return fallback
+
+
 async def _persist_session_state(turn: Turn) -> dict:
     """在 Mongo 可见消息落库后推进 Session state；失败不伪装成成功。"""
     result = await memory.persist_session_turn(
@@ -68,8 +75,25 @@ async def _persist_session_state(turn: Turn) -> dict:
             result.get("code"),
         )
     if result.get("status") in {"ready", "idempotent"}:
-        turn.conversation_revision = int(
-            result.get("conversation_revision", turn.conversation_revision) or 0
+        turn.conversation_revision = _state_int(
+            result.get("conversation_revision"), turn.conversation_revision
+        )
+        turn.summary_revision = _state_int(
+            result.get("summary_revision"), turn.summary_revision
+        )
+        turn.reset_generation = _state_int(
+            result.get("reset_generation"), turn.reset_generation
+        )
+        turn.context_source_status = str(
+            result.get("source_status") or turn.context_source_status or "empty"
+        )
+        await update_turn(
+            turn.turn_id,
+            conversation_revision=turn.conversation_revision,
+            summary_revision=turn.summary_revision,
+            reset_generation=turn.reset_generation,
+            source_status=turn.context_source_status,
+            context_source_status=turn.context_source_status,
         )
     return result
 
@@ -166,6 +190,14 @@ def _turn_from_state(state: dict[str, str]) -> Turn:
         scope=state.get("scope", ""),
         agent_token=settings.auth.agent_service_token,
         task_state=_decode_json_field(state.get("task_state")),
+        conversation_revision=_state_int(state.get("conversation_revision")),
+        summary_revision=_state_int(state.get("summary_revision")),
+        reset_generation=_state_int(state.get("reset_generation")),
+        context_source_status=str(
+            state.get("source_status")
+            or state.get("context_source_status")
+            or "empty"
+        ),
     )
 
 
@@ -263,6 +295,24 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
             farm_id=turn.farm_id,
             source_status="unavailable",
         )
+    turn.conversation_revision = _state_int(
+        turn.memory_snapshot.get("conversation_revision")
+    )
+    turn.summary_revision = _state_int(turn.memory_snapshot.get("summary_revision"))
+    turn.reset_generation = _state_int(turn.memory_snapshot.get("reset_generation"))
+    turn.context_source_status = str(
+        turn.memory_snapshot.get("source_status")
+        or turn.memory_snapshot.get("context_source_status")
+        or "empty"
+    )
+    await update_turn(
+        turn.turn_id,
+        conversation_revision=turn.conversation_revision,
+        summary_revision=turn.summary_revision,
+        reset_generation=turn.reset_generation,
+        source_status=turn.context_source_status,
+        context_source_status=turn.context_source_status,
+    )
 
     async def approval_waiter(turn_id: str) -> tuple[bool, str]:
         return await wait_approval(turn_id)
