@@ -217,7 +217,7 @@ void main() {
     final adapter = RecordingAdapter({
       '/auth/me': {...userResponse, 'nickname': '李伟刚'},
     });
-    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
     dio.httpClientAdapter = adapter;
 
     await tester.pumpWidget(

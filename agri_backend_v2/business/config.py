@@ -1,11 +1,12 @@
 """Business 配置加载。
 
-从 business/config.yaml 读取，环境变量可覆盖关键字段（DATABASE__URL、QWEATHER_API_KEY 等）。
+从 business/config.yaml 读取，环境变量可覆盖关键字段（DATABASE__URL、SERVER__HOST 等）。
 
 加载入口：
   from business.config import settings
   settings.database.url
 """
+
 from __future__ import annotations
 
 import os
@@ -16,6 +17,12 @@ import yaml
 
 # business/config.yaml 的位置（与 business/ 包同级）。
 _CONFIG_FILE = Path(__file__).resolve().parent / "config.yaml"
+
+
+@dataclass
+class ServerCfg:
+    host: str = "127.0.0.1"
+    port: int = 9876
 
 
 @dataclass
@@ -83,6 +90,7 @@ class TokenQuotaCfg:
 
 @dataclass
 class Settings:
+    server: ServerCfg = field(default_factory=ServerCfg)
     database: DatabaseCfg = field(default_factory=DatabaseCfg)
     mongodb: MongoCfg = field(default_factory=MongoCfg)
     secrets: SecretsCfg = field(default_factory=SecretsCfg)
@@ -100,6 +108,7 @@ def _load_yaml() -> dict:
 
 def _build_settings() -> Settings:
     raw = _load_yaml()
+    server_raw = raw.get("server", {}) or {}
     db_raw = raw.get("database", {}) or {}
     mongo_raw = raw.get("mongodb", {}) or {}
     secrets_raw = raw.get("secrets", {}) or {}
@@ -108,6 +117,10 @@ def _build_settings() -> Settings:
     quota_raw = raw.get("token_quota", {}) or {}
 
     settings = Settings(
+        server=ServerCfg(
+            host=str(server_raw.get("host", "127.0.0.1")),
+            port=int(server_raw.get("port", 9876)),
+        ),
         database=DatabaseCfg(
             url=db_raw.get("url", ""),
             pool_size=int(db_raw.get("pool_size", 5)),
@@ -148,9 +161,7 @@ def _build_settings() -> Settings:
             bcrypt_rounds=int(auth_raw.get("bcrypt_rounds", 12)),
             agent_service_token=auth_raw.get("agent_service_token", ""),
             delegation_secret=auth_raw.get("delegation_secret", ""),
-            delegation_issuer=auth_raw.get(
-                "delegation_issuer", "farm-manager-agent"
-            ),
+            delegation_issuer=auth_raw.get("delegation_issuer", "farm-manager-agent"),
             delegation_audience=auth_raw.get(
                 "delegation_audience", "farm-manager-business-mcp"
             ),
@@ -166,6 +177,10 @@ def _build_settings() -> Settings:
     )
 
     # 环境变量覆盖（双下划线分隔命名空间）。
+    if env := os.getenv("SERVER__HOST"):
+        settings.server.host = env
+    if env := os.getenv("SERVER__PORT"):
+        settings.server.port = int(env)
     if env := os.getenv("DATABASE__URL"):
         settings.database.url = env
     if env := os.getenv("MONGODB__URI"):

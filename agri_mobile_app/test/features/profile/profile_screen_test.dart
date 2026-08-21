@@ -149,7 +149,7 @@ void main() {
         },
       },
     });
-    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
     dio.httpClientAdapter = adapter;
 
     await tester.pumpWidget(
@@ -199,7 +199,7 @@ void main() {
         },
       },
     });
-    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
     dio.httpClientAdapter = adapter;
 
     await tester.pumpWidget(
@@ -238,7 +238,7 @@ void main() {
         'assistant_role': 'professional',
       },
     });
-    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
     dio.httpClientAdapter = adapter;
 
     await tester.pumpWidget(
@@ -269,7 +269,7 @@ ProfileRepository _profileRepository({Map<String, Object?>? version}) {
     '/settings': settingsResponse,
     '/api/app/version': version ?? versionResponse,
   });
-  final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+  final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
   dio.httpClientAdapter = adapter;
   return ProfileRepository(ApiClient(dio: dio));
 }

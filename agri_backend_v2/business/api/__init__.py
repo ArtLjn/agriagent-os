@@ -26,7 +26,7 @@ from business.api import (
 )
 
 logger = logging.getLogger(__name__)
-api_router = APIRouter(prefix="/api/agri_backend_v2")
+api_router = APIRouter(prefix="/api/v2")
 
 for router in (
     health.router,

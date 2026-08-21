@@ -1,4 +1,4 @@
-"""POST /api/agri_backend_v2/auth/login：同源代理 Business 用户登录。"""
+"""POST /api/v2/auth/login：同源代理 Business 用户登录。"""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""POST /api/agri_backend_v2/reset — 清空会话记忆。"""
+"""POST /api/v2/reset — 清空会话记忆。"""
 
 from __future__ import annotations
 

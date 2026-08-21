@@ -1,4 +1,4 @@
-"""Trace 端点：GET /api/agri_backend_v2/traces 系列。"""
+"""Trace 端点：GET /api/v2/traces 系列。"""
 
 from __future__ import annotations
 

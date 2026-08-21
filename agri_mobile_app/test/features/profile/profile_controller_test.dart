@@ -14,7 +14,7 @@ void main() {
       '/settings': settingsResponse,
       '/api/app/version': versionResponse,
     });
-    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
     dio.httpClientAdapter = adapter;
     final controller = ProfileController(
       repository: ProfileRepository(ApiClient(dio: dio)),
@@ -53,7 +53,7 @@ void main() {
         'force_update': null,
       },
     });
-    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
     dio.httpClientAdapter = adapter;
     final controller = ProfileController(
       repository: ProfileRepository(ApiClient(dio: dio)),
@@ -82,7 +82,7 @@ void main() {
         'force_update': true,
       },
     });
-    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
     dio.httpClientAdapter = adapter;
     final controller = ProfileController(
       repository: ProfileRepository(ApiClient(dio: dio)),
@@ -110,7 +110,7 @@ void main() {
       '/settings': settingsResponse,
       '/api/app/version': versionResponse,
     });
-    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
     dio.httpClientAdapter = adapter;
     final controller = ProfileController(
       repository: ProfileRepository(ApiClient(dio: dio)),
@@ -133,7 +133,7 @@ void main() {
         },
       },
     });
-    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
     dio.httpClientAdapter = adapter;
     final repository = ProfileRepository(ApiClient(dio: dio));
 
@@ -159,7 +159,7 @@ void main() {
         'force_update': false,
       },
     });
-    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
     dio.httpClientAdapter = adapter;
     final controller = ProfileController(
       repository: ProfileRepository(ApiClient(dio: dio)),

@@ -792,7 +792,7 @@ def v2_get_json(url: str, authorization: str | None = None) -> dict[str, Any]:
 
 def v2_api_base_url(value: str) -> str:
     base = value.rstrip("/")
-    return base if base.endswith("/api/agri_backend_v2") else f"{base}/api/agri_backend_v2"
+    return base if base.endswith("/api/v2") else f"{base}/api/v2"
 
 
 def v2_api_url(base_url: str, path: str, params: dict[str, Any]) -> str:

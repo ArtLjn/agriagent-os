@@ -1,4 +1,4 @@
-"""POST /api/agri_backend_v2/approve — 决议 HITL gate。"""
+"""POST /api/v2/approve — 决议 HITL gate。"""
 
 from __future__ import annotations
 

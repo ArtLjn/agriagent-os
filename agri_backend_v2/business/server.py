@@ -31,6 +31,7 @@ from business.tools import (  # noqa: F401
     workers,
 )
 from business.api import api_router, install_exception_handlers
+from business.config import settings
 from business.db import check_connection
 from business.mcp_app import mcp
 from business.mcp_auth import McpAuthMiddleware
@@ -102,12 +103,18 @@ def create_app() -> FastAPI:
 def main() -> None:
     setup_logging()
     logger = logging.getLogger(__name__)
+    server_url = f"http://{settings.server.host}:{settings.server.port}"
     check_connection()
     ensure_admin_user()
-    logger.info("starting business server on http://127.0.0.1:9876")
-    logger.info("REST API: http://127.0.0.1:9876/api/v2")
-    logger.info("MCP endpoint: http://127.0.0.1:9876/mcp")
-    uvicorn.run(create_app(), host="127.0.0.1", port=9876, ws="auto")
+    logger.info("starting business server on %s", server_url)
+    logger.info("REST API: %s/api/v2", server_url)
+    logger.info("MCP endpoint: %s/mcp", server_url)
+    uvicorn.run(
+        create_app(),
+        host=settings.server.host,
+        port=settings.server.port,
+        ws="auto",
+    )
 
 
 if __name__ == "__main__":

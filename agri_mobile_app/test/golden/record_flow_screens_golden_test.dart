@@ -14,7 +14,7 @@ import '../support/api_test_fixtures.dart';
 void main() {
   testGoldens('记录创建闭环三页在 390x844 下稳定渲染', (tester) async {
     final adapter = RecordingAdapter({'POST /costs': costRecordResponse});
-    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
     dio.httpClientAdapter = adapter;
     final client = ApiClient(dio: dio);
     final controller = RecordFlowController(

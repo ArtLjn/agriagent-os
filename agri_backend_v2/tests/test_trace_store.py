@@ -102,9 +102,9 @@ def mongodb_enabled(monkeypatch):
 def test_trace_api_registers_formal_read_routes() -> None:
     paths = {route.path for route in api_router.routes}
 
-    assert "/api/agri_backend_v2/traces/{trace_id}/nodes" in paths
-    assert "/api/agri_backend_v2/traces/{trace_id}/events" in paths
-    assert "/api/agri_backend_v2/traces/{trace_id}/timeline" in paths
+    assert "/api/v2/traces/{trace_id}/nodes" in paths
+    assert "/api/v2/traces/{trace_id}/events" in paths
+    assert "/api/v2/traces/{trace_id}/timeline" in paths
 
 
 @pytest.mark.asyncio

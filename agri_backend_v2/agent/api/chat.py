@@ -1,4 +1,4 @@
-"""POST /api/agri_backend_v2/chat — SSE ReAct 事件流。"""
+"""POST /api/v2/chat — SSE ReAct 事件流。"""
 
 from __future__ import annotations
 

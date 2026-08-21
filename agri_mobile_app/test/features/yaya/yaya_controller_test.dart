@@ -89,7 +89,7 @@ void main() {
       '/agent/conversations': [conversationResponse],
       '/agent/conversations/s1/messages': [messageResponse],
     });
-    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
     dio.httpClientAdapter = adapter;
     final controller = YayaController(
       repository: YayaRepository(ApiClient(dio: dio)),

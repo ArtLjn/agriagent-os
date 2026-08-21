@@ -1,6 +1,6 @@
 """Agent 配置加载。
 
-从 agent/config.yaml 读取 Redis、MongoDB + Business MCP 地址。
+从 agent/config.yaml 读取 HTTP 服务、Redis、MongoDB + Business MCP 地址。
 LLM 仍走 providers.json（在 agri_backend_v2 根目录，agent/llm.py 读）。
 环境变量覆盖：MONGODB__URI、BUSINESS_MCP__URL 等。
 """
@@ -16,6 +16,12 @@ import yaml
 # agent/config.yaml 的位置（与 agent/ 包同级）。
 _CONFIG_FILE = Path(__file__).resolve().parent / "config.yaml"
 _SKILL_ROUTER_MODES = frozenset({"main_agent", "llm_router"})
+
+
+@dataclass
+class ServerCfg:
+    host: str = "127.0.0.1"
+    port: int = 8000
 
 
 @dataclass
@@ -143,6 +149,7 @@ class ContextCfg:
 
 @dataclass
 class Settings:
+    server: ServerCfg = field(default_factory=ServerCfg)
     redis: RedisCfg = field(default_factory=RedisCfg)
     mongodb: MongoCfg = field(default_factory=MongoCfg)
     business_mcp: BusinessMcpCfg = field(default_factory=BusinessMcpCfg)
@@ -190,6 +197,7 @@ def _context_raw(raw: dict) -> tuple[dict, dict]:
 
 def _build_settings() -> Settings:
     raw = _load_yaml()
+    server_raw = raw.get("server", {}) or {}
     mongo_raw = raw.get("mongodb", {}) or {}
     redis_raw = raw.get("redis", {}) or {}
     mcp_raw = raw.get("business_mcp", {}) or {}
@@ -257,6 +265,10 @@ def _build_settings() -> Settings:
         ),
     )
     settings = Settings(
+        server=ServerCfg(
+            host=str(server_raw.get("host", "127.0.0.1")),
+            port=int(server_raw.get("port", 8000)),
+        ),
         redis=RedisCfg(
             enabled=bool(redis_raw.get("enabled", False)),
             host=str(redis_raw.get("host", "127.0.0.1")),
@@ -347,9 +359,7 @@ def _build_settings() -> Settings:
                     else "main_agent",
                 )
             ),
-            skill_router_backend=str(
-                context_raw.get("skill_router_backend", "llm")
-            ),
+            skill_router_backend=str(context_raw.get("skill_router_backend", "llm")),
             skill_router_max_skills=max(
                 1, int(context_raw.get("skill_router_max_skills", 3))
             ),
@@ -364,6 +374,10 @@ def _build_settings() -> Settings:
     )
     if env := os.getenv("MONGODB__URI"):
         settings.mongodb.uri = env
+    if env := os.getenv("SERVER__HOST"):
+        settings.server.host = env
+    if env := os.getenv("SERVER__PORT"):
+        settings.server.port = int(env)
     if env := os.getenv("REDIS__HOST"):
         settings.redis.host = env
     if env := os.getenv("REDIS__ENABLED"):
@@ -441,9 +455,7 @@ def _build_settings() -> Settings:
         ),
         "summary_ttl_seconds": os.getenv("CONTEXT__SUMMARY_TTL_SECONDS"),
         "recent_turn_limit": os.getenv("CONTEXT__RECENT_TURN_LIMIT"),
-        "pending_action_ttl_seconds": os.getenv(
-            "CONTEXT__PENDING_ACTION_TTL_SECONDS"
-        ),
+        "pending_action_ttl_seconds": os.getenv("CONTEXT__PENDING_ACTION_TTL_SECONDS"),
         "task_state_ttl_seconds": os.getenv("CONTEXT__TASK_STATE_TTL_SECONDS"),
         "summary_soft_ratio": os.getenv("CONTEXT__SUMMARY_SOFT_RATIO"),
         "summary_hard_ratio": os.getenv("CONTEXT__SUMMARY_HARD_RATIO"),

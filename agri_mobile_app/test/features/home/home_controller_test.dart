@@ -14,7 +14,7 @@ void main() {
       '/planting/work-orders': paginatedWorkOrdersResponse,
       '/planting/labor/unsettled-summary': unsettledLaborSummaryResponse,
     });
-    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
     dio.httpClientAdapter = adapter;
     final controller = HomeController(
       repository: DashboardRepository(ApiClient(dio: dio)),
@@ -48,7 +48,7 @@ void main() {
     }, statusCodes: {
       'GET /weather/forecast': 500
     });
-    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
     dio.httpClientAdapter = adapter;
     final controller = HomeController(
       repository: DashboardRepository(ApiClient(dio: dio)),
@@ -68,7 +68,7 @@ void main() {
       '/planting/work-orders': paginatedWorkOrdersResponse,
       '/planting/labor/unsettled-summary': unsettledLaborSummaryResponse,
     });
-    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
     dio.httpClientAdapter = adapter;
     final controller = HomeController(
       repository: DashboardRepository(ApiClient(dio: dio)),

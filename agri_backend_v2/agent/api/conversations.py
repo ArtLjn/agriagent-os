@@ -1,4 +1,4 @@
-"""会话端点：GET /api/agri_backend_v2/conversations + GET /api/agri_backend_v2/conversations/{id}。"""
+"""会话端点：GET /api/v2/conversations + GET /api/v2/conversations/{id}。"""
 
 from __future__ import annotations
 

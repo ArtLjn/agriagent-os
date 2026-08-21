@@ -1,4 +1,4 @@
-"""GET /api/agri_backend_v2/turns/{turn_id} — Turn 状态轮询。"""
+"""GET /api/v2/turns/{turn_id} — Turn 状态轮询。"""
 
 from __future__ import annotations
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../data/api/api_client.dart';
 import '../../shared/widgets/animated_press.dart';
 import '../../shared/widgets/reference_page.dart';
 import '../../theme/app_colors.dart';
@@ -70,10 +71,10 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> {
           ),
         ),
       );
-    } catch (_) {
+    } catch (error) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('暂时无法识别记录，请稍后再试')),
+        SnackBar(content: Text(ApiClient.userMessageFor(error))),
       );
     } finally {
       if (mounted) setState(() => _parsing = false);

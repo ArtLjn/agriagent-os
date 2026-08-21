@@ -44,23 +44,42 @@ abstract class AppDependencies {
 }
 
 class BackendAppDependencies implements AppDependencies {
-  BackendAppDependencies({ApiClient? client}) : this._(client ?? ApiClient());
+  BackendAppDependencies({ApiClient? client, ApiClient? agentClient})
+      : this._(
+          client ??
+              ApiClient(
+                baseUrl: const String.fromEnvironment(
+                  'BUSINESS_API_BASE_URL',
+                  defaultValue: 'http://192.168.1.13:9876/api/v2',
+                ),
+              ),
+          agentClient ??
+              client ??
+              ApiClient(
+                baseUrl: const String.fromEnvironment(
+                  'AGENT_API_BASE_URL',
+                  defaultValue: 'http://192.168.1.13:8000/api/v2',
+                ),
+              ),
+        );
 
-  BackendAppDependencies._(this.client)
+  BackendAppDependencies._(this.client, this.agentClient)
       : session = AppSession(
           client: client,
           store: const SecureSessionStore(),
+          agentClient: agentClient,
         ),
         profile = ProfileRepository(client),
         dashboard = DashboardRepository(client),
         billing = BillingRepository(client),
         business = BusinessRepository(client),
         workbench = WorkbenchRepository(client),
-        yaya = YayaRepository(client),
+        yaya = YayaRepository(agentClient),
         locations = LocationRepository(client),
         location = SystemLocationService();
 
   final ApiClient client;
+  final ApiClient agentClient;
   final AppSession session;
   @override
   final ProfileRepository profile;

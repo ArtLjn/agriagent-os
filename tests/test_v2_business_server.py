@@ -20,30 +20,30 @@ def test_business_server_exposes_mcp_without_redirect() -> None:
 
 
 def test_business_api_v2_endpoints() -> None:
-    """验证：/api/agri_backend_v2/* REST 端点注册正确。"""
+    """验证：/api/v2/* REST 端点注册正确。"""
     app = server.create_app()
     schema = app.openapi()
     paths = sorted(schema["paths"].keys())
 
     # 必须存在的核心端点
     required = [
-        "/api/agri_backend_v2/health",
-        "/api/agri_backend_v2/readiness",
-        "/api/agri_backend_v2/auth/login",
-        "/api/agri_backend_v2/auth/register",
-        "/api/agri_backend_v2/users/me",
-        "/api/agri_backend_v2/users/me/settings",
-        "/api/agri_backend_v2/farms/my",
-        "/api/agri_backend_v2/dashboard",
-        "/api/agri_backend_v2/workers",
-        "/api/agri_backend_v2/crop-cycles",
-        "/api/agri_backend_v2/crop-templates",
-        "/api/agri_backend_v2/farm-logs",
-        "/api/agri_backend_v2/work-orders",
-        "/api/agri_backend_v2/cost-records",
-        "/api/agri_backend_v2/debts",
-        "/api/agri_backend_v2/weather",
-        "/api/agri_backend_v2/locations/search",
+        "/api/v2/health",
+        "/api/v2/readiness",
+        "/api/v2/auth/login",
+        "/api/v2/auth/register",
+        "/api/v2/users/me",
+        "/api/v2/users/me/settings",
+        "/api/v2/farms/my",
+        "/api/v2/dashboard",
+        "/api/v2/workers",
+        "/api/v2/crop-cycles",
+        "/api/v2/crop-templates",
+        "/api/v2/farm-logs",
+        "/api/v2/work-orders",
+        "/api/v2/cost-records",
+        "/api/v2/debts",
+        "/api/v2/weather",
+        "/api/v2/locations/search",
     ]
     for p in required:
         assert p in paths, f"Missing endpoint: {p}"
@@ -59,8 +59,8 @@ async def test_business_mcp_registers_user_settings_tool() -> None:
 def test_business_api_returns_structured_auth_error() -> None:
     app = server.create_app()
     with TestClient(app) as client:
-        response = client.get("/api/agri_backend_v2/users/me")
+        response = client.get("/api/v2/users/me")
 
     assert response.status_code == 401
     assert response.json()["detail"]["code"] == "unauthorized"
-    assert response.json()["detail"]["meta"]["path"] == "/api/agri_backend_v2/users/me"
+    assert response.json()["detail"]["meta"]["path"] == "/api/v2/users/me"

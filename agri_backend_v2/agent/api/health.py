@@ -1,4 +1,4 @@
-"""GET /api/agri_backend_v2/health + GET /api/agri_backend_v2/dev-users。"""
+"""GET /api/v2/health + GET /api/v2/dev-users。"""
 
 from __future__ import annotations
 

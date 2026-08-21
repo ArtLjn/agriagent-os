@@ -171,7 +171,7 @@ BusinessRepository _fakeBusinessRepository() {
     '/cost-categories': [categoryResponse],
     '/smart-fill/parse': smartFillParseResponse,
   });
-  final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+  final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
   dio.httpClientAdapter = adapter;
   return BusinessRepository(ApiClient(dio: dio));
 }
@@ -182,7 +182,7 @@ ProfileRepository _fakeProfileRepository() {
     '/settings': settingsResponse,
     '/api/app/version': versionResponse,
   });
-  final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+  final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
   dio.httpClientAdapter = adapter;
   return ProfileRepository(ApiClient(dio: dio));
 }
@@ -192,7 +192,7 @@ YayaRepository _fakeYayaRepository() {
     '/agent/conversations': [conversationResponse],
     '/agent/conversations/s1/messages': [messageResponse],
   });
-  final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+  final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
   dio.httpClientAdapter = adapter;
   return YayaRepository(ApiClient(dio: dio));
 }
@@ -209,7 +209,7 @@ LocationRepository _fakeLocationRepository() {
       ],
     },
   });
-  final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+  final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
   dio.httpClientAdapter = adapter;
   return LocationRepository(ApiClient(dio: dio));
 }
@@ -222,7 +222,7 @@ DashboardRepository _fakeDashboardRepository() {
     '/planting/work-orders': paginatedWorkOrdersResponse,
     '/planting/labor/unsettled-summary': unsettledLaborSummaryResponse,
   });
-  final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+  final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
   dio.httpClientAdapter = adapter;
   return DashboardRepository(ApiClient(dio: dio));
 }
@@ -235,7 +235,7 @@ BillingRepository _fakeBillingRepository() {
     '/debts': debtsResponse,
     'POST /debts': costRecordResponse,
   });
-  final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+  final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
   dio.httpClientAdapter = adapter;
   return BillingRepository(ApiClient(dio: dio));
 }
@@ -254,7 +254,7 @@ WorkbenchRepository _fakeWorkbenchRepository() {
     '/smart-fill/scenarios': smartFillScenariosResponse,
     '/smart-fill/parse': smartFillParseResponse,
   });
-  final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+  final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
   dio.httpClientAdapter = adapter;
   return WorkbenchRepository(ApiClient(dio: dio));
 }

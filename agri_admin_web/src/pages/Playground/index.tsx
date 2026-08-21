@@ -363,7 +363,7 @@ export default function Playground() {
     }
   }, []);
 
-  /* ── 加载 dev 用户列表（agri_backend_v2 agent /api/agri_backend_v2/dev-users）── */
+  /* ── 加载 dev 用户列表（agri_backend_v2 agent /api/v2/dev-users）── */
   const loadDevUsers = useCallback(async () => {
     try {
       const users = await listDevUsers();

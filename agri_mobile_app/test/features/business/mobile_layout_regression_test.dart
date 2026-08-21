@@ -31,7 +31,7 @@ void main() {
       '/planting/workers/summary': paginatedWorkerSummariesResponse,
       'POST /planting/workers': workerResponse,
     });
-    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
     dio.httpClientAdapter = adapter;
     client = ApiClient(dio: dio);
   });

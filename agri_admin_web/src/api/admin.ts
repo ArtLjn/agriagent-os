@@ -1,7 +1,7 @@
 import apiClient from './client';
 import type { TracePayload } from '../utils/tracePayload';
 
-// ─── Trace API（对齐 agri_backend_v2 agent /api/agri_backend_v2/traces*）──────────────────────────────
+// ─── Trace API（对齐 agri_backend_v2 agent /api/v2/traces*）──────────────────────────────
 // vite proxy: /api/admin/traces* → http://localhost:8000/api/v2/traces*
 
 export interface TraceRootError {
@@ -201,7 +201,7 @@ interface TraceTimelineResponse {
 }
 
 /**
- * 列出 trace 请求级 summary（agri_backend_v2 /api/agri_backend_v2/traces）。
+ * 列出 trace 请求级 summary（agri_backend_v2 /api/v2/traces）。
  * 兼容旧调用：返回 items + next_cursor + has_more。
  */
 export async function listTraces(params?: ListTracesParams): Promise<ListTracesResponse> {

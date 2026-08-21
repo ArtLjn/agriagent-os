@@ -522,7 +522,7 @@ agent_active_limit >= llm_inflight_limit >= mcp_inflight_limit
   "status": "queued",
   "queue_position": 1,
   "request_id": "...",
-  "event_stream": "/api/agri_backend_v2/turns/t-001/events"
+  "event_stream": "/api/v2/turns/t-001/events"
 }
 ```
 

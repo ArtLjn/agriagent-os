@@ -13,7 +13,7 @@ void main() {
       '/costs/summary/2026': yearlySummaryResponse,
       '/debts': debtsResponse,
     });
-    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
     dio.httpClientAdapter = adapter;
     final controller = BillingController(
       repository: BillingRepository(ApiClient(dio: dio)),
@@ -47,7 +47,7 @@ void main() {
       '/costs/summary/2026': yearlySummaryResponse,
       '/debts': debtsResponse,
     });
-    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
     dio.httpClientAdapter = adapter;
     final controller = BillingController(
       repository: BillingRepository(ApiClient(dio: dio)),
@@ -69,7 +69,7 @@ void main() {
       },
       '/debts': debtsResponse,
     });
-    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
     dio.httpClientAdapter = adapter;
     final controller = BillingController(
       repository: BillingRepository(ApiClient(dio: dio)),
@@ -96,7 +96,7 @@ void main() {
         ],
       },
     });
-    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
     dio.httpClientAdapter = adapter;
     final controller = BillingController(
       repository: BillingRepository(ApiClient(dio: dio)),

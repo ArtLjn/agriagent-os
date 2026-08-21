@@ -14,6 +14,7 @@ class YayaController extends ChangeNotifier {
   String? activeSessionId;
   List<String> lastSkills = const [];
   Map<String, dynamic>? pendingAction;
+  String? activeTurnId;
   bool _disposed = false;
 
   Future<void> loadConversations() async {
@@ -47,6 +48,7 @@ class YayaController extends ChangeNotifier {
       return;
     }
     activeSessionId = null;
+    activeTurnId = null;
     errorMessage = null;
     pendingAction = null;
     lastSkills = const [];
@@ -60,6 +62,7 @@ class YayaController extends ChangeNotifier {
     sending = true;
     errorMessage = null;
     pendingAction = null;
+    activeTurnId = null;
     activeSessionId ??= _newSessionId();
     final sessionId = activeSessionId;
     messages.add(YayaMessageViewModel.user(trimmed));
@@ -73,6 +76,12 @@ class YayaController extends ChangeNotifier {
       )) {
         if (_disposed) break;
         if (event.done) break;
+        if (event.conversationId != null && event.conversationId!.isNotEmpty) {
+          activeSessionId = event.conversationId;
+        }
+        if (event.turnId != null && event.turnId!.isNotEmpty) {
+          activeTurnId = event.turnId;
+        }
         if (event.error != null && event.error!.isNotEmpty) {
           errorMessage = event.error;
           _removeEmptyAssistant(assistantIndex);
@@ -89,6 +98,8 @@ class YayaController extends ChangeNotifier {
         if (event.skills.isNotEmpty) lastSkills = event.skills;
         if (event.pendingAction != null) {
           pendingAction = event.pendingAction;
+          activeTurnId = event.turnId ??
+              '${event.pendingAction!['turn_id'] ?? activeTurnId ?? ''}';
           final current = messages[assistantIndex];
           messages[assistantIndex] = current.copyWith(
             pendingAction: event.pendingAction,
@@ -111,6 +122,8 @@ class YayaController extends ChangeNotifier {
 
   Future<void> respondToPendingAction(String text) async {
     if (pendingAction == null) return;
+    final decision = text.trim() == '确认';
+    final turnId = activeTurnId?.trim() ?? '';
     pendingAction = null;
     for (var index = 0; index < messages.length; index++) {
       final message = messages[index];
@@ -119,6 +132,16 @@ class YayaController extends ChangeNotifier {
       }
     }
     _safeNotify();
+    if (turnId.isNotEmpty) {
+      try {
+        await repository.approve(turnId: turnId, decision: decision);
+      } catch (_) {
+        if (!_disposed) errorMessage = '审批请求失败，请稍后重试';
+        _safeNotify();
+      }
+      return;
+    }
+    // 兼容只实现旧 pending_action 的测试仓库；v2 approval_required 不会走这里。
     await send(text);
   }
 

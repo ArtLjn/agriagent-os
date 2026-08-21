@@ -190,7 +190,7 @@ void main() {
       {'/settings': settingsResponse, '/api/app/version': versionResponse},
       statusCodes: {'/auth/me': 500},
     );
-    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
     dio.httpClientAdapter = adapter;
     final dependencies = FakeAppDependencies(
       restoreResult: true,
@@ -246,7 +246,7 @@ void main() {
       '/settings': settingsResponse,
       '/api/app/version': versionResponse,
     });
-    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
     dio.httpClientAdapter = adapter;
     final dependencies = FakeAppDependencies(
       profile: ProfileRepository(ApiClient(dio: dio)),
@@ -285,7 +285,7 @@ void main() {
       '/settings': settingsResponse,
       '/api/app/version': versionResponse,
     });
-    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
     dio.httpClientAdapter = adapter;
     final dependencies = FakeAppDependencies(
       profile: ProfileRepository(ApiClient(dio: dio)),
@@ -328,7 +328,7 @@ void main() {
       '/settings': settingsResponse,
       '/api/app/version': versionResponse,
     });
-    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
     dio.httpClientAdapter = adapter;
     final dependencies = FakeAppDependencies(
       profile: ProfileRepository(ApiClient(dio: dio)),
@@ -397,7 +397,7 @@ ProfileRepository _profileRepositoryWithLocation(String? location) {
     '/settings': settingsResponse,
     '/api/app/version': versionResponse,
   });
-  final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+  final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
   dio.httpClientAdapter = adapter;
   return ProfileRepository(ApiClient(dio: dio));
 }

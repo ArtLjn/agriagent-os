@@ -30,19 +30,23 @@ class HomeController {
       fallback: unpaid > 0 ? '1项' : '0项',
     );
     final score = advice.overview.score.clamp(0, 100).toInt();
+    final scoreText = advice.isAiGenerated ? score.toString() : '--';
+    final scoreCaption = advice.isAiGenerated
+        ? _nonEmpty(
+            advice.overview.subtitle,
+            fallback: '$weatherText · $workOrderText作业',
+          )
+        : '经营概览已同步，暂无每日 AI 评分';
 
     return HomeViewModel(
       headline: _nonEmpty(advice.preview, fallback: '暂无建议'),
-      scoreText: score.toString(),
-      scoreCaption: _nonEmpty(
-        advice.overview.subtitle,
-        fallback: '$weatherText · $workOrderText作业',
-      ),
+      scoreText: scoreText,
+      scoreCaption: scoreCaption,
       weatherText: weatherText,
       workOrderCountText: workOrderText,
       pendingText: pendingText,
-      adviceScoreText: '$score分',
-      adviceScoreProgress: score / 100,
+      adviceScoreText: advice.isAiGenerated ? '$score分' : '暂无评分',
+      adviceScoreProgress: advice.isAiGenerated ? score / 100 : 0,
       unsettledLaborText: _money(unpaid),
       riskText: pendingText,
       riskSummaryText:

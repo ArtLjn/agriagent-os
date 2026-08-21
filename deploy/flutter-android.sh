@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# 一键启动 Flutter Android App，默认连接 Pixel_7 / emulator-5554，支持热重载。
+# 一键启动 Flutter Android App，默认连接 Pixel 9 Pro XL / emulator-5554，支持热重载。
 
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_DIR="$ROOT_DIR/mobile-app"
-DEVICE_ID="emulator-5554"
-EMULATOR_ID="Pixel_7"
-BACKEND_URL="${BACKEND_URL:-http://127.0.0.1:8099}"
+APP_DIR="$ROOT_DIR/agri_mobile_app"
+DEVICE_ID="${DEVICE_ID:-emulator-5554}"
+EMULATOR_ID="${EMULATOR_ID:-Pixel_9_Pro_XL}"
+BUSINESS_API_URL="${BUSINESS_API_URL:-http://192.168.1.13:9876/api/v2}"
+AGENT_API_URL="${AGENT_API_URL:-http://192.168.1.13:8000/api/v2}"
 
 cd "$APP_DIR"
 
@@ -35,10 +36,13 @@ if ! adb devices | grep -q "^${DEVICE_ID}[[:space:]]*device"; then
   done
 fi
 
-adb -s "$DEVICE_ID" reverse tcp:8099 tcp:8099 >/dev/null
-
 echo "启动 Flutter App：$DEVICE_ID"
-echo "后端地址：$BACKEND_URL"
+echo "Business API：$BUSINESS_API_URL"
+echo "Agent API：$AGENT_API_URL"
 echo "热重载：按 r    热重启：按 R    退出：按 q    保留 App 运行：按 d"
 
-flutter run -d "$DEVICE_ID" --hot --dart-define=API_BASE_URL="$BACKEND_URL"
+flutter run \
+  -d "$DEVICE_ID" \
+  --hot \
+  --dart-define=BUSINESS_API_BASE_URL="$BUSINESS_API_URL" \
+  --dart-define=AGENT_API_BASE_URL="$AGENT_API_URL"

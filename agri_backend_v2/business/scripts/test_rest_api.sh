@@ -191,7 +191,7 @@ import sys
 print(json.dumps({"phone": sys.argv[1], "password": sys.argv[2], "nickname": "DDL链路测试"}, ensure_ascii=False))
 PY
 )"
-    request_without_auth POST /api/agri_backend_v2/auth/register "201" "$payload"
+    request_without_auth POST /api/v2/auth/register "201" "$payload"
     TOKEN="$(json_value token)"
     [[ -n "$TOKEN" ]] || fail "注册响应没有 token"
     echo "已注册隔离测试用户: ${PHONE}"
@@ -205,7 +205,7 @@ import sys
 print(json.dumps({"phone": sys.argv[1], "password": sys.argv[2]}))
 PY
 )"
-    request_without_auth POST /api/agri_backend_v2/auth/login "200" "$payload"
+    request_without_auth POST /api/v2/auth/login "200" "$payload"
     TOKEN="$(json_value token)"
     [[ -n "$TOKEN" ]] || fail "登录响应没有 token"
   fi
@@ -235,22 +235,22 @@ check_mcp() {
 echo "== Business REST + MCP 完整链路测试 =="
 echo "BASE_URL=${BASE_URL} REGISTER_NEW=${REGISTER_NEW} CLEANUP=${CLEANUP} INCLUDE_LABOR=${INCLUDE_LABOR}"
 
-request GET /api/agri_backend_v2/health "200"
-request GET /api/agri_backend_v2/readiness "200"
-request_without_auth GET /api/agri_backend_v2/users/me "401"
+request GET /api/v2/health "200"
+request GET /api/v2/readiness "200"
+request_without_auth GET /api/v2/users/me "401"
 check_mcp
 
 login_or_register
 
-request GET /api/agri_backend_v2/users/me "200"
+request GET /api/v2/users/me "200"
 require_json_field id
-request GET /api/agri_backend_v2/users/me/settings "200"
-request PATCH /api/agri_backend_v2/users/me/settings "200" '{"default_city":"苏州","default_lat":31.2989,"default_lon":120.5853,"assistant_role":"professional"}'
+request GET /api/v2/users/me/settings "200"
+request PATCH /api/v2/users/me/settings "200" '{"default_city":"苏州","default_lat":31.2989,"default_lon":120.5853,"assistant_role":"professional"}'
 assert_json_value default_city 苏州
-request PATCH /api/agri_backend_v2/users/me "200" '{"nickname":"DDL链路测试用户"}'
+request PATCH /api/v2/users/me "200" '{"nickname":"DDL链路测试用户"}'
 assert_json_value nickname DDL链路测试用户
 
-request GET /api/agri_backend_v2/farms/my "200"
+request GET /api/v2/farms/my "200"
 FARM_ID="$(json_value farm_id)"
 [[ "$FARM_ID" =~ ^[0-9]+$ ]] || fail "农场 ID 无效: ${FARM_ID}"
 request GET "/api/v2/farms/${FARM_ID}" "200"
@@ -258,18 +258,18 @@ request GET "/api/v2/farms/${FARM_ID}/overview" "200"
 request PATCH "/api/v2/farms/${FARM_ID}" "200" '{"name":"DDL链路测试农场"}'
 request PATCH "/api/v2/farms/${FARM_ID}/location" "200" '{"location":"苏州","lat":31.2989,"lon":120.5853}'
 
-request GET '/api/agri_backend_v2/locations/search?keyword=%E8%8B%8F%E5%B7%9E' "200"
-request GET '/api/agri_backend_v2/locations/coords?city=%E8%8B%8F%E5%B7%9E' "200"
-request GET '/api/agri_backend_v2/weather?location=%E8%8B%8F%E5%B7%9E&days=1&lat=31.2989&lon=120.5853' "200 502 503"
-request GET '/api/agri_backend_v2/weather/now?location=%E8%8B%8F%E5%B7%9E&lat=31.2989&lon=120.5853' "200 502 503"
+request GET '/api/v2/locations/search?keyword=%E8%8B%8F%E5%B7%9E' "200"
+request GET '/api/v2/locations/coords?city=%E8%8B%8F%E5%B7%9E' "200"
+request GET '/api/v2/weather?location=%E8%8B%8F%E5%B7%9E&days=1&lat=31.2989&lon=120.5853' "200 502 503"
+request GET '/api/v2/weather/now?location=%E8%8B%8F%E5%B7%9E&lat=31.2989&lon=120.5853' "200 502 503"
 
-request GET /api/agri_backend_v2/crop-templates/system/list "200"
+request GET /api/v2/crop-templates/system/list "200"
 TEMPLATE_PAYLOAD='{"name":"DDL链路测试番茄","variety":"agri_backend_v2-test","category":"蔬菜","stages":[{"name":"育苗期","duration_days":10,"order_index":0,"key_tasks":"育苗"},{"name":"结果期","duration_days":20,"order_index":1,"key_tasks":"管理结果"}]}'
-request POST /api/agri_backend_v2/crop-templates "201" "$TEMPLATE_PAYLOAD"
+request POST /api/v2/crop-templates "201" "$TEMPLATE_PAYLOAD"
 TEMPLATE_ID="$(json_value id)"
 [[ "$TEMPLATE_ID" =~ ^[0-9]+$ ]] || fail "模板 ID 无效: ${TEMPLATE_ID}"
 request GET "/api/v2/crop-templates/${TEMPLATE_ID}" "200"
-request GET /api/agri_backend_v2/crop-templates "200"
+request GET /api/v2/crop-templates "200"
 request PATCH "/api/v2/crop-templates/${TEMPLATE_ID}" "200" "$TEMPLATE_PAYLOAD"
 
 CYCLE_PAYLOAD="$(python3 - "$TEMPLATE_ID" <<'PY'
@@ -286,11 +286,11 @@ print(json.dumps({
 }, ensure_ascii=False))
 PY
 )"
-request POST /api/agri_backend_v2/crop-cycles "201" "$CYCLE_PAYLOAD"
+request POST /api/v2/crop-cycles "201" "$CYCLE_PAYLOAD"
 CYCLE_ID="$(json_value id)"
 [[ "$CYCLE_ID" =~ ^[0-9]+$ ]] || fail "茬口 ID 无效: ${CYCLE_ID}"
 request GET "/api/v2/crop-cycles/${CYCLE_ID}" "200"
-request GET /api/agri_backend_v2/crop-cycles "200"
+request GET /api/v2/crop-cycles "200"
 request PATCH "/api/v2/crop-cycles/${CYCLE_ID}" "200" '{"batch_note":"REST链路已更新"}'
 request POST "/api/v2/crop-cycles/${CYCLE_ID}/advance-stage" "200 400"
 
@@ -307,20 +307,20 @@ print(json.dumps({
 }, ensure_ascii=False))
 PY
 )"
-request POST /api/agri_backend_v2/planting-units "201" "$UNIT_PAYLOAD"
+request POST /api/v2/planting-units "201" "$UNIT_PAYLOAD"
 UNIT_ID="$(json_value id)"
 [[ "$UNIT_ID" =~ ^[0-9]+$ ]] || fail "种植单元 ID 无效: ${UNIT_ID}"
 request GET "/api/v2/planting-units?cycle_id=${CYCLE_ID}" "200"
 request PATCH "/api/v2/planting-units/${UNIT_ID}" "200" '{"note":"REST链路已更新"}'
 
 WORKER_PAYLOAD='{"name":"DDL测试工人","phone":"13800009999","default_pay_type":"daily","default_unit_price":180,"note":"REST完整链路测试"}'
-request POST /api/agri_backend_v2/workers "201" "$WORKER_PAYLOAD"
+request POST /api/v2/workers "201" "$WORKER_PAYLOAD"
 WORKER_ID="$(json_value id)"
 [[ "$WORKER_ID" =~ ^[0-9]+$ ]] || fail "工人 ID 无效: ${WORKER_ID}"
 request GET "/api/v2/workers/${WORKER_ID}" "200"
-request GET /api/agri_backend_v2/workers "200"
+request GET /api/v2/workers "200"
 request PATCH "/api/v2/workers/${WORKER_ID}" "200" '{"note":"REST链路已更新"}'
-request GET /api/agri_backend_v2/workers/summary "200"
+request GET /api/v2/workers/summary "200"
 
 LOG_PAYLOAD="$(python3 - "$CYCLE_ID" <<'PY'
 import json
@@ -334,13 +334,13 @@ print(json.dumps({
 }, ensure_ascii=False))
 PY
 )"
-request POST /api/agri_backend_v2/farm-logs "201" "$LOG_PAYLOAD"
+request POST /api/v2/farm-logs "201" "$LOG_PAYLOAD"
 LOG_ID="$(json_value id)"
 [[ "$LOG_ID" =~ ^[0-9]+$ ]] || fail "农事日志 ID 无效: ${LOG_ID}"
 request GET "/api/v2/farm-logs/${LOG_ID}" "200"
 request GET "/api/v2/farm-logs?cycle_id=${CYCLE_ID}" "200"
 request PATCH "/api/v2/farm-logs/${LOG_ID}" "200" '{"note":"REST日志已更新"}'
-request GET /api/agri_backend_v2/farm-logs/operations/types "200"
+request GET /api/v2/farm-logs/operations/types "200"
 
 WORK_ORDER_PAYLOAD="$(python3 - "$CYCLE_ID" "$UNIT_ID" <<'PY'
 import json
@@ -356,13 +356,13 @@ print(json.dumps({
 }, ensure_ascii=False))
 PY
 )"
-request POST /api/agri_backend_v2/work-orders "201" "$WORK_ORDER_PAYLOAD"
+request POST /api/v2/work-orders "201" "$WORK_ORDER_PAYLOAD"
 WORK_ORDER_ID="$(json_value id)"
 [[ "$WORK_ORDER_ID" =~ ^[0-9]+$ ]] || fail "工单 ID 无效: ${WORK_ORDER_ID}"
 request GET "/api/v2/work-orders/${WORK_ORDER_ID}" "200"
 request GET "/api/v2/work-orders?cycle_id=${CYCLE_ID}" "200"
 request PATCH "/api/v2/work-orders/${WORK_ORDER_ID}" "200" '{"note":"REST工单已更新"}'
-request GET /api/agri_backend_v2/operation-types "200"
+request GET /api/v2/operation-types "200"
 
 if [[ "$INCLUDE_LABOR" == "1" ]]; then
   WAGE_PAYLOAD="$(python3 - "$CYCLE_ID" "$WORK_ORDER_ID" <<'PY'
@@ -383,19 +383,19 @@ print(json.dumps({
 }, ensure_ascii=False))
 PY
 )"
-  request POST /api/agri_backend_v2/labor/wages "201" "$WAGE_PAYLOAD"
+  request POST /api/v2/labor/wages "201" "$WAGE_PAYLOAD"
   LABOR_ENTRY_ID="$(json_value id)"
   [[ "$LABOR_ENTRY_ID" =~ ^[0-9]+$ ]] || fail "工资记录 ID 无效: ${LABOR_ENTRY_ID}"
-  request GET '/api/agri_backend_v2/labor/wages?mode=unpaid' "200"
-  request GET '/api/agri_backend_v2/labor/unsettled-summary' "200"
+  request GET '/api/v2/labor/wages?mode=unpaid' "200"
+  request GET '/api/v2/labor/unsettled-summary' "200"
   request POST "/api/v2/work-orders/${WORK_ORDER_ID}/settle" "200 400"
 fi
 
 CATEGORY_PAYLOAD='{"name":"DDL测试材料","type":"cost","icon":"tag","sort_order":99}'
-request POST /api/agri_backend_v2/cost-categories "201" "$CATEGORY_PAYLOAD"
+request POST /api/v2/cost-categories "201" "$CATEGORY_PAYLOAD"
 CATEGORY_ID="$(json_value id)"
 [[ "$CATEGORY_ID" =~ ^[0-9]+$ ]] || fail "成本分类 ID 无效: ${CATEGORY_ID}"
-request GET /api/agri_backend_v2/cost-categories "200"
+request GET /api/v2/cost-categories "200"
 request PATCH "/api/v2/cost-categories/${CATEGORY_ID}" "200" '{"sort_order":100}'
 
 COST_PAYLOAD="$(python3 - "$CYCLE_ID" <<'PY'
@@ -411,12 +411,12 @@ print(json.dumps({
 }, ensure_ascii=False))
 PY
 )"
-request POST /api/agri_backend_v2/cost-records "201" "$COST_PAYLOAD"
+request POST /api/v2/cost-records "201" "$COST_PAYLOAD"
 COST_ID="$(json_value id)"
 [[ "$COST_ID" =~ ^[0-9]+$ ]] || fail "成本记录 ID 无效: ${COST_ID}"
 request GET "/api/v2/cost-records?cycle_id=${CYCLE_ID}" "200"
 request PATCH "/api/v2/cost-records/${COST_ID}" "200" '{"note":"REST成本已更新"}'
-request GET '/api/agri_backend_v2/cost-records/summary/yearly?year=2026' "200"
+request GET '/api/v2/cost-records/summary/yearly?year=2026' "200"
 request GET "/api/v2/cost-records/cycles/${CYCLE_ID}/profit" "200"
 
 DEBT_PAYLOAD="$(python3 - "$CYCLE_ID" <<'PY'
@@ -434,16 +434,16 @@ print(json.dumps({
 }, ensure_ascii=False))
 PY
 )"
-request POST /api/agri_backend_v2/debts "201" "$DEBT_PAYLOAD"
-request GET /api/agri_backend_v2/debts "200"
-request GET /api/agri_backend_v2/debts/summary "200"
-request POST /api/agri_backend_v2/debts/settle "200" '{"counterparty":"DDL测试供应商","amount":120,"note":"REST赊账已结算"}'
+request POST /api/v2/debts "201" "$DEBT_PAYLOAD"
+request GET /api/v2/debts "200"
+request GET /api/v2/debts/summary "200"
+request POST /api/v2/debts/settle "200" '{"counterparty":"DDL测试供应商","amount":120,"note":"REST赊账已结算"}'
 
-request GET /api/agri_backend_v2/dashboard "200"
+request GET /api/v2/dashboard "200"
 request GET "/api/v2/dashboard/recent-operations?cycle_id=${CYCLE_ID}&days=365&limit=50" "200"
-request GET '/api/agri_backend_v2/dashboard/cost-summary?year=2026' "200"
-request GET /api/agri_backend_v2/dashboard/active-cycles "200"
-request GET /api/agri_backend_v2/dashboard/unsettled-labor "200"
+request GET '/api/v2/dashboard/cost-summary?year=2026' "200"
+request GET /api/v2/dashboard/active-cycles "200"
+request GET /api/v2/dashboard/unsettled-labor "200"
 request GET "/api/v2/recent-operations?cycle_id=${CYCLE_ID}&days=365&limit=50" "200"
 
 if [[ "$CLEANUP" == "1" ]]; then

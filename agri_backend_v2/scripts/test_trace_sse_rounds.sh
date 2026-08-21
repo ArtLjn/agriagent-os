@@ -36,7 +36,7 @@ if ! [[ "$ROUNDS" =~ ^[1-9][0-9]*$ ]]; then
 fi
 
 case "$AGENT_BASE_URL" in
-  */api/agri_backend_v2) API_BASE="$AGENT_BASE_URL" ;;
+  */api/v2) API_BASE="$AGENT_BASE_URL" ;;
   *) API_BASE="${AGENT_BASE_URL%/}/api/v2" ;;
 esac
 

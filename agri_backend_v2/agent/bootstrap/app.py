@@ -1,6 +1,6 @@
 """FastAPI entry point — thin shell.
 
-路由 → agent/api/*  (统一前缀 /api/agri_backend_v2)
+路由 → agent/api/*  (统一前缀 /api/v2)
 鉴权 → agent/auth.py
 
 Run: uv run --package farm-manager-agent python -m agent.bootstrap.app
@@ -34,6 +34,7 @@ from agent.api import (  # noqa: E402, F401
     traces,
     turns,
 )  # register routes
+from agent.config import settings  # noqa: E402
 from agent.platforms.persistence.mongo.chat_store import check_connection, close  # noqa: E402
 from agent.platforms.persistence.redis.redis_store import (  # noqa: E402
     check_connection as check_redis_connection,
@@ -42,7 +43,10 @@ from agent.platforms.persistence.redis.redis_store import (  # noqa: E402
 from agent.application.worker import start as start_worker, stop as stop_worker  # noqa: E402
 from agent.application.sweeper import start as start_sweeper, stop as stop_sweeper  # noqa: E402
 from agent.platforms.logging import get_logger, setup_logging  # noqa: E402
-from agent.domains.harness.observability.trace import start_trace_system, stop_trace_system  # noqa: E402
+from agent.domains.harness.observability.trace import (  # noqa: E402
+    start_trace_system,
+    stop_trace_system,
+)
 
 setup_logging(app_name="agent")
 logger = get_logger(__name__)
@@ -81,11 +85,12 @@ def index() -> FileResponse:
 def main() -> None:
     import uvicorn
 
-    logger.info("starting agent on http://127.0.0.1:8000")
+    server_url = f"http://{settings.server.host}:{settings.server.port}"
+    logger.info("starting agent on %s", server_url)
     uvicorn.run(
         "agent.bootstrap.app:app",
-        host="127.0.0.1",
-        port=8000,
+        host=settings.server.host,
+        port=settings.server.port,
         reload=False,
         log_level="info",
     )
