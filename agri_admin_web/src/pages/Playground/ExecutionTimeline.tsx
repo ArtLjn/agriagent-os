@@ -37,6 +37,13 @@ const eventMeta: Record<ExecutionEvent['type'], { label: string; color: string }
   verification_warning: { label: '检查告警', color: palette.warning },
   write_committed_reply_failed: { label: '收尾告警', color: palette.warning },
   retrying: { label: '自动重试', color: palette.warning },
+  progress: { label: '执行进度', color: '#79c0ff' },
+  'step.started': { label: 'Step 开始', color: '#79c0ff' },
+  'step.completed': { label: 'Step 完成', color: palette.success },
+  'tool.failed': { label: 'Tool 失败', color: palette.danger },
+  'turn.completed': { label: '执行完成', color: palette.success },
+  'turn.terminated': { label: '受控终止', color: palette.warning },
+  'turn.failed': { label: '执行失败', color: palette.danger },
   error: { label: '执行失败', color: palette.danger },
 };
 
@@ -52,10 +59,17 @@ function EventIcon({ type }: { type: ExecutionEvent['type'] }) {
     case 'approval_result':
     case 'operation_committed':
     case 'context_compressed':
+    case 'turn.completed':
     case 'plan_step_done': return <CheckCircleOutlined {...props} />;
     case 'context_usage': return <ClockCircleOutlined {...props} />;
+    case 'progress': return <LoadingOutlined {...props} />;
+    case 'step.started': return <LoadingOutlined {...props} />;
+    case 'step.completed': return <CheckCircleOutlined {...props} />;
+    case 'tool.failed': return <ExclamationCircleOutlined {...props} />;
     case 'error':
+    case 'turn.failed':
     case 'doom_loop_warning': return <ExclamationCircleOutlined {...props} />;
+    case 'turn.terminated': return <ClockCircleOutlined {...props} />;
     default: return <LoadingOutlined {...props} />;
   }
 }
@@ -141,6 +155,20 @@ function EventBody({ event }: { event: ExecutionEvent }) {
       return <span style={{ color: palette.warning }}>{event.code} · {event.message}</span>;
     case 'retrying':
       return <span style={{ color: palette.warning }}>{event.code} · {event.category ?? 'transient'} · 第 {event.attempt} 次，等待 {event.delay_ms}ms</span>;
+    case 'progress':
+      return <span style={{ color: TEXT_DIM }}>{event.message}{event.phase ? ` · ${event.phase}` : ''}</span>;
+    case 'step.started':
+      return <span style={{ color: TEXT_DIM }}>第 {event.step_index} 步开始 · {event.status}</span>;
+    case 'step.completed':
+      return <span style={{ color: TEXT_DIM }}>第 {event.step_index} 步结束 · {event.status} · {event.tool_count} 个 Tool</span>;
+    case 'tool.failed':
+      return <span style={{ color: palette.danger }}>{event.tool_name} · {event.tool_call_id} · {jsonText(event.error)}</span>;
+    case 'turn.completed':
+      return <span style={{ color: palette.success }}>{event.message ?? `停止原因：${event.stop_reason ?? 'completed'}${event.step_count === undefined ? '' : ` · 共 ${event.step_count} 步`}`}</span>;
+    case 'turn.terminated':
+      return <span style={{ color: palette.warning }}>{event.reason} · {event.message}{event.step_count === undefined ? '' : ` · 共 ${event.step_count} 步`}</span>;
+    case 'turn.failed':
+      return <span style={{ color: palette.danger }}>停止原因：{event.stop_reason}<DetailDisclosure label="查看错误详情" value={event.error} tone={palette.danger} /></span>;
     case 'error':
       return <span style={{ color: palette.danger }}>{event.code} · {event.category ? `${event.category} · ` : ''}{event.message}</span>;
   }
@@ -192,7 +220,7 @@ export function ExecutionTimeline({ events, loading }: { events?: ExecutionEvent
       </button>
       {open && (
         <div style={{ padding: '2px 18px 16px 24px' }}>
-          {events.map((event, index) => <TimelineEvent key={`${event.type}-${index}`} event={event} index={index} isLast={index === events.length - 1} />)}
+          {events.map((event, index) => <TimelineEvent key={event.event_id ?? `${event.type}-${event.seq ?? index}`} event={event} index={index} isLast={index === events.length - 1} />)}
         </div>
       )}
     </section>

@@ -106,6 +106,34 @@ def plan_step_done(
     }
 
 
+def step_started(turn_id: str, step_index: int) -> dict:
+    """标记 ReAct Step 开始，供并行 Tool Batch 关联稳定的 step_index。"""
+    return {
+        "type": "step.started",
+        "data": {"turn_id": turn_id, "step_index": step_index, "status": "running"},
+    }
+
+
+def step_completed(
+    turn_id: str,
+    step_index: int,
+    *,
+    status: str,
+    tool_count: int = 0,
+    error: dict[str, Any] | None = None,
+) -> dict:
+    """标记 Step 收口，错误信息只保留结构化摘要。"""
+    data: dict[str, Any] = {
+        "turn_id": turn_id,
+        "step_index": step_index,
+        "status": status,
+        "tool_count": tool_count,
+    }
+    if error:
+        data["error"] = error
+    return {"type": "step.completed", "data": data}
+
+
 def action(tool_name: str, arguments: dict, rationale: str = "") -> dict:
     return {
         "type": "action",
@@ -156,6 +184,28 @@ def tool_finished(
             "step": step,
             "duration_ms": duration_ms,
             "result": result,
+            "error": error,
+        },
+    }
+
+
+def tool_failed(
+    turn_id: str,
+    tool_call_id: str,
+    tool_name: str,
+    step: int,
+    error: dict[str, Any],
+    duration_ms: int = 0,
+) -> dict:
+    """标记 Tool 失败，和 tool_started 使用同一个 tool_call_id 配对。"""
+    return {
+        "type": "tool.failed",
+        "data": {
+            "turn_id": turn_id,
+            "tool_call_id": tool_call_id,
+            "tool_name": tool_name,
+            "step": step,
+            "duration_ms": duration_ms,
             "error": error,
         },
     }
@@ -261,8 +311,71 @@ def error_event(
     return {"type": "error", "data": data}
 
 
-def done(status: str, turn_id: str) -> dict:
-    return {"type": "done", "data": {"status": status, "turn_id": turn_id}}
+def done(
+    status: str,
+    turn_id: str,
+    *,
+    stop_reason: str | None = None,
+    step_count: int | None = None,
+) -> dict:
+    """构造唯一流关闭事件，并保留可解释的 Turn 终止上下文。"""
+    data: dict[str, Any] = {"status": status, "turn_id": turn_id}
+    if stop_reason:
+        data["stop_reason"] = stop_reason
+    if step_count is not None:
+        data["step_count"] = step_count
+    return {"type": "done", "data": data}
+
+
+def turn_completed(
+    turn_id: str, *, stop_reason: str, step_count: int
+) -> dict:
+    """发布业务成功终态；真正关闭 SSE 仍由 done 负责。"""
+    return {
+        "type": "turn.completed",
+        "data": {
+            "turn_id": turn_id,
+            "status": "completed",
+            "stop_reason": stop_reason,
+            "step_count": step_count,
+        },
+    }
+
+
+def turn_terminated(
+    turn_id: str,
+    *,
+    reason: str,
+    message: str,
+    step_count: int,
+    status: str = "terminated",
+) -> dict:
+    """发布预算/策略受控终态，不伪装成 error 事件。"""
+    return {
+        "type": "turn.terminated",
+        "data": {
+            "turn_id": turn_id,
+            "status": status,
+            "reason": reason,
+            "message": message,
+            "step_count": step_count,
+        },
+    }
+
+
+def turn_failed(
+    turn_id: str, *, stop_reason: str, error: dict[str, Any]
+) -> dict:
+    """发布执行失败语义终态；错误详情仍保留 code 和上下文。"""
+    return {
+        "type": "turn.failed",
+        "data": {
+            "turn_id": turn_id,
+            "status": "failed",
+            "stop_reason": stop_reason,
+            "error": error,
+        },
+    }
 
 
 def context_usage(

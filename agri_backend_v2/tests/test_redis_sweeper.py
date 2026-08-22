@@ -56,3 +56,20 @@ async def test_sweep_once_trims_and_expires_dispatch_stream(
     assert result == {"active": 2, "queue": 3, "user": 1, "approval": 4}
     client.xtrim.assert_awaited_once()
     client.expire.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_timeout_turn_publishes_answer_semantic_terminal_and_done(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    publish = AsyncMock()
+    monkeypatch.setattr(sweeper, "mark_timeout_if_active", AsyncMock(return_value=True))
+    monkeypatch.setattr(sweeper, "publish_event", publish)
+
+    assert await sweeper._timeout_turn("turn-1", "lease_expired") is True
+    assert [call.args[1]["type"] for call in publish.await_args_list] == [
+        "timeout",
+        "final_answer",
+        "turn.terminated",
+        "done",
+    ]

@@ -144,7 +144,12 @@ async def run_turn(
         logger.exception("run_turn setup failed")
         ev = _pipeline_error_event(turn, exc)
         yield ev
-        yield sse.done(turn.status, turn.turn_id)
+        yield sse.done(
+            turn.status,
+            turn.turn_id,
+            stop_reason=turn.stop_reason.value if turn.stop_reason else None,
+            step_count=turn.step_count,
+        )
         return
 
     try:
@@ -160,7 +165,12 @@ async def run_turn(
         ev = _pipeline_error_event(turn, exc)
         yield ev
 
-    yield sse.done(turn.status, turn.turn_id)
+    yield sse.done(
+        turn.status,
+        turn.turn_id,
+        stop_reason=turn.stop_reason.value if turn.stop_reason else None,
+        step_count=turn.step_count,
+    )
 
 
 async def _prepare_turn_runtime(
@@ -266,6 +276,9 @@ async def _run_turn_loop(
         turn.set_phase(TurnPhase.REASONING)
         turn.step_count += 1
         increment_step()
+        step_started_ev = sse.step_started(turn.turn_id, turn.step_count)
+        turn.emit(step_started_ev["type"], step_started_ev["data"])
+        yield step_started_ev
 
         async for ev in _run_single_reasoning_step(
             turn=turn,
@@ -284,6 +297,33 @@ async def _run_turn_loop(
 
         if turn.status != "running":
             break
+
+        step_completed_ev = sse.step_completed(
+            turn.turn_id,
+            turn.step_count,
+            status="completed",
+            tool_count=sum(
+                event.get("type") in {"tool_started", "tool.failed"}
+                and event.get("step") == turn.step_count
+                for event in turn.events
+            ),
+        )
+        turn.emit(step_completed_ev["type"], step_completed_ev["data"])
+        yield step_completed_ev
+
+    if turn.status == "rejected":
+        rejection_message = turn.rejected_reason or "用户拒绝执行该操作"
+        async for ev in _emit_failure_terminal(
+            turn,
+            code="approval_rejected",
+            message=rejection_message,
+            answer=_rejected_final_answer(turn) or "已取消该操作：用户拒绝执行",
+            phase=TurnPhase.FINALIZING,
+            stop_reason=StopReason.APPROVAL_REJECTED,
+            status="rejected",
+        ):
+            yield ev
+        return
 
     if turn.status == "running":
         turn.set_phase(TurnPhase.FINALIZING)
@@ -675,10 +715,22 @@ async def _emit_final_answer(
     turn.status = "completed"
     turn.stop_reason = StopReason.MODEL_COMPLETED
     turn.set_phase(TurnPhase.TERMINAL)
+    step_completed_ev = sse.step_completed(
+        turn.turn_id, turn.step_count, status="completed"
+    )
+    turn.emit(step_completed_ev["type"], step_completed_ev["data"])
+    yield step_completed_ev
     yield sse.final_answer_start()
     if content:
         yield sse.final_answer_delta(content)
     yield sse.final_answer(content)
+    completed_ev = sse.turn_completed(
+        turn.turn_id,
+        stop_reason=turn.stop_reason.value,
+        step_count=turn.step_count,
+    )
+    turn.emit(completed_ev["type"], completed_ev["data"])
+    yield completed_ev
 
 
 # ── LLM 调用 ──────────────────────────────────────────────
@@ -854,9 +906,24 @@ async def _handle_llm_error(turn: Turn, exc: Exception) -> AsyncGenerator[dict, 
         stream_started=isinstance(exc, LlmStreamError) and exc.stream_started,
     )
     turn.final_answer = answer
+    failed_ev = sse.turn_failed(
+        turn.turn_id,
+        stop_reason=StopReason.LLM_FAILED.value,
+        error=error_info,
+    )
+    step_completed_ev = sse.step_completed(
+        turn.turn_id,
+        turn.step_count,
+        status="failed",
+        error=error_info,
+    )
+    turn.emit(step_completed_ev["type"], step_completed_ev["data"])
+    yield step_completed_ev
     yield sse.final_answer_start()
     yield sse.final_answer_delta(answer)
     yield sse.final_answer(answer)
+    turn.emit(failed_ev["type"], failed_ev["data"])
+    yield failed_ev
 
 
 def _llm_failure_answer(category: str, *, stream_started: bool) -> str:
@@ -1152,8 +1219,7 @@ async def _process_skill_call(
 
     rejected_answer = _rejected_final_answer(turn)
     if rejected_answer is not None:
-        turn.final_answer = rejected_answer
-        yield sse.final_answer(rejected_answer)
+        # 由 _run_turn_loop 的统一拒绝 Finalizer 负责答复和语义终态，避免重复 final_answer。
         return
 
     state = _SkillExecState()
@@ -1420,7 +1486,7 @@ async def _check_duplication(
 async def _emit_doom_loop_terminal(
     turn: Turn, detail: str
 ) -> AsyncGenerator[dict, None]:
-    """发布 Doom 警告，再交给统一失败终止器收口。"""
+    """发布 Doom 警告，再交给统一受控终止器收口。"""
     warning_ev = sse.doom_loop_warning(detail, step=turn.step_count)
     turn.emit("doom_loop_warning", warning_ev["data"])
     yield warning_ev
@@ -1431,6 +1497,7 @@ async def _emit_doom_loop_terminal(
         answer=detail,
         phase=TurnPhase.REASONING,
         stop_reason=StopReason.DOOM_LOOP_DETECTED,
+        status="terminated",
     ):
         yield ev
 
@@ -1468,31 +1535,70 @@ async def _emit_failure_terminal(
     phase: TurnPhase,
     stop_reason: StopReason,
     tool_name: str = "",
+    status: str = "failed",
 ) -> AsyncGenerator[dict, None]:
-    """统一发出失败终态，保证 error、final_answer 和 done 链路一致。"""
-    error_info = turn.record_error(
-        code,
-        message,
-        phase=phase,
-        tool_name=tool_name,
-        stop_reason=stop_reason,
-    )
-    error_ev = sse.error_event(
-        message,
-        code,
-        phase=error_info["phase"],
-        tool_name=tool_name,
-        retryable=False,
-        attempt=0,
-    )
-    turn.emit("error", error_ev["data"])
-    yield error_ev
+    """统一发出失败或受控终止，保证答复和语义终态顺序一致。"""
+    if status in {"terminated", "rejected"}:
+        if status == "rejected":
+            error_info = turn.record_error(
+                code,
+                message,
+                phase=phase,
+                stop_reason=stop_reason,
+                status="rejected",
+            )
+        else:
+            error_info = turn.record_termination(stop_reason, message, phase=phase)
+    else:
+        error_info = turn.record_error(
+            code,
+            message,
+            phase=phase,
+            tool_name=tool_name,
+            stop_reason=stop_reason,
+        )
+        error_ev = sse.error_event(
+            message,
+            code,
+            phase=error_info["phase"],
+            tool_name=tool_name,
+            retryable=False,
+            attempt=0,
+        )
+        turn.emit("error", error_ev["data"])
+        yield error_ev
     turn.final_answer = answer
     turn.finalization_request = None
     turn.set_phase(TurnPhase.TERMINAL)
+    step_completed_ev = sse.step_completed(
+        turn.turn_id,
+        turn.step_count,
+        status=("rejected" if status == "rejected" else "terminated")
+        if status in {"terminated", "rejected"}
+        else "failed",
+        error=None if status in {"terminated", "rejected"} else error_info,
+    )
+    turn.emit(step_completed_ev["type"], step_completed_ev["data"])
+    yield step_completed_ev
     yield sse.final_answer_start()
     yield sse.final_answer_delta(answer)
     yield sse.final_answer(answer)
+    if status in {"terminated", "rejected"}:
+        terminal_ev = sse.turn_terminated(
+            turn.turn_id,
+            reason=stop_reason.value,
+            message=message,
+            step_count=turn.step_count,
+            status="rejected" if status == "rejected" else "terminated",
+        )
+    else:
+        terminal_ev = sse.turn_failed(
+            turn.turn_id,
+            stop_reason=stop_reason.value,
+            error=error_info,
+        )
+    turn.emit(terminal_ev["type"], terminal_ev["data"])
+    yield terminal_ev
 
 
 # ── HITL 审批闸门（P5）────────────────────────────────────
@@ -1702,6 +1808,17 @@ async def _run_skill_call(
             )
         turn.emit("tool_finished", finished_ev["data"])
         yield finished_ev
+        if result_obj.error:
+            failed_ev = sse.tool_failed(
+                turn.turn_id,
+                tool_call_id,
+                skill.name,
+                turn.step_count,
+                error_info,
+                duration_ms=_tool_ms,
+            )
+            turn.emit(failed_ev["type"], failed_ev["data"])
+            yield failed_ev
         turn.emit("observation", obs_ev["data"])
         yield obs_ev
     except Exception as exc:
@@ -1752,6 +1869,16 @@ async def _run_skill_call(
         )
         turn.emit("tool_finished", finished_ev["data"])
         yield finished_ev
+        failed_ev = sse.tool_failed(
+            turn.turn_id,
+            tool_call_id,
+            skill.name,
+            turn.step_count,
+            error_info,
+            duration_ms=duration_ms,
+        )
+        turn.emit(failed_ev["type"], failed_ev["data"])
+        yield failed_ev
         turn.emit("observation", obs_ev["data"])
         yield obs_ev
         trace_tool_call(skill.name, args, None, error=str(exc))
@@ -1808,8 +1935,7 @@ async def _drive_approval_followup(
 
     rejected_answer = _rejected_final_answer(turn)
     if rejected_answer is not None:
-        turn.final_answer = rejected_answer
-        yield sse.final_answer(rejected_answer)
+        # 由 _run_turn_loop 的统一拒绝 Finalizer 负责答复和语义终态，避免重复 final_answer。
         return
 
     # 3. 执行 commit（使用 prepare 原始参数，禁止模型改写）
@@ -2184,33 +2310,30 @@ def _build_skill_obs_str(tool_name: str, args: dict, state: _SkillExecState) -> 
 
 
 async def _finalize_turn(turn: Turn) -> AsyncGenerator[dict, None]:
-    """while 循环结束后：running→completed/failed。"""
+    """while 循环结束后：running→completed/terminated。"""
     if turn.committed_result is not None:
         async for ev in _finalize_committed_with_fallback(
             turn, "写入已成功，但收尾轮次未生成最终答复。"
         ):
             yield ev
     else:
-        error_info = turn.record_error(
-            "max_steps_reached",
+        answer = "本轮执行已达到推理步数上限，尚未完成请求。已停止继续调用工具，请补充信息后重试。"
+        turn.record_termination(
+            StopReason.STEP_BUDGET_EXHAUSTED,
             "达到最大步数限制，请缩小问题范围或重试",
             phase=TurnPhase.FINALIZING,
-            stop_reason=StopReason.STEP_BUDGET_EXHAUSTED,
         )
-        ev = sse.error_event(
-            error_info["message"],
-            "max_steps",
-            phase=error_info["phase"],
-            retryable=error_info["retryable"],
-            attempt=error_info["attempt"],
-        )
-        turn.emit("error", ev["data"])
-        yield ev
-        answer = "本轮执行已达到推理步数上限，尚未完成请求。已停止继续调用工具，请补充信息后重试。"
         turn.final_answer = answer
-        turn.set_phase(TurnPhase.TERMINAL)
         yield sse.final_answer_start()
         yield sse.final_answer(answer)
+        terminal_ev = sse.turn_terminated(
+            turn.turn_id,
+            reason=StopReason.STEP_BUDGET_EXHAUSTED.value,
+            message="达到最大步数限制，请缩小问题范围或重试",
+            step_count=turn.step_count,
+        )
+        turn.emit(terminal_ev["type"], terminal_ev["data"])
+        yield terminal_ev
 
 
 async def _finalize_committed_with_fallback(
@@ -2233,6 +2356,13 @@ async def _finalize_committed_with_fallback(
     turn.set_phase(TurnPhase.TERMINAL)
     yield sse.final_answer_start()
     yield sse.final_answer(turn.final_answer)
+    completed_ev = sse.turn_completed(
+        turn.turn_id,
+        stop_reason=turn.stop_reason.value,
+        step_count=turn.step_count,
+    )
+    turn.emit(completed_ev["type"], completed_ev["data"])
+    yield completed_ev
 
 
 # ── 辅助函数 ──────────────────────────────────────────────

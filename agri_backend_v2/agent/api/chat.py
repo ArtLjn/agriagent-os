@@ -13,6 +13,11 @@ from pydantic import BaseModel
 from agent.api import api_router
 from agent.auth import ensure_mcp_credentials, parse_identity
 from agent.domains.harness.runtime.turn import Turn
+from agent.domains.harness.runtime.projection import (
+    ProjectionPermissionError,
+    project_event,
+    resolve_presentation_profile,
+)
 from agent.platforms.persistence.mongo.chat_store import append_message
 from agent.platforms.persistence.redis.coordination import (
     CoordinationError,
@@ -46,11 +51,27 @@ class ChatRequest(BaseModel):
 async def chat(
     req: ChatRequest,
     authorization: str | None = Header(default=None),
-    after_seq: int = Query(default=0, ge=0),
+    after_seq: int | None = Query(default=None, ge=0),
+    last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
+    viewer_authorization: str | None = Header(default=None, alias="X-Viewer-Authorization"),
+    presentation_profile: str | None = Header(default=None, alias="X-SSE-Presentation-Profile"),
 ) -> StreamingResponse:
     """Create a durable turn and stream replayable Redis events."""
     conv_id = req.conversation_id or "default"
     identity = parse_identity(authorization)
+    viewer_identity = identity
+    if viewer_authorization:
+        viewer_identity = parse_identity(viewer_authorization)
+        if viewer_identity.get("role") != "admin":
+            raise HTTPException(403, {"code": "viewer_forbidden", "message": "viewer 无权查看 Agent 调试流"})
+    try:
+        resolved_profile = resolve_presentation_profile(
+            execution_identity=identity,
+            viewer_identity=viewer_identity,
+            requested=presentation_profile,
+        )
+    except ProjectionPermissionError as exc:
+        raise HTTPException(403, {"code": "projection_forbidden", "message": str(exc)}) from exc
     ensure_mcp_credentials()
     scope = scope_hash(identity["user_id"], identity["farm_id"], conv_id)
     request_id = req.client_request_id or uuid.uuid4().hex
@@ -193,9 +214,25 @@ async def chat(
             503, {"code": "turn_creation_failed", "message": str(exc)}
         ) from exc
 
+    replay_after_seq = after_seq
+    if replay_after_seq is None and last_event_id:
+        from agent.platforms.persistence.redis.turn_store import resolve_event_seq
+
+        replay_after_seq = await resolve_event_seq(turn.turn_id, last_event_id)
+    if replay_after_seq is None:
+        replay_after_seq = 0
+
     async def event_stream():
-        async for event in stream_events(turn.turn_id, after_seq=after_seq):
-            payload = {**event["data"], "seq": event["seq"]}
+        async for event in stream_events(turn.turn_id, after_seq=replay_after_seq):
+            projected = project_event(
+                event,
+                profile=resolved_profile,
+                execution_identity=identity,
+                viewer_identity=viewer_identity,
+            )
+            if projected is None:
+                continue
+            payload = {**projected["data"], "seq": event["seq"]}
             for field in (
                 "event_id",
                 "trace_id",
@@ -215,13 +252,17 @@ async def chat(
                 "reset_generation",
                 "source_status",
                 "context_source_status",
+                "presentation_profile",
+                "viewer_user_id",
+                "execution_user_id",
+                "impersonation",
             ):
-                if field in event:
-                    payload[field] = event[field]
+                if field in projected:
+                    payload[field] = projected[field]
             yield sse_event(
-                event["type"],
+                projected["type"],
                 payload,
-                event_id=event.get("event_id", ""),
+                event_id=projected.get("event_id", ""),
             )
 
     return StreamingResponse(

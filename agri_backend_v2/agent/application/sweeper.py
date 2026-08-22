@@ -19,10 +19,18 @@ from agent.platforms.persistence.redis.turn_store import (
     mark_timeout_if_active,
     publish_event,
 )
+from agent.platforms.persistence.redis import sse
 
 logger = logging.getLogger(__name__)
 
-_TERMINAL_STATUSES = {"completed", "failed", "rejected", "cancelled", "timeout"}
+_TERMINAL_STATUSES = {
+    "completed",
+    "terminated",
+    "failed",
+    "rejected",
+    "cancelled",
+    "timeout",
+}
 _ACTIVE_STATUSES = {"accepted", "running", "awaiting_approval"}
 _sweeper_task: asyncio.Task | None = None
 _sweeper_stop: asyncio.Event | None = None
@@ -48,6 +56,23 @@ async def _timeout_turn(turn_id: str, code: str) -> bool:
     await publish_event(
         turn_id,
         {"type": "timeout", "data": {"code": code, "turn_id": turn_id}},
+    )
+    await publish_event(
+        turn_id,
+        {"type": "final_answer", "data": {"text": "本轮执行已超时，系统未确认业务操作是否完成。"}},
+    )
+    await publish_event(
+        turn_id,
+        sse.turn_terminated(
+            turn_id,
+            reason=code,
+            message="本轮执行已超时，系统未确认业务操作是否完成。",
+            step_count=0,
+        ),
+    )
+    await publish_event(
+        turn_id,
+        {"type": "done", "data": {"status": "timeout", "turn_id": turn_id, "stop_reason": code}},
     )
     return True
 

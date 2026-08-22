@@ -507,13 +507,13 @@ async def test_doom_loop_stops_before_next_llm_call_with_final_answer() -> None:
         )
     ]
 
-    assert turn.status == "failed"
+    assert turn.status == "terminated"
     assert turn.stop_reason == StopReason.DOOM_LOOP_DETECTED
     assert [event["type"] for event in events][-4:] == [
-        "error",
         "final_answer_start",
         "final_answer_delta",
         "final_answer",
+        "turn.terminated",
     ]
     assert not any(event["type"] == "context_usage" for event in events)
 
@@ -554,7 +554,10 @@ async def test_duplicate_tool_call_path_also_emits_doom_loop_final_answer() -> N
 
     assert turn.stop_reason == StopReason.DOOM_LOOP_DETECTED
     assert any(event["type"] == "doom_loop_warning" for event in events)
-    assert events[-1]["type"] == "final_answer"
+    assert [event["type"] for event in events][-2:] == [
+        "final_answer",
+        "turn.terminated",
+    ]
 
 
 @pytest.mark.asyncio
@@ -769,11 +772,14 @@ async def test_non_retryable_tool_error_stops_before_max_steps() -> None:
     assert turn.stop_reason == StopReason.TOOL_FAILED
     assert turn.error != "max_steps_reached"
     assert turn.final_answer
-    assert [event["type"] for event in events][-4:] == [
-        "error",
+    types = [event["type"] for event in events]
+    assert "tool.failed" in types
+    assert types[-5:] == [
+        "step.completed",
         "final_answer_start",
         "final_answer_delta",
         "final_answer",
+        "turn.failed",
     ]
 
 
@@ -878,11 +884,12 @@ async def test_max_steps_emits_user_visible_terminal_answer() -> None:
     turn = Turn(user_input="无法完成的任务")
     events = [event async for event in react._finalize_turn(turn)]
 
-    assert turn.status == "failed"
-    assert turn.error == "max_steps_reached"
+    assert turn.status == "terminated"
+    assert turn.error is None
     assert turn.stop_reason == StopReason.STEP_BUDGET_EXHAUSTED
     assert turn.phase == TurnPhase.TERMINAL
-    assert any(event["type"] == "error" for event in events)
+    assert not any(event["type"] == "error" for event in events)
+    assert any(event["type"] == "turn.terminated" for event in events)
     assert any(event["type"] == "final_answer" for event in events)
     assert turn.final_answer
 
@@ -898,12 +905,13 @@ async def test_final_answer_emits_incremental_and_complete_events() -> None:
         )
     ]
 
-    assert [event["type"] for event in events][-3:] == [
+    assert [event["type"] for event in events][-4:] == [
         "final_answer_start",
         "final_answer_delta",
         "final_answer",
+        "turn.completed",
     ]
-    assert events[-2]["data"] == {"delta": "最终答复"}
+    assert events[-3]["data"] == {"delta": "最终答复"}
 
 
 @pytest.mark.asyncio

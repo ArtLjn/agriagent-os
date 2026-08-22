@@ -22,6 +22,7 @@ TurnStatus = Literal[
     "queued",  # 等待会话或全局执行槽位
     "awaiting_approval",  # Blocked on HITL gate
     "completed",  # Final answer emitted
+    "terminated",  # Controlled termination, not an execution fault
     "rejected",  # User rejected HITL
     "failed",  # Error
     "cancelled",  # User cancelled
@@ -90,7 +91,7 @@ class Turn:
 
     # Loop state.
     step_count: int = 0
-    max_steps: int = 5
+    max_steps: int = 20
     status: TurnStatus = "running"
     phase: TurnPhase = TurnPhase.SETUP
     stop_reason: StopReason | None = None
@@ -171,12 +172,44 @@ class Turn:
             self.stop_reason = stop_reason
         if status is not None:
             self.status = status
-        if status in {"completed", "failed", "rejected", "cancelled", "timeout"}:
+        if status in {
+            "completed",
+            "terminated",
+            "failed",
+            "rejected",
+            "cancelled",
+            "timeout",
+        }:
             self.phase = TurnPhase.TERMINAL
         return dict(self.error_details)
 
+    def record_termination(
+        self,
+        reason: StopReason,
+        message: str,
+        *,
+        phase: TurnPhase | None = None,
+    ) -> dict[str, Any]:
+        """记录受控终止，避免把预算耗尽误记为系统异常。"""
+        if phase is not None:
+            self.phase = phase
+        self.status = "terminated"
+        self.stop_reason = reason
+        self.error = None
+        self.error_code = None
+        self.error_message = message
+        self.error_details = {
+            "code": reason.value,
+            "message": message,
+            "phase": self.phase.value,
+            "retryable": False,
+            "attempt": 0,
+        }
+        self.phase = TurnPhase.TERMINAL
+        return dict(self.error_details)
+
     def emit(self, event_type: str, data: dict | None = None) -> dict:
-        """Append an SSE event to this turn. Returns the event for streaming."""
+        """记录领域事件；seq/event_id 由持久化 Publisher 在边界统一补充。"""
         import time
 
         event = {

@@ -376,7 +376,14 @@ async def test_rejected_approval_ends_turn_without_commit(
     assert commit.call_count == 0
     assert "operation_committed" not in event_types
     assert event_types.count("final_answer") == 1
+    assert "approval_result" in event_types
+    assert "turn.terminated" in event_types
+    assert event_types.index("final_answer") < event_types.index("turn.terminated")
+    assert event_types.index("turn.terminated") < event_types.index("done")
     assert "已取消" in (turn.final_answer or "")
+    assert turn.status == "rejected"
+    assert turn.error_code == "approval_rejected"
+    assert turn.stop_reason.value == "approval_rejected"
 
 
 @pytest.mark.asyncio

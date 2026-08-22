@@ -85,3 +85,4 @@ backend/var/mongodb-cleanup/
 output/
 agri_admin_web/dist/
 agri_home_index/app/dist/
+archive

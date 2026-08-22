@@ -150,6 +150,7 @@ class _FakeStore:
             return next(item["seq"] for item in events if item["type"] == "done")
         item = {
             "seq": len(events) + 1,
+            "event_id": f"evt_{turn_id}_{len(events) + 1}",
             "type": event["type"],
             "data": dict(event.get("data") or {}),
             "terminal": event["type"] == "done",
@@ -433,13 +434,17 @@ def _sse_events(response: httpx.Response) -> list[dict[str, Any]]:
         lines = block.splitlines()
         if not lines:
             continue
+        event_id = next(
+            (line.removeprefix("id: ") for line in lines if line.startswith("id:")),
+            "",
+        )
         event_type = next(
             line.removeprefix("event: ") for line in lines if line.startswith("event:")
         )
         data = next(
             line.removeprefix("data: ") for line in lines if line.startswith("data:")
         )
-        events.append({"type": event_type, **json.loads(data)})
+        events.append({"type": event_type, "sse_event_id": event_id, **json.loads(data)})
     return events
 
 
@@ -456,26 +461,23 @@ async def test_chat_worker_normal_chain_and_after_seq_reconnect(
         assert response.status_code == 200
 
         types = [event["type"] for event in first]
-        assert types.index("started") < types.index("meta")
-        assert types.index("meta") < types.index("observation")
+        assert types.count("progress") >= 2
         assert (
-            types.index("observation")
+            types.index("progress")
             < types.index("final_answer")
             < types.index("done")
         )
         assert types.count("done") == 1
         assert first[-1]["type"] == "done"
-        assert all("conversation_revision" in event for event in first)
-        assert all("reset_generation" in event for event in first)
-        assert all("source_status" in event for event in first)
+        assert all(event["sse_event_id"] == event["event_id"] for event in first)
+        assert all("trace_id" not in event for event in first)
+        assert all("user_id" not in event for event in first)
         assert len(fake_runtime.business_calls) == 1
         assert len(fake_runtime.messages) == 2
         assert len(fake_runtime.dispatches) == 1
         assert len(fake_runtime.worker_runs) == 0
 
-        observation_seq = next(
-            event["seq"] for event in first if event["type"] == "observation"
-        )
+        observation_seq = max(event["seq"] for event in first if event["type"] == "progress")
         reconnected = await _post_chat(
             client,
             request_id="normal-request",
@@ -491,7 +493,7 @@ async def test_chat_worker_normal_chain_and_after_seq_reconnect(
     assert len(fake_runtime.business_calls) == 1
     assert len(fake_runtime.messages) == 2
     assert len(fake_runtime.dispatches) == 1
-    assert len(fake_runtime.events[next(iter(fake_runtime.events))]) == len(first)
+    assert len(fake_runtime.events[next(iter(fake_runtime.events))]) > len(first)
 
 
 @pytest.mark.asyncio
@@ -552,9 +554,9 @@ async def test_worker_exception_has_error_final_answer_and_unique_done(
     types = [event["type"] for event in events]
     assert response.status_code == 200
     assert "error" in types
-    assert types.index("error") < types.index("final_answer") < types.index("done")
+    assert types.index("error") < types.index("final_answer") < types.index("turn.failed") < types.index("done")
     assert types.count("done") == 1
     error = next(event for event in events if event["type"] == "error")
-    assert error["code"] == "worker_failed"
+    assert "执行失败" in error["message"] or "fake worker runtime failure" in error["message"]
     final_answer = next(event for event in events if event["type"] == "final_answer")
     assert final_answer["text"]

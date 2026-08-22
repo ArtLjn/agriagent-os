@@ -30,7 +30,8 @@ import { buildTraceMonitorUrl, selectLatestTraceId } from './traceLinks';
 import { LlmContextInspector, LlmContextTriggerButton } from './LlmContextInspector';
 import { QuickPrompts } from './QuickPrompts';
 import { ExecutionTimeline } from './ExecutionTimeline';
-import { executionEventFromChunk, type ExecutionEvent } from './executionEvents';
+import { appendExecutionEvent, executionEventFromChunk, type ExecutionEvent } from './executionEvents';
+import { authStore } from '../../stores/authStore';
 
 const CARD = palette.bgElevated;
 const BORDER = palette.border;
@@ -328,6 +329,7 @@ export default function Playground() {
   const llmContextRequestId = llmContextTimeline?.trace_id;
   // dev user token：模拟用户时注入到 streamChat 的 Authorization 头
   const activeUserToken = selectedDevUser?.token ?? null;
+  const viewerToken = authStore.getToken();
 
   const updateSession = useCallback((sid: string, updater: (state: ChatSessionState) => ChatSessionState) => {
     setSessions((prev) => {
@@ -511,9 +513,10 @@ export default function Playground() {
   }, [updateSession]);
 
   const openLlmContextInspector = useCallback(() => {
+    if (selectedDevUser) return;
     setLlmContextOpen(true);
     void refreshSessionTimeline(sessionId);
-  }, [refreshSessionTimeline, sessionId]);
+  }, [refreshSessionTimeline, sessionId, selectedDevUser]);
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => {
@@ -555,6 +558,8 @@ export default function Playground() {
       let streamedTrace: StreamTraceContext | null = null;
       for await (const chunk of streamChat(userMsg, targetSessionId, activeUserToken, {
         client_request_id: clientRequestId,
+        viewerToken,
+        presentationProfile: selectedDevUser ? 'user' : 'admin_debug',
       })) {
         if (chunk.type === 'meta') {
           streamedTrace = chunk.data;
@@ -566,7 +571,7 @@ export default function Playground() {
             ...state,
             messages: state.messages.map((item) => (
               item.id === assistantMessage.id
-                ? { ...item, events: [...(item.events ?? []), executionEvent] }
+                ? { ...item, events: appendExecutionEvent(item.events ?? [], executionEvent) }
                 : item
             )),
           }));
@@ -612,7 +617,9 @@ export default function Playground() {
         }
       }
 
-      await refreshSessionTimeline(targetSessionId, streamedTrace?.trace_id);
+      if (!selectedDevUser) {
+        await refreshSessionTimeline(targetSessionId, streamedTrace?.trace_id);
+      }
 
       await loadConversations();
       return true;
@@ -633,7 +640,7 @@ export default function Playground() {
         traceLoading: false,
       }));
     }
-  }, [activeUserToken, input, scrollToBottom, sessionId, sessions, updateSession, loadConversations, refreshSessionTimeline]);
+  }, [activeUserToken, input, scrollToBottom, sessionId, sessions, updateSession, loadConversations, refreshSessionTimeline, selectedDevUser, viewerToken]);
 
   const handlePendingAction = useCallback(async (messageId: string, action: string) => {
     const targetSessionId = sessionId;
@@ -833,6 +840,7 @@ export default function Playground() {
               onChange={(value) => {
                 const user = devUsers.find((u) => u.user_id === value) ?? null;
                 setSelectedDevUser(user);
+                setLlmContextOpen(false);
                 // 切换用户后开启新会话，避免历史会话身份混淆
                 const sid = generateSessionId();
                 setSessionId(sid);
@@ -853,6 +861,9 @@ export default function Playground() {
                 })),
               ]}
             />
+            <Tag color={selectedDevUser ? 'blue' : 'purple'} style={{ margin: 0, whiteSpace: 'nowrap' }}>
+              viewer: admin · acting_as: {selectedDevUser?.user_id ?? 'admin'} · presentation: {selectedDevUser ? 'user' : 'debug'}
+            </Tag>
             <span style={{ width: 1, height: 20, background: BORDER, flexShrink: 0 }} />
             <Tooltip title="点击复制 Session ID">
               <span
@@ -936,6 +947,7 @@ export default function Playground() {
                 if (llmContextOpen) return;
                 openLlmContextInspector();
               }}
+              disabled={Boolean(selectedDevUser)}
             />
           </Space>
         </div>

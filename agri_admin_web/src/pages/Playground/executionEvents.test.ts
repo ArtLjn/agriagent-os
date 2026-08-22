@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { executionEventFromChunk } from './executionEvents';
+import { appendExecutionEvent, executionEventFromChunk } from './executionEvents';
 
 describe('executionEventFromChunk', () => {
   it('保留 SSE 事件的展示顺序和工具参数', () => {
@@ -45,8 +45,44 @@ describe('executionEventFromChunk', () => {
     })).toEqual({ type: 'plan', goal: '完成种植准备', steps: ['创建茬口'] });
   });
 
+  it('保留用户投影的执行进度', () => {
+    expect(executionEventFromChunk({ type: 'progress', data: { message: '正在处理请求' } })).toEqual({
+      type: 'progress',
+      message: '正在处理请求',
+    });
+  });
+
+  it('展示 Step 和 Tool 失败事件', () => {
+    expect(executionEventFromChunk({ type: 'step.started', data: { turn_id: 't-1', step_index: 1, status: 'running' } })).toEqual({ type: 'step.started', step_index: 1, status: 'running' });
+    expect(executionEventFromChunk({ type: 'tool.failed', data: { turn_id: 't-1', tool_call_id: 'c-1', tool_name: 'weather', step: 1, duration_ms: 20, error: { code: 'tool_failed' } } })).toMatchObject({ type: 'tool.failed', tool_call_id: 'c-1' });
+  });
+
+  it('按 event_id 去重并按 seq 排序', () => {
+    const first = { type: 'progress' as const, message: '一', event_id: 'evt-1', seq: 1 };
+    const second = { type: 'progress' as const, message: '二', event_id: 'evt-2', seq: 2 };
+    expect(appendExecutionEvent([second, first], { ...first, message: '重放' })).toEqual([
+      { ...first, message: '重放' },
+      second,
+    ]);
+  });
+
   it('忽略不会进入执行时间线的内容事件', () => {
     expect(executionEventFromChunk({ type: 'content', data: '最终答案' })).toBeNull();
     expect(executionEventFromChunk({ type: 'done', data: { status: 'completed' } })).toBeNull();
+  });
+
+  it('展示语义终态事件，区分完成、受控终止和失败', () => {
+    expect(executionEventFromChunk({
+      type: 'turn.completed',
+      data: { status: 'completed', stop_reason: 'completed', step_count: 2 },
+    })).toEqual({ type: 'turn.completed', status: 'completed', stop_reason: 'completed', step_count: 2 });
+    expect(executionEventFromChunk({
+      type: 'turn.terminated',
+      data: { status: 'terminated', reason: 'max_steps', message: '达到最大步数', step_count: 8 },
+    })).toEqual({ type: 'turn.terminated', status: 'terminated', reason: 'max_steps', message: '达到最大步数', step_count: 8 });
+    expect(executionEventFromChunk({
+      type: 'turn.failed',
+      data: { status: 'failed', stop_reason: 'tool_error', error: { code: 'tool_failed' } },
+    })).toEqual({ type: 'turn.failed', status: 'failed', stop_reason: 'tool_error', error: { code: 'tool_failed' } });
   });
 });

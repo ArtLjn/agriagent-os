@@ -89,6 +89,10 @@ export interface StreamTraceContext {
   event_type?: string;
   phase?: string;
   terminal?: boolean;
+  presentation_profile?: 'user' | 'admin_debug';
+  viewer_user_id?: string;
+  execution_user_id?: string;
+  impersonation?: boolean;
 }
 
 // ── Stream Chunk（Playground 消费）──
@@ -116,6 +120,13 @@ export type StreamChunk =
   | { type: 'verification_warning'; data: { issues: string[] } }
   | { type: 'write_committed_reply_failed'; data: { code: string; message: string } }
   | { type: 'retrying'; data: { code: string; category?: string; attempt: number; delay_ms: number } }
+  | { type: 'progress'; data: { message: string; phase?: string } }
+  | { type: 'step.started'; data: { turn_id: string; step_index: number; status: string } }
+  | { type: 'step.completed'; data: { turn_id: string; step_index: number; status: string; tool_count: number; error?: Record<string, unknown> } }
+  | { type: 'tool.failed'; data: { turn_id: string; tool_call_id: string; tool_name: string; step: number; duration_ms: number; error: Record<string, unknown> } }
+  | { type: 'turn.completed'; data: { status: 'completed'; stop_reason?: string; step_count?: number; message?: string } }
+  | { type: 'turn.terminated'; data: { status: 'terminated'; reason: string; message: string; step_count?: number } }
+  | { type: 'turn.failed'; data: { status: 'failed'; stop_reason: string; error: Record<string, unknown> } }
   | { type: 'meta'; data: StreamTraceContext }
   | { type: 'done'; data: DoneEvent }
   | { type: 'error'; data: { code: string; message: string; category?: string; phase?: string; tool_name?: string; retryable?: boolean; attempt?: number; stream_started?: boolean } };
@@ -164,7 +175,12 @@ export async function* parseSseStream(
 // 参考 agri_backend_v2/agent/static/index.html 的 appendEvent 实现，覆盖所有事件类型，
 // 让 Playground 能像 index.html 一样实时展示 thought/plan/action/observation 等。
 function mapSsePayloadToChunk(event: SseEvent): StreamChunk | null {
-  const { type, data } = event;
+  const { type } = event;
+  const data: Record<string, unknown> = {
+    ...event.data,
+    event_id: event.data.event_id ?? undefined,
+    seq: typeof event.data.seq === 'number' ? event.data.seq : undefined,
+  };
   switch (type) {
     case 'meta':
       return {
@@ -179,6 +195,12 @@ function mapSsePayloadToChunk(event: SseEvent): StreamChunk | null {
           event_type: typeof data.event_type === 'string' ? data.event_type : type,
           phase: typeof data.phase === 'string' ? data.phase : undefined,
           terminal: typeof data.terminal === 'boolean' ? data.terminal : undefined,
+          presentation_profile: data.presentation_profile === 'admin_debug' || data.presentation_profile === 'user'
+            ? data.presentation_profile
+            : undefined,
+          viewer_user_id: typeof data.viewer_user_id === 'string' ? data.viewer_user_id : undefined,
+          execution_user_id: typeof data.execution_user_id === 'string' ? data.execution_user_id : undefined,
+          impersonation: typeof data.impersonation === 'boolean' ? data.impersonation : undefined,
         },
       };
     case 'final_answer_start':
@@ -324,6 +346,75 @@ function mapSsePayloadToChunk(event: SseEvent): StreamChunk | null {
           delay_ms: Number(data.delay_ms ?? 0),
         },
       };
+    case 'progress':
+      return {
+        type: 'progress',
+        data: {
+          message: String(data.message ?? '正在处理请求'),
+          phase: typeof data.phase === 'string' ? data.phase : undefined,
+        },
+      };
+    case 'step.started':
+      return {
+        type: 'step.started',
+        data: {
+          turn_id: String(data.turn_id ?? ''),
+          step_index: Number(data.step_index ?? 0),
+          status: String(data.status ?? 'running'),
+        },
+      };
+    case 'step.completed':
+      return {
+        type: 'step.completed',
+        data: {
+          turn_id: String(data.turn_id ?? ''),
+          step_index: Number(data.step_index ?? 0),
+          status: String(data.status ?? 'completed'),
+          tool_count: Number(data.tool_count ?? 0),
+          error: data.error as Record<string, unknown> | undefined,
+        },
+      };
+    case 'tool.failed':
+      return {
+        type: 'tool.failed',
+        data: {
+          turn_id: String(data.turn_id ?? ''),
+          tool_call_id: String(data.tool_call_id ?? ''),
+          tool_name: String(data.tool_name ?? ''),
+          step: Number(data.step ?? 0),
+          duration_ms: Number(data.duration_ms ?? 0),
+          error: (data.error as Record<string, unknown>) ?? {},
+        },
+      };
+    case 'turn.completed':
+      return {
+        type: 'turn.completed',
+        data: {
+          status: 'completed',
+          stop_reason: typeof data.stop_reason === 'string' ? data.stop_reason : undefined,
+          step_count: typeof data.step_count === 'number' ? data.step_count : undefined,
+          message: typeof data.message === 'string' ? data.message : undefined,
+        },
+      };
+    case 'turn.terminated':
+      return {
+        type: 'turn.terminated',
+        data: {
+          status: 'terminated',
+          reason: String(data.reason ?? 'terminated'),
+          message: String(data.message ?? ''),
+          step_count: typeof data.step_count === 'number' ? data.step_count : undefined,
+        },
+      };
+    case 'turn.failed':
+      return {
+        type: 'turn.failed',
+        data: {
+          status: 'failed',
+          stop_reason: String(data.stop_reason ?? 'error'),
+          error: (data.error as Record<string, unknown>) ?? {},
+        },
+      };
     case 'done':
       return {
         type: 'done',
@@ -377,11 +468,18 @@ export async function* streamChat(
   message: string,
   conversationId?: string,
   userToken?: string | null,
-  options: { client_request_id?: string; after_seq?: number } = {},
+  options: {
+    client_request_id?: string;
+    after_seq?: number;
+    viewerToken?: string | null;
+    presentationProfile?: 'user' | 'admin_debug';
+  } = {},
 ): AsyncGenerator<StreamChunk> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   const token = userToken || authStore.getToken();
   if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (options.viewerToken) headers['X-Viewer-Authorization'] = `Bearer ${options.viewerToken}`;
+  if (options.presentationProfile) headers['X-SSE-Presentation-Profile'] = options.presentationProfile;
   const query = options.after_seq === undefined ? '' : `?after_seq=${options.after_seq}`;
   const resp = await fetch(`/api/agent/chat${query}`, {
     method: 'POST',

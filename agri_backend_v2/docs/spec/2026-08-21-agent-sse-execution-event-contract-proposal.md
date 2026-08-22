@@ -632,7 +632,287 @@ Domain Event
 - Token usage 必须挂在对应 LLM message/step 事件或 Trace 节点，不放进所有事件；
 - 审计记录不能用前端收到的文本推断业务写入，必须来自 Tool 提交结果。
 
-## 13. 分阶段实施计划
+## 13. admin-web 调试平台的身份与视觉输出差异
+
+### 13.1 先拆开三个身份概念
+
+admin-web 不能只用一个 `role` 判断 SSE 返回什么。一次调试请求至少包含三个
+不同维度：
+
+```text
+viewer_identity       = 当前打开 admin-web 的人，通常是 admin
+execution_identity    = Agent/Business 实际执行请求的身份，可为 admin 或选中的 user
+presentation_profile  = 当前页面允许展示的字段集合
+```
+
+当前 Playground 的行为是：登录 admin 不选择 dev user 时，使用 admin 自身 Token；
+选择 dev user 后，通过 `Authorization` 覆盖为 dev user Token。这个动作只改变
+`execution_identity`，不能自动改变 admin-web 的 `presentation_profile`，也不能
+授予被模拟 user 访问 Trace、Prompt 或其他管理接口的权限。
+
+### 13.2 三种视觉输出模式
+
+| 模式 | viewer | execution identity | 目标 | 默认视觉输出 |
+|---|---|---|---|---|
+| 用户业务视图 | user | 当前 user | 真实用户体验 | 只展示可理解的执行进度、审批、结果和最终答复 |
+| 管理员调试视图 | admin | admin 或指定 user | 定位 Harness、Tool、LLM 和 SSE 问题 | 展示完整诊断时间线、关联 ID、预算和结构化错误 |
+| 管理员模拟用户视图 | admin | 指定 user | 验证某个 user 的业务权限和实际回答 | 页面默认展示用户业务视图，可由 admin 显式展开诊断面板 |
+
+管理员模拟 user 时，必须在页面顶部同时显示：
+
+```text
+viewer: admin@example.com
+acting_as: user-123 / farm-456
+presentation: user | debug
+```
+
+不能只显示“当前用户”，否则管理员容易把“当前登录管理员”和“Agent 实际执行
+用户”混淆。切换 `acting_as` 或 `presentation` 后，应新建一次 Turn；不能在已有
+Turn 中途修改身份或字段权限。
+
+### 13.3 两种投影，而不是两套 Runtime
+
+Runtime 只产生一份完整 Domain Event，后端根据 viewer 权限和 presentation profile
+生成不同的 Public Projection：
+
+```text
+完整 Domain Event
+  ├── user_projection：用户可见业务事件
+  └── admin_debug_projection：管理员可见诊断事件
+```
+
+前端不能通过隐藏 DOM、过滤 React 字段或约定“普通页面不渲染”来实现安全隔离。
+字段权限必须在 SSE/Trace API 服务端完成；admin-web 的视觉层只负责渲染服务端已经
+授权的字段。
+
+### 13.4 字段级输出矩阵
+
+| 字段/事件 | user 业务视图 | admin-web 调试视图 | admin 模拟 user 默认视图 | 说明 |
+|---|---:|---:|---:|---|
+| `final_answer_start/delta/answer.completed` | 是 | 是 | 是 | 最终业务答复，三种视图一致 |
+| `turn.started/completed/terminated/failed` | 是 | 是 | 是 | user 只看用户可读原因，admin 可看完整 `stop_reason` |
+| `done.status` | 是 | 是 | 是 | 传输收口状态；不能单独代表业务成功 |
+| `progress`、安全 `heartbeat` | 是 | 是 | 是 | 只展示阶段和等待状态，不暴露内部调用细节 |
+| `approval.required/result` | 是 | 是 | 是 | user 看到待确认动作摘要；admin 可看风险、策略和关联 ID |
+| `operation_committed` | 是，摘要 | 是，完整结构化结果 | 是，摘要 | user 不应看到内部 DB 主键、请求头和内部响应原文 |
+| `tool.intent/action` | 否或摘要 | 是 | 默认否 | user 只需知道“正在查询/准备执行”；admin 可看 Tool 名称和脱敏参数 |
+| `tool.started/finished/failed` | 进度或失败摘要 | 是 | 默认摘要，debug 展开 | `tool_call_id` 和耗时属于诊断字段 |
+| `observation.created` | 不返回原始结果 | 是，脱敏结果 | 默认不返回，debug 展开 | 原始业务结果可能含隐私、内部字段或大 payload |
+| `reasoning.delta/thought` | 否 | 受权限控制 | 默认否 | 不把隐藏 Chain of Thought 当作普通 user 输出 |
+| `tool.call.delta` | 否 | 可见但默认折叠 | 默认否 | 参数生成增量可能包含敏感输入，需脱敏和权限控制 |
+| `context.usage` | 百分比或“正在整理上下文” | `used/total/percent/level/step` | 默认百分比，可展开 | 详细 Token/预算是调试信息 |
+| `context_compressing/compressed` | 简短状态 | 触发原因、前后占用、摘要元数据 | 简短状态 | 不返回完整 Context 内容 |
+| `retrying` | “正在重试” | code、category、attempt、delay | 简短状态，可展开 | 不向 user 暴露 Provider、网络和内部重试栈 |
+| `error` | 用户可读错误 | code、phase、tool、retryable、attempt | 用户可读错误 | 原始异常、堆栈和凭据永不进入公共 SSE |
+| `event_id/seq` | 否或仅客户端内部使用 | 是 | 默认隐藏，可供复制 | 用于 Replay、Trace 跳转和事件去重 |
+| `trace_id/request_id/span_id` | 否 | 是 | 默认隐藏，可复制诊断编号 | 关联 ID 不能作为用户权限凭证 |
+| `status_before/status_after/phase/step` | 简化阶段 | 是 | 简化阶段，debug 展开 | admin 用于定位状态转换和预算问题 |
+| `model/provider/prompt/context/tool schema` | 否 | 按 admin 权限 | 否 | 只能走独立诊断接口或显式调试权限 |
+
+### 13.5 user 业务视图的推荐事件字段
+
+user SSE 应保持小而稳定，建议只保留：
+
+```json
+{
+  "type": "progress",
+  "data": {
+    "phase": "tool_executing",
+    "message": "正在查询农场数据"
+  }
+}
+```
+
+以及：
+
+```json
+{
+  "type": "answer.delta",
+  "data": {
+    "delta": "已查询到当前地块信息。"
+  }
+}
+```
+
+受控终止对 user 的视觉表现应是：
+
+```json
+{
+  "type": "turn.terminated",
+  "data": {
+    "reason": "step_budget_exhausted",
+    "message": "任务未在本轮执行预算内完成，当前结果可能不完整。"
+  }
+}
+```
+
+user 不需要知道 `step_count=5`、具体 `tool_call_id`、Redis `seq`、LLM provider
+或内部异常堆栈。`reason` 可以保留稳定枚举，但 `message` 必须由服务端生成，避免
+前端根据内部错误字符串自行翻译。
+
+### 13.6 admin-web 调试视图的推荐字段分组
+
+admin-web 不应把所有字段平铺在一条时间线上，建议按以下视觉区域组织：
+
+```text
+顶部身份条
+  viewer / acting_as / farm / presentation / permission
+
+Turn 摘要条
+  turn_id / conversation_id / status / stop_reason / phase / step_count
+  finalization_count / started_at / duration / terminal event
+
+执行时间线
+  step.started/completed
+  tool.started/finished/failed
+  approval.required/result
+  observation.created
+  answer.started/delta/completed
+
+诊断抽屉
+  event_id / seq / trace_id / request_id / span_id
+  status_before/status_after / retry / error context
+
+上下文与模型面板
+  context usage / compression / prompt snapshot / token usage
+  model/provider / tool schema / raw payload
+```
+
+其中：
+
+- 时间线展示“发生了什么”；
+- 诊断抽屉展示“这件事如何被关联和重放”；
+- 上下文与模型面板展示“为什么会发生”；
+- 原始 payload 必须折叠、限制长度并明确标记敏感字段已脱敏。
+
+### 13.7 admin-web 需要的事件 Envelope 扩展
+
+管理员调试事件可以携带以下字段，但 user projection 不应下发：
+
+```json
+{
+  "event_id": "evt_123",
+  "seq": 42,
+  "turn_id": "turn_123",
+  "conversation_id": "conversation_123",
+  "trace_id": "trace_123",
+  "request_id": "request_123",
+  "span_id": "span_456",
+  "step_index": 2,
+  "phase": "tool_executing",
+  "status_before": "running",
+  "status_after": "running",
+  "data": {
+    "tool_name": "get_weather",
+    "tool_call_id": "call_123",
+    "duration_ms": 840,
+    "redaction": {
+      "applied": true,
+      "fields": ["authorization", "farm_secret"]
+    }
+  }
+}
+```
+
+字段显示策略：
+
+1. `event_id/seq` 用于事件去重和重连游标，不作为业务文本展示；
+2. `trace_id/request_id` 用于跳转 Trace Monitor，可复制但不能用于鉴权；
+3. `phase/status_before/status_after` 用状态 Badge 和时间线节点展示；
+4. `tool_call_id`、耗时、重试次数用于 Tool 详情和性能定位；
+5. `data` 中的 arguments、observation、prompt 和 response 必须经过服务端脱敏；
+6. 没有对应权限时，字段应为缺失或明确 `redacted`，不能返回空字符串冒充无值。
+
+### 13.8 权限与接口边界
+
+admin-web 调试权限和 Agent 执行身份必须分开校验：
+
+```text
+Agent SSE 请求
+  -> 校验 execution_identity 是否能访问该 conversation/farm
+  -> 根据 viewer_identity 决定 public/debug projection
+
+Trace / Prompt / Debug Export 请求
+  -> 单独校验 viewer_identity 的 admin 权限
+  -> 再校验目标 turn/conversation/farm 的管理范围
+```
+
+当前落地的 SSE 请求头约定为：`Authorization` 表示
+`execution_identity`，`X-Viewer-Authorization` 仅允许管理员调试端携带并表示
+`viewer_identity`，`X-SSE-Presentation-Profile` 取 `user` 或 `admin_debug`。服务端
+拒绝非 admin viewer 请求 `admin_debug`，不能由前端仅靠隐藏组件实现字段隔离。
+
+不能因为请求携带了 dev user Token，就允许读取 admin Trace；也不能因为 viewer 是
+admin，就跳过 Agent 对目标 farm 和 conversation 的业务访问校验。模拟 user 时，
+建议服务端显式记录：
+
+```json
+{
+  "viewer_user_id": "admin-1",
+  "execution_user_id": "user-123",
+  "execution_farm_uid": "farm-456",
+  "presentation_profile": "admin_debug",
+  "impersonation": true
+}
+```
+
+该审计字段进入 Trace/审计记录，不直接显示在 user 的 SSE 内容中。
+
+### 13.9 当前 admin-web 的迁移要求
+
+当前 Playground 的 `ExecutionTimeline` 会直接渲染 `thought`、Tool 参数、
+observation、上下文占用和错误详情。迁移到新契约时应按以下方式调整：
+
+- admin 调试视图继续保留完整时间线，但改为消费 `admin_debug_projection`；
+- 模拟 user 默认只渲染用户业务视图，增加“诊断”开关后才加载 admin Trace/详情；
+- `activeUserToken` 只表示 execution identity，不决定是否可以查看诊断字段；
+- `meta` 继续作为兼容入口，但新增 `presentation_profile`、`acting_as` 和
+  `permission_scope` 的服务端返回信息；
+- `assistant_delta`、`thought`、`tool_call_delta` 不再直接当作 assistant 普通文本；
+- 所有事件列表使用 `event_id` 去重、`seq` 排序，不能继续使用
+  `${event.type}-${index}` 作为长期唯一键；
+- Trace Monitor、LLM Context Inspector、Session Debug Export 只能在 admin 权限
+  通过后调用，不由普通 SSE 事件触发越权读取。
+
+## 14. 实施 TODO
+
+### Phase 0：契约和回归基线
+
+- [x] P0-01：补齐 `TurnStatus`、`StopReason`、`phase` 和终态优先级的契约测试。
+- [x] P0-02：补齐正常完成、Tool 失败、HITL、取消、超时、doom、max_steps 的事件顺序测试。
+- [x] P0-03：补齐 `seq`、`event_id`、`after_seq`、唯一 `done` 和断线重放测试。
+- [x] P0-04：补齐 user/admin/admin 模拟 user 的字段可见性与脱敏测试。
+
+### Phase 1：Publisher 和 Envelope 收敛
+
+- [x] P1-01：增加 Domain Event/Publisher 边界，隔离 Runtime 与 SSE Serializer。
+- [x] P1-02：统一事件 Envelope 的 `event_id`、`seq`、身份、阶段和状态字段。
+- [x] P1-03：`/api/v2/chat` 与 `/api/v2/turns/{turn_id}/events` 写入标准 SSE `id:`。
+- [x] P1-04：补充 `Last-Event-ID` 兼容入口，并保持 `after_seq` 行为不变。
+
+### Phase 2：终态和 Finalizer 统一
+
+- [x] P2-01：引入 `turn.completed`、`turn.terminated`、`turn.failed` 语义终态事件。
+- [x] P2-02：增加 `terminated` 持久化状态，兼容旧客户端读取 `failed + error_code`。
+- [x] P2-03：将 max_steps、doom、Tool/LLM error、timeout、cancel 统一交给 Finalizer。
+- [x] P2-04：保证语义终态后只发送一个 `done`，并携带 `stop_reason`。
+
+### Phase 3：Step、Tool 与 admin-web 视觉投影
+
+- [x] P3-01：增加 `step.started/completed`，明确并行 Tool Batch 的 Step 归属。
+- [x] P3-02：补齐 Tool started/finished/failed 与 `tool_call_id` 配对规则。
+- [x] P3-03：实现 user projection 与 admin debug projection 的服务端字段过滤/脱敏。
+- [x] P3-04：admin-web 时间线改用 `event_id` 去重、`seq` 排序和身份条展示。
+- [x] P3-05：普通 user 默认不接收原始 reasoning、Prompt、Context 和内部响应。
+
+### Phase 4：生产化验收
+
+- [x] P4-01：真实 Agent `/api/v2/chat` 验证正常、Tool、HITL、终止和失败链路。
+- [x] P4-02：真实 `/turns/{turn_id}/events` 验证断线、重连和 `Last-Event-ID`。
+- [x] P4-03：验证 Worker reclaim、超时、取消和重复 `done` 防护。
+- [x] P4-04：完成 admin-web Playground、Trace Monitor、Context Inspector 联调。
+
+## 15. 分阶段实施计划
 
 ### Phase 0：契约和回归基线
 
@@ -670,7 +950,7 @@ Domain Event
 - 前端以 `event_id` 去重，以 `seq` 排序，不以数组下标作为唯一键；
 - 完成真实 Agent `/api/v2/chat` 和 `/turns/{id}/events` SSE smoke。
 
-## 14. 验收矩阵
+## 16. 验收矩阵
 
 | 场景 | 必须出现 | 最终状态 | 不允许出现 |
 |---|---|---|---|
@@ -687,7 +967,7 @@ Domain Event
 | Worker 崩溃 | reclaim/timeout/failed 的明确事件 | 明确终态 | 长时间静默或重复 done |
 | Stream 等待超时 | `stream.timeout` 或明确 `turn.timeout` | 非静默 | HTTP 200 后直接断开 |
 
-## 15. 需要新增或调整的代码边界
+## 17. 需要新增或调整的代码边界
 
 建议的最小文件边界如下，实际实现时仍需以当前目录地图和依赖约束为准：
 
@@ -705,7 +985,7 @@ Domain Event
 新增抽象的理由是隔离 Runtime 事实、Redis 持久化和 HTTP SSE 传输；这三者如果继续
 混在 `sse.py` 或 `engine.py`，后续无法安全支持 Trace、重放和协议兼容。
 
-## 16. Review 通过标准
+## 18. Review 通过标准
 
 方案通过 review 的最低条件：
 
@@ -718,7 +998,7 @@ Domain Event
 7. 接受 Redis `seq`/`event_id`/`after_seq`/`Last-Event-ID` 的恢复契约；
 8. 验收矩阵中的正常、预算、异常、审批、取消、重连和 Worker 崩溃路径都有证据。
 
-## 17. 最终结论
+## 19. 最终结论
 
 系统最终应形成以下关系：
 
@@ -744,3 +1024,37 @@ SSE 不是日志流，而是公共执行事件流；
 Turn 终态不是一个 error 字符串，而是可持久化、可重放、可解释的状态事实；
 done 不是业务成功标志，而是事件流已经可靠收口的传输信号。
 ```
+
+## 20. 2026-08-22 实施验收状态
+
+本轮已完成 P1-P4 全部实施项。认证验收通过 Business `/api/v2/auth/register` 创建
+受控 user，再分别通过 `/api/v2/auth/login` 获取 user/admin token；token 仅在验收
+进程内存中使用，没有写入文档、日志或工作区文件。
+
+### P4 真实验收证据
+
+- P4-01：真实 user `/api/v2/chat` 正常天气链路出现 Tool、Step、`turn.completed`、
+  唯一 `done`；真实 Tool 错误链路出现 `tool.failed`、`turn.failed`、用户答复和
+  `done`；HITL 拒绝链路出现 `approval_required`、`approval_result`、
+  `final_answer`、`turn.terminated`、`done`，最终状态为 `rejected`，没有执行写 Tool。
+- P4-02：真实 `/turns/{turn_id}/events` 使用 `after_seq` 和 `Last-Event-ID` 重放，
+  重放事件满足游标条件，没有重新调用 LLM/Tool；同一 Turn 的 `done` 计数为 1。
+- P4-03：真实取消链路收口为 `cancelled → final_answer → turn.terminated → done`，
+  状态为 `cancelled/user_cancelled/turn_cancelled`，取消后没有继续 Tool；真实 Redis
+  Sweeper 故障注入收口为 `timeout → final_answer → turn.terminated → done`，
+  `lease_expired` 已写入状态；Worker reclaim 的两种 `XAUTOCLAIM/XCLAIM` 分支有回归测试。
+- P4-04：同一真实 Turn 使用 user projection 与 admin debug projection 对比：user
+  仅看到进度、上下文百分比、审批摘要、错误摘要和最终答复；admin 可看到
+  `trace_id/request_id/seq`、Step、Tool、状态转换和执行身份字段。Playground 时间线、
+  Trace 链接、Context Inspector 的联调测试通过。
+
+### 当前验证结果
+
+- 后端 SSE/Worker/Runtime 聚焦测试：`39 passed`；
+- admin-web Playground 测试：`45 passed`；
+- admin-web TypeScript 检查、后端 Ruff、`git diff --check`：通过；
+- Agent `/api/v2/health`：200，Redis/Mongo 可达；未认证 `/api/v2/chat`：结构化
+  `missing_authorization`。
+
+说明：工作区仍存在与本方案无关的既有 `.vite/`、移动端 golden failure 文件和全局
+构建债务；它们没有被本次实现修改或纳入验收结论。

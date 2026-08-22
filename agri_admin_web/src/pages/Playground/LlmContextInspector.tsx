@@ -54,10 +54,12 @@ export function LlmContextTriggerButton({
   hasSnapshot,
   loading,
   onClick,
+  disabled = false,
 }: {
   hasSnapshot: boolean;
   loading: boolean;
   onClick: () => void;
+  disabled?: boolean;
 }) {
   const active = hasSnapshot;
   return (
@@ -66,6 +68,7 @@ export function LlmContextTriggerButton({
         type={active ? 'primary' : 'default'}
         icon={<FileSearchOutlined />}
         loading={loading}
+        disabled={disabled}
         onClick={onClick}
         className={active ? undefined : 'playground-toolbar__ghost'}
         style={{

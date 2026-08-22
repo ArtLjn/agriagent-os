@@ -45,12 +45,75 @@ from agent.platforms.persistence.redis.turn_store import (
     update_turn,
     wait_approval,
 )
+from agent.platforms.persistence.redis import sse
 
 logger = logging.getLogger(__name__)
 
 _worker_tasks: list[asyncio.Task] = []
 _worker_stop: asyncio.Event | None = None
 _consumer_prefix = f"worker-{uuid.uuid4().hex[:10]}"
+
+
+async def _publish_worker_finalization(
+    turn_id: str,
+    *,
+    status: str,
+    answer: str,
+    error_info: dict[str, object] | None = None,
+    terminal_event: dict[str, object] | None = None,
+) -> None:
+    """统一 Worker fallback 的 error → answer → semantic terminal → done 顺序。"""
+    if error_info:
+        await publish_event(turn_id, {"type": "error", "data": error_info})
+    await publish_event(turn_id, {"type": "final_answer", "data": {"text": answer}})
+    if terminal_event:
+        await publish_event(turn_id, terminal_event)
+    await publish_event(
+        turn_id,
+        {"type": "done", "data": {"status": status, "turn_id": turn_id}},
+    )
+
+
+async def _finalize_cancelled_before_runtime(turn: Turn, trace_id: str) -> None:
+    """取消发生在上下文预加载期间时直接收口，避免进入新的 Tool 调用。"""
+    error_info = turn.record_error(
+        "turn_cancelled",
+        "本轮任务已取消",
+        phase=TurnPhase.TERMINAL,
+        stop_reason=StopReason.USER_CANCELLED,
+        status="cancelled",
+    )
+    answer = "本轮任务已取消，系统未确认业务操作是否完成。"
+    await update_turn(
+        turn.turn_id,
+        status="cancelled",
+        phase=turn.phase.value,
+        stop_reason=turn.stop_reason.value,
+        error_code=error_info["code"],
+        error_message=error_info["message"],
+        error_details=error_info,
+        final_answer=answer,
+        finalization_pending=True,
+        pending_approval=None,
+    )
+    await _publish_worker_finalization(
+        turn.turn_id,
+        status="cancelled",
+        answer=answer,
+        terminal_event=sse.turn_terminated(
+            turn.turn_id,
+            reason=StopReason.USER_CANCELLED.value,
+            message="本轮任务已取消",
+            step_count=turn.step_count,
+            status="cancelled",
+        ),
+    )
+    await _finish_assistant_persistence(
+        turn,
+        content=answer,
+        message_kind="error_answer",
+        trace_id=trace_id,
+    )
 
 
 def _state_int(value: object, fallback: int = 0) -> int:
@@ -245,14 +308,16 @@ async def _recover_interrupted_turn(turn: Turn, state: dict[str, str]) -> None:
         finalization_pending=True,
         pending_approval=None,
     )
-    await publish_event(turn.turn_id, {"type": "error", "data": error_info})
-    await publish_event(
+    await _publish_worker_finalization(
         turn.turn_id,
-        {"type": "final_answer", "data": {"text": answer}},
-    )
-    await publish_event(
-        turn.turn_id,
-        {"type": "done", "data": {"status": "timeout", "turn_id": turn.turn_id}},
+        status="timeout",
+        answer=answer,
+        error_info=error_info,
+        terminal_event=sse.turn_failed(
+            turn.turn_id,
+            stop_reason=StopReason.PIPELINE_CRASH.value,
+            error=error_info,
+        ),
     )
     await _finish_assistant_persistence(
         turn,
@@ -290,14 +355,16 @@ async def _finalize_context_failure(
         final_answer=answer,
         finalization_pending=True,
     )
-    await publish_event(turn.turn_id, {"type": "error", "data": error_info})
-    await publish_event(
+    await _publish_worker_finalization(
         turn.turn_id,
-        {"type": "final_answer", "data": {"text": answer}},
-    )
-    await publish_event(
-        turn.turn_id,
-        {"type": "done", "data": {"status": "failed", "turn_id": turn.turn_id}},
+        status="failed",
+        answer=answer,
+        error_info=error_info,
+        terminal_event=sse.turn_failed(
+            turn.turn_id,
+            stop_reason=stop_reason.value,
+            error=error_info,
+        ),
     )
     await _finish_assistant_persistence(
         turn,
@@ -392,6 +459,7 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
     current_state = await get_turn(turn.turn_id)
     if not current_state or current_state.get("status") in {
         "completed",
+        "terminated",
         "failed",
         "rejected",
         "cancelled",
@@ -425,6 +493,7 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
     renew_stop = asyncio.Event()
     renew_task = asyncio.create_task(renew_until_done(lease, renew_stop))
     final_answer = ""
+    deferred_done_event: dict[str, object] | None = None
     init_trace(
         conversation_id=turn.conversation_id,
         turn_id=turn.turn_id,
@@ -514,7 +583,12 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
 
     try:
         async with asyncio.timeout(settings.redis.turn_execution_timeout_seconds):
-            await update_turn(turn.turn_id, status="running")
+            # mark_running() 已完成 accepted/queued -> running 的 CAS；此处不能
+            # 再无条件写 running，否则会覆盖并发到达的用户取消。
+            latest = await get_turn(turn.turn_id)
+            if latest and latest.get("status") == "cancelled":
+                await _finalize_cancelled_before_runtime(turn, trace_id)
+                return
             await publish_event(
                 turn.turn_id,
                 {
@@ -532,12 +606,25 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
                         stop_reason=StopReason.USER_CANCELLED,
                         status="cancelled",
                     )
+                    final_answer = "本轮任务已取消，系统未确认业务操作是否完成。"
                     await publish_event(
                         turn.turn_id,
                         {
                             "type": "cancelled",
                             "data": {"code": "turn_cancelled", "turn_id": turn.turn_id},
                         },
+                    )
+                    await _publish_worker_finalization(
+                        turn.turn_id,
+                        status="cancelled",
+                        answer=final_answer,
+                        terminal_event=sse.turn_terminated(
+                            turn.turn_id,
+                            reason=StopReason.USER_CANCELLED.value,
+                            message="本轮任务已取消",
+                            step_count=turn.step_count,
+                            status="cancelled",
+                        ),
                     )
                     break
                 event_type = event.get("type", "")
@@ -546,13 +633,18 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
                     await _persist_session_state(turn)
                 if event_type == "final_answer":
                     final_answer = event.get("data", {}).get("text", "")
-                if event_type == "done" and final_answer:
-                    await update_turn(
-                        turn.turn_id,
-                        final_answer=final_answer,
-                        finalization_pending=True,
-                    )
-                await publish_event(turn.turn_id, event)
+                if event_type == "done":
+                    # done 是客户端可见的持久化栅栏，必须等 Turn 状态和助手事实
+                    # 收尾完成后再发布，避免消费者收到 done 时仍读到旧状态。
+                    deferred_done_event = event
+                    if final_answer:
+                        await update_turn(
+                            turn.turn_id,
+                            final_answer=final_answer,
+                            finalization_pending=True,
+                        )
+                else:
+                    await publish_event(turn.turn_id, event)
         await update_turn(
             turn.turn_id,
             status=turn.status,
@@ -574,6 +666,8 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
         elif turn.status == "cancelled":
             turn.pending_approval = None
             await _persist_session_state(turn)
+        if deferred_done_event is not None:
+            await publish_event(turn.turn_id, deferred_done_event)
     except TimeoutError:
         error_info = turn.record_error(
             "turn_timeout",
@@ -599,24 +693,21 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
         await publish_event(
             turn.turn_id,
             {
-                "type": "error",
-                "data": error_info,
-            },
-        )
-        await publish_event(
-            turn.turn_id,
-            {"type": "final_answer", "data": {"text": timeout_answer}},
-        )
-        await publish_event(
-            turn.turn_id,
-            {
                 "type": "timeout",
                 "data": {"code": "turn_timeout", "turn_id": turn.turn_id},
             },
         )
-        await publish_event(
+        await _publish_worker_finalization(
             turn.turn_id,
-            {"type": "done", "data": {"status": "timeout", "turn_id": turn.turn_id}},
+            status="timeout",
+            answer=timeout_answer,
+            error_info=error_info,
+            terminal_event=sse.turn_terminated(
+                turn.turn_id,
+                reason=StopReason.TURN_TIMEOUT.value,
+                message=error_info["message"],
+                step_count=turn.step_count,
+            ),
         )
         await _finish_assistant_persistence(
             turn,
@@ -645,17 +736,16 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
             final_answer=failure_answer,
             finalization_pending=True,
         )
-        await publish_event(
+        await _publish_worker_finalization(
             turn.turn_id,
-            {"type": "error", "data": error_info},
-        )
-        await publish_event(
-            turn.turn_id,
-            {"type": "final_answer", "data": {"text": failure_answer}},
-        )
-        await publish_event(
-            turn.turn_id,
-            {"type": "done", "data": {"status": "failed", "turn_id": turn.turn_id}},
+            status="failed",
+            answer=failure_answer,
+            error_info=error_info,
+            terminal_event=sse.turn_failed(
+                turn.turn_id,
+                stop_reason=StopReason.PIPELINE_CRASH.value,
+                error=error_info,
+            ),
         )
         await _finish_assistant_persistence(
             turn,

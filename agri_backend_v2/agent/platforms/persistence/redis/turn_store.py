@@ -14,6 +14,7 @@ from typing import Any
 
 from agent.config import settings
 from agent.domains.harness.runtime.turn import Turn
+from agent.domains.harness.runtime.events import DomainEvent
 from agent.platforms.persistence.redis.redis_store import get_client, key
 from agent.domains.harness.observability.trace.collector import record_event
 from agent.domains.harness.observability.trace.context import current_span_id, get_trace, trace_id_for_turn
@@ -30,6 +31,12 @@ _EVENT_STATUS_AFTER = {
     "approval_result": "running",
     "cancelled": "cancelled",
     "timeout": "timeout",
+    "turn.completed": "completed",
+    "turn.terminated": "terminated",
+    "turn.failed": "failed",
+    "step.started": "running",
+    "step.completed": "running",
+    "tool.failed": "failed",
     "error": "failed",
 }
 
@@ -154,6 +161,16 @@ async def get_turn(turn_id: str) -> dict[str, str] | None:
     return data or None
 
 
+def legacy_status_fields(turn: dict[str, str]) -> dict[str, str]:
+    """为旧客户端提供 failed + error_code 兼容字段，不改变新状态事实。"""
+    if turn.get("status") != "terminated":
+        return turn
+    reason = str(turn.get("stop_reason") or turn.get("error_code") or "terminated")
+    turn.setdefault("legacy_status", "failed")
+    turn.setdefault("legacy_error_code", reason)
+    return turn
+
+
 async def update_turn(turn_id: str, **fields: Any) -> None:
     client = get_client()
     if client is None:
@@ -235,7 +252,7 @@ async def dispatch_turn(turn_id: str) -> str:
     return message_id
 
 
-async def publish_event(turn_id: str, event: dict[str, Any]) -> int:
+async def publish_event(turn_id: str, event: DomainEvent | dict[str, Any]) -> int:
     client = get_client()
     if client is None:
         raise RuntimeError("redis coordination is disabled")
@@ -397,6 +414,13 @@ async def publish_event(turn_id: str, event: dict[str, Any]) -> int:
     return seq
 
 
+class RedisEventPublisher:
+    """Runtime 领域事件到 Redis Event Stream 的适配器。"""
+
+    async def publish(self, turn_id: str, event: DomainEvent) -> int:
+        return await publish_event(turn_id, event)
+
+
 async def read_events(turn_id: str, after_seq: int = 0) -> list[dict[str, Any]]:
     client = get_client()
     if client is None:
@@ -469,6 +493,18 @@ async def read_events(turn_id: str, after_seq: int = 0) -> list[dict[str, Any]]:
     return events
 
 
+async def resolve_event_seq(turn_id: str, event_id: str) -> int | None:
+    """将 SSE Last-Event-ID 映射为 Turn 内的 seq，供断线恢复复用。"""
+    if not event_id:
+        return None
+    events = await read_events(turn_id)
+    for event in events:
+        if event.get("event_id") == event_id:
+            return int(event["seq"])
+    # 事件可能已因 Stream 保留窗口淘汰；返回 None 让调用方安全回放保留窗口。
+    return None
+
+
 async def stream_events(
     turn_id: str,
     *,
@@ -491,14 +527,37 @@ async def stream_events(
         state = await get_turn(turn_id)
         if state and state.get("status") in {
             "completed",
+            "terminated",
             "failed",
             "rejected",
             "cancelled",
             "timeout",
         }:
+            # 取消/回收可能已先写入终态，但 Worker 仍需要发布用户答复和
+            # semantic terminal；此时不能提前合成 done 截断后续事件。
+            if str(state.get("finalization_pending", "")).lower() in {
+                "1",
+                "true",
+                "yes",
+            }:
+                await asyncio.sleep(poll_interval)
+                continue
             done_event = {
                 "type": "done",
-                "data": {"status": state["status"], "turn_id": turn_id},
+                "data": {
+                    "status": state["status"],
+                    "turn_id": turn_id,
+                    **(
+                        {"stop_reason": state["stop_reason"]}
+                        if state.get("stop_reason")
+                        else {}
+                    ),
+                    **(
+                        {"step_count": _int_value(state.get("step_count"))}
+                        if state.get("step_count") is not None
+                        else {}
+                    ),
+                },
             }
             # Worker 崩溃或旧数据可能只留下终态状态，没有写入 done。
             # 将补发终态持久化，保证下一次 after_seq 重连不会再次合成同一事件。

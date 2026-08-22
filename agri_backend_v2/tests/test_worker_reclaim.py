@@ -9,6 +9,7 @@ import pytest
 from agent.application import worker
 from agent.domains.harness.runtime.turn import Turn
 from agent.platforms.persistence.redis.coordination import TurnLease
+from agent.platforms.persistence.redis import sse
 
 
 @pytest.mark.asyncio
@@ -64,6 +65,33 @@ def _lease() -> TurnLease:
         user_scope_hash="user-scope-1",
         token="lease-1",
     )
+
+
+@pytest.mark.asyncio
+async def test_worker_finalization_publishes_semantic_terminal_before_done(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    publish = AsyncMock()
+    monkeypatch.setattr(worker, "publish_event", publish)
+
+    await worker._publish_worker_finalization(
+        "turn-1",
+        status="failed",
+        answer="执行失败",
+        error_info={"code": "worker_failed", "message": "失败"},
+        terminal_event=sse.turn_failed(
+            "turn-1",
+            stop_reason="pipeline_crash",
+            error={"code": "worker_failed", "message": "失败"},
+        ),
+    )
+
+    assert [call.args[1]["type"] for call in publish.await_args_list] == [
+        "error",
+        "final_answer",
+        "turn.failed",
+        "done",
+    ]
 
 
 @pytest.mark.asyncio
@@ -202,5 +230,6 @@ async def test_context_source_failure_finalizes_without_entering_runtime(
     )
 
     assert update_turn.await_args.kwargs["error_code"] == "context_source_unavailable"
-    assert publish_event.await_count == 3
+    assert publish_event.await_count == 4
+    assert publish_event.await_args_list[2].args[1]["type"] == "turn.failed"
     finish.assert_awaited_once()
