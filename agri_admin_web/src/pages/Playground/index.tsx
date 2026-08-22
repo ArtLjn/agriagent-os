@@ -760,10 +760,12 @@ export default function Playground() {
                         fontWeight: isActive ? 600 : 500,
                         fontFamily: 'monospace',
                         lineHeight: 1.4,
-                        wordBreak: 'break-all',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
                         flex: 1,
                         minWidth: 0,
-                      }}>
+                      }} title={conversationId}>
                         {conversationId}
                       </div>
                     </div>
@@ -824,8 +826,6 @@ export default function Playground() {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden', padding: '16px 20px 16px', position: 'relative' }}>
         {/* 子 header - Playground 配置 */}
         <div className="playground-toolbar" style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          gap: 12,
           padding: '8px 16px',
           marginBottom: 16,
           background: CARD,
@@ -833,7 +833,7 @@ export default function Playground() {
           borderRadius: 10,
           flexShrink: 0,
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+          <div className="playground-toolbar__main">
             <Select
               placeholder="选择用户"
               value={selectedDevUser?.user_id ?? ''}
@@ -851,7 +851,7 @@ export default function Playground() {
                   message.error('加载会话列表失败');
                 });
               }}
-              style={{ width: 220, flexShrink: 0 }}
+              className="playground-user-select"
               styles={{ popup: { root: { background: CARD } } }}
               options={[
                 { value: '', label: '默认用户（admin 自身）' },
@@ -861,52 +861,30 @@ export default function Playground() {
                 })),
               ]}
             />
-            <Tag color={selectedDevUser ? 'blue' : 'purple'} style={{ margin: 0, whiteSpace: 'nowrap' }}>
-              viewer: admin · acting_as: {selectedDevUser?.user_id ?? 'admin'} · presentation: {selectedDevUser ? 'user' : 'debug'}
-            </Tag>
-            <span style={{ width: 1, height: 20, background: BORDER, flexShrink: 0 }} />
-            <Tooltip title="点击复制 Session ID">
-              <span
-                onClick={() => void copySessionId(sessionId)}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  color: TEXT_DIM,
-                  fontSize: 12,
-                  fontFamily: 'monospace',
-                  maxWidth: 260,
-                  padding: '4px 10px',
-                  borderRadius: 6,
-                  background: 'rgba(139, 148, 158, 0.06)',
-                  border: `1px solid ${palette.borderSoft}`,
-                  cursor: 'pointer',
-                  transition: 'all 150ms ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(139, 148, 158, 0.12)';
-                  e.currentTarget.style.color = TEXT;
-                  e.currentTarget.style.borderColor = BORDER;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(139, 148, 158, 0.06)';
-                  e.currentTarget.style.color = TEXT_DIM;
-                  e.currentTarget.style.borderColor = palette.borderSoft;
-                }}
-              >
-                <span style={{
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  maxWidth: 200,
-                }}>
-                  {sessionId}
-                </span>
-                <CopyOutlined style={{ fontSize: 11, flexShrink: 0, opacity: 0.5 }} />
+            <div
+              className="playground-identity"
+              title={`viewer: admin · acting_as: ${selectedDevUser?.user_id ?? 'admin'} · presentation: ${selectedDevUser ? 'user' : 'debug'}`}
+            >
+              <span className="playground-identity__label">调试身份</span>
+              <Tag color={selectedDevUser ? 'blue' : 'purple'} style={{ margin: 0 }}>
+                {selectedDevUser ? 'user 视图' : 'admin 视图'}
+              </Tag>
+              <span className="playground-identity__acting-as">
+                acting_as: {selectedDevUser?.user_id ?? 'admin'}
               </span>
+            </div>
+            <Tooltip title="点击复制 Session ID">
+              <button
+                type="button"
+                className="playground-session-id"
+                onClick={() => void copySessionId(sessionId)}
+              >
+                <span>{sessionId}</span>
+                <CopyOutlined />
+              </button>
             </Tooltip>
           </div>
-          <Space size={4} style={{ flexShrink: 0 }}>
+          <div className="playground-toolbar__actions">
             <Button
               type="primary"
               icon={<PlusOutlined />}
@@ -949,7 +927,7 @@ export default function Playground() {
               }}
               disabled={Boolean(selectedDevUser)}
             />
-          </Space>
+          </div>
         </div>
 
         {/* 消息区域 */}

@@ -207,19 +207,19 @@ export function ExecutionTimeline({ events, loading }: { events?: ExecutionEvent
   const thoughtCount = events.filter((event) => event.type === 'thought').length;
   const toolCount = events.filter((event) => event.type === 'action').length;
   return (
-    <section style={{ marginBottom: 16, border: `1px solid ${BORDER}`, borderRadius: 12, background: 'linear-gradient(135deg, rgba(88,166,255,0.08), rgba(188,140,255,0.04))', overflow: 'hidden' }}>
-      <button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '13px 16px', border: 0, background: 'transparent', color: TEXT, cursor: 'pointer', textAlign: 'left' }}>
-        <span style={{ width: 28, height: 28, display: 'grid', placeItems: 'center', borderRadius: 9, color: loading ? '#79c0ff' : palette.purple, background: loading ? 'rgba(121,192,255,0.14)' : 'rgba(188,140,255,0.14)' }}>
+    <section style={{ marginBottom: 16, border: `1px solid ${BORDER}`, borderRadius: 10, background: palette.bgSoft, overflow: 'hidden' }}>
+      <button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', border: 0, background: 'transparent', color: TEXT, cursor: 'pointer', textAlign: 'left' }}>
+        <span style={{ width: 28, height: 28, display: 'grid', placeItems: 'center', borderRadius: 8, color: loading ? '#79c0ff' : palette.purple, background: loading ? 'rgba(121,192,255,0.14)' : 'rgba(188,140,255,0.14)' }}>
           {loading ? <LoadingOutlined spin /> : <NodeIndexOutlined />}
         </span>
         <span style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 0 }}>
           <span style={{ fontWeight: 650, fontSize: 14 }}>{loading ? '正在处理' : '执行过程'}</span>
-          <span style={{ color: TEXT_DIM, fontSize: 12 }}>{events.length} 个步骤{thoughtCount ? ` · ${thoughtCount} 段思考` : ''}{toolCount ? ` · ${toolCount} 次工具调用` : ''}</span>
+          <span style={{ color: TEXT_DIM, fontSize: 12 }}>{events.length} 个事件{thoughtCount ? ` · ${thoughtCount} 段思考` : ''}{toolCount ? ` · ${toolCount} 次工具调用` : ''}</span>
         </span>
         {open ? <UpOutlined style={{ color: TEXT_DIM }} /> : <DownOutlined style={{ color: TEXT_DIM }} />}
       </button>
       {open && (
-        <div style={{ padding: '2px 18px 16px 24px' }}>
+        <div style={{ padding: '2px 14px 14px 18px', borderTop: `1px solid ${palette.borderSoft}` }}>
           {events.map((event, index) => <TimelineEvent key={event.event_id ?? `${event.type}-${event.seq ?? index}`} event={event} index={index} isLast={index === events.length - 1} />)}
         </div>
       )}
