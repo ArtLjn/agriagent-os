@@ -19,7 +19,7 @@ from datetime import date
 from business.db import session_scope
 from business.mcp_app import mcp
 from business.models import CropCycle, OperationWorkOrder
-from business.services import labor_service, work_order_service
+from business.services import labor_service, worker_service, work_order_service
 from business.services.work_order_service import _UNSET
 from business.tools._headers import get_farm_id_from_headers
 
@@ -44,6 +44,7 @@ def manage_work_orders(
     scope_type: str | None = None,
     note: str | None = None,
     amount: float | None = None,
+    worker_id: int | None = None,
     worker_name: str | None = None,
     pay_type: str | None = None,
     unit_price: float | None = None,
@@ -73,17 +74,18 @@ def manage_work_orders(
 
       - operation="add_labor" [RISK: write_confirm]
           给已有作业单添加工时记录（工人出勤/应得工资，未支付）。
-          work_order_id、worker_name 必填。后端自动生成未结算人工成本账单。
+          work_order_id、worker_id 必填；worker_name 仅兼容唯一姓名匹配。
+          后端自动生成未结算人工成本账单。
           月底用 settle 操作统一结算支付。
-          相关参数：work_order_id, worker_name, pay_type, unit_price, quantity。
+          相关参数：work_order_id, worker_id, worker_name, pay_type, unit_price, quantity。
 
       - operation="wages" [RISK: read]
           查询工人工资汇总，三种模式：
           - query_mode="unpaid": 查所有工人未结款汇总（如"谁还欠多少"）
           - query_mode="monthly": 按月份查历史账单（如"8月工资"），month 必填
           - query_mode="worker": 按工人查明细（如"张三6-8月工资"），
-            worker_name 必填，start_date/end_date 可选
-          相关参数：query_mode, worker_name, month, start_date, end_date。
+            worker_id 必填，start_date/end_date 可选
+          相关参数：query_mode, worker_id, worker_name, month, start_date, end_date。
 
       - operation="update" [RISK: write_confirm]
           更新作业单，只更新传入的字段（未传字段保持原值）。work_order_id 必填。
@@ -92,7 +94,7 @@ def manage_work_orders(
 
       - operation="settle" [RISK: write_confirm]
           按筛选条件结算未付人工（月底统一支付）。amount 不传则全额结算。
-          相关参数：amount, worker_name, cycle_id, work_order_id,
+          相关参数：amount, worker_id, worker_name, cycle_id, work_order_id,
                     start_date, end_date。
 
     Args:
@@ -104,7 +106,8 @@ def manage_work_orders(
       scope_type: 作业范围 cycle / unit / farm（create 默认 cycle，update 可选）
       note: 备注（create/update 可选）
       amount: 结算金额（settle 可选，不传则全额结算）
-      worker_name: 工人姓名（add_labor 必填，wages worker 模式必填，settle 可选筛选）
+      worker_id: 已确认的工人 ID（add_labor 必填；wages worker/settle 优先使用）
+      worker_name: 工人姓名（仅唯一匹配时兼容；不能在多个同名工人中自动选择）
       pay_type: 计薪方式 daily / hourly / piece（add_labor 可选，默认取工人档案值）
       unit_price: 单价即日薪/时薪/件薪（add_labor 可选，默认取工人档案值）
       quantity: 工时数量即天数/小时数/件数（add_labor 可选，默认 1）
@@ -121,16 +124,16 @@ def manage_work_orders(
       - "作业单 5 的详情" → operation="detail", work_order_id=5
       - "创建一条浇水作业单" → operation="create",
         operation_type="浇水", operation_date="2026-03-01", cycle_id=3
-      - "给作业单21添加朱哥的工时" → operation="add_labor",
-        work_order_id=21, worker_name="朱哥"
+      - "给作业单21添加朱哥的工时" → 先解析 worker_id，再 operation="add_labor",
+        work_order_id=21, worker_id=<工人ID>
       - "查询本月未结款" → operation="wages", query_mode="unpaid"
       - "8月工资账单" → operation="wages", query_mode="monthly", month="2026-08"
-      - "张三6-8月工资明细" → operation="wages", query_mode="worker",
-        worker_name="张三", start_date="2026-06-01", end_date="2026-08-31"
+      - "张三6-8月工资明细" → 先解析 worker_id，再 operation="wages", query_mode="worker",
+        worker_id=<工人ID>, start_date="2026-06-01", end_date="2026-08-31"
       - "把作业单 5 的备注改成下午浇水" → operation="update",
         work_order_id=5, note="下午浇水"
-      - "月底结算张三的未付人工" → operation="settle",
-        worker_name="张三", start_date="2026-08-01", end_date="2026-08-31"
+      - "月底结算张三的未付人工" → 先解析 worker_id，再 operation="settle",
+        worker_id=<工人ID>, start_date="2026-08-01", end_date="2026-08-31"
     """
     farm_id = get_farm_id_from_headers()
     op = (operation or "").lower()
@@ -192,12 +195,12 @@ def manage_work_orders(
                 "error": "missing_work_order_id",
                 "message": "add_labor 操作必须提供 work_order_id",
             }
-        if not worker_name:
+        if worker_id is None and not worker_name:
             return {
-                "error": "missing_worker_name",
-                "message": "add_labor 操作必须提供 worker_name",
+                "error": "missing_worker_id",
+                "message": "add_labor 操作必须提供 worker_id；worker_name 仅兼容唯一匹配",
             }
-        labor_data: dict = {"worker_name": worker_name}
+        labor_data: dict = {"worker_id": worker_id, "worker_name": worker_name}
         if pay_type:
             labor_data["pay_type"] = pay_type
         if unit_price is not None:
@@ -239,6 +242,13 @@ def manage_work_orders(
                 )
                 db.flush()
                 return work_order_service.get_work_order(db, work_order_id, farm_id)
+        except worker_service.WorkerIdentityError as exc:
+            return {
+                "code": exc.code,
+                "error": exc.code,
+                "message": str(exc),
+                "meta": exc.meta,
+            }
         except ValueError as exc:
             return {"error": "invalid_param", "message": str(exc)}
 
@@ -259,11 +269,19 @@ def manage_work_orders(
                     db,
                     farm_id=farm_id,
                     mode=query_mode,
+                    worker_id=worker_id,
                     worker_name=worker_name,
                     month=month,
                     start_date=d_start,
                     end_date=d_end,
                 )
+        except worker_service.WorkerIdentityError as exc:
+            return {
+                "code": exc.code,
+                "error": exc.code,
+                "message": str(exc),
+                "meta": exc.meta,
+            }
         except ValueError as exc:
             return {"error": "invalid_param", "message": str(exc)}
 
@@ -295,6 +313,13 @@ def manage_work_orders(
                     scope_type=_UNSET if scope_type is None else scope_type,
                     note=_UNSET if note is None else note,
                 )
+        except worker_service.WorkerIdentityError as exc:
+            return {
+                "code": exc.code,
+                "error": exc.code,
+                "message": str(exc),
+                "meta": exc.meta,
+            }
         except ValueError as exc:
             return {"error": "invalid_param", "message": str(exc)}
 
@@ -314,12 +339,20 @@ def manage_work_orders(
                     db,
                     farm_id,
                     amount=amount,
+                    worker_id=worker_id,
                     worker_name=worker_name,
                     cycle_id=cycle_id,
                     work_order_id=work_order_id,
                     start_date=parsed_start,
                     end_date=parsed_end,
                 )
+        except worker_service.WorkerIdentityError as exc:
+            return {
+                "code": exc.code,
+                "error": exc.code,
+                "message": str(exc),
+                "meta": exc.meta,
+            }
         except ValueError as exc:
             return {"error": "not_found", "message": str(exc)}
 

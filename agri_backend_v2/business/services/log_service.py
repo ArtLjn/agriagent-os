@@ -6,13 +6,12 @@ CRUD on farm_logs + farm_log_workers，沿用 archive 表结构。
 改造点（相比 agri_backend_v2 早期版本）：
   - 接受 farm_id 参数，移除 DEFAULT_FARM_ID 全局变量依赖
   - 补充 update_log、count_logs（复用 archive log_service.py 的逻辑）
-  - 保留 agri_backend_v2 的 _resolve_worker_ids 自动建档逻辑（archive 是严格校验，agri_backend_v2 允许 agent 直接传工人名字）
+  - _resolve_worker_ids 只解析已有工人；姓名多候选或不存在时返回结构化业务错误
   - 接受 operation_type 过滤参数
 """
 
 from __future__ import annotations
 
-import logging
 from datetime import date, datetime, timedelta
 from typing import Any
 
@@ -21,8 +20,10 @@ from sqlalchemy.orm import Session, selectinload
 
 from business.db import DEFAULT_FARM_ID, session_scope
 from business.models import CropCycle, FarmLog, FarmLogWorker, Worker
-
-logger = logging.getLogger(__name__)
+from business.services.worker_service import (
+    WorkerIdentityError,
+    normalize_worker_name,
+)
 
 
 def _parse_date(value: str | None) -> date:
@@ -35,37 +36,68 @@ def _parse_date(value: str | None) -> date:
         return date.today()
 
 
-def _resolve_worker_ids(db, farm_id: int, worker_names: list[str]) -> list[int]:
-    """worker_names → worker_ids（farm_id 范围内）。
+def _resolve_worker_ids(
+    db,
+    farm_id: int,
+    worker_ids: list[int] | None = None,
+    worker_names: list[str] | None = None,
+) -> list[int]:
+    """解析已存在的工人引用，拒绝缺失或多候选姓名。
 
-    - 名字匹配的 worker 直接用；不存在则自动建档（status=active）。
-      archive 习惯是允许 agent 直接传工人名字而无需先建 worker 档案。
+    姓名只保留兼容查询入口；日志落库前始终转换为明确的 worker_id，
+    不再因一次日志输入自动创建工人档案。
     """
+    if worker_ids is not None:
+        unique_ids = list(dict.fromkeys(int(worker_id) for worker_id in worker_ids))
+        workers = (
+            db.query(Worker)
+            .filter(Worker.farm_id == farm_id, Worker.id.in_(unique_ids))
+            .all()
+        )
+        workers_by_id = {worker.id: worker for worker in workers}
+        missing_ids = [
+            worker_id for worker_id in unique_ids if worker_id not in workers_by_id
+        ]
+        if missing_ids:
+            raise WorkerIdentityError(
+                "worker_not_found",
+                "存在不属于当前农场的工人",
+                candidate_ids=missing_ids,
+            )
+        return unique_ids
+
     if not worker_names:
         return []
+    normalized_names = [normalize_worker_name(name) for name in worker_names]
     existing = db.scalars(
         select(Worker).where(
             Worker.farm_id == farm_id,
-            Worker.name.in_(worker_names),
+            Worker.name.in_(normalized_names),
         )
     ).all()
-    by_name = {w.name: w for w in existing}
-    ids = [w.id for w in existing]
-    # 自动建档缺失的工人
-    for name in worker_names:
-        if name in by_name:
-            continue
-        w = Worker(
-            farm_id=farm_id,
-            name=name,
-            default_pay_type="daily",
-            status="active",
-        )
-        db.add(w)
-        db.flush()
-        ids.append(w.id)
-        logger.info("auto-created worker: %s (id=%s)", name, w.id)
-    return ids
+    by_name: dict[str, list[Worker]] = {}
+    for worker in existing:
+        by_name.setdefault(normalize_worker_name(worker.name), []).append(worker)
+
+    resolved_ids: list[int] = []
+    for name in normalized_names:
+        candidates = by_name.get(name, [])
+        if not candidates:
+            raise WorkerIdentityError(
+                "worker_not_found",
+                "未找到该工人，请先创建工人档案",
+                name=name,
+            )
+        if len(candidates) > 1:
+            raise WorkerIdentityError(
+                "worker_identity_ambiguous",
+                "同名工人不止一人，请提供 worker_id 或电话号码",
+                name=name,
+                candidate_ids=[worker.id for worker in candidates],
+            )
+        if candidates[0].id not in resolved_ids:
+            resolved_ids.append(candidates[0].id)
+    return resolved_ids
 
 
 def query_logs(
@@ -167,6 +199,7 @@ def create_log(
     operation_date: str | None = None,
     note: str | None = None,
     worker_names: list[str] | None = None,
+    worker_ids: list[int] | None = None,
 ) -> dict:
     """Append a new farm log entry. Returns the created log dict.
 
@@ -176,7 +209,8 @@ def create_log(
         operation_type: 作业类型（必填，如"浇水"、"施肥"）
         operation_date: YYYY-MM-DD（不传默认今天）
         note: 备注
-        worker_names: 参与工人姓名列表（自动建档缺失的工人）
+        worker_names: 兼容的参与工人姓名列表，必须能唯一匹配已有档案
+        worker_ids: 已确认的参与工人 ID 列表
     """
     if farm_id is None:
         farm_id = DEFAULT_FARM_ID
@@ -203,8 +237,10 @@ def create_log(
         db.add(log)
         db.flush()  # 拿到 log.id
 
-        worker_ids = _resolve_worker_ids(db, farm_id, worker_names or [])
-        for wid in worker_ids:
+        resolved_worker_ids = _resolve_worker_ids(
+            db, farm_id, worker_ids=worker_ids, worker_names=worker_names
+        )
+        for wid in resolved_worker_ids:
             db.add(FarmLogWorker(farm_log_id=log.id, worker_id=wid))
 
         db.flush()
@@ -224,6 +260,7 @@ def update_log(
     operation_date: str | None = None,
     note: str | None = None,
     worker_names: list[str] | None = None,
+    worker_ids: list[int] | None = None,
 ) -> dict:
     """更新农事日志。可部分更新字段。
 
@@ -234,7 +271,8 @@ def update_log(
         operation_type: 新作业类型（可选）
         operation_date: 新日期（可选）
         note: 新备注（可选）
-        worker_names: 新工人列表（可选，传入则全量替换）
+        worker_names: 兼容的工人姓名列表（可选，传入则全量替换）
+        worker_ids: 已确认的工人 ID 列表（可选，传入则全量替换）
     """
     if farm_id is None:
         farm_id = DEFAULT_FARM_ID
@@ -259,13 +297,15 @@ def update_log(
         if note is not None:
             log.note = note
 
-        if worker_names is not None:
+        if worker_names is not None or worker_ids is not None:
             # 全量替换 worker_links
             for link in list(log.worker_links):
                 db.delete(link)
             db.flush()
-            worker_ids = _resolve_worker_ids(db, farm_id, worker_names)
-            for wid in worker_ids:
+            resolved_worker_ids = _resolve_worker_ids(
+                db, farm_id, worker_ids=worker_ids, worker_names=worker_names
+            )
+            for wid in resolved_worker_ids:
                 db.add(FarmLogWorker(farm_log_id=log.id, worker_id=wid))
 
         db.flush()

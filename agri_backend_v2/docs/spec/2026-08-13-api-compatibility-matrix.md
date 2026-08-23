@@ -170,7 +170,7 @@ spec 中的 `unit_count`、`unit_area_mu` 当前没有由 `cycle_service` 直接
 | 旧接口 | v2 实际接口 | 请求参数 | 响应 | 状态 |
 |---|---|---|---|---|
 | `GET /logs` | `GET /api/v2/farm-logs` | `cycle_id?,operation_type?,start_date?,end_date?,page?,page_size?` | `{items,total}` | 路径/过滤器迁移 |
-| `POST /logs` | `POST /api/v2/farm-logs` | `cycle_id,operation_type,operation_date?,note?,worker_names[]` | 日志详情 | 参数收窄 |
+| `POST /logs` | `POST /api/v2/farm-logs` | `cycle_id,operation_type,operation_date?,note?,worker_ids[]`（`worker_names[]` 仅兼容唯一匹配） | 日志详情 | 参数收窄 |
 | `PUT /logs/{id}` | `PUT/PATCH /api/v2/farm-logs/{log_id}` | 更新字段 | 日志详情 | 迁移 |
 | `DELETE /logs/{id}` | `DELETE /api/v2/farm-logs/{log_id}` | Path | `{"deleted": id}` | 迁移 |
 | 无 | `GET /api/v2/farm-logs/{log_id}` | Path | 日志详情 | v2 新增 |
@@ -183,7 +183,7 @@ spec 中的 `unit_count`、`unit_area_mu` 当前没有由 `cycle_service` 直接
 | 旧接口 | v2 实际接口 | 请求参数 | 响应 | 状态 |
 |---|---|---|---|---|
 | `GET /planting/workers` | `GET /api/v2/workers` | `active_only=false` | `{items,total}` | 路径/包装迁移 |
-| `POST /planting/workers` | `POST /api/v2/workers` | `name,phone?,default_pay_type?,default_unit_price?,note?` | 工人详情 | 等价 |
+| `POST /planting/workers` | `POST /api/v2/workers` | `name,phone?,default_pay_type?,default_unit_price?,note?`；同农场电话唯一，同名允许 | 工人详情 | 业务约束收紧 |
 | `GET /planting/workers/summary` | `GET /api/v2/workers/summary` | `active_only=false` | `{items,total}` | 等价 |
 | `PUT /planting/workers/{id}` | `PUT/PATCH /api/v2/workers/{worker_id}` | 工人更新字段 | 工人详情 | 迁移 |
 | `DELETE /planting/workers/{id}` | `DELETE /api/v2/workers/{worker_id}` | Path | 停用后的工人 | 迁移 |
@@ -198,7 +198,7 @@ v2 工人字段：`id,farm_id,name,phone,default_pay_type,default_unit_price,not
 | `GET /planting/work-orders` | `GET /api/v2/work-orders` | `cycle_id?,page?,page_size?` | `{items,total}` | 路径/分页迁移 |
 | `GET /planting/work-orders/{id}` | `GET /api/v2/work-orders/{order_id}` | Path | 工单详情 | 等价 |
 | 无 | `PUT/PATCH /api/v2/work-orders/{order_id}` | 工单更新字段 | 工单详情 | v2 新增 |
-| 无 | `POST /api/v2/work-orders/{order_id}/settle` | `amount?,worker_name?,cycle_id?,start_date?,end_date?` | `paid_amount,total_unpaid_before,workers` 等 | v2 新增 |
+| 无 | `POST /api/v2/work-orders/{order_id}/settle` | `amount?,worker_id?,worker_name?,cycle_id?,start_date?,end_date?`；按工人优先使用 `worker_id` | `paid_amount,total_unpaid_before,workers` 等 | v2 新增 |
 | `POST /planting/labor/wages` | `POST /api/v2/labor/wages` | `worker_id?/worker_name?,cycle_id,operation_type,work_date,pay_type?,quantity?,unit_price?,payable_amount?,paid_amount?,note?,client_request_id?` | 工资记录 + `cost_record_id` | 迁移 |
 | `PATCH /planting/labor/wages/{id}` | `PATCH /api/v2/labor/wages/{labor_entry_id}` | 工资更新字段 | 工资记录 | 等价 |
 | `GET /planting/labor/unsettled-summary` | `GET /api/v2/labor/unsettled-summary` | 无 | `total_unpaid,workers[]` | 迁移 |

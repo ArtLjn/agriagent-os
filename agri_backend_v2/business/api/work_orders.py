@@ -16,6 +16,7 @@ from business.services import (
     labor_service,
     operation_type_service,
     recent_operation_service,
+    worker_service,
     work_order_service,
 )
 
@@ -65,6 +66,7 @@ class UpdateWorkOrderRequest(StrictRequest):
 
 class SettleLaborRequest(StrictRequest):
     amount: Decimal | None = Field(default=None, gt=0)
+    worker_id: int | None = Field(default=None, gt=0)
     worker_name: str | None = Field(default=None, max_length=100)
     cycle_id: int | None = Field(default=None, gt=0)
     start_date: date | None = None
@@ -141,6 +143,11 @@ def create_work_order(
         return work_order_service.create_work_order(
             db, farm_id=user["farm_id"], **payload
         )
+    except worker_service.WorkerIdentityError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": exc.code, "message": str(exc), "meta": exc.meta},
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -174,6 +181,11 @@ def update_work_order(
         return work_order_service.update_work_order(
             db, order_id, farm_id=user["farm_id"], **changes
         )
+    except worker_service.WorkerIdentityError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": exc.code, "message": str(exc), "meta": exc.meta},
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -193,6 +205,11 @@ def settle_work_order_labor(
             work_order_id=order_id,
             **filters,
         )
+    except worker_service.WorkerIdentityError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": exc.code, "message": str(exc), "meta": exc.meta},
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -219,6 +236,11 @@ def create_unit(
         return work_order_service.create_unit(
             db, farm_id=user["farm_id"], **request.model_dump()
         )
+    except work_order_service.PlantingUnitConflictError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": exc.code, "message": str(exc)},
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -238,6 +260,11 @@ def update_unit(
             farm_id=user["farm_id"],
             **request.model_dump(exclude_unset=True),
         )
+    except work_order_service.PlantingUnitConflictError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": exc.code, "message": str(exc)},
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -264,6 +291,11 @@ def save_wage(
         return labor_service.save_wage_entry(
             db, request.model_dump(), farm_id=user["farm_id"]
         )
+    except worker_service.WorkerIdentityError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": exc.code, "message": str(exc), "meta": exc.meta},
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -282,6 +314,11 @@ def update_wage(
             request.model_dump(exclude_unset=True),
             farm_id=user["farm_id"],
         )
+    except worker_service.WorkerIdentityError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": exc.code, "message": str(exc), "meta": exc.meta},
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -289,6 +326,7 @@ def update_wage(
 @operations_router.get("/labor/wages")
 def query_wages(
     mode: str = Query(pattern="^(unpaid|monthly|worker)$"),
+    worker_id: int | None = Query(default=None, gt=0),
     worker_name: str | None = Query(default=None, max_length=100),
     month: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}$"),
     start_date: date | None = None,
@@ -301,11 +339,17 @@ def query_wages(
             db,
             farm_id=user["farm_id"],
             mode=mode,
+            worker_id=worker_id,
             worker_name=worker_name,
             month=month,
             start_date=start_date,
             end_date=end_date,
         )
+    except worker_service.WorkerIdentityError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": exc.code, "message": str(exc), "meta": exc.meta},
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

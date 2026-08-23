@@ -17,7 +17,7 @@ triggers:
   - 加人
 operations:
   query: {tool_name: query_workers, description: 查询农场工人档案列表，可只查看在职工人。, risk_level: read, parameters: [active_only], required: []}
-  create: {tool_name: create_worker, description: 新增一名农场工人，填写姓名以及可选的联系方式和计酬信息。, risk_level: write_confirm, parameters: [name, phone, default_pay_type, default_unit_price, note], required: [name]}
+  create: {tool_name: create_worker, description: 新增一名农场工人；同名允许，电话在当前农场内唯一，电话冲突或同名无电话歧义时拒绝写入。, risk_level: write_confirm, parameters: [name, phone, default_pay_type, default_unit_price, note], required: [name]}
   update: {tool_name: update_worker, description: 修改指定工人的姓名、电话、计酬方式、单价、备注或状态。, risk_level: write_confirm, parameters: [worker_id, name, phone, default_pay_type, default_unit_price, note, status], required: [worker_id]}
   delete: {tool_name: deactivate_worker, description: 停用指定工人并保留历史用工记录。, risk_level: write_confirm, parameters: [worker_id], required: [worker_id]}
 parameters:
@@ -61,7 +61,7 @@ parameters:
 # manage_workers
 
 管理农场工人档案，支持 4 种操作：
-- `create` — 添加工人（write_confirm，同名幂等）
+- `create` — 添加工人（write_confirm，同名允许；电话冲突拒绝）
 - `query` — 查列表（read）
 - `update` — 修改信息（write_confirm）
 - `delete` — 停用工人（write_confirm，保留历史用工）
@@ -70,3 +70,10 @@ parameters:
 
 - create/update/delete 是 write_confirm，需用户确认
 - query 是 read，不闸门
+
+## 身份边界
+
+- 同名工人可以存在，姓名不是唯一键。
+- 电话在当前农场内唯一；同电话创建返回冲突，不会覆盖已有档案。
+- 创建同名工人时没有电话且已有同名档案，必须先补充电话或选择已有 worker_id。
+- update/delete 必须使用 worker_id，不能按姓名选择第一条记录。

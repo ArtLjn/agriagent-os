@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from business.api.deps import get_current_user
 from business.api.schemas import StrictRequest
 from business.db import get_db
-from business.services import log_service, operation_type_service
+from business.services import log_service, operation_type_service, worker_service
 
 router = APIRouter(prefix="/farm-logs", tags=["farm-logs"])
 
@@ -21,7 +21,8 @@ class CreateLogRequest(StrictRequest):
     operation_type: str = Field(min_length=1, max_length=50)
     operation_date: date | None = None
     note: str | None = Field(default=None, max_length=500)
-    worker_names: list[str] = Field(default_factory=list, max_length=100)
+    worker_ids: list[int] | None = Field(default=None, max_length=100)
+    worker_names: list[str] | None = Field(default=None, max_length=100)
 
 
 class UpdateLogRequest(StrictRequest):
@@ -29,6 +30,7 @@ class UpdateLogRequest(StrictRequest):
     operation_type: str | None = Field(default=None, min_length=1, max_length=50)
     operation_date: date | None = None
     note: str | None = Field(default=None, max_length=500)
+    worker_ids: list[int] | None = Field(default=None, max_length=100)
     worker_names: list[str] | None = Field(default=None, max_length=100)
 
 
@@ -83,8 +85,14 @@ def create_log(
                 request.operation_date.isoformat() if request.operation_date else None
             ),
             note=request.note,
+            worker_ids=request.worker_ids,
             worker_names=request.worker_names,
         )
+    except worker_service.WorkerIdentityError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": exc.code, "message": str(exc), "meta": exc.meta},
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -113,6 +121,11 @@ def update_log(
         changes["operation_date"] = changes["operation_date"].isoformat()
     try:
         return log_service.update_log(farm_id=user["farm_id"], log_id=log_id, **changes)
+    except worker_service.WorkerIdentityError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": exc.code, "message": str(exc), "meta": exc.meta},
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

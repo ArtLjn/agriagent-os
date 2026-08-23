@@ -23,6 +23,8 @@
 from __future__ import annotations
 
 import logging
+import re
+import unicodedata
 from datetime import date
 from decimal import Decimal
 from typing import Any
@@ -44,6 +46,18 @@ logger = logging.getLogger(__name__)
 # 哨兵：用于 update 函数区分"未提供该字段"（保持原值）和"显式传 None"（清空）。
 # 对应 archive pydantic 的 model_fields_set 语义。
 _UNSET: Any = object()
+
+
+class PlantingUnitConflictError(ValueError):
+    """种植单元在同一茬口内违反名称唯一性。"""
+
+    code = "duplicate_planting_unit_name"
+
+
+def _normalize_unit_name(value: str) -> str:
+    """统一地块/棚名称空白和兼容字符，作为同一茬口内的比较值。"""
+    normalized = unicodedata.normalize("NFKC", str(value or ""))
+    return re.sub(r"\s+", "", normalized).strip()
 
 
 def _planting_unit_to_dict(unit: PlantingUnit) -> dict[str, Any]:
@@ -139,12 +153,32 @@ def create_unit(
     status: str = "active",
     note: str | None = None,
 ) -> dict[str, Any]:
-    """创建种植单元；需校验 cycle 属于当前农场。"""
+    """创建种植单元；同一农场茬口内名称必须唯一。"""
     _get_cycle(db, cycle_id, farm_id)
+    normalized_name = _normalize_unit_name(name)
+    if not normalized_name:
+        raise ValueError("种植单元名称不能为空")
+    duplicate = next(
+        (
+            unit
+            for unit in db.query(PlantingUnit)
+            .filter(
+                PlantingUnit.farm_id == farm_id,
+                PlantingUnit.cycle_id == cycle_id,
+            )
+            .all()
+            if _normalize_unit_name(unit.name) == normalized_name
+        ),
+        None,
+    )
+    if duplicate is not None:
+        raise PlantingUnitConflictError(
+            f"当前茬口已存在名为 {normalized_name} 的种植单元（ID={duplicate.id}）"
+        )
     unit = PlantingUnit(
         farm_id=farm_id,
         cycle_id=cycle_id,
-        name=name,
+        name=normalized_name,
         area_mu=area_mu,
         planted_date=planted_date,
         status=status,
@@ -187,7 +221,28 @@ def update_unit(
     """更新种植单元；只更新非 _UNSET 字段（_UNSET 表示保持原值，None 表示清空）。"""
     unit = _get_unit(db, unit_id, farm_id)
     if name is not _UNSET:
-        unit.name = name
+        normalized_name = _normalize_unit_name(name)
+        if not normalized_name:
+            raise ValueError("种植单元名称不能为空")
+        duplicate = next(
+            (
+                candidate
+                for candidate in db.query(PlantingUnit)
+                .filter(
+                    PlantingUnit.farm_id == farm_id,
+                    PlantingUnit.cycle_id == unit.cycle_id,
+                    PlantingUnit.id != unit_id,
+                )
+                .all()
+                if _normalize_unit_name(candidate.name) == normalized_name
+            ),
+            None,
+        )
+        if duplicate is not None:
+            raise PlantingUnitConflictError(
+                f"当前茬口已存在名为 {normalized_name} 的种植单元（ID={duplicate.id}）"
+            )
+        unit.name = normalized_name
     if area_mu is not _UNSET:
         unit.area_mu = area_mu
     if planted_date is not _UNSET:
@@ -426,6 +481,7 @@ def settle_labor_payment(
     db: Session,
     farm_id: int,
     amount: Decimal | float | None = None,
+    worker_id: int | None = None,
     worker_name: str | None = None,
     cycle_id: int | None = None,
     work_order_id: int | None = None,
@@ -445,6 +501,7 @@ def settle_labor_payment(
     entries = list_labor_payables(
         db,
         farm_id=farm_id,
+        worker_id=worker_id,
         worker_name=worker_name,
         cycle_id=cycle_id,
         work_order_id=work_order_id,
@@ -586,4 +643,5 @@ __all__ = [
     "get_unit",
     "update_unit",
     "delete_unit",
+    "PlantingUnitConflictError",
 ]

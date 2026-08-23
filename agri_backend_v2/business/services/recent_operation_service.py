@@ -16,6 +16,7 @@
     避免先转 dict 再回查 ORM 的无谓往返）
   - 保留 db: Session 第一参数
 """
+
 from __future__ import annotations
 
 import logging
@@ -181,6 +182,7 @@ def list_operation_work_orders(
 def list_labor_payables(
     db: Session,
     farm_id: int,
+    worker_id: int | None = None,
     worker_name: str | None = None,
     cycle_id: int | None = None,
     cycle_name: str | None = None,
@@ -204,7 +206,9 @@ def list_labor_payables(
             LaborEntry.unpaid_amount > 0,
         )
     )
-    if worker_name:
+    if worker_id is not None:
+        query = query.filter(Worker.id == worker_id)
+    elif worker_name:
         query = query.filter(Worker.name.contains(worker_name.strip()))
     if cycle_id is not None:
         query = query.filter(OperationWorkOrder.cycle_id == cycle_id)

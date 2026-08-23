@@ -182,6 +182,9 @@ class CycleStage(Base):
 
 class Worker(Base):
     __tablename__ = "workers"
+    __table_args__ = (
+        UniqueConstraint("farm_id", "phone", name="uq_workers_farm_phone"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     farm_id = Column(Integer, ForeignKey("farms.id"), nullable=False)
@@ -264,6 +267,14 @@ class PlantingUnit(Base):
     """批次下的棚、地块或区域。"""
 
     __tablename__ = "planting_units"
+    __table_args__ = (
+        UniqueConstraint(
+            "farm_id",
+            "cycle_id",
+            "name",
+            name="uq_planting_units_farm_cycle_name",
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     farm_id = Column(Integer, ForeignKey("farms.id"), nullable=False, index=True)

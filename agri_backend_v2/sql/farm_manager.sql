@@ -136,6 +136,7 @@ CREATE TABLE planting_units (
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
+  UNIQUE KEY uq_planting_units_farm_cycle_name (farm_id, cycle_id, name),
   KEY idx_planting_units_farm_id (farm_id),
   KEY idx_planting_units_cycle_id (cycle_id),
   CONSTRAINT fk_planting_units_farm
@@ -157,6 +158,7 @@ CREATE TABLE workers (
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
+  UNIQUE KEY uq_workers_farm_phone (farm_id, phone),
   KEY idx_workers_farm_status (farm_id, status),
   CONSTRAINT fk_workers_farm
     FOREIGN KEY (farm_id) REFERENCES farms (id) ON DELETE RESTRICT

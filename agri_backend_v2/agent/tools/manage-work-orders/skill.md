@@ -42,16 +42,16 @@ operations:
     tool_name: add_labor_to_work_order
     description: 给已有作业单添加工时记录（工人出勤/应得工资，未支付）。后端自动生成未结算人工成本账单。不传 unit_price/pay_type 时自动从工人档案读取。
     risk_level: write_confirm
-    parameters: [work_order_id, worker_name, pay_type, unit_price, quantity]
-    required: [work_order_id, worker_name]
+    parameters: [work_order_id, worker_id, worker_name, pay_type, unit_price, quantity]
+    required: [work_order_id, worker_id]
   wages:
     tool_name: query_wages
     description: 查询工人工资汇总，三种模式：unpaid=查未结款汇总 / monthly=按月查历史 / worker=按工人查明细。
     risk_level: read
-    parameters: [query_mode, worker_name, month, start_date, end_date]
+    parameters: [query_mode, worker_id, worker_name, month, start_date, end_date]
     required: [query_mode]
   update: {tool_name: update_work_order, description: 修改指定作业单的作业内容、日期、茬口、范围或备注。, risk_level: write_confirm, parameters: [work_order_id, operation_type, operation_date, cycle_id, scope_type, note], required: [work_order_id]}
-  settle: {tool_name: settle_work_orders, description: 月底按工人或日期范围统一结算未付人工工资。, risk_level: write_confirm, parameters: [amount, worker_name, start_date, end_date], required: []}
+  settle: {tool_name: settle_work_orders, description: 月底按工人或日期范围统一结算未付人工工资；按工人结算优先使用 worker_id。, risk_level: write_confirm, parameters: [amount, worker_id, worker_name, start_date, end_date], required: []}
 parameters:
   type: object
   properties:
@@ -85,7 +85,10 @@ parameters:
       description: 备注（create/update 可选）
     worker_name:
       type: string
-      description: 工人姓名（add_labor 必填，wages worker 模式必填，settle 可选筛选）
+      description: 工人姓名（仅兼容唯一匹配；不能在多个同名工人中自动选择）
+    worker_id:
+      type: integer
+      description: 已确认的工人 ID（add_labor 必填；wages worker/settle 优先使用）
     pay_type:
       type: string
       enum: [daily, hourly, piece]
@@ -103,7 +106,7 @@ parameters:
         工资查询模式（wages 必填）：
         unpaid=查所有工人未结款汇总（如"谁还欠多少""本月未结"）
         monthly=按月份查历史账单（如"8月工资""上个月工资"），需配合 month
-        worker=按工人查明细（如"张三6-8月工资""朱哥的工资明细"），需配合 worker_name
+        worker=按工人查明细（如"张三6-8月工资""朱哥的工资明细"），需配合 worker_id；worker_name 仅兼容唯一匹配
     month:
       type: string
       description: YYYY-MM 月份（wages monthly 模式必填）
@@ -149,12 +152,12 @@ parameters:
 - "创建一条浇水作业单" → create, operation_type=浇水, operation_date=2026-03-01
 - "安排朱哥今天到草莓地育苗" → 两步：
   1. create, operation_type=育苗, operation_date=2026-08-10, cycle_id=27
-  2. add_labor, work_order_id=<上一步返回的id>, worker_name=朱哥
-- "记一下朱哥今天在作业单21上的工时" → add_labor, work_order_id=21, worker_name=朱哥
+  2. 先确认朱哥的 worker_id，再 add_labor, work_order_id=<上一步返回的id>, worker_id=<工人ID>
+- "记一下朱哥今天在作业单21上的工时" → 先解析 worker_id，再 add_labor, work_order_id=21, worker_id=<工人ID>
 - "查询本月未结款" → wages, query_mode=unpaid
 - "8月工资账单" → wages, query_mode=monthly, month=2026-08
-- "张三6-8月工资明细" → wages, query_mode=worker, worker_name=张三, start_date=2026-06-01, end_date=2026-08-31
-- "月底结算张三的工资" → settle, worker_name=张三, start_date=2026-08-01, end_date=2026-08-31
+- "张三6-8月工资明细" → 先解析 worker_id，再 wages, query_mode=worker, worker_id=<工人ID>, start_date=2026-06-01, end_date=2026-08-31
+- "月底结算张三的工资" → 先解析 worker_id，再 settle, worker_id=<工人ID>, start_date=2026-08-01, end_date=2026-08-31
 - "最近有哪些作业单" → query
 - "作业单 5 的详情" → detail, work_order_id=5
 
@@ -167,7 +170,7 @@ parameters:
    - 成功后获得 work_order_id
 
 2. **第二步 HITL（工时记录）**：调 add_labor 记录工时
-   - work_order_id=<第一步返回的id>, worker_name=朱哥
+   - 先确认朱哥的 worker_id，再传 work_order_id=<第一步返回的id>, worker_id=<工人ID>
    - pay_type/unit_price 不传时自动从工人档案读取（如 daily/100）
    - quantity 默认 1
    - 用户确认"朱哥今天干活1天，应得100元"
@@ -181,12 +184,13 @@ parameters:
 - create 缺 operation_date：默认今天
 - create 缺 cycle_id：先调 query_crop_cycles 查活跃茬口
 - add_labor 缺 work_order_id：先调 query 查最近作业单
+- add_labor 缺 worker_id：先调 manage_workers 查询候选；同名多候选时必须让用户选择
 - add_labor 缺 unit_price：不追问，自动从工人档案 default_unit_price 读取
 - add_labor 缺 pay_type：不追问，自动从工人档案 default_pay_type 读取
 - add_labor 缺 quantity：默认 1
 - wages 缺 query_mode：追问是查未结款/月度账单/工人明细
 - wages monthly 缺 month：默认当月
-- wages worker 缺 worker_name：追问查哪个工人
+- wages worker 缺 worker_id：先按姓名查询候选；同名多候选时必须让用户选择
 - wages worker 缺 start_date/end_date：默认当月
 - settle 缺 amount：全额结算
 - settle 缺 start_date/end_date：默认当月

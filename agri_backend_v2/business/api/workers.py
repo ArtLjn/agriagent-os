@@ -67,9 +67,15 @@ def create_worker(
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    return worker_service.create_worker(
-        db, farm_id=user["farm_id"], **request.model_dump()
-    )
+    try:
+        return worker_service.create_worker(
+            db, farm_id=user["farm_id"], **request.model_dump()
+        )
+    except worker_service.WorkerIdentityError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": exc.code, "message": str(exc), "meta": exc.meta},
+        ) from exc
 
 
 @router.get("/{worker_id}")
@@ -99,6 +105,11 @@ def update_worker(
             farm_id=user["farm_id"],
             **request.model_dump(exclude_unset=True),
         )
+    except worker_service.WorkerIdentityError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": exc.code, "message": str(exc), "meta": exc.meta},
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

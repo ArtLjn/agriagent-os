@@ -15,7 +15,7 @@
   - 导入改为 business.models / business.context_runtime / shared.time
   - cost_service 常量和函数从 business.services.cost_service 导入（并行依赖，
     若 ImportError 说明 cost_service 未就绪，最终统一自检）
-  - _get_worker / find_or_create_worker_by_name 从 worker_service 导入
+  - _get_worker / resolve_worker_by_name 从 worker_service 导入
   - WageSaveRequest / WageUpdateRequest / LaborEntryCreate 改为 dict 参数
   - db.commit() 改 db.flush()（IntegrityError 恢复路径保留 db.rollback() 以清理 session 重试）
   - save_wage_entry / update_wage_entry 返回 tuple[dict, int|None]（dict 替代 ORM）
@@ -51,7 +51,7 @@ from business.services.cost_service import (
 )
 from business.services.worker_service import (
     _get_worker,
-    find_or_create_worker_by_name,
+    resolve_worker_by_name,
 )
 from shared.time import ensure_beijing_timezone
 
@@ -116,7 +116,7 @@ def build_labor_entry(
 
     data 字段：worker_id / worker_name / pay_type / quantity / unit_price /
     paid_amount / payable_amount（可选，缺省按 quantity*unit_price 计算）/ note /
-    client_request_id。worker_id 优先；缺失时用 worker_name 自动建档。
+    client_request_id。worker_id 优先；仅在姓名能唯一匹配已有档案时兼容解析。
 
     unit_price / pay_type 未传时自动从工人档案 default_unit_price /
     default_pay_type 回填，避免日结工工资金额为 0。
@@ -127,13 +127,7 @@ def build_labor_entry(
         worker = _get_worker(db, int(worker_id), farm_id)
         resolved_worker_id = worker.id
     elif worker_name:
-        unit_price = data.get("unit_price")
-        worker = find_or_create_worker_by_name(
-            db,
-            farm_id,
-            str(worker_name),
-            _to_decimal(unit_price) if unit_price is not None else None,
-        )
+        worker = resolve_worker_by_name(db, farm_id, str(worker_name))
         resolved_worker_id = worker.id
     else:
         raise ValueError("必须选择或填写工人")
@@ -392,30 +386,26 @@ def _get_wage_entry(db: Session, labor_entry_id: int, farm_id: int) -> LaborEntr
 
 
 def _resolve_wage_worker(db: Session, data: dict, farm_id: int) -> Any:
-    """save 时解析工人：worker_id 优先，否则用 worker_name 自动建档。"""
+    """save 时解析工人：worker_id 优先，否则只解析唯一姓名候选。"""
     worker_id = data.get("worker_id")
     if worker_id is not None:
         return _get_worker(db, int(worker_id), farm_id)
     worker_name = data.get("worker_name")
     if not worker_name:
         raise ValueError("必须选择或填写工人")
-    return find_or_create_worker_by_name(
-        db, farm_id, str(worker_name), _to_decimal(data.get("unit_price"))
-    )
+    return resolve_worker_by_name(db, farm_id, str(worker_name))
 
 
 def _resolve_wage_worker_for_update(
     db: Session, data: dict, current_worker_id: int, farm_id: int
 ) -> Any:
-    """update 时解析工人：worker_id 优先，其次 worker_name，最后保持原 worker。"""
+    """update 时解析工人：worker_id 优先，其次唯一姓名，最后保持原工人。"""
     worker_id = data.get("worker_id")
     if worker_id is not None:
         return _get_worker(db, int(worker_id), farm_id)
     worker_name = data.get("worker_name")
     if worker_name:
-        return find_or_create_worker_by_name(
-            db, farm_id, str(worker_name), _to_decimal(data.get("unit_price"))
-        )
+        return resolve_worker_by_name(db, farm_id, str(worker_name))
     return _get_worker(db, current_worker_id, farm_id)
 
 
@@ -607,6 +597,7 @@ def query_wages(
     db: Session,
     farm_id: int,
     mode: str,
+    worker_id: int | None = None,
     worker_name: str | None = None,
     month: str | None = None,
     start_date: date | None = None,
@@ -616,7 +607,7 @@ def query_wages(
 
     mode="unpaid":   查所有工人未结款汇总（settlement_status IN unpaid/partial）
     mode="monthly":  按月份查历史账单（含已结/未结），month 格式 "2026-08"
-    mode="worker":   按工人+日期范围查明细，worker_name 必填
+        mode="worker":   按工人+日期范围查明细，worker_id 必填；worker_name 仅兼容唯一匹配
     """
     if mode == "unpaid":
         return _query_unpaid_wages(db, farm_id)
@@ -625,9 +616,15 @@ def query_wages(
             raise ValueError("monthly 模式必须提供 month (YYYY-MM)")
         return _query_monthly_wages(db, farm_id, month)
     if mode == "worker":
-        if not worker_name:
-            raise ValueError("worker 模式必须提供 worker_name")
-        return _query_worker_wages(db, farm_id, worker_name, start_date, end_date)
+        if worker_id is not None:
+            worker = _get_worker(db, int(worker_id), farm_id)
+        elif worker_name:
+            worker = resolve_worker_by_name(db, farm_id, worker_name)
+        else:
+            raise ValueError("worker 模式必须提供 worker_id 或 worker_name")
+        return _query_worker_wages(
+            db, farm_id, worker.id, worker.name, start_date, end_date
+        )
     raise ValueError(f"未知 query mode: {mode}，支持 unpaid/monthly/worker")
 
 
@@ -736,6 +733,7 @@ def _query_monthly_wages(db: Session, farm_id: int, month: str) -> dict[str, Any
 def _query_worker_wages(
     db: Session,
     farm_id: int,
+    worker_id: int,
     worker_name: str,
     start_date: date | None,
     end_date: date | None,
@@ -750,7 +748,7 @@ def _query_worker_wages(
         .join(Worker, LaborEntry.worker_id == Worker.id)
         .filter(
             LaborEntry.farm_id == farm_id,
-            Worker.name == worker_name,
+            Worker.id == worker_id,
         )
     )
     if start_date:

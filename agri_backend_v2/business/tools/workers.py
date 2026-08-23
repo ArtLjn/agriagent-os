@@ -9,6 +9,7 @@
 身份注入：agent 通过 BusinessClient headers 传入 X-Farm-Id，
 本工具从 HTTP 请求头读取后传给 service 层做农场隔离。
 """
+
 from __future__ import annotations
 
 from business.db import session_scope
@@ -37,7 +38,8 @@ def manage_workers(
           相关参数：active_only。
 
       - operation="create" [RISK: write_confirm]
-          创建工人档案；同名工人已存在则直接返回（幂等）。name 必填。
+          创建工人档案；同名允许，电话在当前农场内必须唯一。name 必填。
+          同名且未提供电话时，如果已有同名档案则返回歧义，不会覆盖已有档案。
           相关参数：name, phone, default_pay_type, default_unit_price, note。
 
       - operation="update" [RISK: write_confirm]
@@ -73,24 +75,30 @@ def manage_workers(
 
     if op == "query":
         with session_scope() as db:
-            workers = worker_service.list_workers(
-                db, farm_id, active_only=active_only
-            )
+            workers = worker_service.list_workers(db, farm_id, active_only=active_only)
             return {"count": len(workers), "workers": workers}
 
     if op == "create":
         if not name:
             return {"error": "missing_name", "message": "create 操作必须提供 name"}
         with session_scope() as db:
-            return worker_service.create_worker(
-                db,
-                farm_id=farm_id,
-                name=name,
-                phone=phone,
-                default_pay_type=default_pay_type or "daily",
-                default_unit_price=default_unit_price,
-                note=note,
-            )
+            try:
+                return worker_service.create_worker(
+                    db,
+                    farm_id=farm_id,
+                    name=name,
+                    phone=phone,
+                    default_pay_type=default_pay_type or "daily",
+                    default_unit_price=default_unit_price,
+                    note=note,
+                )
+            except worker_service.WorkerIdentityError as exc:
+                return {
+                    "code": exc.code,
+                    "error": exc.code,
+                    "message": str(exc),
+                    "meta": exc.meta,
+                }
 
     if op == "update":
         if worker_id is None:
@@ -111,6 +119,13 @@ def manage_workers(
                     note=note,
                     status=status,
                 )
+        except worker_service.WorkerIdentityError as exc:
+            return {
+                "code": exc.code,
+                "error": exc.code,
+                "message": str(exc),
+                "meta": exc.meta,
+            }
         except ValueError as exc:
             return {"error": "not_found", "message": str(exc)}
 

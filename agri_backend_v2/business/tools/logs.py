@@ -10,10 +10,12 @@ manage_farm_logs skill。风险等级由 agent skill 根据参数动态判定：
 身份注入：agent 通过 BusinessClient headers 传入 X-Farm-Id，
 本工具从 HTTP 请求头读取后传给 service 层做农场隔离。
 """
+
 from __future__ import annotations
 
 from business.mcp_app import mcp
 from business.services import log_service
+from business.services import worker_service
 from business.tools._headers import get_farm_id_from_headers
 
 
@@ -25,6 +27,7 @@ def manage_farm_logs(
     operation_date: str | None = None,
     note: str | None = None,
     worker_names: list[str] | None = None,
+    worker_ids: list[int] | None = None,
     log_id: int | None = None,
     days: int = 7,
     limit: int = 20,
@@ -38,11 +41,11 @@ def manage_farm_logs(
 
       - operation="create" [RISK: write_confirm]
           创建一条农事记录。cycle_id 和 operation_type 必填。
-          相关参数：cycle_id, operation_type, operation_date, note, worker_names。
+          相关参数：cycle_id, operation_type, operation_date, note, worker_ids。
 
       - operation="update" [RISK: write_confirm]
           更新一条农事记录。log_id 必填，其余参数可选（仅传需要修改的字段）。
-          相关参数：log_id, cycle_id, operation_type, operation_date, note, worker_names。
+          相关参数：log_id, cycle_id, operation_type, operation_date, note, worker_ids。
 
       - operation="delete" [RISK: write_high]
           按 log_id 删除一条农事记录。不可恢复。
@@ -54,7 +57,8 @@ def manage_farm_logs(
       operation_type: 操作类型如"浇水"、"施肥"（create 必填，update 可选）
       operation_date: YYYY-MM-DD（create/update 可选，不传默认今天）
       note: 备注（create/update 可选）
-      worker_names: 参与工人姓名列表（create/update 可选，update 时全量替换）
+      worker_ids: 已确认的参与工人 ID 列表（create/update 可选，update 时全量替换）
+      worker_names: 兼容的参与工人姓名列表；仅能唯一匹配已有档案时有效
       log_id: 农事记录 ID（update/delete 必填）
       days: 查询最近 N 天（query，默认 7）
       limit: 查询返回最大条数（query，默认 20）
@@ -76,18 +80,32 @@ def manage_farm_logs(
 
     if op == "create":
         if not cycle_id:
-            return {"error": "missing_cycle_id", "message": "create 操作必须提供 cycle_id"}
+            return {
+                "error": "missing_cycle_id",
+                "message": "create 操作必须提供 cycle_id",
+            }
         if not operation_type:
-            return {"error": "missing_operation_type",
-                    "message": "create 操作必须提供 operation_type（如浇水、施肥）"}
-        return log_service.create_log(
-            farm_id=farm_id,
-            cycle_id=cycle_id,
-            operation_type=operation_type,
-            operation_date=operation_date,
-            note=note,
-            worker_names=worker_names,
-        )
+            return {
+                "error": "missing_operation_type",
+                "message": "create 操作必须提供 operation_type（如浇水、施肥）",
+            }
+        try:
+            return log_service.create_log(
+                farm_id=farm_id,
+                cycle_id=cycle_id,
+                operation_type=operation_type,
+                operation_date=operation_date,
+                note=note,
+                worker_ids=worker_ids,
+                worker_names=worker_names,
+            )
+        except worker_service.WorkerIdentityError as exc:
+            return {
+                "code": exc.code,
+                "error": exc.code,
+                "message": str(exc),
+                "meta": exc.meta,
+            }
 
     if op == "update":
         if log_id is None:
@@ -100,8 +118,16 @@ def manage_farm_logs(
                 operation_type=operation_type,
                 operation_date=operation_date,
                 note=note,
+                worker_ids=worker_ids,
                 worker_names=worker_names,
             )
+        except worker_service.WorkerIdentityError as exc:
+            return {
+                "code": exc.code,
+                "error": exc.code,
+                "message": str(exc),
+                "meta": exc.meta,
+            }
         except ValueError as exc:
             return {"error": "not_found", "message": str(exc)}
 

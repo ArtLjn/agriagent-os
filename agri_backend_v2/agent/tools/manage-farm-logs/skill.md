@@ -24,9 +24,9 @@ operations:
     tool_name: create_farm_log
     description: 记录已经完成的浇水、施肥、打药、播种、采摘等农事活动。
     risk_level: write_confirm
-    parameters: [cycle_id, operation_type, operation_date, note, worker_names]
+    parameters: [cycle_id, operation_type, operation_date, note, worker_ids, worker_names]
     required: [cycle_id, operation_type]
-  update: {tool_name: update_farm_log, description: 修改指定农事记录的操作、日期、备注或参与工人。, risk_level: write_confirm, parameters: [log_id, cycle_id, operation_type, operation_date, note, worker_names], required: [log_id]}
+  update: {tool_name: update_farm_log, description: 修改指定农事记录的操作、日期、备注或参与工人；参与工人优先使用 worker_ids。, risk_level: write_confirm, parameters: [log_id, cycle_id, operation_type, operation_date, note, worker_ids, worker_names], required: [log_id]}
   delete: {tool_name: delete_farm_log, description: 删除指定农事记录。, risk_level: write_high, parameters: [log_id], required: [log_id]}
 parameters:
   type: object
@@ -51,11 +51,16 @@ parameters:
     note:
       type: string
       description: 备注（create/update 可选）
+    worker_ids:
+      type: array
+      items:
+        type: integer
+      description: 已确认的参与工人 ID 列表（create/update 可选；update 时全量替换）
     worker_names:
       type: array
       items:
         type: string
-      description: 参与工人姓名列表（update 时全量替换）
+      description: 兼容的参与工人姓名列表；仅能唯一匹配已有档案，不能自动创建工人（update 时全量替换）
     log_id:
       type: integer
       description: 农事记录 ID（update/delete 必填）
