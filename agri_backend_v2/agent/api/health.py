@@ -10,9 +10,14 @@ from fastapi import HTTPException
 from agent.api import api_router
 from agent.config import settings
 from agent.deps import pending_approvals
-from agent.platforms.persistence.redis.redis_store import get_client, key, status as redis_status
+from agent.platforms.persistence.redis.redis_store import (
+    get_client,
+    key,
+    status as redis_status,
+)
 from agent.platforms.persistence.redis.turn_store import pending_approval_count
 from agent.platforms.persistence.mongo import chat_store
+from shared.roles import UserRole
 
 logger = logging.getLogger(__name__)
 
@@ -21,9 +26,8 @@ logger = logging.getLogger(__name__)
 async def health() -> dict:
     redis = await redis_status()
     mongo = await chat_store.status()
-    dependencies_ok = (
-        (not redis["enabled"] or redis["reachable"])
-        and (not mongo["enabled"] or mongo["reachable"])
+    dependencies_ok = (not redis["enabled"] or redis["reachable"]) and (
+        not mongo["enabled"] or mongo["reachable"]
     )
     return {
         "status": "ok" if dependencies_ok else "degraded",
@@ -70,7 +74,7 @@ def dev_users() -> dict:
             rows = (
                 db.query(User, Farm)
                 .outerjoin(Farm, Farm.user_id == User.id)
-                .filter(User.status == "active")
+                .filter(User.status == "active", User.role == UserRole.DEV.value)
                 .order_by(User.created_at)
                 .limit(50)
                 .all()

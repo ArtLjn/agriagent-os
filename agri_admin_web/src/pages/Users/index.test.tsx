@@ -71,16 +71,15 @@ describe('Users', () => {
     );
     mockedUsersApi.create.mockResolvedValue(
       axiosResponse({
-        id: 'user-2',
+        access_token: 'new-user-token',
+        token_type: 'Bearer',
+        user: { id: 'user-2', phone: '18812345678', nickname: '新农友', role: 'user' },
+        user_id: 'user-2',
         phone: '18812345678',
         nickname: '新农友',
-        avatar_url: null,
         role: 'user',
-        status: 'active',
-        created_at: '2026-07-24T11:00:00Z',
+        farm_uid: 'farm-2',
         farm_id: 2,
-        farm_name: '新农友的农场',
-        farm_location: null,
       }),
     );
   });
@@ -100,6 +99,8 @@ describe('Users', () => {
     expect(await screen.findByRole('dialog', { name: '新建用户' })).toBeInTheDocument();
     await user.type(screen.getByLabelText('手机号'), '18812345678');
     await user.type(screen.getByLabelText('昵称'), '新农友');
+    await user.click(screen.getByRole('combobox', { name: '角色' }));
+    await user.click(await screen.findByText(/调试用户：测试调试账号/));
     await user.type(screen.getByLabelText('初始密码'), 'password123');
     await user.type(screen.getByLabelText('确认密码'), 'password123');
     await user.click(screen.getByRole('button', { name: /创\s*建/ }));
@@ -109,6 +110,7 @@ describe('Users', () => {
         phone: '18812345678',
         nickname: '新农友',
         password: 'password123',
+        role: 'dev',
       });
     });
     await waitFor(() => {

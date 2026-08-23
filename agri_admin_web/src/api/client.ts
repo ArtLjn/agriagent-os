@@ -11,7 +11,8 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use(
   (config) => {
     const token = authStore.getToken();
-    if (token) {
+    // 允许 Playground 用 dev 用户 token 覆盖默认管理员登录态。
+    if (token && !config.headers?.Authorization) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;

@@ -31,6 +31,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, relationship
 
+from shared.roles import UserRole
+
 
 class Base(DeclarativeBase):
     """Shared declarative base."""
@@ -53,7 +55,7 @@ class User(Base):
     password_hash = Column(String(128), nullable=False)
     nickname = Column(String(50), nullable=False, default="农友")
     avatar_url = Column(String(500), nullable=True)
-    role = Column(String(20), nullable=False, default="user")
+    role = Column(String(20), nullable=False, default=UserRole.USER.value)
     status = Column(String(20), nullable=False, default="active")
     token_monthly_limit = Column(Integer, nullable=True)
     token_weekly_limit = Column(Integer, nullable=True)

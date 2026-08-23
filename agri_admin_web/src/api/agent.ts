@@ -1,5 +1,6 @@
 import apiClient from './client';
 import { authStore } from '../stores/authStore';
+import type { UserRole } from '../constants/roles';
 
 // ── SSE 事件类型 ──
 export interface SseEvent {
@@ -17,7 +18,7 @@ export interface ConversationItem {
 }
 
 export interface ConversationMessage {
-  role: string;
+  role: UserRole;
   content: string;
   created_at?: string;
 }
@@ -509,9 +510,13 @@ export async function* streamChat(
 }
 
 // ── 对话列表 ──
-export async function listConversations(limit = 50): Promise<ConversationItem[]> {
+export async function listConversations(
+  limit = 50,
+  userToken?: string | null,
+): Promise<ConversationItem[]> {
   const res = await apiClient.get<{ items: ConversationItem[] }>('/agent/conversations', {
     params: { limit },
+    headers: userToken ? { Authorization: `Bearer ${userToken}` } : undefined,
   });
   return res.data.items ?? [];
 }
@@ -519,10 +524,14 @@ export async function listConversations(limit = 50): Promise<ConversationItem[]>
 // ── 对话消息 ──
 export async function getConversationMessages(
   conversationId: string,
+  userToken?: string | null,
 ): Promise<ConversationMessage[]> {
   const res = await apiClient.get<{ items: ConversationMessage[] }>(
     `/agent/conversations/${encodeURIComponent(conversationId)}`,
-    { params: { limit: 100 } },
+    {
+      params: { limit: 100 },
+      headers: userToken ? { Authorization: `Bearer ${userToken}` } : undefined,
+    },
   );
   return res.data.items ?? [];
 }

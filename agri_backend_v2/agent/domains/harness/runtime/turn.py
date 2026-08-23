@@ -15,6 +15,7 @@ from enum import Enum
 from typing import Any, Literal
 
 from agent.domains.harness.context.models import ContextBundle
+from shared.roles import UserRole
 
 TurnStatus = Literal[
     "running",  # ReAct loop iterating
@@ -78,7 +79,7 @@ class Turn:
     user_id: str = ""
     farm_uid: str = ""
     farm_id: int = 1
-    role: str = "user"
+    role: str = UserRole.USER.value
     token_id: str = ""
     scope: str = ""
     agent_token: str = ""

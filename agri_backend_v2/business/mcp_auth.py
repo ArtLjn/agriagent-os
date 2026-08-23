@@ -12,6 +12,7 @@ from sqlalchemy import select
 from business.config import settings
 from business.db import SessionLocal
 from business.models import Farm, User
+from shared.roles import normalize_user_role
 
 
 class McpAuthFailure(Exception):
@@ -87,7 +88,9 @@ def _verify_delegation(headers: dict[str, str]) -> dict[str, Any]:
     return payload
 
 
-def _resolve_principal(payload: dict[str, Any], headers: dict[str, str]) -> dict[str, Any]:
+def _resolve_principal(
+    payload: dict[str, Any], headers: dict[str, str]
+) -> dict[str, Any]:
     user_id = str(payload.get("sub") or "")
     farm_uid = str(payload.get("farm_uid") or "")
     if not user_id or not farm_uid:
@@ -109,7 +112,8 @@ def _resolve_principal(payload: dict[str, Any], headers: dict[str, str]) -> dict
             "user_id": user_id,
             "farm_uid": farm_uid,
             "farm_id": farm.id,
-            "role": str(payload.get("role") or user.role),
+            # 委托 Token 的角色只作传输信息，最终权限以数据库当前角色为准。
+            "role": normalize_user_role(user.role).value,
             "scope": payload.get("scope", ""),
             "actor_service": "agent",
         }

@@ -6,6 +6,7 @@
   - JWT 签发时注入 farm_uid（对外租户标识）和 farm_id（迁移期兼容）
   - 注册时自动创建默认农场和成本分类
 """
+
 from __future__ import annotations
 
 import logging
@@ -18,19 +19,24 @@ from business.models import User
 from business.services import farm_crud_service
 from business.services.password import hash_password, verify_password
 from business.services.tokens import create_access_token
+from shared.roles import UserRole, normalize_user_role
 
 logger = logging.getLogger(__name__)
 
 
 def register(
-    phone: str, password: str, nickname: str = "农友"
+    phone: str,
+    password: str,
+    nickname: str = "农友",
+    role: str | UserRole = UserRole.USER,
 ) -> tuple[User, str]:
-    """注册新用户：创建 User + 默认 Farm + 默认成本分类，并签发 token。
+    """注册用户并创建默认农场；非普通角色只能由已授权管理端调用。
 
     Args:
         phone: 手机号（唯一）
         password: 明文密码（内部 hash 后存储）
         nickname: 昵称，默认 "农友"
+        role: 角色；调用方必须在 API 边界完成管理员授权校验
 
     Returns:
         (user, access_token) 元组
@@ -38,6 +44,7 @@ def register(
     Raises:
         ValueError: 手机号已注册
     """
+    normalized_role = normalize_user_role(role)
     with session_scope() as db:
         existing = db.query(User).filter(User.phone == phone).first()
         if existing is not None:
@@ -49,7 +56,7 @@ def register(
             phone=phone,
             password_hash=hash_password(password),
             nickname=nickname,
-            role="user",
+            role=normalized_role.value,
             status="active",
         )
         db.add(user)
@@ -73,11 +80,13 @@ def register(
         token = create_access_token(
             user_id=user.id,
             phone=user.phone,
-            role=user.role,
+            role=normalized_role,
             farm_uid=farm.uid,
             farm_id=farm.id,
         )
-        logger.info("用户注册 | phone=%s user_id=%s farm_id=%s", phone, user.id, farm.id)
+        logger.info(
+            "用户注册 | phone=%s user_id=%s farm_id=%s", phone, user.id, farm.id
+        )
         return user, token
 
 
@@ -145,7 +154,7 @@ def ensure_admin_user() -> None:
             phone=phone,
             password_hash=hash_password(password),
             nickname="管理员",
-            role="admin",
+            role=UserRole.ADMIN.value,
             status="active",
         )
         db.add(user)

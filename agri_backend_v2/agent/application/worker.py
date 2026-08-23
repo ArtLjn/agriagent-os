@@ -45,6 +45,7 @@ from agent.platforms.persistence.redis.turn_store import (
     update_turn,
     wait_approval,
 )
+from shared.roles import UserRole
 from agent.platforms.persistence.redis import sse
 
 logger = logging.getLogger(__name__)
@@ -238,9 +239,7 @@ async def _persist_visible_assistant_message(
         )
         return False
     session_result = await _persist_session_state(turn)
-    observation_result = await _persist_observation(
-        turn, assistant_answer=content
-    )
+    observation_result = await _persist_observation(turn, assistant_answer=content)
     trace_persistence_state(
         message_status="ready",
         session_status=str(session_result.get("status") or "unavailable"),
@@ -279,7 +278,9 @@ async def _recover_pending_finalization(state: dict[str, str]) -> bool:
     return await _finish_assistant_persistence(
         turn,
         content=content,
-        message_kind="error_answer" if state.get("status") != "completed" else "final_answer",
+        message_kind="error_answer"
+        if state.get("status") != "completed"
+        else "final_answer",
         trace_id=state.get("trace_id") or trace_id_for_turn(turn.turn_id),
     )
 
@@ -294,7 +295,9 @@ async def _recover_interrupted_turn(turn: Turn, state: dict[str, str]) -> None:
         status="timeout",
     )
     turn.pending_approval = None
-    answer = "本轮执行被 Worker 中断，系统未自动重复执行操作，请确认当前业务状态后重试。"
+    answer = (
+        "本轮执行被 Worker 中断，系统未自动重复执行操作，请确认当前业务状态后重试。"
+    )
     trace_id = state.get("trace_id") or trace_id_for_turn(turn.turn_id)
     await update_turn(
         turn.turn_id,
@@ -417,7 +420,7 @@ def _turn_from_state(state: dict[str, str]) -> Turn:
         user_id=state.get("user_id", ""),
         farm_uid=state.get("farm_uid", ""),
         farm_id=int(state.get("farm_id", "1")),
-        role=state.get("role", "user"),
+        role=state.get("role", UserRole.USER.value),
         token_id=state.get("token_id", ""),
         scope=state.get("scope", ""),
         agent_token=settings.auth.agent_service_token,
@@ -429,9 +432,7 @@ def _turn_from_state(state: dict[str, str]) -> Turn:
         summary_revision=_state_int(state.get("summary_revision")),
         reset_generation=_state_int(state.get("reset_generation")),
         context_source_status=str(
-            state.get("source_status")
-            or state.get("context_source_status")
-            or "empty"
+            state.get("source_status") or state.get("context_source_status") or "empty"
         ),
     )
 
@@ -452,7 +453,8 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
         turn_id=turn.turn_id,
         scope_hash=scope,
         user_scope_hash=__import__(
-            "agent.platforms.persistence.redis.coordination", fromlist=["user_scope_hash"]
+            "agent.platforms.persistence.redis.coordination",
+            fromlist=["user_scope_hash"],
         ).user_scope_hash(turn.user_id, turn.farm_id),
         token=state["lease_token"],
     )
@@ -522,9 +524,7 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
         )
     trace_memory_read(
         source_status=str(turn.memory_snapshot.get("source_status") or "empty"),
-        memory_revision=_state_int(
-            turn.memory_snapshot.get("conversation_revision")
-        ),
+        memory_revision=_state_int(turn.memory_snapshot.get("conversation_revision")),
         hit_count=len(turn.memory_snapshot.get("messages") or []),
     )
     divergence = memory.source_divergence(
@@ -533,9 +533,7 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
         redis_summary_revision=_state_int(state.get("summary_revision")),
     )
     if divergence:
-        divergence_code = str(
-            divergence.get("code") or "context_source_divergence"
-        )
+        divergence_code = str(divergence.get("code") or "context_source_divergence")
         trace_context_source_divergence(
             sources=divergence.get("sources") or {},
             code=divergence_code,

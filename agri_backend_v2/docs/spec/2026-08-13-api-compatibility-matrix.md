@@ -1,6 +1,6 @@
 ---
 spec_id: 2026-08-13-api-compatibility-matrix
-last_updated: 2026-08-13
+last_updated: 2026-08-22
 status: draft
 ---
 
@@ -66,7 +66,7 @@ MCP 工具只供 Agent ReAct/MCP 调用，不能直接作为移动端或 admin-w
 
 | 字段 | 旧版约束 | v2 运行时约束 |
 |---|---|---|
-| `phone` | 中国大陆 11 位 | `+` 可选，11-20 位 |
+| `phone` | 中国大陆 11 位 | 注册必须是 11 位数字且以 `1[3-9]` 开头；登录继续兼容 `+` 和 11-20 位 |
 | `password` 注册 | 8-64 位 | 6-72 位 |
 | `nickname` | 默认“农友”，最长 50 | 默认“农友”，最长 50 |
 
@@ -295,7 +295,7 @@ worker:  worker_name,date_range, summary{entry_count,total_payable,total_paid,to
 | `GET /api/v2/traces/{request_id}` | `limit=200` | Trace 节点 |
 | `GET /api/v2/traces/{request_id}/summary` | Path | Trace 聚合摘要 |
 | `GET /api/v2/health` | 无 | Agent、Redis、turn 状态 |
-| `GET /api/v2/dev-users` | 无 | 开发用户和 JWT，仅开发环境能力 |
+| `GET /api/v2/dev-users` | 无 | 仅返回 `status=active` 且 `role=dev` 的开发用户和 JWT，仅开发环境能力；生产环境 404 |
 
 ### 6.3 `/chat` SSE 关键事件
 

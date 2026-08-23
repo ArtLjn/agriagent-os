@@ -36,6 +36,13 @@ import {
   type UserQuotaOverviewItem,
   type CreateUserRequest,
 } from "../../api/users";
+import {
+  isAdminRole,
+  roleLabel,
+  USER_ROLE_OPTIONS,
+  USER_ROLES,
+  type UserRole,
+} from "../../constants/roles";
 
 const BG_CARD = "#21262d";
 const BORDER = "#30363d";
@@ -108,21 +115,9 @@ export default function Users() {
       const params: ListUsersParams = { page: targetPage, page_size: size };
       if (statusFilter) params.status = statusFilter;
       if (phoneKeyword.trim()) params.phone_keyword = phoneKeyword.trim();
-      const quotaParams = statusFilter
-        ? { page: targetPage, page_size: size, status: statusFilter }
-        : { page: targetPage, page_size: size };
-      const [usersRes, quotaRes] = await Promise.all([
-        usersApi.list(params),
-        usersApi.getQuotaOverview(quotaParams),
-      ]);
-      const quotaMap = new Map(
-        quotaRes.data.items.map((item) => [item.user_id, item])
-      );
+      const usersRes = await usersApi.list(params);
       setUsers(
-        usersRes.data.items.map((user) => ({
-          ...user,
-          quota: quotaMap.get(user.id),
-        }))
+        usersRes.data.items,
       );
       setTotal(usersRes.data.total);
     } catch {
@@ -198,6 +193,7 @@ export default function Users() {
         phone: values.phone.trim(),
         password: values.password,
         nickname: values.nickname?.trim() || "农友",
+        role: values.role ?? USER_ROLES.USER,
       });
       message.success("用户已创建");
       setCreateModalOpen(false);
@@ -333,8 +329,8 @@ export default function Users() {
       key: "role",
       width: 80,
       render: (role: string) => (
-        <Tag color={role === "admin" ? "orange" : "blue"}>
-          {role === "admin" ? "管理员" : "用户"}
+        <Tag color={isAdminRole(role) ? "orange" : role === USER_ROLES.DEV ? "purple" : "blue"}>
+          {roleLabel(role)}
         </Tag>
       ),
     },
@@ -539,6 +535,18 @@ export default function Users() {
             <Input placeholder="默认农友" maxLength={50} />
           </Form.Item>
           <Form.Item
+            label="角色"
+            name="role"
+            initialValue={USER_ROLES.USER}
+          >
+            <Select<UserRole>
+              options={USER_ROLE_OPTIONS.map((item) => ({
+                value: item.value,
+                label: `${item.label}：${item.description}`,
+              }))}
+            />
+          </Form.Item>
+          <Form.Item
             label="初始密码"
             name="password"
             rules={[
@@ -677,8 +685,8 @@ export default function Users() {
             <Descriptions.Item label="手机号">{detail.phone}</Descriptions.Item>
             <Descriptions.Item label="昵称">{detail.nickname}</Descriptions.Item>
             <Descriptions.Item label="角色">
-              <Tag color={detail.role === "admin" ? "orange" : "blue"}>
-                {detail.role === "admin" ? "管理员" : "用户"}
+              <Tag color={isAdminRole(detail.role) ? "orange" : detail.role === USER_ROLES.DEV ? "purple" : "blue"}>
+                {roleLabel(detail.role)}
               </Tag>
             </Descriptions.Item>
             <Descriptions.Item label="状态">

@@ -5,10 +5,10 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from agent.domains.harness.observability.trace.safety import sanitize_payload
+from shared.roles import is_admin_role
 
 PresentationProfile = Literal["user", "admin_debug"]
 
-_ADMIN_ROLE = "admin"
 _MAX_PUBLIC_PAYLOAD_CHARS = 8_000
 _MAX_DEBUG_PAYLOAD_CHARS = 16_000
 
@@ -24,10 +24,11 @@ def resolve_presentation_profile(
     requested: str | None,
 ) -> PresentationProfile:
     """分离执行身份和查看身份，防止 user token 获得调试字段。"""
-    viewer_is_admin = viewer_identity.get("role") == _ADMIN_ROLE
+    viewer_is_admin = is_admin_role(viewer_identity.get("role"))
     profile = requested or (
         "admin_debug"
-        if viewer_is_admin and viewer_identity.get("user_id") == execution_identity.get("user_id")
+        if viewer_is_admin
+        and viewer_identity.get("user_id") == execution_identity.get("user_id")
         else "user"
     )
     if profile not in {"user", "admin_debug"}:
@@ -73,10 +74,20 @@ def project_event(
     return projected
 
 
-def _public_event(event_type: str, data: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
+def _public_event(
+    event_type: str, data: dict[str, Any]
+) -> tuple[str, dict[str, Any]] | None:
     if event_type in {"thought", "assistant_delta", "tool_call_delta", "plan"}:
         return None
-    if event_type in {"queued", "accepted", "started", "action", "tool_started", "tool_finished", "observation"}:
+    if event_type in {
+        "queued",
+        "accepted",
+        "started",
+        "action",
+        "tool_started",
+        "tool_finished",
+        "observation",
+    }:
         return "progress", {"message": "正在处理请求"}
     if event_type in {"step.started", "step.completed"}:
         return "progress", {
@@ -92,7 +103,9 @@ def _public_event(event_type: str, data: dict[str, Any]) -> tuple[str, dict[str,
         return "approval_required", {
             "action_id": str(data.get("action_id") or data.get("turn_id") or ""),
             "skill_name": str(data.get("tool_name") or "业务操作"),
-            "params": sanitize_payload(data.get("arguments") or {}, max_chars=_MAX_PUBLIC_PAYLOAD_CHARS),
+            "params": sanitize_payload(
+                data.get("arguments") or {}, max_chars=_MAX_PUBLIC_PAYLOAD_CHARS
+            ),
             "context": None,
         }
     if event_type == "approval_result":
@@ -111,8 +124,12 @@ def _public_event(event_type: str, data: dict[str, Any]) -> tuple[str, dict[str,
         return "progress", {"message": "正在整理执行状态"}
     if event_type == "turn.terminated":
         return event_type, {
-            "reason": str(data.get("reason") or data.get("stop_reason") or "terminated"),
-            "message": str(data.get("message") or "任务未在本轮执行预算内完成，结果可能不完整。"),
+            "reason": str(
+                data.get("reason") or data.get("stop_reason") or "terminated"
+            ),
+            "message": str(
+                data.get("message") or "任务未在本轮执行预算内完成，结果可能不完整。"
+            ),
         }
     if event_type == "turn.failed":
         error = data.get("error") if isinstance(data.get("error"), dict) else {}
@@ -124,7 +141,13 @@ def _public_event(event_type: str, data: dict[str, Any]) -> tuple[str, dict[str,
         return event_type, {"message": "本轮执行已完成"}
     if event_type == "done":
         return event_type, {"status": str(data.get("status") or "completed")}
-    if event_type in {"final_answer_start", "final_answer_delta", "final_answer", "cancelled", "timeout"}:
+    if event_type in {
+        "final_answer_start",
+        "final_answer_delta",
+        "final_answer",
+        "cancelled",
+        "timeout",
+    }:
         return event_type, data
     return None
 
@@ -134,7 +157,9 @@ def _public_result(result: Any) -> Any:
         return sanitize_payload(result, max_chars=_MAX_PUBLIC_PAYLOAD_CHARS)
     summary_keys = ("message", "summary", "status", "success")
     summary = {key: result[key] for key in summary_keys if key in result}
-    return sanitize_payload(summary or {"status": "completed"}, max_chars=_MAX_PUBLIC_PAYLOAD_CHARS)
+    return sanitize_payload(
+        summary or {"status": "completed"}, max_chars=_MAX_PUBLIC_PAYLOAD_CHARS
+    )
 
 
 __all__ = [

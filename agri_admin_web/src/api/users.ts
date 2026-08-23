@@ -1,11 +1,12 @@
 import apiClient from "./client";
+import type { UserRole } from "../constants/roles";
 
 export interface UserListItem {
   id: string;
   phone: string;
   nickname: string;
   avatar_url: string | null;
-  role: string;
+  role: UserRole;
   status: string;
   created_at: string;
   farm_name: string | null;
@@ -35,6 +36,24 @@ export interface CreateUserRequest {
   phone: string;
   password: string;
   nickname?: string;
+  role?: UserRole;
+}
+
+export interface RegisterResponse {
+  access_token: string;
+  token_type: string;
+  user: {
+    id: string;
+    phone: string;
+    nickname: string;
+    role: UserRole;
+  };
+  user_id: string;
+  phone: string;
+  nickname: string;
+  role: UserRole;
+  farm_uid: string;
+  farm_id: number;
 }
 
 export interface BatchUpdateUserQuotaRequest extends UpdateUserQuotaRequest {
@@ -79,7 +98,7 @@ export interface CurrentUser {
   phone: string;
   nickname: string | null;
   avatar_url?: string | null;
-  role?: string;
+  role?: UserRole;
   status?: string;
   farm?: {
     id: number;
@@ -132,7 +151,7 @@ export const usersApi = {
     apiClient.get<UserListResponse>("/admin/users", { params }),
 
   create: (data: CreateUserRequest) =>
-    apiClient.post<UserDetail>("/admin/users", data),
+    apiClient.post<RegisterResponse>("/auth/register", data),
 
   getDetail: (userId: string) =>
     apiClient.get<UserDetail>(`/admin/users/${userId}`),

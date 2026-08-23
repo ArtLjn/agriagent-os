@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from fastapi import Header, HTTPException
+from fastapi import Depends, Header, HTTPException
 
 from business.services import auth_service, farm_crud_service
 from business.services.tokens import (
@@ -14,6 +14,7 @@ from business.services.tokens import (
     TokenInvalidError,
     decode_access_token,
 )
+from shared.roles import is_admin_role
 
 
 def get_current_user(authorization: str | None = Header(default=None)) -> dict:
@@ -101,3 +102,25 @@ def get_current_user(authorization: str | None = Header(default=None)) -> dict:
         "farm_id": farm.id,
         "role": user.role,
     }
+
+
+def get_optional_current_user(
+    authorization: str | None = Header(default=None),
+) -> dict | None:
+    """允许公开注册读取可选管理员身份，但不放宽无 Token 请求。"""
+    if not authorization or not authorization.strip():
+        return None
+    return get_current_user(authorization)
+
+
+def get_current_admin(user: dict = Depends(get_current_user)) -> dict:
+    """确认当前主体具备管理员权限，供管理端资源复用。"""
+    if not is_admin_role(user.get("role")):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "admin_required",
+                "message": "只有管理员可以访问该资源",
+            },
+        )
+    return user

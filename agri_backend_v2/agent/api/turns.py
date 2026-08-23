@@ -24,6 +24,7 @@ from agent.platforms.persistence.redis.turn_store import (
 )
 from agent.platforms.persistence.redis.coordination import scope_hash
 from agent.platforms.persistence.redis.turn_store import remove_from_queues, update_turn
+from shared.roles import UserRole, is_admin_role
 
 
 @api_router.get("/turns/{turn_id}")
@@ -67,8 +68,12 @@ async def turn_events(
     after_seq: int | None = Query(default=None, ge=0),
     authorization: str | None = Header(default=None),
     last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
-    viewer_authorization: str | None = Header(default=None, alias="X-Viewer-Authorization"),
-    presentation_profile: str | None = Header(default=None, alias="X-SSE-Presentation-Profile"),
+    viewer_authorization: str | None = Header(
+        default=None, alias="X-Viewer-Authorization"
+    ),
+    presentation_profile: str | None = Header(
+        default=None, alias="X-SSE-Presentation-Profile"
+    ),
 ) -> StreamingResponse:
     turn = await get_turn(turn_id)
     if turn is None:
@@ -77,15 +82,22 @@ async def turn_events(
     execution_identity = checked_identity or {
         "user_id": turn.get("user_id", ""),
         "farm_uid": turn.get("farm_uid", ""),
-        "role": "user",
+        "role": UserRole.USER.value,
     }
     viewer_identity = execution_identity
-    viewer_token = viewer_authorization if isinstance(viewer_authorization, str) else None
-    requested_profile = presentation_profile if isinstance(presentation_profile, str) else None
+    viewer_token = (
+        viewer_authorization if isinstance(viewer_authorization, str) else None
+    )
+    requested_profile = (
+        presentation_profile if isinstance(presentation_profile, str) else None
+    )
     if viewer_token:
         viewer_identity = parse_identity(viewer_token)
-        if viewer_identity.get("role") != "admin":
-            raise HTTPException(403, {"code": "viewer_forbidden", "message": "viewer 无权查看 Agent 调试流"})
+        if not is_admin_role(viewer_identity.get("role")):
+            raise HTTPException(
+                403,
+                {"code": "viewer_forbidden", "message": "viewer 无权查看 Agent 调试流"},
+            )
     try:
         resolved_profile = resolve_presentation_profile(
             execution_identity=execution_identity,
@@ -93,7 +105,9 @@ async def turn_events(
             requested=requested_profile,
         )
     except ProjectionPermissionError as exc:
-        raise HTTPException(403, {"code": "projection_forbidden", "message": str(exc)}) from exc
+        raise HTTPException(
+            403, {"code": "projection_forbidden", "message": str(exc)}
+        ) from exc
     replay_after_seq = after_seq
     if replay_after_seq is None and last_event_id:
         replay_after_seq = await resolve_event_seq(turn_id, last_event_id)
@@ -203,7 +217,14 @@ async def cancel_turn(
         )
         await publish_event(
             turn_id,
-            {"type": "done", "data": {"status": "cancelled", "turn_id": turn_id, "stop_reason": "user_cancelled"}},
+            {
+                "type": "done",
+                "data": {
+                    "status": "cancelled",
+                    "turn_id": turn_id,
+                    "stop_reason": "user_cancelled",
+                },
+            },
         )
         await remove_from_queues(
             turn_id,

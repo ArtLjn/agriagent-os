@@ -24,6 +24,9 @@ export AGENT_DELEGATION_SECRET='<Agent 委托 JWT 密钥>'
 
 `AGENT_ENV=production` 会让 `GET /api/v2/dev-users` 返回 404，避免公网泄露用户列表和可直接使用的开发令牌。Business 和 Agent 都应只监听 `127.0.0.1`，公网入口使用 [farm-manager-agent.nginx.example](../../deploy/farm-manager-agent.nginx.example) 的 HTTPS 反向代理。
 
+开发环境下该接口只返回启用状态的 `dev` 角色账户。`dev` 与 `user` 共用普通业务权限和
+`farm:read farm:write` scope；只有 `admin` 角色可以使用管理接口和 `admin_debug` SSE 投影。
+
 ## 上线验收
 
 ```bash

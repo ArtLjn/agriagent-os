@@ -37,6 +37,7 @@ from agent.platforms.persistence.redis.turn_store import (
     stream_events,
     update_turn,
 )
+from shared.roles import UserRole, is_admin_role
 
 logger = logging.getLogger(__name__)
 
@@ -53,8 +54,12 @@ async def chat(
     authorization: str | None = Header(default=None),
     after_seq: int | None = Query(default=None, ge=0),
     last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
-    viewer_authorization: str | None = Header(default=None, alias="X-Viewer-Authorization"),
-    presentation_profile: str | None = Header(default=None, alias="X-SSE-Presentation-Profile"),
+    viewer_authorization: str | None = Header(
+        default=None, alias="X-Viewer-Authorization"
+    ),
+    presentation_profile: str | None = Header(
+        default=None, alias="X-SSE-Presentation-Profile"
+    ),
 ) -> StreamingResponse:
     """Create a durable turn and stream replayable Redis events."""
     conv_id = req.conversation_id or "default"
@@ -62,8 +67,11 @@ async def chat(
     viewer_identity = identity
     if viewer_authorization:
         viewer_identity = parse_identity(viewer_authorization)
-        if viewer_identity.get("role") != "admin":
-            raise HTTPException(403, {"code": "viewer_forbidden", "message": "viewer 无权查看 Agent 调试流"})
+        if not is_admin_role(viewer_identity.get("role")):
+            raise HTTPException(
+                403,
+                {"code": "viewer_forbidden", "message": "viewer 无权查看 Agent 调试流"},
+            )
     try:
         resolved_profile = resolve_presentation_profile(
             execution_identity=identity,
@@ -71,7 +79,9 @@ async def chat(
             requested=presentation_profile,
         )
     except ProjectionPermissionError as exc:
-        raise HTTPException(403, {"code": "projection_forbidden", "message": str(exc)}) from exc
+        raise HTTPException(
+            403, {"code": "projection_forbidden", "message": str(exc)}
+        ) from exc
     ensure_mcp_credentials()
     scope = scope_hash(identity["user_id"], identity["farm_id"], conv_id)
     request_id = req.client_request_id or uuid.uuid4().hex
@@ -137,7 +147,7 @@ async def chat(
             )
             prompt_message_id = await append_message(
                 conversation_id=conv_id,
-                role="user",
+                role=UserRole.USER.value,
                 content=req.message,
                 turn_id=turn.turn_id,
                 trace_id=trace_id,
@@ -153,12 +163,16 @@ async def chat(
                     error_code="conversation_message_persist_failed",
                 )
                 if admission.queued:
-                    from agent.platforms.persistence.redis.turn_store import remove_from_queues
+                    from agent.platforms.persistence.redis.turn_store import (
+                        remove_from_queues,
+                    )
 
                     await remove_from_queues(turn.turn_id, scope)
                 else:
                     await release_turn(admission.lease)
-                from agent.platforms.persistence.redis.turn_store import release_idempotency
+                from agent.platforms.persistence.redis.turn_store import (
+                    release_idempotency,
+                )
 
                 await release_idempotency(scope, request_id)
                 raise HTTPException(
@@ -202,7 +216,9 @@ async def chat(
     except Exception as exc:
         if admission is not None:
             if admission.queued:
-                from agent.platforms.persistence.redis.turn_store import remove_from_queues
+                from agent.platforms.persistence.redis.turn_store import (
+                    remove_from_queues,
+                )
 
                 await remove_from_queues(turn.turn_id, scope)
             else:

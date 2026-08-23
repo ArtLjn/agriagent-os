@@ -3,7 +3,7 @@
 JWT payload 标准：
   - sub: user_id
   - phone: 用户手机号
-  - role: user/admin
+  - role: admin/user/dev
   - farm_uid: 关联农场 UUID
   - farm_id: 迁移期内部兼容字段，不作为对外租户标识
   - type: "access"
@@ -21,6 +21,7 @@ from typing import Any
 import jwt
 
 from business.config import settings
+from shared.roles import UserRole, normalize_user_role, scope_for_role
 
 
 class TokenExpiredError(Exception):
@@ -34,7 +35,7 @@ class TokenInvalidError(Exception):
 def create_access_token(
     user_id: str,
     phone: str | None = None,
-    role: str = "user",
+    role: str | UserRole = UserRole.USER,
     farm_uid: str | None = None,
     farm_id: int | None = None,
     scope: str | None = None,
@@ -45,7 +46,7 @@ def create_access_token(
     Args:
         user_id: 用户 ID
         phone: 手机号（可选，便于日志展示）
-        role: 角色（user/admin）
+        role: 角色（admin/user/dev）
         farm_uid: 对外农场 UUID
         farm_id: 迁移期内部 ID，不作为对外租户标识
         expires_minutes: 过期分钟数，默认从 config 读
@@ -54,6 +55,7 @@ def create_access_token(
         JWT token 字符串
     """
     cfg = settings.auth
+    normalized_role = normalize_user_role(role)
     if not cfg.jwt_secret:
         raise RuntimeError("JWT_SECRET 未配置，无法签发认证令牌")
     now = datetime.now(timezone.utc)
@@ -73,11 +75,8 @@ def create_access_token(
     }
     if phone is not None:
         payload["phone"] = phone
-    if role is not None:
-        payload["role"] = role
-    payload["scope"] = scope or (
-        "farm:read farm:write admin:*" if role == "admin" else "farm:read farm:write"
-    )
+    payload["role"] = normalized_role.value
+    payload["scope"] = scope or scope_for_role(normalized_role)
     if farm_uid is not None:
         payload["farm_uid"] = farm_uid
     # 迁移期保留内部 farm_id，待 Agent Redis/Mongo 状态完成 farm_uid 化后删除。

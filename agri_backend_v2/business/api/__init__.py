@@ -32,6 +32,7 @@ for router in (
     health.router,
     auth.router,
     users.router,
+    users.admin_router,
     farms.router,
     dashboard.router,
     crop_templates.router,

@@ -59,19 +59,18 @@ describe('users api', () => {
     expect(mockedApiClient.patch).toHaveBeenNthCalledWith(2, '/users/me/settings', { assistant_role: 'concise' });
   });
 
-  it('通过管理员接口创建用户', async () => {
+  it('在管理端创建用户时复用注册接口', async () => {
     mockedApiClient.post.mockResolvedValueOnce({
       data: {
-        id: 'user-1',
+        access_token: 'new-user-token',
+        token_type: 'Bearer',
+        user: { id: 'user-1', phone: '18812345678', nickname: '新农友', role: 'user' },
+        user_id: 'user-1',
         phone: '18812345678',
         nickname: '新农友',
-        avatar_url: null,
         role: 'user',
-        status: 'active',
-        created_at: '2026-07-24T10:00:00Z',
+        farm_uid: 'farm-1',
         farm_id: 7,
-        farm_name: '新农友的农场',
-        farm_location: null,
       },
     });
 
@@ -79,13 +78,15 @@ describe('users api', () => {
       phone: '18812345678',
       password: 'password123',
       nickname: '新农友',
+      role: 'dev',
     });
 
-    expect(mockedApiClient.post).toHaveBeenCalledWith('/admin/users', {
+    expect(mockedApiClient.post).toHaveBeenCalledWith('/auth/register', {
       phone: '18812345678',
       password: 'password123',
       nickname: '新农友',
+      role: 'dev',
     });
-    expect(result.data.farm_name).toBe('新农友的农场');
+    expect(result.data.user.nickname).toBe('新农友');
   });
 });

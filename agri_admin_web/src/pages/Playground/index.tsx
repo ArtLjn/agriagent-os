@@ -32,6 +32,7 @@ import { QuickPrompts } from './QuickPrompts';
 import { ExecutionTimeline } from './ExecutionTimeline';
 import { appendExecutionEvent, executionEventFromChunk, type ExecutionEvent } from './executionEvents';
 import { authStore } from '../../stores/authStore';
+import { getSsePresentationProfile, roleLabel, USER_ROLES } from '../../constants/roles';
 
 const CARD = palette.bgElevated;
 const BORDER = palette.border;
@@ -330,6 +331,8 @@ export default function Playground() {
   // dev user token：模拟用户时注入到 streamChat 的 Authorization 头
   const activeUserToken = selectedDevUser?.token ?? null;
   const viewerToken = authStore.getToken();
+  const executionRole = selectedDevUser?.role ?? USER_ROLES.ADMIN;
+  const presentationProfile = getSsePresentationProfile(executionRole);
 
   const updateSession = useCallback((sid: string, updater: (state: ChatSessionState) => ChatSessionState) => {
     setSessions((prev) => {
@@ -356,14 +359,14 @@ export default function Playground() {
   }, [updateSession]);
 
   /* ── 加载会话列表 ── */
-  const loadConversations = useCallback(async () => {
+  const loadConversations = useCallback(async (userToken = activeUserToken) => {
     try {
-      const list = await listConversations(50);
+      const list = await listConversations(50, userToken);
       setConversations(list);
     } catch {
       // 静默失败
     }
-  }, []);
+  }, [activeUserToken]);
 
   /* ── 加载 dev 用户列表（agri_backend_v2 agent /api/v2/dev-users）── */
   const loadDevUsers = useCallback(async () => {
@@ -392,7 +395,7 @@ export default function Playground() {
     setSessionId(sid);
     updateSession(sid, () => ({ ...emptySessionState(), loading: true }));
     try {
-      const msgs = await getConversationMessages(sid);
+      const msgs = await getConversationMessages(sid, activeUserToken);
       // agri_backend_v2 agent 只返回 role/content/created_at；skills/pendingAction 仅来自 SSE 流，历史消息无此字段
       const loaded: Message[] = msgs.map((m: ConversationMessage, idx: number) => ({
         id: `history-${idx}-${m.role}`,
@@ -412,7 +415,7 @@ export default function Playground() {
       updateSession(sid, (state) => ({ ...state, loading: false }));
       message.error('加载会话失败');
     }
-  }, [updateSession]);
+  }, [activeUserToken, updateSession]);
 
   /* ── 新建会话 ── */
   const createNewSession = useCallback(() => {
@@ -431,7 +434,7 @@ export default function Playground() {
       pendingPlan: m.pendingPlan,
     }));
     try {
-      const persistedMessages = await getConversationMessages(sid);
+      const persistedMessages = await getConversationMessages(sid, activeUserToken);
       if (persistedMessages.length > 0) {
         // agri_backend_v2 agent 历史消息只有 role/content，skills/pendingAction 仅存在于当前会话 SSE 流中
         sourceMessages = persistedMessages.map((m) => ({
@@ -451,7 +454,7 @@ export default function Playground() {
       timeline,
     });
     return JSON.stringify(debugExport, null, 2);
-  }, [selectedDevUser, sessions]);
+  }, [activeUserToken, selectedDevUser, sessions]);
 
   const copySessionJson = useCallback(async (sid: string) => {
     const ok = await copyAsyncText({
@@ -559,7 +562,7 @@ export default function Playground() {
       for await (const chunk of streamChat(userMsg, targetSessionId, activeUserToken, {
         client_request_id: clientRequestId,
         viewerToken,
-        presentationProfile: selectedDevUser ? 'user' : 'admin_debug',
+        presentationProfile,
       })) {
         if (chunk.type === 'meta') {
           streamedTrace = chunk.data;
@@ -640,7 +643,7 @@ export default function Playground() {
         traceLoading: false,
       }));
     }
-  }, [activeUserToken, input, scrollToBottom, sessionId, sessions, updateSession, loadConversations, refreshSessionTimeline, selectedDevUser, viewerToken]);
+  }, [activeUserToken, input, presentationProfile, scrollToBottom, sessionId, sessions, updateSession, loadConversations, refreshSessionTimeline, selectedDevUser, viewerToken]);
 
   const handlePendingAction = useCallback(async (messageId: string, action: string) => {
     const targetSessionId = sessionId;
@@ -846,8 +849,9 @@ export default function Playground() {
                 setSessionId(sid);
                 setSessions({ [sid]: emptySessionState() });
                 setConversations([]);
-                // agri_backend_v2 agent 通过 token 识别用户身份，listConversations 不需要 user_id 参数
-                void listConversations(50).then(setConversations).catch(() => {
+                // 使用 dev-users 返回的 token 获取该用户自己的会话，避免展示管理员会话。
+                const nextToken = user?.token ?? null;
+                void loadConversations(nextToken).catch(() => {
                   message.error('加载会话列表失败');
                 });
               }}
@@ -866,8 +870,8 @@ export default function Playground() {
               title={`viewer: admin · acting_as: ${selectedDevUser?.user_id ?? 'admin'} · presentation: ${selectedDevUser ? 'user' : 'debug'}`}
             >
               <span className="playground-identity__label">调试身份</span>
-              <Tag color={selectedDevUser ? 'blue' : 'purple'} style={{ margin: 0 }}>
-                {selectedDevUser ? 'user 视图' : 'admin 视图'}
+              <Tag color={presentationProfile === 'user' ? 'blue' : 'purple'} style={{ margin: 0 }}>
+                {presentationProfile === 'user' ? `${roleLabel(executionRole)}视图` : '管理员调试视图'}
               </Tag>
               <span className="playground-identity__acting-as">
                 acting_as: {selectedDevUser?.user_id ?? 'admin'}

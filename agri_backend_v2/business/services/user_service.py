@@ -6,6 +6,7 @@
   - get_user_settings / update_user_settings: 用户偏好设置
   - list_users / update_user_status: 管理员接口
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -15,8 +16,9 @@ from typing import Any
 from sqlalchemy import or_
 
 from business.db import session_scope
-from business.models import User, UserSetting
+from business.models import Farm, User, UserSetting
 from business.services import farm_crud_service
+from shared.roles import UserRole, normalize_user_role
 
 logger = logging.getLogger(__name__)
 
@@ -95,9 +97,7 @@ def update_user_profile(
 def get_user_settings(user_id: str) -> dict[str, Any] | None:
     """获取用户偏好设置。"""
     with session_scope() as db:
-        setting = (
-            db.query(UserSetting).filter(UserSetting.user_id == user_id).first()
-        )
+        setting = db.query(UserSetting).filter(UserSetting.user_id == user_id).first()
         if setting is None:
             return None
         return {
@@ -122,9 +122,7 @@ def update_user_settings(
     如果更新了 default_city，同步更新关联农场的 location。
     """
     with session_scope() as db:
-        setting = (
-            db.query(UserSetting).filter(UserSetting.user_id == user_id).first()
-        )
+        setting = db.query(UserSetting).filter(UserSetting.user_id == user_id).first()
         if setting is None:
             setting = UserSetting(user_id=user_id, updated_at=datetime.now())
             db.add(setting)
@@ -156,7 +154,7 @@ def list_users(
     page: int = 1,
     size: int = 20,
     status: str | None = None,
-    role: str | None = None,
+    role: str | UserRole | None = None,
     keyword: str | None = None,
 ) -> dict[str, Any]:
     """管理员：用户列表（分页）。
@@ -165,23 +163,21 @@ def list_users(
         page: 页码（从 1 开始）
         size: 每页条数
         status: 按状态过滤（active/disabled）
-        role: 按角色过滤（user/admin）
+        role: 按角色过滤（admin/user/dev）
         keyword: 按手机号/昵称模糊搜索
 
     Returns:
         {"items": [...], "total": N}
     """
     with session_scope() as db:
-        query = db.query(User)
+        query = db.query(User, Farm.name).outerjoin(Farm, Farm.user_id == User.id)
         if status:
             query = query.filter(User.status == status)
         if role:
-            query = query.filter(User.role == role)
+            query = query.filter(User.role == normalize_user_role(role).value)
         if keyword:
             kw = f"%{keyword.strip()}%"
-            query = query.filter(
-                or_(User.phone.like(kw), User.nickname.like(kw))
-            )
+            query = query.filter(or_(User.phone.like(kw), User.nickname.like(kw)))
         total = query.count()
         items = (
             query.order_by(User.created_at.desc())
@@ -190,9 +186,33 @@ def list_users(
             .all()
         )
         return {
-            "items": [_user_to_dict(u) for u in items],
+            "items": [
+                _user_to_dict(user, farm_name=farm_name) for user, farm_name in items
+            ],
             "total": total,
         }
+
+
+def get_admin_user_detail(user_id: str) -> dict[str, Any] | None:
+    """管理员：读取用户资料及其农场信息，不返回密码或认证令牌。"""
+    with session_scope() as db:
+        row = (
+            db.query(User, Farm)
+            .outerjoin(Farm, Farm.user_id == User.id)
+            .filter(User.id == user_id)
+            .first()
+        )
+        if row is None:
+            return None
+        user, farm = row
+        result = _user_to_dict(user, farm_name=farm.name if farm else None)
+        result.update(
+            {
+                "farm_id": farm.id if farm else None,
+                "farm_location": farm.location if farm else None,
+            }
+        )
+        return result
 
 
 def update_user_status(user_id: str, status: str) -> User | None:
@@ -225,7 +245,7 @@ def update_user_quota(
         return user
 
 
-def _user_to_dict(user: User) -> dict[str, Any]:
+def _user_to_dict(user: User, *, farm_name: str | None = None) -> dict[str, Any]:
     return {
         "id": user.id,
         "phone": user.phone,
@@ -236,6 +256,7 @@ def _user_to_dict(user: User) -> dict[str, Any]:
         "token_monthly_limit": user.token_monthly_limit,
         "token_weekly_limit": user.token_weekly_limit,
         "created_at": user.created_at.isoformat() if user.created_at else None,
+        "farm_name": farm_name,
     }
 
 
@@ -245,6 +266,7 @@ __all__ = [
     "get_user_settings",
     "update_user_settings",
     "list_users",
+    "get_admin_user_detail",
     "update_user_status",
     "update_user_quota",
 ]

@@ -10,6 +10,7 @@ import jwt
 from fastapi import HTTPException
 
 from agent.config import settings
+from shared.roles import UserRole, normalize_user_role
 
 
 def _bearer_token(authorization: str | None) -> str:
@@ -64,12 +65,19 @@ def parse_identity(authorization: str | None) -> dict[str, Any]:
                 "message": "令牌缺少用户或农场身份",
             },
         )
+    try:
+        role = normalize_user_role(payload.get("role") or UserRole.USER)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=401,
+            detail={"code": "invalid_token", "message": "令牌角色无效"},
+        ) from exc
     return {
         "user_id": user_id,
         "farm_uid": farm_uid,
         # 迁移期读取旧 claim；新链路的可信农场标识是 farm_uid。
         "farm_id": int(payload.get("farm_id") or 0),
-        "role": str(payload.get("role") or "user"),
+        "role": role.value,
         "scope": payload.get("scope", ""),
         "token_id": str(payload.get("jti") or ""),
         "user_token": token,
@@ -112,7 +120,7 @@ def create_delegation_token(
         "act": {"sub": "agent", "type": "service"},
         "type": "delegation",
         "farm_uid": identity["farm_uid"],
-        "role": identity.get("role", "user"),
+        "role": identity.get("role", UserRole.USER.value),
         "scope": identity.get("scope") or "farm:read",
         "source_jti": identity.get("token_id", ""),
         "conversation_id": conversation_id,
