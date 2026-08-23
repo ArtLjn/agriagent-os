@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { isAxiosError } from 'axios';
 import { Input, Button, Space, Tag, Tooltip, message, Select } from 'antd';
 import { SendOutlined, DeleteOutlined, CopyOutlined, PlusOutlined, MenuFoldOutlined, MenuUnfoldOutlined, LoadingOutlined, LinkOutlined, ProfileOutlined } from '@ant-design/icons';
 import { listTraces, getTimeline, type TraceTimeline } from '../../api/admin';
@@ -8,8 +9,13 @@ import {
   listDevUsers,
   listConversations,
   getConversationMessages,
+  getConversationMessagesPage,
+  getConversationTurnDetail,
+  getConversationTurns,
   type ConversationItem,
   type ConversationMessage,
+  type ConversationTurnDetail,
+  type ConversationTurnSummary,
   type DevUser,
   type PendingAction,
   type PendingPlan,
@@ -47,8 +53,13 @@ const ROW_ACTIVE = 'rgba(88, 166, 255, 0.12)';
 
 interface Message {
   id: string;
+  message_id?: string | null;
+  turn_id?: string | null;
+  trace_id?: string | null;
   role: 'user' | 'assistant';
   content: string;
+  message_kind?: string | null;
+  meta?: Record<string, unknown>;
   events?: ExecutionEvent[];
   skills?: string[];
   pendingAction?: PendingAction | null;
@@ -63,6 +74,13 @@ interface ChatSessionState {
   trace?: StreamTraceContext | null;
   timeline: TraceTimeline | null;
   llmContextTimeline: TraceTimeline | null;
+  historyCursor: string | null;
+  historyHasMore: boolean;
+  historyLoading: boolean;
+  historyRevision: number;
+  turnDetail: ConversationTurnDetail | null;
+  turnDetailLoading: boolean;
+  turns: ConversationTurnSummary[];
 }
 
 function generateSessionId(): string {
@@ -85,6 +103,26 @@ function emptySessionState(): ChatSessionState {
     trace: null,
     timeline: null,
     llmContextTimeline: null,
+    historyCursor: null,
+    historyHasMore: false,
+    historyLoading: false,
+    historyRevision: 0,
+    turnDetail: null,
+    turnDetailLoading: false,
+    turns: [],
+  };
+}
+
+function mapHistoricalMessage(message: ConversationMessage, index: number): Message {
+  return {
+    id: message.message_id ?? `history-${message.created_at ?? 'unknown'}-${index}-${message.role}`,
+    message_id: message.message_id,
+    turn_id: message.turn_id,
+    trace_id: message.trace_id,
+    role: message.role as 'user' | 'assistant',
+    content: message.content,
+    message_kind: message.message_kind,
+    meta: message.meta,
   };
 }
 
@@ -152,7 +190,8 @@ function TraceMetricPill({ label, value, accent }: { label: string; value: strin
 
 /* ── 聊天气泡组件 ── */
 function ChatBubble({
-  role, content, events, skills, loading, pendingAction, pendingPlan, pendingResolution, onAction,
+  role, content, events, skills, loading, pendingAction, pendingPlan, pendingResolution,
+  turnId, traceId, onAction, onViewDetails,
 }: {
   role: 'user' | 'assistant';
   content: string;
@@ -162,7 +201,10 @@ function ChatBubble({
   pendingAction?: PendingAction | null;
   pendingPlan?: PendingPlan | null;
   pendingResolution?: PendingResolution | null;
+  turnId?: string | null;
+  traceId?: string | null;
   onAction?: (action: string) => void;
+  onViewDetails?: (turnId: string) => void;
 }) {
   const isUser = role === 'user';
   const hasConfirmationControls = hasPendingConfirmationControls({ role, content, pendingAction, pendingPlan, pendingResolution });
@@ -210,6 +252,18 @@ function ChatBubble({
                 ⚡ {s}
               </span>
             ))}
+            {turnId && onViewDetails && (
+              <Tooltip title={traceId ? '查看 Turn / Trace 详情' : '查看 Turn 详情'}>
+                <Button
+                  type="text"
+                  size="small"
+                  aria-label="查看执行详情"
+                  icon={<ProfileOutlined />}
+                  onClick={() => onViewDetails(turnId)}
+                  style={{ color: TEXT_DIM, padding: '0 4px', height: 24 }}
+                />
+              </Tooltip>
+            )}
           </div>
         )}
         {!isUser && pendingAction?.context && (
@@ -321,6 +375,8 @@ export default function Playground() {
   const traceLoading = activeSession.traceLoading;
   const timeline = activeSession.timeline;
   const llmContextTimeline = activeSession.llmContextTimeline ?? timeline;
+  const turnDetail = activeSession.turnDetail;
+  const turnDetailLoading = activeSession.turnDetailLoading;
   const traceMetrics = buildPlaygroundTraceMetrics(timeline);
   const llmContextSnapshot = extractLatestLlmContextSnapshot(llmContextTimeline);
   const compressed = hasAutomaticCompression(traceMetrics);
@@ -395,13 +451,11 @@ export default function Playground() {
     setSessionId(sid);
     updateSession(sid, () => ({ ...emptySessionState(), loading: true }));
     try {
-      const msgs = await getConversationMessages(sid, activeUserToken);
-      // agri_backend_v2 agent 只返回 role/content/created_at；skills/pendingAction 仅来自 SSE 流，历史消息无此字段
-      const loaded: Message[] = msgs.map((m: ConversationMessage, idx: number) => ({
-        id: `history-${idx}-${m.role}`,
-        role: m.role as 'user' | 'assistant',
-        content: m.content,
-      }));
+      const [page, turnPage] = await Promise.all([
+        getConversationMessagesPage(sid, { userToken: activeUserToken }),
+        getConversationTurns(sid, { userToken: activeUserToken }).catch(() => null),
+      ]);
+      const loaded: Message[] = page.items.map(mapHistoricalMessage);
       const resolved = applyHistoricalPendingResolution(loaded);
       updateSession(sid, (state) => ({
         ...state,
@@ -410,12 +464,62 @@ export default function Playground() {
         messages: resolved,
         timeline: null,
         llmContextTimeline: null,
+        historyCursor: page.next_cursor ?? null,
+        historyHasMore: page.has_more,
+        historyLoading: false,
+        historyRevision: page.conversation_revision ?? 0,
+        turnDetail: null,
+        turnDetailLoading: false,
+        turns: turnPage?.items ?? [],
       }));
     } catch {
       updateSession(sid, (state) => ({ ...state, loading: false }));
       message.error('加载会话失败');
     }
   }, [activeUserToken, updateSession]);
+
+  const loadOlderMessages = useCallback(async () => {
+    const sid = sessionId;
+    const current = sessions[sid] ?? emptySessionState();
+    if (current.historyLoading || !current.historyHasMore || !current.historyCursor) return;
+
+    const container = scrollRef.current;
+    const previousHeight = container?.scrollHeight ?? 0;
+    const previousTop = container?.scrollTop ?? 0;
+    updateSession(sid, (state) => ({ ...state, historyLoading: true }));
+    try {
+      const page = await getConversationMessagesPage(sid, {
+        userToken: activeUserToken,
+        cursor: current.historyCursor,
+      });
+      const older = page.items.map(mapHistoricalMessage);
+      updateSession(sid, (state) => {
+        const existingIds = new Set(state.messages.map((item) => item.id));
+        const uniqueOlder = older.filter((item) => !existingIds.has(item.id));
+        return {
+          ...state,
+          messages: [...uniqueOlder, ...state.messages],
+          historyCursor: page.next_cursor ?? null,
+          historyHasMore: page.has_more,
+          historyRevision: page.conversation_revision ?? state.historyRevision,
+          historyLoading: false,
+        };
+      });
+      requestAnimationFrame(() => {
+        const nextContainer = scrollRef.current;
+        if (nextContainer) {
+          nextContainer.scrollTop = previousTop + nextContainer.scrollHeight - previousHeight;
+        }
+      });
+    } catch (error) {
+      if (isAxiosError(error) && error.response?.status === 409) {
+        await switchConversation(sid);
+        return;
+      }
+      updateSession(sid, (state) => ({ ...state, historyLoading: false }));
+      message.error('加载更早历史失败');
+    }
+  }, [activeUserToken, sessionId, sessions, switchConversation, updateSession]);
 
   /* ── 新建会话 ── */
   const createNewSession = useCallback(() => {
@@ -436,7 +540,7 @@ export default function Playground() {
     try {
       const persistedMessages = await getConversationMessages(sid, activeUserToken);
       if (persistedMessages.length > 0) {
-        // agri_backend_v2 agent 历史消息只有 role/content，skills/pendingAction 仅存在于当前会话 SSE 流中
+        // 历史接口保留消息关联字段；skills/pendingAction 仍只存在于当前会话 SSE 流中。
         sourceMessages = persistedMessages.map((m) => ({
           role: m.role,
           content: m.content,
@@ -515,6 +619,72 @@ export default function Playground() {
     return latestTimeline;
   }, [updateSession]);
 
+  const viewTurnDetails = useCallback(async (turnId: string) => {
+    const sid = sessionId;
+    updateSession(sid, (state) => ({ ...state, turnDetailLoading: true }));
+    try {
+      const detail = await getConversationTurnDetail(sid, turnId, {
+        userToken: activeUserToken,
+      });
+      updateSession(sid, (state) => ({
+        ...state,
+        turnDetail: detail,
+        turnDetailLoading: false,
+      }));
+      if (detail.trace_id) {
+        await refreshSessionTimeline(sid, detail.trace_id);
+      }
+    } catch {
+      updateSession(sid, (state) => ({ ...state, turnDetailLoading: false }));
+      message.error('加载执行详情失败');
+    }
+  }, [activeUserToken, refreshSessionTimeline, sessionId, updateSession]);
+
+  const refreshLatestHistory = useCallback(async (sid: string) => {
+    try {
+      const [page, turnPage] = await Promise.all([
+        getConversationMessagesPage(sid, { userToken: activeUserToken }),
+        getConversationTurns(sid, { userToken: activeUserToken }).catch(() => null),
+      ]);
+      const persisted = page.items.map(mapHistoricalMessage);
+      updateSession(sid, (state) => {
+        const next = [...state.messages];
+        for (const item of persisted) {
+          const existingIndex = next.findIndex((candidate) => (
+            candidate.id === item.id
+            || (!candidate.message_id
+              && candidate.role === item.role
+              && candidate.content === item.content)
+          ));
+          if (existingIndex >= 0) {
+            next[existingIndex] = {
+              ...item,
+              ...next[existingIndex],
+              id: item.id,
+              message_id: item.message_id,
+              turn_id: item.turn_id,
+              trace_id: item.trace_id,
+              message_kind: item.message_kind,
+              meta: item.meta,
+            };
+          } else if (!next.some((candidate) => candidate.id === item.id)) {
+            next.push(item);
+          }
+        }
+        return {
+          ...state,
+          messages: next,
+          historyCursor: page.next_cursor ?? null,
+          historyHasMore: page.has_more,
+          historyRevision: page.conversation_revision ?? state.historyRevision,
+          turns: turnPage?.items ?? state.turns,
+        };
+      });
+    } catch {
+      // 最新页刷新失败时保留当前 SSE 结果和历史滚动状态。
+    }
+  }, [activeUserToken, updateSession]);
+
   const openLlmContextInspector = useCallback(() => {
     if (selectedDevUser) return;
     setLlmContextOpen(true);
@@ -553,6 +723,8 @@ export default function Playground() {
       trace: null,
       timeline: null,
       llmContextTimeline: null,
+      turnDetail: null,
+      turnDetailLoading: false,
     }));
     scrollToBottom();
 
@@ -623,6 +795,7 @@ export default function Playground() {
       if (!selectedDevUser) {
         await refreshSessionTimeline(targetSessionId, streamedTrace?.trace_id);
       }
+      await refreshLatestHistory(targetSessionId);
 
       await loadConversations();
       return true;
@@ -643,7 +816,7 @@ export default function Playground() {
         traceLoading: false,
       }));
     }
-  }, [activeUserToken, input, presentationProfile, scrollToBottom, sessionId, sessions, updateSession, loadConversations, refreshSessionTimeline, selectedDevUser, viewerToken]);
+  }, [activeUserToken, input, presentationProfile, refreshLatestHistory, scrollToBottom, sessionId, sessions, updateSession, loadConversations, refreshSessionTimeline, selectedDevUser, viewerToken]);
 
   const handlePendingAction = useCallback(async (messageId: string, action: string) => {
     const targetSessionId = sessionId;
@@ -939,6 +1112,8 @@ export default function Playground() {
           flex: 1, minHeight: 0, overflow: 'auto',
           padding: '4px 8px 12px',
           marginBottom: 10,
+        }} onScroll={(event) => {
+          if (event.currentTarget.scrollTop <= 48) void loadOlderMessages();
         }}>
           {messages.length === 0 && (
             <div style={{
@@ -969,11 +1144,14 @@ export default function Playground() {
               content={m.content}
               events={m.events}
               skills={m.skills}
+              turnId={m.turn_id}
+              traceId={m.trace_id}
               loading={loading && m.id === messages[messages.length - 1]?.id}
               pendingAction={m.pendingAction}
               pendingPlan={m.pendingPlan}
               pendingResolution={m.pendingResolution}
               onAction={(action) => { void handlePendingAction(m.id, action); }}
+              onViewDetails={viewTurnDetails}
             />
           ))}
           {isThinking && (
@@ -1003,7 +1181,7 @@ export default function Playground() {
         />
 
         {/* 执行摘要 - 紧凑单行 */}
-        {(timeline !== null || traceLoading) && (
+        {(timeline !== null || traceLoading || turnDetailLoading || turnDetail !== null) && (
           <div style={{
             marginBottom: 10,
             display: 'flex',
@@ -1015,10 +1193,17 @@ export default function Playground() {
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
               <span style={{ color: ACCENT, fontSize: 12, fontWeight: 500 }}>执行摘要</span>
-              {traceLoading ? (
+              {turnDetailLoading ? (
+                <span style={{ color: TEXT_DIM, fontSize: 12 }}>加载 Turn 详情...</span>
+              ) : traceLoading ? (
                 <span style={{ color: TEXT_DIM, fontSize: 12 }}>加载中...</span>
               ) : timeline && timeline.rounds ? (
                 <>
+                  {turnDetail && (
+                    <Tag color={turnDetail.events_status === 'available' ? 'success' : 'warning'} style={{ fontSize: 11, margin: 0 }}>
+                      Turn: {turnDetail.status}
+                    </Tag>
+                  )}
                   <TraceMetricPill
                     label="节点"
                     value={formatMetricNumber(timeline.rounds.reduce((s, r) => s + r.nodes.length, 0))}
@@ -1062,6 +1247,10 @@ export default function Playground() {
                     })()}
                   </div>
                 </>
+              ) : turnDetail ? (
+                <Tag color="warning" style={{ fontSize: 11, margin: 0 }}>
+                  执行证据不可用
+                </Tag>
               ) : (
                 <span style={{ color: TEXT_DIM, fontSize: 12 }}>暂无数据</span>
               )}

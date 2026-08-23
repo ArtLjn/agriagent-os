@@ -18,9 +18,81 @@ export interface ConversationItem {
 }
 
 export interface ConversationMessage {
+  message_id?: string | null;
+  turn_id?: string | null;
+  trace_id?: string | null;
   role: UserRole;
   content: string;
   created_at?: string;
+  message_kind?: string | null;
+  meta?: Record<string, unknown>;
+}
+
+export interface ConversationMessagesPage {
+  conversation_id: string;
+  items: ConversationMessage[];
+  message_count?: number;
+  page_count?: number;
+  has_more: boolean;
+  next_cursor?: string | null;
+  latest_message_id?: string | null;
+  conversation_revision?: number;
+  summary_revision?: number;
+  reset_generation?: number;
+  source_status?: string;
+  context_source_status?: string;
+  pagination?: {
+    next_cursor: string | null;
+    has_more: boolean;
+    page_count: number;
+    limit: number;
+    direction: 'older';
+    snapshot_revision: number;
+    consistency: 'snapshot' | 'changed';
+  };
+}
+
+export interface ConversationTurnSummary {
+  turn_id: string;
+  trace_id?: string | null;
+  status: string;
+  stop_reason?: string | null;
+  step_count: number;
+  message_ids: { prompt?: string; answer?: string };
+  business_result?: Record<string, unknown> | null;
+  approval?: {
+    status: 'awaiting_approval' | 'approved' | 'rejected' | string;
+    tool_name?: string;
+    risk_level?: string;
+    reason?: string;
+  } | null;
+  error?: Record<string, unknown> | string | null;
+  events_status: 'available' | 'missing' | 'not_available' | 'error' | string;
+  started_at?: string | null;
+  finished_at?: string | null;
+}
+
+export interface ConversationTurnsPage {
+  conversation_id: string;
+  items: ConversationTurnSummary[];
+  next_cursor?: string | null;
+  has_more: boolean;
+  source_status?: string;
+  evidence_status?: string;
+  evidence?: Record<string, unknown> | null;
+  pagination?: {
+    next_cursor: string | null;
+    has_more: boolean;
+    limit: number;
+    direction: 'older';
+  };
+}
+
+export interface ConversationTurnDetail extends ConversationTurnSummary {
+  conversation_id: string;
+  steps: Record<string, unknown>[];
+  summary?: Record<string, unknown> | null;
+  evidence: Record<string, string>;
 }
 
 // ── Pending Action / Plan（保留给 Playground 组件用）──
@@ -526,14 +598,71 @@ export async function getConversationMessages(
   conversationId: string,
   userToken?: string | null,
 ): Promise<ConversationMessage[]> {
-  const res = await apiClient.get<{ items: ConversationMessage[] }>(
-    `/agent/conversations/${encodeURIComponent(conversationId)}`,
+  const page = await getConversationMessagesPage(conversationId, { userToken });
+  return page.items;
+}
+
+export async function getConversationMessagesPage(
+  conversationId: string,
+  options: {
+    limit?: number;
+    cursor?: string | null;
+    userToken?: string | null;
+  } = {},
+): Promise<ConversationMessagesPage> {
+  const res = await apiClient.get<ConversationMessagesPage>(
+    `/agent/conversations/${encodeURIComponent(conversationId)}/messages`,
     {
-      params: { limit: 100 },
-      headers: userToken ? { Authorization: `Bearer ${userToken}` } : undefined,
+      params: {
+        limit: options.limit ?? 100,
+        ...(options.cursor ? { cursor: options.cursor } : {}),
+      },
+      headers: options.userToken
+        ? { Authorization: `Bearer ${options.userToken}` }
+        : undefined,
     },
   );
-  return res.data.items ?? [];
+  return {
+    ...res.data,
+    items: res.data.items ?? [],
+    has_more: Boolean(res.data.has_more),
+  };
+}
+
+export async function getConversationTurns(
+  conversationId: string,
+  options: { limit?: number; cursor?: string | null; userToken?: string | null } = {},
+): Promise<ConversationTurnsPage> {
+  const res = await apiClient.get<ConversationTurnsPage>(
+    `/agent/conversations/${encodeURIComponent(conversationId)}/turns`,
+    {
+      params: {
+        limit: options.limit ?? 50,
+        ...(options.cursor ? { cursor: options.cursor } : {}),
+      },
+      headers: options.userToken
+        ? { Authorization: `Bearer ${options.userToken}` }
+        : undefined,
+    },
+  );
+  return { ...res.data, items: res.data.items ?? [], has_more: Boolean(res.data.has_more) };
+}
+
+export async function getConversationTurnDetail(
+  conversationId: string,
+  turnId: string,
+  options: { includePayload?: boolean; userToken?: string | null } = {},
+): Promise<ConversationTurnDetail> {
+  const res = await apiClient.get<ConversationTurnDetail>(
+    `/agent/conversations/${encodeURIComponent(conversationId)}/turns/${encodeURIComponent(turnId)}`,
+    {
+      params: options.includePayload ? { include_payload: true } : undefined,
+      headers: options.userToken
+        ? { Authorization: `Bearer ${options.userToken}` }
+        : undefined,
+    },
+  );
+  return res.data;
 }
 
 // ── HITL 审批 ──

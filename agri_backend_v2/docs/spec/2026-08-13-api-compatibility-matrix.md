@@ -270,7 +270,9 @@ worker:  worker_name,date_range, summary{entry_count,total_payable,total_paid,to
 | `POST /agent/chat` | `POST /api/v2/chat` | 旧：`cycle_id?,message,session_id?,simulate_user_id?`；v2：`message,conversation_id?,client_request_id?` | 旧 JSON `reply,pending_action,pending_plan`；v2 SSE | 协议重构 |
 | `POST /agent/chat/stream` | `POST /api/v2/chat` | `after_seq?` | `text/event-stream`，事件带 `type,data,seq` | 合并 |
 | `GET /agent/conversations` | `GET /api/v2/conversations` | `limit=20,cursor?` | 分页会话对象 | 响应迁移 |
-| `GET /agent/conversations/{id}/messages` | `GET /api/v2/conversations/{conversation_id}` | `limit=100,before?` | 会话消息对象 | 路径迁移 |
+| `GET /agent/conversations/{id}/messages` | `GET /api/v2/conversations/{conversation_id}/messages` | `limit=100,cursor?` | 规范历史消息分页；旧 v2 详情接口继续兼容 `before?` | 路径/分页契约迁移 |
+| `GET /agent/conversations/{id}/turns` | `GET /api/v2/conversations/{conversation_id}/turns` | `limit=50,cursor?` | 会话 Turn 摘要和执行证据状态 | v2 新增 |
+| `GET /agent/conversations/{id}/turns/{turn_id}` | `GET /api/v2/conversations/{conversation_id}/turns/{turn_id}` | `include_payload?` | Turn/Trace 聚合详情；普通用户默认公开投影 | v2 新增 |
 | `GET /agent/conversations/{id}/debug-export` | 无 | Path | — | 缺失 |
 | `GET /agent/daily` | 无 | `cycle_id?` | 每日建议 | 缺失 |
 | `POST /agent/daily/refresh` | 无 | `cycle_id?` | 每日建议 | 缺失 |

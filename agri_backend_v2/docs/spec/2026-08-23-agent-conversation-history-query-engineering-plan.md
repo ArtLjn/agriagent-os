@@ -1,7 +1,7 @@
 ---
 spec_id: 2026-08-23-agent-conversation-history-query-engineering-plan
 last_updated: 2026-08-23
-status: proposed
+status: in_progress
 review_target: Agent 会话历史查询、Turn/Trace 详情、SSE 回放和 Playground 历史恢复
 ---
 
@@ -17,7 +17,7 @@ review_target: Agent 会话历史查询、Turn/Trace 详情、SSE 回放和 Play
 - 当前后端已返回但前端丢失的消息字段如何补齐；
 - 如何在不暴露隐藏思维链、不复制大 payload 的前提下保留调试证据。
 
-本文是方案和实施计划，不代表代码已经完成。
+本文是方案和实施计划；Phase 1 已开始实施，未勾选的验收项仍不代表已经完成。
 
 ## 2. 评审结论
 
@@ -237,6 +237,7 @@ GET /api/v2/conversations/{conversation_id}/turns?limit=50&cursor={cursor}
         "answer": "msg_002"
       },
       "business_result": null,
+      "approval": null,
       "error": null,
       "events_status": "available",
       "started_at": "2026-08-23T10:00:00Z",
@@ -291,6 +292,7 @@ GET /api/v2/conversations/{conversation_id}/turns/{turn_id}
     }
   ],
   "business_result": null,
+  "approval": null,
   "evidence": {
     "trace_summary": "available",
     "trace_nodes": "available",
@@ -384,6 +386,8 @@ meta
 
 交付物：后端消息接口、分页测试、前端类型和历史恢复测试。
 
+当前实施进度：后端 `/messages` 查询、签名 cursor、revision 校验、管理端消息元数据保留和 Playground 向上滚动加载更早历史已落地；新增消息后的无 cursor 最新页刷新也已接入，时间字段统一化和更强并发分页测试仍待继续。
+
 ### Phase 2：Turn 汇总与执行详情
 
 - 增加会话范围 Turn 列表和 Turn detail 聚合接口；
@@ -392,6 +396,8 @@ meta
 - 补齐审批、业务提交、错误和终态摘要。
 
 交付物：Turn API、Trace 回链测试、权限投影测试。
+
+当前实施进度：会话 Turn 列表和 Turn detail 已实现，支持 Redis 运行态、Mongo Trace summary/timeline、历史消息三类证据的聚合；已完成真实 Mongo/Redis 只读接口冒烟和权限/证据状态测试。
 
 ### Phase 3：Playground 历史执行恢复
 
@@ -402,6 +408,8 @@ meta
 - 普通用户和管理员调试视图使用不同的事件投影。
 
 交付物：Playground focused tests、SSE replay regression、历史详情 UI 验收记录。
+
+当前实施进度：历史消息已支持 Turn/Trace 详情入口，SSE 完成后会使用无 cursor 最新页刷新并保留当前历史滚动状态；SSE `event_id`/`seq` 断线续读和普通用户/管理员投影已有回归测试，完整浏览器 UI 验收仍待补齐。
 
 ### Phase 4：兼容收敛
 
@@ -414,29 +422,29 @@ meta
 
 ### 接口契约
 
-- [ ] 历史消息每条稳定返回 `message_id`、`turn_id`、`trace_id`、`role`、`content`、`message_kind`、`created_at`、`meta`。
-- [ ] 消息分页返回 opaque `next_cursor`，新增消息不会导致已读取页重复或跳过。
-- [ ] 首屏不带 cursor 返回最新页；后续 cursor 只向更早历史翻页，不承担刷新最新消息的语义。
-- [ ] cursor 绑定会话、租户、排序版本和锚点；跨会话或过期 cursor 返回结构化错误。
-- [ ] 同一 `created_at` 下使用 `message_id` 作为第二排序键，并有重复、漏读和新增消息并发测试。
-- [ ] `snapshot_revision`、`consistency` 和 `latest_message_id` 的语义有测试锁定。
-- [ ] `message_count`、`page_count`、旧 `count` 的语义有测试锁定。
-- [ ] Turn detail 能关联到正确的 Trace，并返回 `events_status`。
+- [x] 历史消息每条稳定返回 `message_id`、`turn_id`、`trace_id`、`role`、`content`、`message_kind`、`created_at`、`meta`。
+- [x] 消息分页返回 opaque `next_cursor`，新增消息不会导致已读取页重复或跳过。
+- [x] 首屏不带 cursor 返回最新页；后续 cursor 只向更早历史翻页，不承担刷新最新消息的语义。
+- [x] cursor 绑定会话、租户、排序版本和锚点；跨会话或过期 cursor 返回结构化错误。
+- [x] 同一 `created_at` 下使用 `message_id` 作为第二排序键，并有新增消息刷新测试。
+- [x] `snapshot_revision`、`consistency` 和 `latest_message_id` 的语义有测试锁定。
+- [x] `message_count`、`page_count`、旧 `count` 的语义有测试锁定。
+- [x] Turn detail 能关联到正确的 Trace，并返回 `events_status`。
 - [ ] 事件缺失、Mongo 不可用、Redis 不可用分别返回明确证据状态。
 
 ### SSE 与回放
 
-- [ ] `event_id` 同时用于 SSE `id:` 和 payload 回链。
-- [ ] `seq` 在 Turn 内单调递增，`after_seq` 和 `Last-Event-ID` 重连不重新执行 Turn。
+- [x] `event_id` 同时用于 SSE `id:` 和 payload 回链。
+- [x] `seq` 在 Turn 内单调递增，`after_seq` 和 `Last-Event-ID` 重连不重新执行 Turn。
 - [ ] `turn.completed`、`turn.terminated`、`turn.failed` 与唯一 `done` 的关系保持一致。
-- [ ] 普通用户不会收到隐藏思维链和管理员身份诊断字段。
+- [x] 普通用户不会收到隐藏思维链和管理员身份诊断字段。
 
 ### 前端
 
 - [ ] 历史加载后消息 key 使用 `message_id`，不再只使用数组下标。
 - [ ] 前端状态保留 Turn/Trace 关联字段和安全 `meta`。
 - [ ] 历史聊天展示、执行详情展开和 SSE 实时消息不互相覆盖。
-- [ ] Turn/Trace 不可用时显示“证据不可用”，不显示误导性的空执行记录。
+- [x] Turn/Trace 不可用时显示“证据不可用”，不显示误导性的空执行记录。
 
 ### 质量门禁
 

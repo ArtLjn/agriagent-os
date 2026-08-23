@@ -18,10 +18,16 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
+import hashlib
+import hmac
+import json
 import logging
 from datetime import datetime, timezone
 from typing import Any
 
+from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
 
 from agent.config import settings
@@ -41,6 +47,140 @@ _state_indexes_initialized = False
 _observation_collection: AsyncIOMotorCollection | None = None
 _observation_indexes_initialized = False
 _UNSET = object()
+_CURSOR_VERSION = 1
+_MESSAGE_KIND_ALIASES = {
+    "user_input": "prompt",
+    "assistant_answer": "final_answer",
+    "error": "error_answer",
+}
+_PUBLIC_MESSAGE_KINDS = frozenset(
+    {"prompt", "final_answer", "error_answer", "tool_summary"}
+)
+_PUBLIC_META_KEYS = frozenset(
+    {
+        "outcome",
+        "tool_summary",
+        "approval_summary",
+        "business_result",
+        "error_code",
+        "error_message",
+        "stop_reason",
+        "status",
+        "source_status",
+        "evidence_status",
+        "source",
+    }
+)
+_MAX_MESSAGE_META_BYTES = 8192
+
+
+class ConversationCursorError(ValueError):
+    """历史消息 cursor 不可安全继续使用时返回的结构化错误。"""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+
+
+def _normalize_message_kind(value: Any) -> str | None:
+    """统一历史消息类型，只保留公开消息类型，避免内部事件污染历史。"""
+    if value is None:
+        return None
+    normalized = str(value).strip()
+    canonical = _MESSAGE_KIND_ALIASES.get(normalized, normalized or None)
+    return canonical if canonical in _PUBLIC_MESSAGE_KINDS else None
+
+
+def _sanitize_message_meta(meta: Any) -> dict[str, Any]:
+    """只返回脱敏摘要字段，避免工具参数或隐藏执行内容进入历史消息。"""
+    if not isinstance(meta, dict):
+        return {}
+    selected = {key: meta[key] for key in _PUBLIC_META_KEYS if key in meta}
+    try:
+        encoded = json.dumps(selected, ensure_ascii=False, default=str)
+        if len(encoded.encode("utf-8")) > _MAX_MESSAGE_META_BYTES:
+            return {}
+        return json.loads(encoded)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return {}
+
+
+def _cursor_secret() -> bytes:
+    """使用 Agent JWT secret 签名 cursor，防止客户端篡改租户和分页锚点。"""
+    secret = str(settings.auth.jwt_secret or "")
+    if not secret:
+        raise ConversationCursorError(
+            "conversation_cursor_unavailable", "会话分页 cursor 签名密钥未配置"
+        )
+    return secret.encode("utf-8")
+
+
+def _encode_conversation_cursor(payload: dict[str, Any]) -> str:
+    """生成只允许向更早历史读取的 opaque cursor。"""
+    raw = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    encoded = base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+    signature = hmac.new(_cursor_secret(), encoded.encode("ascii"), hashlib.sha256)
+    return f"{encoded}.{signature.hexdigest()}"
+
+
+def _decode_conversation_cursor(
+    cursor: str,
+    *,
+    conversation_id: str,
+    user_id: str | None,
+    farm_id: int | None,
+    snapshot_revision: int,
+) -> dict[str, Any]:
+    """校验 cursor 的签名、租户、会话和快照版本后返回分页锚点。"""
+    try:
+        encoded, signature = cursor.split(".", 1)
+        expected = hmac.new(
+            _cursor_secret(), encoded.encode("ascii"), hashlib.sha256
+        ).hexdigest()
+        if not hmac.compare_digest(signature, expected):
+            raise ConversationCursorError(
+                "conversation_cursor_invalid", "分页 cursor 无效"
+            )
+        padded = encoded + "=" * (-len(encoded) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
+    except ConversationCursorError:
+        raise
+    except (binascii.Error, TypeError, ValueError, UnicodeDecodeError) as exc:
+        raise ConversationCursorError(
+            "conversation_cursor_invalid", "分页 cursor 无效"
+        ) from exc
+
+    expected_farm_id = farm_id if farm_id is not None else _DEFAULT_FARM_ID
+    if (
+        payload.get("v") != _CURSOR_VERSION
+        or payload.get("conversation_id") != conversation_id
+        or payload.get("user_id") != user_id
+        or payload.get("farm_id") != expected_farm_id
+        or payload.get("direction") != "older"
+    ):
+        raise ConversationCursorError(
+            "conversation_cursor_scope_mismatch", "分页 cursor 不属于当前会话或用户"
+        )
+    try:
+        cursor_revision = int(payload.get("snapshot_revision", -1))
+    except (TypeError, ValueError) as exc:
+        raise ConversationCursorError(
+            "conversation_cursor_invalid", "分页 cursor 无效"
+        ) from exc
+    if cursor_revision != snapshot_revision:
+        raise ConversationCursorError(
+            "conversation_revision_changed", "会话内容已更新，请重新加载最新历史"
+        )
+    anchor = payload.get("anchor")
+    if (
+        not isinstance(anchor, dict)
+        or not anchor.get("created_at")
+        or not anchor.get("message_id")
+    ):
+        raise ConversationCursorError(
+            "conversation_cursor_invalid", "分页 cursor 缺少锚点"
+        )
+    return anchor
 
 
 def _collection_name() -> str:
@@ -58,9 +198,7 @@ def _state_collection_name() -> str:
 
 
 def _observation_collection_name() -> str:
-    return settings.mongodb.collections.get(
-        "memory_observations", "memoryObservations"
-    )
+    return settings.mongodb.collections.get("memory_observations", "memoryObservations")
 
 
 def get_collection() -> AsyncIOMotorCollection | None:
@@ -762,7 +900,10 @@ async def save_summary_result(
         return current
     if current and current.get("last_write_key") == f"{summary_key}:commit":
         return {**current, "status": "idempotent"}
-    if current is not None and current.get("conversation_revision") != expected_revision:
+    if (
+        current is not None
+        and current.get("conversation_revision") != expected_revision
+    ):
         return {
             "ok": False,
             "status": "conflict",
@@ -771,9 +912,7 @@ async def save_summary_result(
             "expected_revision": expected_revision,
             "actual_revision": current.get("conversation_revision"),
         }
-    current_summary_revision = int(
-        (current or {}).get("summary_revision", 0) or 0
-    )
+    current_summary_revision = int((current or {}).get("summary_revision", 0) or 0)
     return await save_conversation_state(
         conversation_id,
         user_id=user_id,
@@ -782,7 +921,9 @@ async def save_summary_result(
         summary=summary,
         summary_status=status,
         summary_revision=(
-            current_summary_revision + 1 if status == "ready" else current_summary_revision
+            current_summary_revision + 1
+            if status == "ready"
+            else current_summary_revision
         ),
         summary_source_from_message_id=source_from_message_id,
         summary_source_to_message_id=source_to_message_id,
@@ -842,10 +983,12 @@ async def append_message(
             doc["turnId"] = turn_id
         if trace_id is not None:
             doc["traceId"] = trace_id
-        if message_kind is not None:
-            doc["messageKind"] = message_kind
-        if meta:
-            doc["meta"] = meta
+        normalized_kind = _normalize_message_kind(message_kind)
+        if normalized_kind is not None:
+            doc["messageKind"] = normalized_kind
+        safe_meta = _sanitize_message_meta(meta)
+        if safe_meta:
+            doc["meta"] = safe_meta
         if idempotency_key:
             doc["idempotencyKey"] = idempotency_key
         result = await coll.insert_one(doc)
@@ -1112,6 +1255,7 @@ async def get_conversation(
             "count": 0,
             "has_more": False,
         }
+
     await ensure_indexes()
 
     filter_doc: dict[str, Any] = {
@@ -1153,8 +1297,8 @@ async def get_conversation(
                 "message_id": str(d.get("_id")) if d.get("_id") is not None else None,
                 "turn_id": d.get("turnId"),
                 "trace_id": d.get("traceId"),
-                "message_kind": d.get("messageKind"),
-                "meta": d.get("meta") or {},
+                "message_kind": _normalize_message_kind(d.get("messageKind")),
+                "meta": _sanitize_message_meta(d.get("meta")),
             }
             for d in docs
         ]
@@ -1171,4 +1315,154 @@ async def get_conversation(
             "items": [],
             "count": 0,
             "has_more": False,
+        }
+
+
+async def get_conversation_messages(
+    conversation_id: str,
+    *,
+    limit: int = 100,
+    cursor: str | None = None,
+    snapshot_revision: int = 0,
+    user_id: str | None = None,
+    farm_id: int | None = None,
+) -> dict[str, Any]:
+    """读取最新消息页或按签名 cursor 向更早历史分页。"""
+    coll = get_collection()
+    if coll is None:
+        return {
+            "conversation_id": conversation_id,
+            "items": [],
+            "message_count": 0,
+            "page_count": 0,
+            "has_more": False,
+            "next_cursor": None,
+            "source_status": "unavailable",
+        }
+    await ensure_indexes()
+
+    tenant_farm_id = farm_id if farm_id is not None else _DEFAULT_FARM_ID
+    filter_doc: dict[str, Any] = {
+        "conversationId": conversation_id,
+        "farmId": tenant_farm_id,
+    }
+    if user_id:
+        filter_doc["userId"] = user_id
+
+    if cursor:
+        anchor = _decode_conversation_cursor(
+            cursor,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            farm_id=farm_id,
+            snapshot_revision=snapshot_revision,
+        )
+        anchor_id = str(anchor["message_id"])
+        anchor_id_value: Any = (
+            ObjectId(anchor_id) if ObjectId.is_valid(anchor_id) else anchor_id
+        )
+        filter_doc["$or"] = [
+            {"createdAt": {"$lt": anchor["created_at"]}},
+            {"createdAt": anchor["created_at"], "_id": {"$lt": anchor_id_value}},
+        ]
+
+    try:
+        query = (
+            coll.find(
+                filter_doc,
+                projection={
+                    "_id": 1,
+                    "role": 1,
+                    "content": 1,
+                    "createdAt": 1,
+                    "turnId": 1,
+                    "traceId": 1,
+                    "messageKind": 1,
+                    "meta": 1,
+                },
+            )
+            .sort([("createdAt", -1), ("_id", -1)])
+            .limit(limit + 1)
+        )
+        docs = await query.to_list(length=limit + 1)
+        has_more = len(docs) > limit
+        docs = docs[:limit]
+        docs.reverse()
+        items = [
+            {
+                "role": document["role"],
+                "content": document["content"],
+                "created_at": document.get("createdAt"),
+                "message_id": (
+                    str(document.get("_id"))
+                    if document.get("_id") is not None
+                    else None
+                ),
+                "turn_id": document.get("turnId"),
+                "trace_id": document.get("traceId"),
+                "message_kind": _normalize_message_kind(document.get("messageKind")),
+                "meta": _sanitize_message_meta(document.get("meta")),
+            }
+            for document in docs
+        ]
+        if hasattr(coll, "count_documents"):
+            message_count = await coll.count_documents(
+                {
+                    "conversationId": conversation_id,
+                    "farmId": tenant_farm_id,
+                    **({"userId": user_id} if user_id else {}),
+                }
+            )
+        else:
+            message_count = len(items)
+
+        next_cursor = None
+        if has_more and items:
+            oldest = items[0]
+            next_cursor = _encode_conversation_cursor(
+                {
+                    "v": _CURSOR_VERSION,
+                    "conversation_id": conversation_id,
+                    "user_id": user_id,
+                    "farm_id": tenant_farm_id,
+                    "direction": "older",
+                    "snapshot_revision": snapshot_revision,
+                    "anchor": {
+                        "created_at": oldest["created_at"],
+                        "message_id": oldest["message_id"],
+                    },
+                }
+            )
+        return {
+            "conversation_id": conversation_id,
+            "items": items,
+            "message_count": message_count,
+            "page_count": len(items),
+            "has_more": has_more,
+            "next_cursor": next_cursor,
+            "latest_message_id": items[-1]["message_id"] if items else None,
+            "pagination": {
+                "next_cursor": next_cursor,
+                "has_more": has_more,
+                "page_count": len(items),
+                "limit": limit,
+                "direction": "older",
+                "snapshot_revision": snapshot_revision,
+                "consistency": "snapshot",
+            },
+            "source_status": "mongo",
+        }
+    except ConversationCursorError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("get_conversation_messages failed: %s", exc)
+        return {
+            "conversation_id": conversation_id,
+            "items": [],
+            "message_count": 0,
+            "page_count": 0,
+            "has_more": False,
+            "next_cursor": None,
+            "source_status": "error",
+            "code": "conversation_messages_unavailable",
         }
