@@ -276,9 +276,28 @@ async def _list_from_summary_collection(
     if turn_id:
         filter_doc["turn_id"] = turn_id
     if cursor:
-        filter_doc["_id"] = {"$lt": cursor}
+        # `_id` 是 trace_id，不表达执行时间；先解析游标对应的时间，
+        # 再按 created_at + _id 的复合边界翻页，保证最新 Trace 优先且不漏项。
+        cursor_doc = await summary_coll.find_one({"_id": cursor})
+        if cursor_doc:
+            cursor_time = cursor_doc.get("created_at")
+            cursor_id = cursor_doc.get("_id", cursor)
+            if cursor_time is not None:
+                filter_doc["$or"] = [
+                    {"created_at": {"$lt": cursor_time}},
+                    {
+                        "created_at": cursor_time,
+                        "_id": {"$lt": cursor_id},
+                    },
+                ]
+            else:
+                filter_doc["_id"] = {"$lt": cursor_id}
 
-    cursor_obj = summary_coll.find(filter_doc).sort("_id", -1).limit(limit + 1)
+    cursor_obj = (
+        summary_coll.find(filter_doc)
+        .sort([("created_at", -1), ("_id", -1)])
+        .limit(limit + 1)
+    )
     docs = await cursor_obj.to_list(length=limit + 1)
 
     has_more = len(docs) > limit

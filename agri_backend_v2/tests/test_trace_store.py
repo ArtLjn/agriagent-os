@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import pytest
 
 from agent.api import traces as traces_api  # noqa: F401
@@ -68,6 +70,12 @@ class FakeCollection:
     def find(self, filter_doc: dict) -> FakeCursor:
         return FakeCursor(
             [document for document in self.documents if _matches(document, filter_doc)]
+        )
+
+    async def find_one(self, filter_doc: dict) -> dict | None:
+        return next(
+            (document for document in self.documents if _matches(document, filter_doc)),
+            None,
         )
 
 
@@ -171,6 +179,62 @@ async def test_list_traces_filters_turn_and_identity(
 
     assert [item["trace_id"] for item in result["items"]] == ["trace-1"]
     assert result["evidence_status"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_list_traces_orders_summary_by_latest_created_at_and_paginates(
+    monkeypatch, mongodb_enabled
+) -> None:
+    utc = timezone.utc
+    summaries = FakeCollection(
+        [
+            {
+                "_id": "trace-old",
+                "request_id": "trace-old",
+                "trace_id": "trace-old",
+                "user_id": "u1",
+                "farm_uid": "f1",
+                "created_at": datetime(2026, 8, 25, 9, 0, tzinfo=utc),
+            },
+            {
+                "_id": "trace-new",
+                "request_id": "trace-new",
+                "trace_id": "trace-new",
+                "user_id": "u1",
+                "farm_uid": "f1",
+                "created_at": datetime(2026, 8, 25, 11, 0, tzinfo=utc),
+            },
+            {
+                "_id": "trace-middle",
+                "request_id": "trace-middle",
+                "trace_id": "trace-middle",
+                "user_id": "u1",
+                "farm_uid": "f1",
+                "created_at": datetime(2026, 8, 25, 10, 0, tzinfo=utc),
+            },
+        ]
+    )
+    monkeypatch.setattr(store, "_get_summary_collection", lambda: summaries)
+    monkeypatch.setattr(store, "_get_trace_collection", lambda: None)
+
+    first_page = await store.list_traces(
+        limit=2,
+        user_id="u1",
+        farm_uid="f1",
+    )
+    second_page = await store.list_traces(
+        limit=2,
+        cursor=first_page["next_cursor"],
+        user_id="u1",
+        farm_uid="f1",
+    )
+
+    assert [item["trace_id"] for item in first_page["items"]] == [
+        "trace-new",
+        "trace-middle",
+    ]
+    assert first_page["next_cursor"] == "trace-middle"
+    assert [item["trace_id"] for item in second_page["items"]] == ["trace-old"]
 
 
 @pytest.mark.asyncio
