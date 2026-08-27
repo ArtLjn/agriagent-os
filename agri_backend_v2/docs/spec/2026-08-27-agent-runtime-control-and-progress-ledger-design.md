@@ -49,6 +49,8 @@ User Request
 - Runtime 已提供受控 `StepBudget` resolver：默认使用固定 20 轮，显式估计值只能在 1-20 的硬上限内按安全系数计算；本轮只接入默认预算和 Trace 证据，尚未启用动态估计。
 - 同一动作连续两次得到相同 Observation 时，Runtime 会设置 `no_progress_detected` FinalizationRequest，由统一终态收口器停止继续消耗决策轮；一次相同结果不会单独触发终止。
 - `no_progress_detected` 与 Doom Loop 都会持久化最小 `blocked_action` 摘要（工具映射、语义范围和 Observation 指纹），跨 Turn 的“继续”不能原样重放该动作。
+- Business 返回 `status=needs_information` 时保留业务错误码和 `missing` 字段，但 Agent 不再把它包装成 `tool.failed`；Runtime 以 `user_input_required` 受控终态向用户索取缺失信息，避免把可恢复业务前置条件误报为系统故障。
+- `prepare_planting_plan` 的 `custom_template_required` 已按上述规则修复：Trace Tool 节点为 `blocked`，不再产生 `tool.failed`，最终答复明确指出 `custom_template.stages`，下一轮可在补充模板后重新准备。
 - Trace summary 已统计真实 `decision_steps`，并通过并行执行路径生成的 `parallel_batch_id` 统计 `parallel_batches` 和 `parallel_tool_calls`，不会从同一 step 的工具数量推断并发。
 - 已实施 Semantic Group 的最小证据：显式 `capability_group + data_scope` 生成语义范围键，账本分别记录 exact progress 与 semantic progress；不同数据范围不会被合并。尚未实施语义 fallback、动态 `max_steps`、完整 ExecutionState/requirements/evidence 模型，以及 Trace Monitor 的完整可视化。
 

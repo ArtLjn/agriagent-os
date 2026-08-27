@@ -1318,8 +1318,19 @@ async def _post_process_skill_result(
         semantic_progress=progress_delta["semantic_status"],
         semantic_progress_reason=progress_delta["semantic_reason"],
         parallel_batch_id=parallel_batch_id,
+        status=("blocked" if state.result and isinstance(state.result, dict) and state.result.get("status") == "needs_information" else ""),
         step_index=turn.step_count,
     )
+    result_data = state.result if isinstance(state.result, dict) else {}
+    if result_data.get("status") == "needs_information":
+        turn.finalization_request = {
+            "code": str(result_data.get("code") or "input_required"),
+            "message": str(result_data.get("message") or "请补充必要信息后继续。"),
+            "tool_name": skill.name,
+            "result": result_data,
+            "status": "needs_information",
+        }
+        return
     if tracker.unchanged_count(skill.name, tc["arguments"]) >= 2:
         _persist_blocked_action(
             turn,
@@ -1727,6 +1738,22 @@ async def _finalize_requested_error(
     code = str(request.get("code") or "tool_failed")
     message = str(request.get("message") or "工具执行失败")
     tool_name = str(request.get("tool_name") or "")
+    if request.get("status") == "needs_information":
+        result = request.get("result")
+        missing = result.get("missing", []) if isinstance(result, dict) else []
+        missing_text = f"（需要：{', '.join(map(str, missing))}）" if missing else ""
+        async for ev in _emit_failure_terminal(
+            turn,
+            code=code,
+            message=message,
+            answer=f"{message}{missing_text}",
+            phase=TurnPhase.FINALIZING,
+            tool_name=tool_name,
+            stop_reason=StopReason.USER_INPUT_REQUIRED,
+            status="terminated",
+        ):
+            yield ev
+        return
     answer = (
         f"调用 {tool_name or '业务工具'} 未完成：{message}。"
         "该错误不可重试，已停止继续调用工具，请补充信息后重试。"
@@ -1976,7 +2003,9 @@ async def _run_skill_call(
                 rationale=action_data.get("rationale", ""),
             )
         state.result_obj = result_obj
-        if result_obj.error:
+        result_data = result_obj.data if isinstance(result_obj.data, dict) else {}
+        needs_information = result_data.get("status") == "needs_information"
+        if result_obj.error and not needs_information:
             state.result = result_obj.data or {"error": result_obj.error}
             state.error = result_obj.error
             result_data = state.result if isinstance(state.result, dict) else {}
@@ -2022,6 +2051,9 @@ async def _run_skill_call(
             )
         else:
             state.result = result_obj.data
+            # Business 业务校验可能返回 needs_information + error 字段；这不是
+            # 工具崩溃，保留结构化结果并交给统一终态向用户索取缺失信息。
+            state.error = None
             state.finalize_after_success = skill.finalize_after_success
             obs_ev = sse.observation(skill.name, state.result)
             finished_ev = sse.tool_finished(
@@ -2034,7 +2066,7 @@ async def _run_skill_call(
             )
         turn.emit("tool_finished", finished_ev["data"])
         yield finished_ev
-        if result_obj.error:
+        if result_obj.error and not needs_information:
             failed_ev = sse.tool_failed(
                 turn.turn_id,
                 tool_call_id,

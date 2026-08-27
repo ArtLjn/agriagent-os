@@ -96,6 +96,32 @@ def test_trace_tool_call_keeps_agent_business_mapping(monkeypatch) -> None:
 
 def test_trace_catalog_recall_keeps_step_budget_evidence(monkeypatch) -> None:
     collector._queue.clear()
+
+
+def test_trace_tool_call_can_mark_business_input_blocked(monkeypatch) -> None:
+    collector._queue.clear()
+    monkeypatch.setattr(
+        collector,
+        "get_trace",
+        lambda: SimpleNamespace(
+            trace_id="trace-input",
+            request_id="request-input",
+            conversation_id="conversation-input",
+            turn_id="turn-input",
+            user_id="user-input",
+            farm_uid="farm-input",
+        ),
+    )
+
+    collector.trace_tool_call(
+        "prepare_planting_plan",
+        {"crop_name": "水稻"},
+        {"status": "needs_information", "code": "custom_template_required"},
+        status="blocked",
+    )
+
+    assert collector._queue[-1]["status"] == "blocked"
+    collector._queue.clear()
     monkeypatch.setattr(
         collector,
         "get_trace",

@@ -15,6 +15,9 @@ operations:
     inject_operation: false
     description: 准备完整种植计划并返回审批摘要，不写入业务实体。
     risk_level: read
+    capability_group: planting_plan
+    data_scope: farm_operations
+    freshness_requirement: current_farm_state
     approval_followup:
       tool_name: commit_planting_plan
       arguments_from_result: [client_request_id, approval_fingerprint, plan]

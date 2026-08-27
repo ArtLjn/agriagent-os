@@ -57,6 +57,17 @@ class _UnknownBusinessSkill(_ReadSkill):
         )
 
 
+class _NeedsInformationSkill(_ReadSkill):
+    async def execute(self, params: dict, ctx) -> SkillResult:
+        result = {
+            "status": "needs_information",
+            "code": "custom_template_required",
+            "message": "需要提供自定义模板阶段",
+            "missing": ["custom_template.stages"],
+        }
+        return SkillResult(data=result, error=result["message"])
+
+
 def test_build_identity_headers_declares_turn_identity(monkeypatch) -> None:
     delegated = {}
 
@@ -595,6 +606,55 @@ async def test_unknown_business_tool_is_normalized_at_skill_boundary() -> None:
 
     assert state.result["code"] == "business_tool_not_registered"
     assert state.result["business_tool_name"] == "manage_crop_cycle"
+
+
+@pytest.mark.asyncio
+async def test_needs_information_is_not_reported_as_tool_failure() -> None:
+    skill = _NeedsInformationSkill("prepare_planting_plan")
+    turn = Turn(user_input="规划水稻")
+    tracker = react.verify.ProgressLedger()
+    tc = {"id": "needs-info-call", "name": skill.name, "arguments": {}}
+    tracker.record(skill.name, {})
+    state = react._SkillExecState()
+
+    events = [
+        event
+        async for event in react._run_skill_call(
+            turn=turn,
+            skill=skill,
+            args={},
+            skill_ctx=SimpleNamespace(),
+            rationale="准备种植计划",
+            state=state,
+            tool_call_id=tc["id"],
+        )
+    ]
+    post_events = [
+        event
+        async for event in react._post_process_skill_result(
+            tc=tc,
+            turn=turn,
+            skill=skill,
+            tracker=tracker,
+            state=state,
+            skill_index={skill.name: skill},
+            skill_ctx=SimpleNamespace(),
+            approval_waiter=_approve,
+            rationale="准备种植计划",
+        )
+    ]
+    assert any(event["type"] == "tool_finished" for event in events)
+    assert not any(event["type"] in {"tool.failed", "tool_failed"} for event in events)
+    assert post_events[-1]["type"] == "progress"
+    assert turn.finalization_request["code"] == "custom_template_required"
+    assert turn.finalization_request["status"] == "needs_information"
+
+    final_events = [
+        event async for event in react._finalize_requested_error(turn)
+    ]
+    assert turn.stop_reason == StopReason.USER_INPUT_REQUIRED
+    assert "custom_template.stages" in turn.final_answer
+    assert final_events[-1]["type"] == "turn.terminated"
 
 
 @pytest.mark.asyncio

@@ -52,6 +52,7 @@ class StopReason(str, Enum):
     TOKEN_BUDGET_EXHAUSTED = "token_budget_exhausted"
     DOOM_LOOP_DETECTED = "doom_loop_detected"
     RESUME_REQUIRES_NEW_ACTION = "resume_requires_new_action"
+    USER_INPUT_REQUIRED = "user_input_required"
     LLM_FAILED = "llm_failed"
     TOOL_FAILED = "tool_failed"
     APPROVAL_REJECTED = "approval_rejected"

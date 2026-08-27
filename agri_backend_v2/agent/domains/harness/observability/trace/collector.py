@@ -539,6 +539,7 @@ def trace_tool_call(
     semantic_progress: str = "",
     semantic_progress_reason: str = "",
     parallel_batch_id: str = "",
+    status: str = "",
     step_index: int | None = None,
 ) -> None:
     """记录 Agent 工具到 Business MCP 的真实映射和观察进度。"""
@@ -573,6 +574,7 @@ def trace_tool_call(
         attempt=attempt,
         attributes=attributes,
         step_index=step_index,
+        status=status or None,
     )
 
 

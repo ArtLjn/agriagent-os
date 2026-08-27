@@ -192,7 +192,9 @@ class ProgressLedger:
                     and item is not call
                 ]
                 result_data = result if isinstance(result, dict) else {}
-                if result_data.get("error") and not result_data.get("retryable", False):
+                if result_data.get("status") == "needs_information":
+                    status, reason = "blocked", "needs_information"
+                elif result_data.get("error") and not result_data.get("retryable", False):
                     status, reason = "blocked", "non_retryable_error"
                 elif previous and previous[-1] == fingerprint:
                     status, reason = "unchanged", "same_observation"
