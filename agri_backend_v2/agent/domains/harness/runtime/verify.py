@@ -58,6 +58,9 @@ class ProgressLedger:
         agent_tool_name: str = "",
         business_tool_name: str = "",
         operation: str = "",
+        capability_group: str = "",
+        data_scope: str = "",
+        freshness_requirement: str = "",
         tool_call_id: str = "",
         step_index: int | None = None,
     ) -> int:
@@ -67,6 +70,9 @@ class ProgressLedger:
             "agent_tool_name": agent_tool_name,
             "business_tool_name": business_tool_name,
             "operation": operation,
+            "capability_group": capability_group,
+            "data_scope": data_scope,
+            "freshness_requirement": freshness_requirement,
             "tool_call_id": tool_call_id,
             "step_index": step_index,
         }

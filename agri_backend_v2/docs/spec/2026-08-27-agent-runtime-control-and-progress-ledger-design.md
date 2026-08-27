@@ -44,6 +44,8 @@ User Request
 - SSE 新增结构化 `progress` 事件；Trace `tool_call` 节点记录 Agent 工具名、Business MCP 工具名、operation、`tool_call_id` 和观察指纹。
 - Playground Debug Export 已同时读取历史 `skill_call` 与当前 Runtime 实际产生的 `tool_call`，并导出上述诊断字段。
 - Doom Loop 终止会将阻断动作写入已有 `task_state`；跨 Turn 原样重试会在 Skill 执行前返回 `blocked_action_repeat`，不同动作才清理临时阻断状态并继续。
+- 模板查询 operation 已声明 `capability_group`、`data_scope` 和 `freshness_requirement`，Registry catalog、Progress Ledger 和 Trace 具备读取这些字段的边界。
+- Agent Registry 未命中返回 `agent_tool_not_registered`；Business 返回明确未知工具结果时归一为 `business_tool_not_registered`。
 - 尚未实施：Semantic Group、只读 fallback、动态 `max_steps`、完整 ExecutionState/requirements/evidence 模型，以及 Trace Monitor 的完整可视化。
 
 ## 2. 范围与非目标
@@ -654,8 +656,8 @@ agri_admin_web/src/pages/Playground/sessionDebugExport.ts
 
 - [x] 当前 Registry 能加载 `list_system_crop_templates`，并显示其 Business 映射为 `manage_crop_cycle/system_templates`；
 - [x] `query_crop_templates` 映射为 `manage_crop_templates/query`，不会被错误合并为系统模板查询；
-- [ ] Agent-facing 名称缺失时返回 `agent_tool_not_registered`；
-- [ ] Business 映射缺失时返回 `business_tool_not_registered`；
+- [x] Agent-facing 名称缺失时返回 `agent_tool_not_registered`；
+- [x] Business 映射缺失时返回 `business_tool_not_registered`；
 - [ ] 所有映射错误不会继续请求 LLM，也不会退化为 `max_steps`。
 
 ### 13.2 Loop 与 Progress
@@ -663,7 +665,7 @@ agri_admin_web/src/pages/Playground/sessionDebugExport.ts
 - [ ] 相同有效参数第二次产生一次 warning；
 - [x] 相同调用和等价 Observation 达到阈值后，在下一次 LLM 调用前终止；
 - [x] 同一 Tool 返回不同业务结果时不会误判 Doom；
-- [ ] 不同数据范围的模板查询不会仅因名称相似而互相阻断；
+- [x] 不同数据范围的模板查询不会仅因名称相似而互相阻断；
 - [ ] 查询虽不修改数据库，但产生新实体/事实时记录 `advanced`；
 - [x] 不可重试错误不会被重复喂回模型直到 `max_steps`；
 - [x] 写入成功后不会因收尾模型再次请求 Tool 而重复写入。

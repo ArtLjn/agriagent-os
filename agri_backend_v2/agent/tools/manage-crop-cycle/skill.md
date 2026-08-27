@@ -35,6 +35,9 @@ operations:
   delete: {tool_name: delete_crop_cycle, description: 删除指定种植茬口。, risk_level: write_high, parameters: [cycle_id], required: [cycle_id]}
   templates:
     tool_name: list_crop_templates
+    capability_group: crop_template_catalog
+    data_scope: farm_imported_templates
+    freshness_requirement: current_farm_state
     description: 查询当前农场可用的作物模板。创建茬口前可先调用本工具取得 crop_template_id。
     risk_level: read
     execution: {mode: parallel_safe, max_concurrency: 4}
@@ -42,6 +45,9 @@ operations:
     required: []
   system_templates:
     tool_name: list_system_crop_templates
+    capability_group: crop_template_catalog
+    data_scope: system_templates
+    freshness_requirement: system_catalog
     description: 查询系统提供的作物模板，可按分类筛选。
     risk_level: read
     execution: {mode: parallel_safe, max_concurrency: 4}

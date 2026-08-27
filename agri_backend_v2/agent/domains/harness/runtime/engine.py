@@ -110,6 +110,17 @@ class _LlmResult:
     tool_calls: list[dict] = field(default_factory=list)
 
 
+def _skill_control_metadata(skill: Skill) -> dict[str, str]:
+    """统一提取 Skill 的跨层映射和语义控制字段，供 Ledger/Trace 共用。"""
+    return {
+        "business_tool_name": getattr(skill, "mcp_tool", ""),
+        "operation": getattr(skill, "operation", ""),
+        "capability_group": skill.capability_group,
+        "data_scope": skill.data_scope,
+        "freshness_requirement": skill.freshness_requirement,
+    }
+
+
 class _TurnRuntime(NamedTuple):
     """单个 Turn 的运行时依赖，按名称访问而不是依赖元组位置。"""
 
@@ -1287,8 +1298,7 @@ async def _post_process_skill_result(
         duration_ms=state.duration_ms,
         error=state.error,
         agent_tool_name=skill.name,
-        business_tool_name=getattr(skill, "mcp_tool", ""),
-        operation=getattr(skill, "operation", ""),
+        **_skill_control_metadata(skill),
         tool_call_id=tc["id"],
         progress=progress_delta["status"],
         progress_reason=progress_delta["reason"],
@@ -1353,8 +1363,7 @@ async def _prepare_skill_call(
         skill.name,
         args,
         agent_tool_name=skill.name,
-        business_tool_name=getattr(skill, "mcp_tool", ""),
-        operation=getattr(skill, "operation", ""),
+        **_skill_control_metadata(skill),
         tool_call_id=tc["id"],
         step_index=turn.step_count,
     )
@@ -1426,7 +1435,11 @@ async def _emit_unknown_tool(
 ) -> AsyncGenerator[dict, None]:
     """未知工具错误：发 observation + 写 tool_msg。"""
     err_msg = f"未知工具: {tool_name}"
-    result = {"error": err_msg}
+    result = {
+        "error": err_msg,
+        "code": "agent_tool_not_registered",
+        "agent_tool_name": tool_name,
+    }
     trace_tool_call(
         tool_name,
         {},
@@ -1441,7 +1454,7 @@ async def _emit_unknown_tool(
         None,
         error=err_msg,
         error_info={
-            "code": "unknown_tool",
+            "code": "agent_tool_not_registered",
             "message": err_msg,
             "phase": TurnPhase.TOOL_PREPARING.value,
             "tool_name": tool_name,
@@ -1508,8 +1521,7 @@ async def _emit_missing_params(
         result,
         error=message,
         agent_tool_name=tool_name,
-        business_tool_name=getattr(skill, "mcp_tool", ""),
-        operation=getattr(skill, "operation", ""),
+        **_skill_control_metadata(skill),
         tool_call_id=tool_call_id,
         step_index=turn.step_count,
     )
@@ -1548,8 +1560,7 @@ async def _emit_blocked_action_repeat(
         result,
         error=message,
         agent_tool_name=skill.name,
-        business_tool_name=getattr(skill, "mcp_tool", ""),
-        operation=getattr(skill, "operation", ""),
+        **_skill_control_metadata(skill),
         tool_call_id=tool_call_id,
         step_index=turn.step_count,
     )
@@ -1912,6 +1923,18 @@ async def _run_skill_call(
             state.result = result_obj.data or {"error": result_obj.error}
             state.error = result_obj.error
             result_data = state.result if isinstance(state.result, dict) else {}
+            if result_data.get("code") in {"unknown_tool", "tool_not_found"}:
+                result_data = {
+                    **result_data,
+                    "code": "business_tool_not_registered",
+                    "business_tool_name": getattr(skill, "mcp_tool", ""),
+                    "agent_tool_name": skill.name,
+                }
+                state.result = result_data
+                state.error = str(
+                    result_data.get("message")
+                    or f"Business MCP 未注册工具 {getattr(skill, 'mcp_tool', '')}"
+                )
             retryable = bool(result_data.get("retryable", False))
             error_info = {
                 "code": str(result_data.get("code") or "tool_failed"),

@@ -25,6 +25,9 @@ export interface SessionDebugSkillCall {
   agent_tool_name?: string;
   business_tool_name?: string;
   operation?: string;
+  capability_group?: string;
+  data_scope?: string;
+  freshness_requirement?: string;
   progress?: string;
   progress_reason?: string;
   observation_fingerprint?: string;
@@ -192,6 +195,9 @@ function extractSkillCalls(
           'agent_tool_name',
           'business_tool_name',
           'operation',
+          'capability_group',
+          'data_scope',
+          'freshness_requirement',
           'progress',
           'progress_reason',
           'observation_fingerprint',

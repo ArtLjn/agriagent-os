@@ -98,6 +98,25 @@ class SkillRegistry:
             raise SkillRegistryError(
                 "mcp_tool_missing", skill.name, "MCP Skill must declare mcp_tool"
             )
+        for field_name in (
+            "capability_group",
+            "data_scope",
+            "freshness_requirement",
+        ):
+            value = skill._control_metadata(field_name)
+            raw_value = skill._meta.get(field_name)
+            if raw_value is not None and not isinstance(raw_value, str):
+                raise SkillRegistryError(
+                    "invalid_control_metadata",
+                    skill.name,
+                    f"{field_name} must be a string",
+                )
+            if value and not value.strip():
+                raise SkillRegistryError(
+                    "invalid_control_metadata",
+                    skill.name,
+                    f"{field_name} must not be blank",
+                )
         execution = skill._meta.get("execution") or {}
         if not isinstance(execution, dict):
             raise SkillRegistryError(
@@ -287,9 +306,17 @@ class SkillRegistry:
                     "context_dependencies": list(
                         metadata_skill.context_dependencies
                     ),
+                    "capability_groups": [],
+                    "data_scopes": [],
                     "risk_levels": [],
                 },
             )
+            for field_name, value in (
+                ("capability_groups", skill.capability_group),
+                ("data_scopes", skill.data_scope),
+            ):
+                if value and value not in item[field_name]:
+                    item[field_name].append(value)
             risk_levels = item["risk_levels"]
             if skill.risk_level not in risk_levels:
                 risk_levels.append(skill.risk_level)

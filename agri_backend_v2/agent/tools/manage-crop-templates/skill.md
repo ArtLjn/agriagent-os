@@ -9,6 +9,9 @@ triggers: [作物模板, 生长阶段, 导入系统模板, 新建模板]
 operations:
   query:
     tool_name: query_crop_templates
+    capability_group: crop_template_catalog
+    data_scope: farm_imported_templates
+    freshness_requirement: current_farm_state
     description: 查询当前农场已有作物模板。
     risk_level: read
     execution: {mode: parallel_safe, max_concurrency: 4}

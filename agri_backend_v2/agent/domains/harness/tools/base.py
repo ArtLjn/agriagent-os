@@ -83,6 +83,33 @@ class Skill:
             return ()
         return tuple(str(item) for item in raw if isinstance(item, str) and item)
 
+    def _control_metadata(self, key: str) -> str:
+        """读取语义控制元数据；Operation 配置优先于聚合 Skill 配置。"""
+        operation_config = getattr(self, "_operation_config_meta", {})
+        value = (
+            operation_config.get(key)
+            if isinstance(operation_config, dict)
+            else None
+        )
+        if value is None:
+            value = self._meta.get(key)
+        return str(value or "")
+
+    @property
+    def capability_group(self) -> str:
+        """返回可用于 Semantic Action 分组的能力标识。"""
+        return self._control_metadata("capability_group")
+
+    @property
+    def data_scope(self) -> str:
+        """返回该 Tool 读取或修改的数据范围。"""
+        return self._control_metadata("data_scope")
+
+    @property
+    def freshness_requirement(self) -> str:
+        """返回结果的新鲜度约束，供重复查询判定使用。"""
+        return self._control_metadata("freshness_requirement")
+
     @property
     def risk_level(self) -> str:
         return self._meta.get("risk_level", "read")
@@ -362,6 +389,13 @@ class OperationSkill(McpSkill):
                 "finalize_after_success"
             ]
         self._meta["operations"] = {}
+        for metadata_name in (
+            "capability_group",
+            "data_scope",
+            "freshness_requirement",
+        ):
+            if metadata_name in source_config:
+                self._meta[metadata_name] = source_config[metadata_name]
         self.kind = source.kind
         operation_mcp_tool = source_config.get("mcp_tool")
         self.mcp_tool = (

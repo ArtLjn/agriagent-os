@@ -43,6 +43,20 @@ class _ReadSkill(Skill):
         return SkillResult(data={"skill": self.name})
 
 
+class _UnknownBusinessSkill(_ReadSkill):
+    mcp_tool = "manage_crop_cycle"
+
+    async def execute(self, params: dict, ctx) -> SkillResult:
+        return SkillResult(
+            data={
+                "error": "unknown tool",
+                "code": "unknown_tool",
+                "message": "Business MCP 未找到工具",
+            },
+            error="Business MCP 未找到工具",
+        )
+
+
 def test_build_identity_headers_declares_turn_identity(monkeypatch) -> None:
     delegated = {}
 
@@ -543,6 +557,44 @@ async def test_long_running_skill_emits_heartbeat(monkeypatch) -> None:
     heartbeats = [event for event in events if event["type"] == "heartbeat"]
     assert heartbeats
     assert heartbeats[0]["data"]["stage"] == "skill:slow-heartbeat"
+
+
+@pytest.mark.asyncio
+async def test_unknown_agent_tool_has_agent_registration_error_code() -> None:
+    turn = Turn(user_input="调用不存在能力")
+
+    events = [
+        event
+        async for event in react._emit_unknown_tool(
+            turn, "unknown-call", "list_system_crop_templates"
+        )
+    ]
+
+    assert events[0]["data"]["error_info"]["code"] == "agent_tool_not_registered"
+    assert json.loads(turn.messages[-1]["content"])["code"] == "agent_tool_not_registered"
+
+
+@pytest.mark.asyncio
+async def test_unknown_business_tool_is_normalized_at_skill_boundary() -> None:
+    skill = _UnknownBusinessSkill("list_system_crop_templates")
+    turn = Turn(user_input="查询系统模板")
+    state = react._SkillExecState()
+
+    _ = [
+        event
+        async for event in react._run_skill_call(
+            turn=turn,
+            skill=skill,
+            args={},
+            skill_ctx=SimpleNamespace(),
+            rationale="查询模板",
+            state=state,
+            tool_call_id="business-unknown-call",
+        )
+    ]
+
+    assert state.result["code"] == "business_tool_not_registered"
+    assert state.result["business_tool_name"] == "manage_crop_cycle"
 
 
 @pytest.mark.asyncio
