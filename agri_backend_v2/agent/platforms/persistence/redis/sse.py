@@ -243,18 +243,21 @@ def progress(
     semantic_reason: str = "",
 ) -> dict:
     """发布运行时进度判定；不把模型文本当作业务进度。"""
+    data = {
+        "tool_name": tool_name,
+        "tool_call_id": tool_call_id,
+        "step": step,
+        "status": status,
+        "reason": reason,
+        "observation_fingerprint": observation_fingerprint,
+    }
+    if semantic_status:
+        data["semantic_status"] = semantic_status
+    if semantic_reason:
+        data["semantic_reason"] = semantic_reason
     return {
         "type": "progress",
-        "data": {
-            "tool_name": tool_name,
-            "tool_call_id": tool_call_id,
-            "step": step,
-            "status": status,
-            "reason": reason,
-            "observation_fingerprint": observation_fingerprint,
-            "semantic_status": semantic_status,
-            "semantic_reason": semantic_reason,
-        },
+        "data": data,
     }
 
 

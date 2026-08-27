@@ -948,6 +948,18 @@ async def test_repeated_unchanged_observation_requests_controlled_finalization()
             "progress_reason": "same_observation",
         },
     }
+    assert turn.task_state == {
+        "status": "blocked",
+        "reason": "unchanged_observation",
+        "resume_policy": "ask_user",
+        "blocked_action": {
+            "agent_tool_name": "query_workers",
+            "arguments": {},
+            "observation_fingerprint": react.verify.observation_fingerprint(
+                {"workers": []}
+            ),
+        },
+    }
 
 
 def test_step_budget_keeps_default_and_clamps_controlled_estimate() -> None:

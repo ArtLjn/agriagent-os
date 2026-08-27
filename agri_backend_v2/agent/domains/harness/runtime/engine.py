@@ -39,7 +39,7 @@ import logging
 import time
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 from agent.auth import create_delegation_token
 from agent.config import settings
@@ -1321,6 +1321,12 @@ async def _post_process_skill_result(
         step_index=turn.step_count,
     )
     if tracker.unchanged_count(skill.name, tc["arguments"]) >= 2:
+        _persist_blocked_action(
+            turn,
+            tracker.last_action(),
+            reason="unchanged_observation",
+            observation_fingerprint=progress_delta["observation_fingerprint"],
+        )
         turn.finalization_request = {
             "code": "no_progress_detected",
             "message": "相同工具连续返回相同结果，任务没有继续推进。",
@@ -1655,23 +1661,11 @@ async def _emit_doom_loop_terminal(
 ) -> AsyncGenerator[dict, None]:
     """发布 Doom 警告，再交给统一受控终止器收口。"""
     if blocked_action:
-        turn.task_state = {
-            "status": "blocked",
-            "reason": StopReason.DOOM_LOOP_DETECTED.value,
-            "resume_policy": "ask_user",
-            "blocked_action": {
-                "agent_tool_name": str(
-                    blocked_action.get("agent_tool_name")
-                    or blocked_action.get("skill")
-                    or ""
-                ),
-                "arguments": dict(
-                    blocked_action.get("arguments")
-                    or blocked_action.get("args")
-                    or {}
-                ),
-            },
-        }
+        _persist_blocked_action(
+            turn,
+            blocked_action,
+            reason=StopReason.DOOM_LOOP_DETECTED.value,
+        )
     warning_ev = sse.doom_loop_warning(detail, step=turn.step_count)
     turn.emit("doom_loop_warning", warning_ev["data"])
     yield warning_ev
@@ -1685,6 +1679,44 @@ async def _emit_doom_loop_terminal(
         status="terminated",
     ):
         yield ev
+
+
+def _persist_blocked_action(
+    turn: Turn,
+    action: dict[str, Any] | None,
+    *,
+    reason: str,
+    observation_fingerprint: str = "",
+) -> None:
+    """持久化最小阻断摘要，供下一 Turn 拒绝原样重放。"""
+    if not action:
+        return
+    blocked_action = {
+        "agent_tool_name": str(
+            action.get("agent_tool_name") or action.get("skill") or ""
+        ),
+        "arguments": dict(action.get("arguments") or action.get("args") or {}),
+    }
+    for field_name in (
+        "business_tool_name",
+        "operation",
+        "capability_group",
+        "data_scope",
+        "freshness_requirement",
+        "semantic_key",
+        "observation_fingerprint",
+    ):
+        value = action.get(field_name) or (
+            observation_fingerprint if field_name == "observation_fingerprint" else ""
+        )
+        if value:
+            blocked_action[field_name] = str(value)
+    turn.task_state = {
+        "status": "blocked",
+        "reason": reason,
+        "resume_policy": "ask_user",
+        "blocked_action": blocked_action,
+    }
 
 
 async def _finalize_requested_error(

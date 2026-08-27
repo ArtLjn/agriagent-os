@@ -48,6 +48,7 @@ User Request
 - Agent Registry 未命中返回 `agent_tool_not_registered`；Business 返回明确未知工具结果时归一为 `business_tool_not_registered`。
 - Runtime 已提供受控 `StepBudget` resolver：默认使用固定 20 轮，显式估计值只能在 1-20 的硬上限内按安全系数计算；本轮只接入默认预算和 Trace 证据，尚未启用动态估计。
 - 同一动作连续两次得到相同 Observation 时，Runtime 会设置 `no_progress_detected` FinalizationRequest，由统一终态收口器停止继续消耗决策轮；一次相同结果不会单独触发终止。
+- `no_progress_detected` 与 Doom Loop 都会持久化最小 `blocked_action` 摘要（工具映射、语义范围和 Observation 指纹），跨 Turn 的“继续”不能原样重放该动作。
 - Trace summary 已统计真实 `decision_steps`，并通过并行执行路径生成的 `parallel_batch_id` 统计 `parallel_batches` 和 `parallel_tool_calls`，不会从同一 step 的工具数量推断并发。
 - 已实施 Semantic Group 的最小证据：显式 `capability_group + data_scope` 生成语义范围键，账本分别记录 exact progress 与 semantic progress；不同数据范围不会被合并。尚未实施语义 fallback、动态 `max_steps`、完整 ExecutionState/requirements/evidence 模型，以及 Trace Monitor 的完整可视化。
 
