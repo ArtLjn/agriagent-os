@@ -1309,6 +1309,16 @@ async def _post_process_skill_result(
         observation_fingerprint=progress_delta["observation_fingerprint"],
         step_index=turn.step_count,
     )
+    if tracker.unchanged_count(skill.name, tc["arguments"]) >= 2:
+        turn.finalization_request = {
+            "code": "no_progress_detected",
+            "message": "相同工具连续返回相同结果，任务没有继续推进。",
+            "tool_name": skill.name,
+            "result": {
+                "progress": progress_delta["status"],
+                "progress_reason": progress_delta["reason"],
+            },
+        }
     if state.error:
         result = state.result if isinstance(state.result, dict) else {}
         if not bool(result.get("retryable", False)):

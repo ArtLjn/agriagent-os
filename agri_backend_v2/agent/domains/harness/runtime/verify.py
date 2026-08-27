@@ -204,6 +204,18 @@ class ProgressLedger:
         """返回最近一次动作，供受控终止持久化恢复门。"""
         return dict(self.calls[-1]) if self.calls else None
 
+    def unchanged_count(self, skill: str, args: dict[str, Any]) -> int:
+        """返回该动作连续得到 unchanged Observation 的次数。"""
+        key = (skill, _args_key(args))
+        count = 0
+        for call in reversed(self.calls):
+            if (call["skill"], _args_key(call["args"])) != key:
+                break
+            if call.get("progress") != "unchanged":
+                break
+            count += 1
+        return count
+
 
 # 兼容现有 Runtime 和外部测试调用方；新代码使用 ProgressLedger 语义。
 CallTracker = ProgressLedger

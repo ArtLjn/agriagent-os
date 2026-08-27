@@ -866,6 +866,63 @@ def test_progress_ledger_classifies_observation_changes() -> None:
     assert ledger.last_action()["skill"] == "query"
 
 
+def test_progress_ledger_counts_only_consecutive_unchanged_observations() -> None:
+    ledger = react.verify.ProgressLedger()
+    args = {"crop": "水稻"}
+
+    ledger.record("query", args)
+    ledger.record_observation("query", args, {"count": 1})
+    assert ledger.unchanged_count("query", args) == 0
+
+    ledger.record("query", args)
+    ledger.record_observation("query", args, {"count": 1})
+    assert ledger.unchanged_count("query", args) == 1
+
+    ledger.record("query", args)
+    ledger.record_observation("query", args, {"count": 1})
+    assert ledger.unchanged_count("query", args) == 2
+
+    ledger.record("query", args)
+    ledger.record_observation("query", args, {"count": 2})
+    assert ledger.unchanged_count("query", args) == 0
+
+
+@pytest.mark.asyncio
+async def test_repeated_unchanged_observation_requests_controlled_finalization() -> None:
+    skill = _ReadSkill("query_workers")
+    turn = Turn(user_input="查询工人")
+    tracker = react.verify.ProgressLedger()
+
+    for index in range(3):
+        args = {}
+        tracker.record(skill.name, args)
+        events = [
+            event
+            async for event in react._post_process_skill_result(
+                tc={"id": f"call-{index}", "name": skill.name, "arguments": args},
+                turn=turn,
+                skill=skill,
+                tracker=tracker,
+                state=react._SkillExecState(result={"workers": []}),
+                skill_index={skill.name: skill},
+                skill_ctx=SimpleNamespace(),
+                approval_waiter=_approve,
+                rationale="查询工人",
+            )
+        ]
+
+    assert events[-1]["type"] == "progress"
+    assert turn.finalization_request == {
+        "code": "no_progress_detected",
+        "message": "相同工具连续返回相同结果，任务没有继续推进。",
+        "tool_name": "query_workers",
+        "result": {
+            "progress": "unchanged",
+            "progress_reason": "same_observation",
+        },
+    }
+
+
 def test_step_budget_keeps_default_and_clamps_controlled_estimate() -> None:
     default_budget = react.verify.resolve_step_budget()
     estimated_budget = react.verify.resolve_step_budget(estimated_steps=3)
