@@ -13,11 +13,18 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass, field
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+_BUDGET_ESTIMATE_TOOL_NAME = "estimate_step_budget"
+_BUDGET_ESTIMATE_SYSTEM_PROMPT = """你是 Agent Harness 的 Runtime 预算估算器。
+你只负责估算完成用户请求所需的 ReAct 决策轮数，不执行任何业务工具，不回答用户。
+请调用 estimate_step_budget，返回 estimated_steps 和 0 到 1 之间的 confidence。
+estimated_steps 只计算正式 Agent 决策轮，不包含本次预算估算调用；宁可保守估算，也不要把安全系数自行算进去。"""
 
 
 @dataclass
@@ -153,6 +160,55 @@ def plan_summary_for_observation(plan: Plan) -> str:
     return f"[PLAN 完成 goal={plan.goal}] " + "；".join(parts)
 
 
+def budget_estimate_messages(user_input: str) -> list[dict[str, str]]:
+    """构造预算预估请求，隔离用户内容与 Runtime 控制规则。"""
+    return [
+        {"role": "system", "content": _BUDGET_ESTIMATE_SYSTEM_PROMPT},
+        {
+            "role": "user",
+            "content": json.dumps(
+                {"user_request": str(user_input or "")[:4000]},
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ),
+        },
+    ]
+
+
+def parse_budget_estimate(
+    tool_calls: list[dict[str, Any]], content: str = ""
+) -> tuple[int, float] | None:
+    """解析模型预算输出；非法或缺字段时交由 Runtime 使用 fallback。"""
+    payload: dict[str, Any] | None = None
+    for call in tool_calls:
+        if call.get("name") != _BUDGET_ESTIMATE_TOOL_NAME:
+            continue
+        arguments = call.get("arguments")
+        if isinstance(arguments, dict):
+            payload = arguments
+            break
+
+    if payload is None and content:
+        try:
+            decoded = json.loads(content.strip())
+        except (TypeError, json.JSONDecodeError):
+            decoded = None
+        if isinstance(decoded, dict):
+            payload = decoded
+
+    if payload is None:
+        return None
+    estimated_steps = payload.get("estimated_steps")
+    confidence = payload.get("confidence")
+    if isinstance(estimated_steps, bool) or not isinstance(estimated_steps, int):
+        return None
+    if isinstance(confidence, bool) or not isinstance(confidence, (int, float)):
+        return None
+    if estimated_steps < 1 or not 0.0 <= confidence <= 1.0:
+        return None
+    return estimated_steps, float(confidence)
+
+
 # make_plan 工具的 OpenAI schema（注入到 tools 列表）
 MAKE_PLAN_TOOL_SCHEMA = {
     "type": "function",
@@ -196,6 +252,33 @@ MAKE_PLAN_TOOL_SCHEMA = {
                 },
             },
             "required": ["goal", "steps"],
+        },
+    },
+}
+
+
+# 预算预估是 Runtime 内部调用，不加入业务 Skill Registry 的公开工具目录。
+BUDGET_ESTIMATE_TOOL_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": _BUDGET_ESTIMATE_TOOL_NAME,
+        "description": "估算完成用户请求所需的正式 ReAct 决策轮数。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "estimated_steps": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "完成请求所需的正式 Agent 决策轮数，不包含预算估算调用",
+                },
+                "confidence": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "对本次轮数估算的置信度，范围 0 到 1",
+                },
+            },
+            "required": ["estimated_steps", "confidence"],
         },
     },
 }

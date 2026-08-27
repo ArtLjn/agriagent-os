@@ -1421,6 +1421,71 @@ def test_step_budget_increases_factor_for_low_confidence() -> None:
     )
 
 
+def test_budget_estimate_parser_accepts_only_structured_model_output() -> None:
+    assert react.planner.parse_budget_estimate(
+        [
+            {
+                "name": "estimate_step_budget",
+                "arguments": {"estimated_steps": 8, "confidence": 0.8},
+            }
+        ]
+    ) == (8, 0.8)
+    assert react.planner.parse_budget_estimate(
+        [], '{"estimated_steps": 4, "confidence": 0.4}'
+    ) == (4, 0.4)
+    assert (
+        react.planner.parse_budget_estimate(
+            [{"name": "estimate_step_budget", "arguments": {"estimated_steps": 4}}]
+        )
+        is None
+    )
+
+
+@pytest.mark.asyncio
+async def test_estimate_turn_budget_reads_model_prediction(monkeypatch) -> None:
+    captured: dict = {}
+
+    async def fake_call(messages, tools, **kwargs):
+        captured["messages"] = messages
+        captured["tools"] = tools
+        captured.update(kwargs)
+        yield react._LlmResult(
+            tool_calls=[
+                {
+                    "name": "estimate_step_budget",
+                    "arguments": {"estimated_steps": 8, "confidence": 0.8},
+                }
+            ]
+        )
+
+    monkeypatch.setattr(react, "_call_llm_stream", fake_call)
+    estimate = await react._estimate_turn_budget(Turn(user_input="规划水稻种植"))
+
+    assert estimate == (8, 0.8)
+    assert captured["messages"][0]["role"] == "system"
+    assert captured["tools"] == [react.planner.BUDGET_ESTIMATE_TOOL_SCHEMA]
+    assert captured["tool_choice"] == {
+        "type": "function",
+        "function": {"name": "estimate_step_budget"},
+    }
+
+
+def test_setup_applies_resolved_budget_to_react_loop(monkeypatch) -> None:
+    monkeypatch.setattr(react.skill_loader, "load_all", lambda: [])
+    turn = Turn(user_input="预算测试", max_steps=20)
+
+    react._setup_turn_runtime(
+        turn,
+        estimated_steps=8,
+        confidence=0.8,
+    )
+
+    assert turn.step_budget["estimated_steps"] == 8
+    assert turn.step_budget["confidence"] == 0.8
+    assert turn.step_budget["resolved_steps"] == 12
+    assert turn.max_steps == 12
+
+
 @pytest.mark.asyncio
 async def test_cross_turn_blocked_action_is_stopped_before_skill_execution() -> None:
     skill = _ReadSkill("query_workers")
@@ -1619,6 +1684,10 @@ async def test_final_answer_emits_incremental_and_complete_events() -> None:
 
 @pytest.mark.asyncio
 async def test_setup_failure_still_emits_terminal_events(monkeypatch) -> None:
+    async def no_budget_estimate(_turn):
+        return None, None
+
+    monkeypatch.setattr(react, "_estimate_turn_budget", no_budget_estimate)
     monkeypatch.setattr(
         react,
         "_setup_turn_runtime",

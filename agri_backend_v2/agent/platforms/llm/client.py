@@ -296,6 +296,7 @@ async def chat_stream(
     messages: list[dict[str, Any]],
     tools: list[dict[str, Any]] | None = None,
     temperature: float = 0.3,
+    tool_choice: str | dict[str, Any] | None = None,
 ) -> AsyncGenerator[dict[str, Any], None]:
     """Async streaming chat. Yields incremental tokens.
 
@@ -322,7 +323,7 @@ async def chat_stream(
     }
     if tools:
         kwargs["tools"] = tools
-        kwargs["tool_choice"] = "auto"
+        kwargs["tool_choice"] = tool_choice or "auto"
 
     last_exc: Exception | None = None
 

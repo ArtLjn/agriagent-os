@@ -193,12 +193,47 @@ async def _prepare_turn_runtime(
 ) -> _TurnRuntime:
     """准备路由、Skill Registry、上下文和 ReAct 所需的运行时状态。"""
     route_result = await _route_turn_skills(turn)
+    estimated_steps, confidence = await _estimate_turn_budget(turn)
     if route_result is None:
-        runtime = _setup_turn_runtime(turn)
+        runtime = _setup_turn_runtime(
+            turn,
+            estimated_steps=estimated_steps,
+            confidence=confidence,
+        )
     else:
-        runtime = _setup_turn_runtime(turn, route_result=route_result)
+        runtime = _setup_turn_runtime(
+            turn,
+            route_result=route_result,
+            estimated_steps=estimated_steps,
+            confidence=confidence,
+        )
     turn.set_phase(TurnPhase.REASONING)
     return _TurnRuntime(*runtime)
+
+
+async def _estimate_turn_budget(turn: Turn) -> tuple[int | None, float | None]:
+    """在首个 ReAct 决策前读取模型估算；失败时保持 Runtime fallback。"""
+    try:
+        result: _LlmResult | None = None
+        async for item in _call_llm_stream(
+            planner.budget_estimate_messages(turn.user_input),
+            [planner.BUDGET_ESTIMATE_TOOL_SCHEMA],
+            tool_choice={
+                "type": "function",
+                "function": {"name": "estimate_step_budget"},
+            },
+        ):
+            if isinstance(item, _LlmResult):
+                result = item
+        if result is None:
+            raise RuntimeError("budget_estimate_empty")
+        estimate = planner.parse_budget_estimate(result.tool_calls, result.full_content)
+        if estimate is None:
+            logger.warning("budget estimate missing or invalid; using fallback_steps")
+        return estimate or (None, None)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("budget estimate unavailable; using fallback_steps: %s", exc)
+        return None, None
 
 
 async def _route_turn_skills(turn: Turn) -> SkillRoute | None:
@@ -377,12 +412,20 @@ def _setup_turn_runtime(
     turn: Turn,
     *,
     route_result: SkillRoute | None = None,
+    estimated_steps: int | None = None,
+    confidence: float | None = None,
 ) -> _TurnRuntime:
     """加载 skills、构建 tools schema、初始化 tracker。"""
     router_started = time.perf_counter()
-    turn.step_budget = verify.resolve_step_budget(
+    step_budget = verify.resolve_step_budget(
         fallback_steps=turn.max_steps,
+        estimated_steps=estimated_steps,
+        confidence=confidence,
+        maximum_steps=turn.max_steps,
     ).to_dict()
+    turn.step_budget = step_budget
+    # 预算证据必须真正约束 ReAct 循环；仅写 Trace 会造成“显示有预算、执行仍跑旧上限”。
+    turn.max_steps = int(step_budget["resolved_steps"])
     # Worker 可在进入 Runtime 前注入 Mongo-backed Session View；直接调用
     # Runtime 的测试替身仍通过 Memory Service 入口提供空快照。
     if not turn.memory_snapshot:
@@ -754,7 +797,10 @@ async def _emit_final_answer(
 
 
 async def _call_llm_stream(
-    llm_messages: list[dict], tools_schema: list[dict]
+    llm_messages: list[dict],
+    tools_schema: list[dict],
+    *,
+    tool_choice: str | dict[str, Any] | None = None,
 ) -> AsyncGenerator[dict | _LlmResult, None]:
     """流式 LLM 调用，同时转发增量和等待心跳。"""
     _llm_start = time.time()
@@ -762,7 +808,14 @@ async def _call_llm_stream(
     tool_calls: list[dict] = []
     token_usage: dict | None = None
 
-    stream = chat_stream(llm_messages, tools=tools_schema)
+    if tool_choice is None:
+        stream = chat_stream(llm_messages, tools=tools_schema)
+    else:
+        stream = chat_stream(
+            llm_messages,
+            tools=tools_schema,
+            tool_choice=tool_choice,
+        )
     next_token = asyncio.create_task(stream.__anext__())
     try:
         while True:

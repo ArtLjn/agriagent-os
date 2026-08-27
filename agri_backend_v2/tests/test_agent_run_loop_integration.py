@@ -387,6 +387,11 @@ def fake_runtime(monkeypatch: pytest.MonkeyPatch) -> _FakeStore:
     monkeypatch.setattr(worker.memory, "observe", persisted_observation)
 
     monkeypatch.setattr(react, "_setup_turn_runtime", setup_runtime)
+
+    async def no_budget_estimate(_turn: Turn) -> tuple[None, None]:
+        return None, None
+
+    monkeypatch.setattr(react, "_estimate_turn_budget", no_budget_estimate)
     monkeypatch.setattr(react, "_skill_router_enabled", lambda: False)
     monkeypatch.setattr(react, "chat_stream", fake_llm)
     monkeypatch.setattr(react, "BusinessClient", BusinessClient)
