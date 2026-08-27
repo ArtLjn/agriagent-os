@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
+import pytest
+
 from agent.domains.harness.context import builder as context
 from agent.domains.harness.memory import service as memory
 from agent.domains.harness.context.models import ContextBlockStatus
+from agent.platforms.persistence.mongo import chat_store
+
+
+async def _capture_state(**kwargs):
+    return kwargs
 
 
 def test_short_memory_summary_is_separate_and_long_memory_is_opt_in() -> None:
@@ -163,6 +170,23 @@ def test_session_actions_receive_lifecycle_metadata(monkeypatch) -> None:
     assert task["status"] == "active"
     assert task["source_turn_id"] == "turn-1"
     assert task["expires_at"]
+
+
+@pytest.mark.asyncio
+async def test_persist_session_turn_clears_previous_task_state(monkeypatch) -> None:
+    monkeypatch.setattr(chat_store, "save_conversation_state", _capture_state)
+
+    result = await memory.persist_session_turn(
+        conversation_id="conversation-1",
+        user_id="user-1",
+        farm_id=1,
+        farm_uid="farm-1",
+        expected_revision=2,
+        turn_id="turn-2",
+        task_state=None,
+    )
+
+    assert result["task_state"] is None
 
 
 async def _async_value(value):
