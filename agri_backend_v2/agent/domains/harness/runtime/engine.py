@@ -51,7 +51,10 @@ from agent.domains.harness.runtime import planner, verify
 from agent.domains.harness.router import SkillRoute, SkillRouter
 from agent.domains.harness.runtime.turn import StopReason, Turn, TurnPhase
 from agent.platforms.persistence.redis import sse
-from agent.domains.harness.runtime.error_policy import LlmStreamError, classify_exception
+from agent.domains.harness.runtime.error_policy import (
+    LlmStreamError,
+    classify_exception,
+)
 from agent.platforms.llm.client import MODEL, chat_stream
 from agent.platforms.logging import log_event
 from agent.platforms.mcp.client import BusinessClient, McpCallError
@@ -422,11 +425,7 @@ def _setup_turn_runtime(
         exposed_tool_count=len(tools_schema),
         candidate_tools=candidate_tools,
         duration_ms=int((time.perf_counter() - router_started) * 1000),
-        router_mode=(
-            "llm_skill_router"
-            if route_result is not None
-            else "all_tools"
-        ),
+        router_mode=("llm_skill_router" if route_result is not None else "all_tools"),
         step_budget=turn.step_budget,
     )
     context_started = time.perf_counter()
@@ -1318,7 +1317,13 @@ async def _post_process_skill_result(
         semantic_progress=progress_delta["semantic_status"],
         semantic_progress_reason=progress_delta["semantic_reason"],
         parallel_batch_id=parallel_batch_id,
-        status=("blocked" if state.result and isinstance(state.result, dict) and state.result.get("status") == "needs_information" else ""),
+        status=(
+            "blocked"
+            if state.result
+            and isinstance(state.result, dict)
+            and state.result.get("status") == "needs_information"
+            else ""
+        ),
         step_index=turn.step_count,
     )
     result_data = state.result if isinstance(state.result, dict) else {}
@@ -1409,10 +1414,9 @@ async def _prepare_skill_call(
         # 用户给出状态声明的下一动作，或明确给出不同动作，才清理临时阻断状态。
         turn.task_state = None
 
-    if (
-        getattr(skill, "operation", "") == "system_templates"
-        and verify.has_empty_observation(tracker, skill.name, args)
-    ):
+    if getattr(
+        skill, "operation", ""
+    ) == "system_templates" and verify.has_empty_observation(tracker, skill.name, args):
         async for ev in _emit_empty_catalog_repeat(turn, skill, tc["id"], args):
             yield ev
         prepared.proceed = False
@@ -1672,16 +1676,16 @@ async def _emit_empty_catalog_repeat(
         "如需继续，请提供自定义模板信息，或明确查询其他模板范围。"
     )
     result = {
-        "error": "empty_catalog_repeat",
-        "code": "empty_catalog_repeat",
+        "status": "needs_information",
+        "code": "system_template_catalog_empty",
         "message": message,
-        "retryable": False,
+        "missing": ["custom_template.stages"],
     }
     trace_tool_call(
         skill.name,
         args,
         result,
-        error=message,
+        error=None,
         agent_tool_name=skill.name,
         **_skill_control_metadata(skill),
         tool_call_id=tool_call_id,
@@ -1691,10 +1695,10 @@ async def _emit_empty_catalog_repeat(
     )
     ev = sse.observation(
         skill.name,
-        None,
-        error=message,
+        result,
+        error=None,
         error_info={
-            "code": "empty_catalog_repeat",
+            "code": "system_template_catalog_empty",
             "message": message,
             "phase": TurnPhase.TOOL_PREPARING.value,
             "tool_name": skill.name,
@@ -1707,7 +1711,7 @@ async def _emit_empty_catalog_repeat(
     turn.messages.append(context.tool_result_message(tool_call_id, skill.name, result))
     async for terminal_ev in _emit_failure_terminal(
         turn,
-        code="empty_catalog_repeat",
+        code="system_template_catalog_empty",
         message=message,
         answer=message,
         phase=TurnPhase.TOOL_PREPARING,

@@ -598,7 +598,9 @@ async def test_unknown_agent_tool_has_agent_registration_error_code() -> None:
     ]
 
     assert events[0]["data"]["error_info"]["code"] == "agent_tool_not_registered"
-    assert json.loads(turn.messages[-1]["content"])["code"] == "agent_tool_not_registered"
+    assert (
+        json.loads(turn.messages[-1]["content"])["code"] == "agent_tool_not_registered"
+    )
     assert turn.finalization_request == {
         "code": "agent_tool_not_registered",
         "message": "未知工具: list_system_crop_templates",
@@ -619,7 +621,9 @@ async def test_unknown_agent_tool_finishes_without_another_llm_step() -> None:
     events = [
         event
         async for event in react._dispatch_tool_calls(
-            tool_calls=[{"id": "unknown-call", "name": "missing-tool", "arguments": {}}],
+            tool_calls=[
+                {"id": "unknown-call", "name": "missing-tool", "arguments": {}}
+            ],
             rationale="调用工具",
             skill_index={skill.name: skill},
             skill_ctx=SimpleNamespace(),
@@ -701,9 +705,7 @@ async def test_needs_information_is_not_reported_as_tool_failure() -> None:
     assert turn.finalization_request["code"] == "custom_template_required"
     assert turn.finalization_request["status"] == "needs_information"
 
-    final_events = [
-        event async for event in react._finalize_requested_error(turn)
-    ]
+    final_events = [event async for event in react._finalize_requested_error(turn)]
     assert turn.stop_reason == StopReason.USER_INPUT_REQUIRED
     assert "custom_template.stages" in turn.final_answer
     assert final_events[-1]["type"] == "turn.terminated"
@@ -1050,6 +1052,8 @@ async def test_empty_system_template_catalog_is_not_queried_again() -> None:
     assert first_delta["status"] == "advanced"
     assert first_delta["reason"] == "new_observation"
     assert turn.stop_reason == StopReason.USER_INPUT_REQUIRED
+    assert events[0]["data"]["error"] is None
+    assert events[0]["data"]["result"]["status"] == "needs_information"
     assert [event["type"] for event in events] == [
         "observation",
         "step.completed",
@@ -1178,16 +1182,22 @@ def test_progress_ledger_tracks_semantic_scope_without_merging_data_ranges() -> 
 
     assert delta["status"] == "advanced"
     assert delta["semantic_status"] == "unchanged"
-    assert ledger.semantic_unchanged_count(
-        "crop_template_catalog", "farm_imported_templates"
-    ) == 1
-    assert ledger.semantic_unchanged_count(
-        "crop_template_catalog", "system_templates"
-    ) == 0
+    assert (
+        ledger.semantic_unchanged_count(
+            "crop_template_catalog", "farm_imported_templates"
+        )
+        == 1
+    )
+    assert (
+        ledger.semantic_unchanged_count("crop_template_catalog", "system_templates")
+        == 0
+    )
 
 
 @pytest.mark.asyncio
-async def test_repeated_unchanged_observation_requests_controlled_finalization() -> None:
+async def test_repeated_unchanged_observation_requests_controlled_finalization() -> (
+    None
+):
     skill = _ReadSkill("query_workers")
     turn = Turn(user_input="查询工人")
     tracker = react.verify.ProgressLedger()
@@ -1318,9 +1328,11 @@ async def test_cross_turn_blocked_action_is_stopped_before_skill_execution() -> 
     assert turn.stop_reason == StopReason.RESUME_REQUIRES_NEW_ACTION
     assert any(event["type"] == "observation" for event in events)
     assert not any(event["type"] == "tool_started" for event in events)
-    assert any(event.get("data", {}).get("text") == (
-        "上一次执行已因相同动作无进展而停止，请补充条件或明确下一步动作。"
-    ) for event in events)
+    assert any(
+        event.get("data", {}).get("text")
+        == ("上一次执行已因相同动作无进展而停止，请补充条件或明确下一步动作。")
+        for event in events
+    )
 
 
 @pytest.mark.asyncio
