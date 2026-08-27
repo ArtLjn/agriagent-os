@@ -17,11 +17,6 @@ BUSINESS_PORT=9876
 PROJECT_ROOT="$(cd "$(dirname "$0")"/.. && pwd)"
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
 ARCHIVE="/tmp/farm-manager-v2-sync.tar.gz"
-LOCAL_AGENT_CONFIG=0
-LOCAL_BUSINESS_CONFIG=0
-[ -f "${PROJECT_ROOT}/v2/agent/config.yaml" ] && LOCAL_AGENT_CONFIG=1
-[ -f "${PROJECT_ROOT}/v2/business/config.yaml" ] && LOCAL_BUSINESS_CONFIG=1
-
 log()  { echo "[$(date '+%H:%M:%S')] $*"; }
 die()  { log "错误: $*" >&2; exit 1; }
 
@@ -38,7 +33,7 @@ fi
 
 # --- 1. 本地打包 agri_backend_v2 代码 ---
 log "打包 v2 代码..."
-COPYFILE_DISABLE=1 tar czf "${ARCHIVE}" \
+COPYFILE_DISABLE=1 tar --no-xattrs -czf "${ARCHIVE}" \
     --exclude='__pycache__' \
     --exclude='*.pyc' \
     --exclude='*.pyo' \
@@ -50,6 +45,8 @@ COPYFILE_DISABLE=1 tar czf "${ARCHIVE}" \
     --exclude='agri_backend_v2/logs' \
     --exclude='agri_backend_v2/.env' \
     --exclude='agri_backend_v2/.env.*' \
+    --exclude='agri_backend_v2/agent/config.yaml' \
+    --exclude='agri_backend_v2/business/config.yaml' \
     --exclude='agri_backend_v2/._*' \
     --exclude='agri_backend_v2/.claude' \
     --exclude='agri_backend_v2/.git' \
@@ -63,7 +60,7 @@ scp -q -o ConnectTimeout=8 "${ARCHIVE}" "${SERVER}:${ARCHIVE}"
 # --- 2. 远程部署 ---
 log "远程部署 v2..."
 ssh "${SERVER}" \
-    "TIMESTAMP='${TIMESTAMP}' REMOTE_ROOT='${REMOTE_ROOT}' REMOTE_DIR='${REMOTE_DIR}' AGENT_SERVICE_NAME='${AGENT_SERVICE_NAME}' BUSINESS_SERVICE_NAME='${BUSINESS_SERVICE_NAME}' AGENT_PORT='${AGENT_PORT}' BUSINESS_PORT='${BUSINESS_PORT}' SERVER_HOST='${SERVER_HOST}' ARCHIVE='${ARCHIVE}' LOCAL_AGENT_CONFIG='${LOCAL_AGENT_CONFIG}' LOCAL_BUSINESS_CONFIG='${LOCAL_BUSINESS_CONFIG}' bash -s" <<'REMOTE_SCRIPT'
+    "TIMESTAMP='${TIMESTAMP}' REMOTE_ROOT='${REMOTE_ROOT}' REMOTE_DIR='${REMOTE_DIR}' AGENT_SERVICE_NAME='${AGENT_SERVICE_NAME}' BUSINESS_SERVICE_NAME='${BUSINESS_SERVICE_NAME}' AGENT_PORT='${AGENT_PORT}' BUSINESS_PORT='${BUSINESS_PORT}' SERVER_HOST='${SERVER_HOST}' ARCHIVE='${ARCHIVE}' bash -s" <<'REMOTE_SCRIPT'
 set -euo pipefail
 
 rlog()  { echo "  [$(date '+%H:%M:%S')] $*"; }
@@ -154,17 +151,18 @@ done
 
 # --- 解压新代码 ---
 rlog "解压 v2 代码..."
-if ! tar xzf "${ARCHIVE}" -C "${REMOTE_ROOT}"; then
+# 归档保留 agri_backend_v2 顶层目录，去掉这一层后直接落到远程 v2 目录。
+if ! tar xzf "${ARCHIVE}" --strip-components=1 -C "${REMOTE_DIR}"; then
     rollback
     rdie "v2 代码解压失败"
 fi
 rm -f "${ARCHIVE}"
 
-# 本地有配置时使用本地配置；本地没有时沿用远程配置。
-if [ "${LOCAL_AGENT_CONFIG}" != "1" ] && [ -f "${BACKUP_DIR}/config/agent.yaml" ]; then
+# 生产配置含密钥，始终从部署前备份恢复，不从工作区归档上传。
+if [ -f "${BACKUP_DIR}/config/agent.yaml" ]; then
     cp "${BACKUP_DIR}/config/agent.yaml" "${REMOTE_DIR}/agent/config.yaml"
 fi
-if [ "${LOCAL_BUSINESS_CONFIG}" != "1" ] && [ -f "${BACKUP_DIR}/config/business.yaml" ]; then
+if [ -f "${BACKUP_DIR}/config/business.yaml" ]; then
     cp "${BACKUP_DIR}/config/business.yaml" "${REMOTE_DIR}/business/config.yaml"
 fi
 
@@ -246,7 +244,7 @@ UNIT_EOF
 # farm-manager 这个服务名沿用旧脚本，保证 server-ctl.sh 仍可管理 Agent。
 rlog "更新 systemd 服务..."
 write_unit "${BUSINESS_SERVICE_NAME}" "Farm Manager v2 Business (REST + MCP)" "business.server" "${BUSINESS_PORT}"
-write_unit "${AGENT_SERVICE_NAME}" "Farm Manager v2 Agent (SSE API)" "agent.main:app" "${AGENT_PORT}"
+write_unit "${AGENT_SERVICE_NAME}" "Farm Manager v2 Agent (SSE API)" "agent.bootstrap.app:app" "${AGENT_PORT}"
 systemctl daemon-reload
 systemctl enable "${BUSINESS_SERVICE_NAME}" "${AGENT_SERVICE_NAME}" >/dev/null
 

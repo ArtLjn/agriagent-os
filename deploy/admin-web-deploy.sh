@@ -2,26 +2,26 @@
 # agri_admin_web 部署脚本 — 打包并上传到腾讯云服务器
 #
 # 用法:
-#   deploy/agri_admin_web-deploy.sh                # 默认打包 + 上传
-#   deploy/agri_admin_web-deploy.sh --no-build     # 跳过打包,直接上传现有 dist
-#   deploy/agri_admin_web-deploy.sh --api-url=https://api.farm.lllcnm.cn
+#   bash deploy/admin-web-deploy.sh                # 默认打包 + 上传
+#   bash deploy/admin-web-deploy.sh --no-build     # 跳过打包,直接上传现有 dist
+#   bash deploy/admin-web-deploy.sh --api-url=/api
 #
 # 环境变量(可选):
 #   SERVER_HOST=43.155.217.74                 SSH 主机
 #   SERVER_USER=root                          SSH 用户
-#   REMOTE_DIR=/root/workspace/static/farm-agri_admin_web  远程静态目录
+#   REMOTE_DIR=/root/workspace/static/farm-admin-web  远程静态目录
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-ADMIN_WEB_DIR="$PROJECT_ROOT/admin-web"
+ADMIN_WEB_DIR="$PROJECT_ROOT/agri_admin_web"
 
 # === 服务器配置(环境变量覆盖) ===
 SERVER_HOST="${SERVER_HOST:-43.155.217.74}"
 SERVER_USER="${SERVER_USER:-root}"
-REMOTE_DIR="${REMOTE_DIR:-/root/workspace/static/farm-agri_admin_web}"
-API_URL="${API_URL:-https://api.farm.lllcnm.cn}"
+REMOTE_DIR="${REMOTE_DIR:-/root/workspace/static/farm-admin-web}"
+API_URL="${API_URL:-/api}"
 
 # === 参数 ===
 SKIP_BUILD=0
@@ -62,7 +62,7 @@ ok "API_URL = ${API_URL}"
 
 # === Step 2: 打包 ===
 if [ "$SKIP_BUILD" = 0 ]; then
-  log "打包 admin-web"
+  log "打包 agri_admin_web"
   if command -v pnpm >/dev/null 2>&1; then
     pnpm build
   elif command -v npm >/dev/null 2>&1; then
@@ -123,5 +123,4 @@ printf '=========================================\n'
 printf ' 路径:   %s@%s:%s\n' "$SERVER_USER" "$SERVER_HOST" "$REMOTE_DIR"
 printf ' API:    %s\n' "$API_URL"
 printf ' 文件数: %s\n' "$(ssh "${SERVER_USER}@${SERVER_HOST}" "find '${REMOTE_DIR}' -type f | wc -l | tr -d ' '")"
-printf ' 回滚:   ssh %s@%s \"cp -a /tmp/farm-agri_admin_web-backup-%s/* %s/\"\n' \
-  "$SERVER_USER" "$SERVER_HOST" "$TIMESTAMP" "$REMOTE_DIR"
+printf ' 回滚备份: /tmp/farm-admin-web-backup-%s\n' "$TIMESTAMP"
