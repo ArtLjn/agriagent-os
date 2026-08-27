@@ -28,6 +28,17 @@ _VOLATILE_RESULT_KEYS = {
     "timestamp",
 }
 
+
+def is_empty_collection_result(result: Any) -> bool:
+    """判断查询是否明确返回空集合；空结果本身是有效事实，不是执行失败。"""
+    if not isinstance(result, dict):
+        return False
+    collection_keys = ("items", "templates", "workers", "records", "results")
+    return any(
+        isinstance(result.get(key), list) and not result[key] for key in collection_keys
+    )
+
+
 # ReAct 的决策轮上限是 Runtime 安全边界；模型输出只能提供受控估计，不能
 # 直接扩大这个上限。后续按任务类型细化时仍需经过 resolve_step_budget。
 DEFAULT_MAX_STEPS = 20
@@ -237,7 +248,9 @@ class ProgressLedger:
                 result_data = result if isinstance(result, dict) else {}
                 if result_data.get("status") == "needs_information":
                     status, reason = "blocked", "needs_information"
-                elif result_data.get("error") and not result_data.get("retryable", False):
+                elif result_data.get("error") and not result_data.get(
+                    "retryable", False
+                ):
                     status, reason = "blocked", "non_retryable_error"
                 elif previous and previous[-1] == fingerprint:
                     status, reason = "unchanged", "same_observation"
@@ -251,7 +264,11 @@ class ProgressLedger:
                     and item.get("semantic_key") == semantic
                     and item.get("observation_fingerprint")
                 ]
-                if semantic and semantic_previous and semantic_previous[-1] == fingerprint:
+                if (
+                    semantic
+                    and semantic_previous
+                    and semantic_previous[-1] == fingerprint
+                ):
                     semantic_status, semantic_reason = (
                         "unchanged",
                         "same_semantic_observation",
@@ -278,6 +295,7 @@ class ProgressLedger:
                 call["progress_reason"] = delta.reason
                 call["semantic_progress"] = delta.semantic_status
                 call["semantic_progress_reason"] = delta.semantic_reason
+                call["empty_collection"] = is_empty_collection_result(result)
                 return delta.to_dict()
         return ProgressDelta(
             "blocked", "observation_without_action", observation_fingerprint(result)
@@ -299,9 +317,7 @@ class ProgressLedger:
             count += 1
         return count
 
-    def semantic_unchanged_count(
-        self, capability_group: str, data_scope: str
-    ) -> int:
+    def semantic_unchanged_count(self, capability_group: str, data_scope: str) -> int:
         """返回同一显式语义范围连续无进展的 Observation 次数。"""
         key = _semantic_key(capability_group, data_scope)
         if not key:
@@ -373,6 +389,20 @@ def check_duplication(
             "确认这是必要的；如非必要，请改用已有结果。"
         )
     return None
+
+
+def has_empty_observation(
+    tracker: CallTracker,
+    skill: str,
+    args: dict[str, Any],
+) -> bool:
+    """判断相同有效查询是否已经观察到空目录，供一次性查询保护使用。"""
+    key = (skill, _args_key(args))
+    return any(
+        (call["skill"], _args_key(call["args"])) == key
+        and call.get("empty_collection") is True
+        for call in tracker.calls
+    )
 
 
 # ─── Doom Loop 检测 ────────────────────────────────────────────

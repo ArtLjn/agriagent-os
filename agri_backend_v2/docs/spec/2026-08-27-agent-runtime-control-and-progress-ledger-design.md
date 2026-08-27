@@ -115,7 +115,7 @@ list_system_crop_templates
 | Turn 生命周期 | `agent/domains/harness/runtime/turn.py` | 已有 phase、status、step_count、stop_reason、task_state、finalization_pending。 |
 | ReAct 循环 | `agent/domains/harness/runtime/engine.py` | 已有每步 LLM 决策、Tool dispatch、Observation 回灌和 Finalizer 入口。 |
 | Tool Registry | `agent/domains/harness/tools/loader.py`、`registry.py` | 已有 YAML 展开、名称校验、公开 Schema 和 operation skill。 |
-| Exact Doom Loop | `agent/domains/harness/runtime/verify.py` | 已按有效参数和 Observation fingerprint 做局部重复检测。 |
+| Exact Doom Loop | `agent/domains/harness/runtime/verify.py` | 已按有效参数和 Observation fingerprint 做局部重复检测；系统模板空目录在重复执行前直接收口。 |
 | Plan | `agent/domains/harness/runtime/planner.py` | `make_plan` 可生成 2-5 步计划，但不是所有 ReAct 动作的统一状态账本。 |
 | Trace/SSE | `agent/domains/harness/observability/trace`、Redis SSE | 已有 step、Tool、Router 诊断和终态事件，但进度证据字段不完整。 |
 | 调试导出 | `agri_admin_web/src/pages/Playground/sessionDebugExport.ts` | 已导出消息、Skill、Router 诊断和 pending plan，缺少可信的执行关联字段。 |
@@ -674,6 +674,7 @@ agri_admin_web/src/pages/Playground/sessionDebugExport.ts
 - [x] 同一 Tool 返回不同业务结果时不会误判 Doom；
 - [x] 不同数据范围的模板查询不会仅因名称相似而互相阻断；
 - [x] 查询虽不修改数据库，但产生新实体/事实时记录 `advanced`；
+- [x] 系统模板目录明确返回空集合后，不重复访问 Business MCP，直接返回可解释的输入要求；
 - [x] 不可重试错误不会被重复喂回模型直到 `max_steps`；
 - [x] 写入成功后不会因收尾模型再次请求 Tool 而重复写入。
 

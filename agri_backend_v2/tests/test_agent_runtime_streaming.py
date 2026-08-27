@@ -68,6 +68,22 @@ class _NeedsInformationSkill(_ReadSkill):
         return SkillResult(data=result, error=result["message"])
 
 
+class _SystemTemplatesSkill(_ReadSkill):
+    def __init__(self) -> None:
+        super().__init__("list_system_crop_templates")
+        self.operation = "system_templates"
+        self._meta.update(
+            {
+                "capability_group": "crop_template_catalog",
+                "data_scope": "system_templates",
+                "freshness_requirement": "system_catalog",
+            }
+        )
+
+    async def execute(self, params: dict, ctx) -> SkillResult:
+        return SkillResult(data={"count": 0, "templates": []})
+
+
 def test_build_identity_headers_declares_turn_identity(monkeypatch) -> None:
     delegated = {}
 
@@ -997,6 +1013,52 @@ async def test_second_valid_duplicate_emits_one_warning_without_stopping() -> No
     assert [event["type"] for event in second_events] == ["verification_warning"]
     assert second.proceed is True
     assert turn.status == "running"
+
+
+@pytest.mark.asyncio
+async def test_empty_system_template_catalog_is_not_queried_again() -> None:
+    skill = _SystemTemplatesSkill()
+    turn = Turn(user_input="查系统模板")
+    tracker = react.verify.ProgressLedger()
+    tracker.record(
+        skill.name,
+        {},
+        agent_tool_name=skill.name,
+        operation=skill.operation,
+        capability_group=skill.capability_group,
+        data_scope=skill.data_scope,
+        freshness_requirement=skill.freshness_requirement,
+    )
+    first_delta = tracker.record_observation(
+        skill.name, {}, {"count": 0, "templates": []}
+    )
+
+    prepared = react._PreparedCall()
+    events = [
+        event
+        async for event in react._prepare_skill_call(
+            {"id": "call-2", "name": skill.name, "arguments": {}},
+            skill,
+            SimpleNamespace(),
+            turn,
+            tracker,
+            prepared,
+        )
+    ]
+
+    assert prepared.proceed is False
+    assert first_delta["status"] == "advanced"
+    assert first_delta["reason"] == "new_observation"
+    assert turn.stop_reason == StopReason.USER_INPUT_REQUIRED
+    assert [event["type"] for event in events] == [
+        "observation",
+        "step.completed",
+        "final_answer_start",
+        "final_answer_delta",
+        "final_answer",
+        "turn.terminated",
+    ]
+    assert not any(event["type"] == "tool_started" for event in events)
 
 
 def test_read_only_query_observing_new_fact_is_advanced() -> None:

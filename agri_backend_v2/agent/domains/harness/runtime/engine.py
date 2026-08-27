@@ -1409,6 +1409,15 @@ async def _prepare_skill_call(
         # 用户给出状态声明的下一动作，或明确给出不同动作，才清理临时阻断状态。
         turn.task_state = None
 
+    if (
+        getattr(skill, "operation", "") == "system_templates"
+        and verify.has_empty_observation(tracker, skill.name, args)
+    ):
+        async for ev in _emit_empty_catalog_repeat(turn, skill, tc["id"], args):
+            yield ev
+        prepared.proceed = False
+        return
+
     tracker.record(
         skill.name,
         args,
@@ -1649,6 +1658,60 @@ async def _emit_blocked_action_repeat(
         answer=message,
         phase=TurnPhase.TOOL_PREPARING,
         stop_reason=StopReason.RESUME_REQUIRES_NEW_ACTION,
+        status="terminated",
+    ):
+        yield terminal_ev
+
+
+async def _emit_empty_catalog_repeat(
+    turn: Turn, skill: Skill, tool_call_id: str, args: dict
+) -> AsyncGenerator[dict, None]:
+    """空系统模板目录只确认一次，避免模型把空结果反复查询成死循环。"""
+    message = (
+        "系统作物模板目录当前为空，已停止重复查询。"
+        "如需继续，请提供自定义模板信息，或明确查询其他模板范围。"
+    )
+    result = {
+        "error": "empty_catalog_repeat",
+        "code": "empty_catalog_repeat",
+        "message": message,
+        "retryable": False,
+    }
+    trace_tool_call(
+        skill.name,
+        args,
+        result,
+        error=message,
+        agent_tool_name=skill.name,
+        **_skill_control_metadata(skill),
+        tool_call_id=tool_call_id,
+        progress="blocked",
+        progress_reason="empty_catalog_already_observed",
+        step_index=turn.step_count,
+    )
+    ev = sse.observation(
+        skill.name,
+        None,
+        error=message,
+        error_info={
+            "code": "empty_catalog_repeat",
+            "message": message,
+            "phase": TurnPhase.TOOL_PREPARING.value,
+            "tool_name": skill.name,
+            "retryable": False,
+            "attempt": 0,
+        },
+    )
+    turn.emit("observation", ev["data"])
+    yield ev
+    turn.messages.append(context.tool_result_message(tool_call_id, skill.name, result))
+    async for terminal_ev in _emit_failure_terminal(
+        turn,
+        code="empty_catalog_repeat",
+        message=message,
+        answer=message,
+        phase=TurnPhase.TOOL_PREPARING,
+        stop_reason=StopReason.USER_INPUT_REQUIRED,
         status="terminated",
     ):
         yield terminal_ev
