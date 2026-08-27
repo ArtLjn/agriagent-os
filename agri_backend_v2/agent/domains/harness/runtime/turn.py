@@ -94,6 +94,7 @@ class Turn:
     # Loop state.
     step_count: int = 0
     max_steps: int = 20
+    step_budget: dict[str, Any] = field(default_factory=dict)
     status: TurnStatus = "running"
     phase: TurnPhase = TurnPhase.SETUP
     stop_reason: StopReason | None = None
@@ -233,6 +234,7 @@ class Turn:
             "phase": self.phase.value,
             "stop_reason": self.stop_reason.value if self.stop_reason else None,
             "step_count": self.step_count,
+            "step_budget": self.step_budget,
             "pending_approval": self.pending_approval,
             "task_state": self.task_state,
             "final_answer": self.final_answer,

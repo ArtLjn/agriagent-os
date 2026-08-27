@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -26,6 +27,86 @@ _VOLATILE_RESULT_KEYS = {
     "trace_id",
     "timestamp",
 }
+
+# ReAct 的决策轮上限是 Runtime 安全边界；模型输出只能提供受控估计，不能
+# 直接扩大这个上限。后续按任务类型细化时仍需经过 resolve_step_budget。
+DEFAULT_MAX_STEPS = 20
+MIN_STEP_BUDGET = 1
+MAX_STEP_BUDGET = DEFAULT_MAX_STEPS
+
+
+@dataclass(frozen=True)
+class StepBudget:
+    """一次 Turn 的决策轮预算及其来源证据。"""
+
+    default_steps: int
+    estimated_steps: int | None
+    safety_factor: float
+    minimum_steps: int
+    maximum_steps: int
+    resolved_steps: int
+    source: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "default_steps": self.default_steps,
+            "estimated_steps": self.estimated_steps,
+            "safety_factor": self.safety_factor,
+            "minimum_steps": self.minimum_steps,
+            "maximum_steps": self.maximum_steps,
+            "resolved_steps": self.resolved_steps,
+            "source": self.source,
+        }
+
+
+def resolve_step_budget(
+    *,
+    default_steps: int = DEFAULT_MAX_STEPS,
+    estimated_steps: int | None = None,
+    safety_factor: float = 1.5,
+    minimum_steps: int = MIN_STEP_BUDGET,
+    maximum_steps: int = MAX_STEP_BUDGET,
+) -> StepBudget:
+    """解析受控决策轮预算，并保证估计值不能突破 Runtime 硬上限。"""
+    if isinstance(default_steps, bool) or not isinstance(default_steps, int):
+        raise ValueError("default_steps 必须是整数")
+    if isinstance(estimated_steps, bool) or (
+        estimated_steps is not None and not isinstance(estimated_steps, int)
+    ):
+        raise ValueError("estimated_steps 必须是整数或 None")
+    if isinstance(minimum_steps, bool) or not isinstance(minimum_steps, int):
+        raise ValueError("minimum_steps 必须是整数")
+    if isinstance(maximum_steps, bool) or not isinstance(maximum_steps, int):
+        raise ValueError("maximum_steps 必须是整数")
+    if minimum_steps < MIN_STEP_BUDGET or maximum_steps < minimum_steps:
+        raise ValueError("step budget 的 min/max 范围无效")
+    if maximum_steps > MAX_STEP_BUDGET:
+        raise ValueError("maximum_steps 不能突破 Runtime 硬上限")
+    if default_steps < minimum_steps or default_steps > maximum_steps:
+        raise ValueError("default_steps 必须位于 step budget 范围内")
+    if estimated_steps is not None and estimated_steps < 1:
+        raise ValueError("estimated_steps 必须大于 0")
+    if safety_factor <= 0 or not math.isfinite(safety_factor):
+        raise ValueError("safety_factor 必须是正数")
+
+    if estimated_steps is None:
+        resolved_steps = default_steps
+        source = "runtime_default"
+    else:
+        resolved_steps = min(
+            maximum_steps,
+            max(minimum_steps, math.ceil(estimated_steps * safety_factor)),
+        )
+        source = "controlled_estimate"
+    return StepBudget(
+        default_steps=default_steps,
+        estimated_steps=estimated_steps,
+        safety_factor=safety_factor,
+        minimum_steps=minimum_steps,
+        maximum_steps=maximum_steps,
+        resolved_steps=resolved_steps,
+        source=source,
+    )
 
 
 @dataclass

@@ -148,6 +148,8 @@ def _metrics(nodes: list[dict[str, Any]]) -> dict[str, Any]:
         "router_calls": 0,
         "context_builds": 0,
         "catalog_recalls": 0,
+        "step_budget_limit": 0,
+        "step_budget_source": "",
         "context_message_tokens": 0,
         "context_tool_schema_tokens": 0,
         "context_response_reserve_tokens": 0,
@@ -194,6 +196,14 @@ def _metrics(nodes: list[dict[str, Any]]) -> dict[str, Any]:
             metrics["router_calls"] += 1
         elif node_type == "catalog_recall":
             metrics["catalog_recalls"] += 1
+            attributes = node.get("attributes")
+            if isinstance(attributes, dict):
+                metrics["step_budget_limit"] = _int_value(
+                    attributes.get("step_budget_limit")
+                )
+                metrics["step_budget_source"] = str(
+                    attributes.get("step_budget_source") or ""
+                )
         elif node_type == "summary_compaction":
             metrics["summary_compaction_count"] += 1
         elif node_type == "memory_read":

@@ -637,6 +637,7 @@ def trace_catalog_recall(
     candidate_tools: list[str],
     duration_ms: int | None = None,
     router_mode: str = "llm_tool_binding",
+    step_budget: dict[str, Any] | None = None,
 ) -> None:
     """记录 LLM 决策前的 Skill 候选目录快照。"""
     record(
@@ -652,6 +653,7 @@ def trace_catalog_recall(
             "candidate_count": len(candidate_tools),
             "selection_status": "pending",
             "decision_source": "skill_registry",
+            "step_budget": step_budget or {},
         },
         duration_ms=duration_ms,
         phase="setup",
@@ -660,6 +662,8 @@ def trace_catalog_recall(
             "exposed_tool_count": exposed_tool_count,
             "candidate_count": len(candidate_tools),
             "router_mode": router_mode,
+            "step_budget_source": (step_budget or {}).get("source", ""),
+            "step_budget_limit": (step_budget or {}).get("resolved_steps"),
         },
     )
 

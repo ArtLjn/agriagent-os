@@ -92,6 +92,38 @@ def test_trace_llm_call_keeps_model_input_and_output(monkeypatch) -> None:
 
 def test_trace_tool_call_keeps_agent_business_mapping(monkeypatch) -> None:
     collector._queue.clear()
+
+
+def test_trace_catalog_recall_keeps_step_budget_evidence(monkeypatch) -> None:
+    collector._queue.clear()
+    monkeypatch.setattr(
+        collector,
+        "get_trace",
+        lambda: SimpleNamespace(
+            trace_id="trace-budget",
+            request_id="request-budget",
+            conversation_id="conversation-budget",
+            turn_id="turn-budget",
+            user_id="user-budget",
+            farm_uid="farm-budget",
+        ),
+    )
+
+    collector.trace_catalog_recall(
+        registry_count=3,
+        exposed_tool_count=4,
+        candidate_tools=["query_crop_templates"],
+        step_budget={
+            "resolved_steps": 20,
+            "source": "runtime_default",
+        },
+    )
+
+    node = collector._queue[-1]
+    assert node["output_data"]["step_budget"]["resolved_steps"] == 20
+    assert node["attributes"]["step_budget_source"] == "runtime_default"
+    assert node["attributes"]["step_budget_limit"] == 20
+    collector._queue.clear()
     monkeypatch.setattr(
         collector,
         "get_trace",

@@ -866,6 +866,32 @@ def test_progress_ledger_classifies_observation_changes() -> None:
     assert ledger.last_action()["skill"] == "query"
 
 
+def test_step_budget_keeps_default_and_clamps_controlled_estimate() -> None:
+    default_budget = react.verify.resolve_step_budget()
+    estimated_budget = react.verify.resolve_step_budget(estimated_steps=3)
+    capped_budget = react.verify.resolve_step_budget(estimated_steps=100)
+
+    assert default_budget.to_dict() == {
+        "default_steps": 20,
+        "estimated_steps": None,
+        "safety_factor": 1.5,
+        "minimum_steps": 1,
+        "maximum_steps": 20,
+        "resolved_steps": 20,
+        "source": "runtime_default",
+    }
+    assert estimated_budget.resolved_steps == 5
+    assert estimated_budget.source == "controlled_estimate"
+    assert capped_budget.resolved_steps == 20
+
+
+def test_step_budget_rejects_invalid_or_unsafe_bounds() -> None:
+    with pytest.raises(ValueError, match="硬上限"):
+        react.verify.resolve_step_budget(maximum_steps=21)
+    with pytest.raises(ValueError, match="大于 0"):
+        react.verify.resolve_step_budget(estimated_steps=0)
+
+
 @pytest.mark.asyncio
 async def test_cross_turn_blocked_action_is_stopped_before_skill_execution() -> None:
     skill = _ReadSkill("query_workers")
