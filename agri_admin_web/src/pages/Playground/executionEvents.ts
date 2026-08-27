@@ -8,6 +8,8 @@ type ExecutionEventPayload =
   | { type: 'plan_step_done'; step_index: number; skill: string; status: string }
   | { type: 'tool_call_delta'; tool_call_id: string; name: string; index: number; arguments_delta: string }
   | { type: 'action'; tool_name: string; arguments: Record<string, unknown>; rationale?: string }
+  | { type: 'tool_started'; turn_id: string; tool_call_id: string; tool_name: string; step: number; arguments: Record<string, unknown> }
+  | { type: 'tool_finished'; turn_id: string; tool_call_id: string; tool_name: string; step: number; duration_ms: number; result?: unknown; error?: Record<string, unknown> | null }
   | { type: 'observation'; tool_name: string; result?: unknown; error?: string | null }
   | { type: 'approval_required'; tool_name: string; arguments: Record<string, unknown> }
   | { type: 'approval_result'; decision: 'approved' | 'rejected'; reason?: string }
@@ -53,6 +55,10 @@ function executionEventFromChunkBase(chunk: StreamChunk): ExecutionEventPayload 
       return { type: 'plan_step_done', ...chunk.data };
     case 'action':
       return { type: 'action', ...chunk.data };
+    case 'tool_started':
+      return { type: 'tool_started', ...chunk.data };
+    case 'tool_finished':
+      return { type: 'tool_finished', ...chunk.data };
     case 'tool_call_delta':
       return { type: 'tool_call_delta', ...chunk.data };
     case 'observation':

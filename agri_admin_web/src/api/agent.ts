@@ -181,6 +181,8 @@ export type StreamChunk =
   | { type: 'plan_step_done'; data: { step_index: number; skill: string; status: string } }
   | { type: 'tool_call_delta'; data: { tool_call_id: string; name: string; index: number; arguments_delta: string } }
   | { type: 'action'; data: { tool_name: string; arguments: Record<string, unknown>; rationale?: string } }
+  | { type: 'tool_started'; data: { turn_id: string; tool_call_id: string; tool_name: string; step: number; arguments: Record<string, unknown> } }
+  | { type: 'tool_finished'; data: { turn_id: string; tool_call_id: string; tool_name: string; step: number; duration_ms: number; result?: unknown; error?: Record<string, unknown> | null } }
   | { type: 'observation'; data: Observation }
   | { type: 'pending_action'; data: PendingAction }
   | { type: 'pending_plan'; data: PendingPlan }
@@ -318,6 +320,30 @@ function mapSsePayloadToChunk(event: SseEvent): StreamChunk | null {
           tool_name: String(data.tool_name ?? ''),
           arguments: (data.arguments as Record<string, unknown>) ?? {},
           rationale: typeof data.rationale === 'string' ? data.rationale : undefined,
+        },
+      };
+    case 'tool_started':
+      return {
+        type: 'tool_started',
+        data: {
+          turn_id: String(data.turn_id ?? ''),
+          tool_call_id: String(data.tool_call_id ?? ''),
+          tool_name: String(data.tool_name ?? ''),
+          step: Number(data.step ?? 0),
+          arguments: (data.arguments as Record<string, unknown>) ?? {},
+        },
+      };
+    case 'tool_finished':
+      return {
+        type: 'tool_finished',
+        data: {
+          turn_id: String(data.turn_id ?? ''),
+          tool_call_id: String(data.tool_call_id ?? ''),
+          tool_name: String(data.tool_name ?? ''),
+          step: Number(data.step ?? 0),
+          duration_ms: Number(data.duration_ms ?? 0),
+          result: data.result,
+          error: data.error as Record<string, unknown> | null | undefined,
         },
       };
     case 'tool_call_delta':

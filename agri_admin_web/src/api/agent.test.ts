@@ -125,6 +125,23 @@ describe('agent api', () => {
     });
   });
 
+  it('保留工具开始和完成事件供 Playground 合并生命周期', () => {
+    expect(mapSseToChunk({
+      type: 'tool_started',
+      data: { turn_id: 't-1', tool_call_id: 'c-1', tool_name: 'get_weather', step: 1, arguments: {} },
+    })).toEqual({
+      type: 'tool_started',
+      data: { turn_id: 't-1', tool_call_id: 'c-1', tool_name: 'get_weather', step: 1, arguments: {} },
+    });
+    expect(mapSseToChunk({
+      type: 'tool_finished',
+      data: { turn_id: 't-1', tool_call_id: 'c-1', tool_name: 'get_weather', step: 1, duration_ms: 18, result: { ok: true } },
+    })).toMatchObject({
+      type: 'tool_finished',
+      data: { tool_call_id: 'c-1', duration_ms: 18 },
+    });
+  });
+
   it('读取 App 端技能列表接口', async () => {
     mockedApiClient.get.mockResolvedValueOnce({
       data: {

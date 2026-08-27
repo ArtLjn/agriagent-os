@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { appendExecutionEvent, executionEventFromChunk } from './executionEvents';
+import { buildTimelineItems } from './ExecutionTimeline';
 
 describe('executionEventFromChunk', () => {
   it('保留 SSE 事件的展示顺序和工具参数', () => {
@@ -54,6 +55,8 @@ describe('executionEventFromChunk', () => {
 
   it('展示 Step 和 Tool 失败事件', () => {
     expect(executionEventFromChunk({ type: 'step.started', data: { turn_id: 't-1', step_index: 1, status: 'running' } })).toEqual({ type: 'step.started', step_index: 1, status: 'running' });
+    expect(executionEventFromChunk({ type: 'tool_started', data: { turn_id: 't-1', tool_call_id: 'c-1', tool_name: 'weather', step: 1, arguments: {} } })).toEqual({ type: 'tool_started', turn_id: 't-1', tool_call_id: 'c-1', tool_name: 'weather', step: 1, arguments: {} });
+    expect(executionEventFromChunk({ type: 'tool_finished', data: { turn_id: 't-1', tool_call_id: 'c-1', tool_name: 'weather', step: 1, duration_ms: 24, result: { ok: true } } })).toMatchObject({ type: 'tool_finished', tool_call_id: 'c-1', duration_ms: 24 });
     expect(executionEventFromChunk({ type: 'tool.failed', data: { turn_id: 't-1', tool_call_id: 'c-1', tool_name: 'weather', step: 1, duration_ms: 20, error: { code: 'tool_failed' } } })).toMatchObject({ type: 'tool.failed', tool_call_id: 'c-1' });
   });
 
@@ -84,5 +87,28 @@ describe('executionEventFromChunk', () => {
       type: 'turn.failed',
       data: { status: 'failed', stop_reason: 'tool_error', error: { code: 'tool_failed' } },
     })).toEqual({ type: 'turn.failed', status: 'failed', stop_reason: 'tool_error', error: { code: 'tool_failed' } });
+  });
+
+  it('将 Step 开始和完成合并为一个执行节点', () => {
+    const items = buildTimelineItems([
+      { type: 'step.started', step_index: 1, status: 'running', seq: 1 },
+      { type: 'thought', content: '先查询数据', seq: 2 },
+      { type: 'step.completed', step_index: 1, status: 'completed', tool_count: 0, seq: 3 },
+    ]);
+
+    expect(items).toHaveLength(2);
+    expect(items[0]).toMatchObject({ kind: 'step', stepIndex: 1, started: { status: 'running' }, completed: { status: 'completed' } });
+  });
+
+  it('将工具调用、执行和结果合并为一个节点', () => {
+    const items = buildTimelineItems([
+      { type: 'action', tool_name: 'get_weather', arguments: {}, seq: 1 },
+      { type: 'tool_started', turn_id: 't-1', tool_call_id: 'c-1', tool_name: 'get_weather', step: 1, arguments: {}, seq: 2 },
+      { type: 'tool_finished', turn_id: 't-1', tool_call_id: 'c-1', tool_name: 'get_weather', step: 1, duration_ms: 36, result: { ok: true }, seq: 3 },
+      { type: 'observation', tool_name: 'get_weather', result: { ok: true }, error: null, seq: 4 },
+    ]);
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ kind: 'tool', toolName: 'get_weather', callId: 'c-1', started: { step: 1 }, finished: { duration_ms: 36 }, observation: { tool_name: 'get_weather' } });
   });
 });
