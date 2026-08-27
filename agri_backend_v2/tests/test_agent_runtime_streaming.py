@@ -1058,22 +1058,25 @@ async def test_repeated_unchanged_observation_requests_controlled_finalization()
     }
 
 
-def test_step_budget_keeps_default_and_clamps_controlled_estimate() -> None:
-    default_budget = react.verify.resolve_step_budget()
+def test_step_budget_keeps_fallback_and_clamps_controlled_estimate() -> None:
+    fallback_budget = react.verify.resolve_step_budget()
     estimated_budget = react.verify.resolve_step_budget(estimated_steps=3)
     capped_budget = react.verify.resolve_step_budget(estimated_steps=100)
 
-    assert default_budget.to_dict() == {
-        "default_steps": 20,
+    assert fallback_budget.to_dict() == {
+        "fallback_steps": 20,
         "estimated_steps": None,
+        "confidence": None,
         "safety_factor": 1.5,
         "minimum_steps": 1,
         "maximum_steps": 20,
         "resolved_steps": 20,
         "source": "runtime_default",
+        "reason": "fallback_steps(20): no estimated_steps",
     }
     assert estimated_budget.resolved_steps == 5
     assert estimated_budget.source == "controlled_estimate"
+    assert estimated_budget.reason == "estimated_steps(3)*safety_factor(1.5)"
     assert capped_budget.resolved_steps == 20
 
 
@@ -1082,6 +1085,29 @@ def test_step_budget_rejects_invalid_or_unsafe_bounds() -> None:
         react.verify.resolve_step_budget(maximum_steps=21)
     with pytest.raises(ValueError, match="大于 0"):
         react.verify.resolve_step_budget(estimated_steps=0)
+    with pytest.raises(ValueError, match="1.0 到 3.0"):
+        react.verify.resolve_step_budget(safety_factor=0.9)
+    with pytest.raises(ValueError, match="1.0 到 3.0"):
+        react.verify.resolve_step_budget(safety_factor=3.1)
+    with pytest.raises(ValueError, match="必须是数字"):
+        react.verify.resolve_step_budget(safety_factor="1.5")
+    with pytest.raises(ValueError, match="0 到 1"):
+        react.verify.resolve_step_budget(confidence=1.1)
+
+
+def test_step_budget_increases_factor_for_low_confidence() -> None:
+    budget = react.verify.resolve_step_budget(
+        estimated_steps=8,
+        confidence=0.4,
+        safety_factor=1.5,
+    )
+
+    assert budget.resolved_steps == 16
+    assert budget.safety_factor == 2.0
+    assert budget.reason == (
+        "estimated_steps(8)*safety_factor(2);confidence(0.4)<0.5"
+        " -> safety_factor=max(1.5,2)"
+    )
 
 
 @pytest.mark.asyncio

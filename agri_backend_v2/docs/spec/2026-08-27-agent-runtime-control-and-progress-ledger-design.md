@@ -47,7 +47,7 @@ User Request
 - 模板查询 operation 已声明 `capability_group`、`data_scope` 和 `freshness_requirement`，Registry catalog、Progress Ledger 和 Trace 具备读取这些字段的边界。
 - Agent Registry 未命中返回 `agent_tool_not_registered`；Business 返回明确未知工具结果时归一为 `business_tool_not_registered`。
 - Agent Registry、Business MCP 映射和不可暴露内部工具的确定性错误都会在当前调度批次进入 Finalizer，不再继续请求 LLM 或消耗后续决策轮。
-- Runtime 已提供受控 `StepBudget` resolver：默认使用固定 20 轮，显式估计值只能在 1-20 的硬上限内按安全系数计算；本轮只接入默认预算和 Trace 证据，尚未启用动态估计。
+- Runtime 已提供受控 `StepBudget` resolver：没有 Planner 估算时使用 `fallback_steps`，显式估计值只能在 1-20 的硬上限内按安全系数计算；`safety_factor` 限定在 1.0-3.0，低置信度估算会将有效系数提升到至少 2.0，预算证据包含 `confidence` 和 `reason`。
 - 同一动作连续两次得到相同 Observation 时，Runtime 会设置 `no_progress_detected` FinalizationRequest，由统一终态收口器停止继续消耗决策轮；一次相同结果不会单独触发终止。
 - `no_progress_detected` 与 Doom Loop 都会持久化最小 `blocked_action` 摘要（工具映射、语义范围和 Observation 指纹），跨 Turn 的“继续”不能原样重放该动作。
 - Business 返回 `status=needs_information` 时保留业务错误码和 `missing` 字段，但 Agent 不再把它包装成 `tool.failed`；Runtime 以 `user_input_required` 受控终态向用户索取缺失信息，避免把可恢复业务前置条件误报为系统故障。
@@ -429,16 +429,16 @@ wall_time_ms
 1. P0 保留当前 `Turn.max_steps` 硬上限和 Finalizer 语义；
 2. P1 增加 Tool Call、Token、耗时和并行批次指标；
 3. P2 先按任务类型使用 Runtime 配置的确定性预算；
-4. P3 才评估 Planner 的 `estimated_steps`，并通过上下限约束：
+4. P3 才评估 Planner 的 `estimated_steps`，并通过上下限约束；没有估算时使用 `fallback_steps`：
 
 ```python
-final_steps = min(max(estimate * safety_factor, minimum), maximum)
+final_steps = min(max(ceil(estimate * safety_factor), minimum), maximum)
 ```
 
 5. LLM 只能提供估计输入，不能修改最终预算；
 6. 动态预算不得覆盖更具体的 Doom、取消、超时、不可重试错误或已提交结果。
 
-初始 `minimum=5`、`safety_factor=1.5`、`maximum=30` 只作为待评审配置，不视为已验证的最优值。配置必须集中在 Agent Runtime Control 设置中，并通过 Trace 记录实际预算来源和最终值。
+当前 Runtime 使用 `minimum=1`、`safety_factor=1.5`、`maximum=20`；安全系数必须位于 1.0-3.0，Planner 还应提供 0-1 的 `confidence`，低于 0.5 时有效系数至少为 2.0。配置必须集中在 Agent Runtime Control 设置中，并通过 Trace 记录实际预算来源、最终值和计算 `reason`。
 
 ### 9.3 预算耗尽收口
 
@@ -691,7 +691,7 @@ agri_admin_web/src/pages/Playground/sessionDebugExport.ts
 - [x] `step_budget_exhausted`、Doom、Tool 错误、取消和超时保留各自最具体的 `stop_reason`；
 - [x] 所有终止路径都有用户可读 `final_answer` 和唯一 `done`；
 - [x] 已有 `committed_result` 时不能因预算或 LLM 收尾失败报告为业务失败；
-- [x] 动态预算 resolver 只允许 Runtime 计算，且受到 min/max clamp；当前默认仍使用固定预算，未启用模型估计。
+- [x] 动态预算 resolver 只允许 Runtime 计算，且受到 min/max clamp；当前 Runtime 默认传入 `fallback_steps`，模型估计和 `confidence` 通过 resolver/Trace 契约接入，尚未由 Planner 自动生成。
 
 ### 13.5 调试证据
 

@@ -672,6 +672,8 @@ def trace_catalog_recall(
             "router_mode": router_mode,
             "step_budget_source": (step_budget or {}).get("source", ""),
             "step_budget_limit": (step_budget or {}).get("resolved_steps"),
+            "step_budget_confidence": (step_budget or {}).get("confidence"),
+            "step_budget_reason": (step_budget or {}).get("reason", ""),
         },
     )
 

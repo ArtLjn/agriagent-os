@@ -378,7 +378,7 @@ def _setup_turn_runtime(
     """加载 skills、构建 tools schema、初始化 tracker。"""
     router_started = time.perf_counter()
     turn.step_budget = verify.resolve_step_budget(
-        default_steps=turn.max_steps,
+        fallback_steps=turn.max_steps,
     ).to_dict()
     # Worker 可在进入 Runtime 前注入 Mongo-backed Session View；直接调用
     # Runtime 的测试替身仍通过 Memory Service 入口提供空快照。

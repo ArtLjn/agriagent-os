@@ -33,47 +33,61 @@ _VOLATILE_RESULT_KEYS = {
 DEFAULT_MAX_STEPS = 20
 MIN_STEP_BUDGET = 1
 MAX_STEP_BUDGET = DEFAULT_MAX_STEPS
+MIN_SAFETY_FACTOR = 1.0
+MAX_SAFETY_FACTOR = 3.0
+LOW_CONFIDENCE_THRESHOLD = 0.5
+LOW_CONFIDENCE_SAFETY_FACTOR = 2.0
 
 
 @dataclass(frozen=True)
 class StepBudget:
     """一次 Turn 的决策轮预算及其来源证据。"""
 
-    default_steps: int
+    fallback_steps: int
     estimated_steps: int | None
+    confidence: float | None
     safety_factor: float
     minimum_steps: int
     maximum_steps: int
     resolved_steps: int
     source: str
+    reason: str
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "default_steps": self.default_steps,
+            "fallback_steps": self.fallback_steps,
             "estimated_steps": self.estimated_steps,
+            "confidence": self.confidence,
             "safety_factor": self.safety_factor,
             "minimum_steps": self.minimum_steps,
             "maximum_steps": self.maximum_steps,
             "resolved_steps": self.resolved_steps,
             "source": self.source,
+            "reason": self.reason,
         }
 
 
 def resolve_step_budget(
     *,
-    default_steps: int = DEFAULT_MAX_STEPS,
+    fallback_steps: int = DEFAULT_MAX_STEPS,
     estimated_steps: int | None = None,
+    confidence: float | None = None,
     safety_factor: float = 1.5,
     minimum_steps: int = MIN_STEP_BUDGET,
     maximum_steps: int = MAX_STEP_BUDGET,
 ) -> StepBudget:
     """解析受控决策轮预算，并保证估计值不能突破 Runtime 硬上限。"""
-    if isinstance(default_steps, bool) or not isinstance(default_steps, int):
-        raise ValueError("default_steps 必须是整数")
+    if isinstance(fallback_steps, bool) or not isinstance(fallback_steps, int):
+        raise ValueError("fallback_steps 必须是整数")
     if isinstance(estimated_steps, bool) or (
         estimated_steps is not None and not isinstance(estimated_steps, int)
     ):
         raise ValueError("estimated_steps 必须是整数或 None")
+    if isinstance(confidence, bool) or (
+        confidence is not None
+        and (not isinstance(confidence, (int, float)) or not math.isfinite(confidence))
+    ):
+        raise ValueError("confidence 必须是 0 到 1 之间的数字或 None")
     if isinstance(minimum_steps, bool) or not isinstance(minimum_steps, int):
         raise ValueError("minimum_steps 必须是整数")
     if isinstance(maximum_steps, bool) or not isinstance(maximum_steps, int):
@@ -82,30 +96,59 @@ def resolve_step_budget(
         raise ValueError("step budget 的 min/max 范围无效")
     if maximum_steps > MAX_STEP_BUDGET:
         raise ValueError("maximum_steps 不能突破 Runtime 硬上限")
-    if default_steps < minimum_steps or default_steps > maximum_steps:
-        raise ValueError("default_steps 必须位于 step budget 范围内")
+    if fallback_steps < minimum_steps or fallback_steps > maximum_steps:
+        raise ValueError("fallback_steps 必须位于 step budget 范围内")
     if estimated_steps is not None and estimated_steps < 1:
         raise ValueError("estimated_steps 必须大于 0")
-    if safety_factor <= 0 or not math.isfinite(safety_factor):
-        raise ValueError("safety_factor 必须是正数")
+    if confidence is not None and not 0.0 <= confidence <= 1.0:
+        raise ValueError("confidence 必须位于 0 到 1 之间")
+    if isinstance(safety_factor, bool) or not isinstance(safety_factor, (int, float)):
+        raise ValueError("safety_factor 必须是数字")
+    if (
+        not math.isfinite(safety_factor)
+        or not MIN_SAFETY_FACTOR <= safety_factor <= MAX_SAFETY_FACTOR
+    ):
+        raise ValueError("safety_factor 必须位于 1.0 到 3.0 之间")
+
+    effective_safety_factor = safety_factor
+    confidence_adjustment = ""
+    if confidence is not None and confidence < LOW_CONFIDENCE_THRESHOLD:
+        effective_safety_factor = max(
+            effective_safety_factor, LOW_CONFIDENCE_SAFETY_FACTOR
+        )
+        confidence_adjustment = (
+            f";confidence({confidence:g})<{LOW_CONFIDENCE_THRESHOLD:g}"
+            f" -> safety_factor=max({safety_factor:g},{LOW_CONFIDENCE_SAFETY_FACTOR:g})"
+        )
 
     if estimated_steps is None:
-        resolved_steps = default_steps
+        resolved_steps = fallback_steps
         source = "runtime_default"
+        reason = f"fallback_steps({fallback_steps}): no estimated_steps"
     else:
         resolved_steps = min(
             maximum_steps,
-            max(minimum_steps, math.ceil(estimated_steps * safety_factor)),
+            max(
+                minimum_steps,
+                math.ceil(estimated_steps * effective_safety_factor),
+            ),
         )
         source = "controlled_estimate"
+        reason = (
+            f"estimated_steps({estimated_steps})"
+            f"*safety_factor({effective_safety_factor:g})"
+            f"{confidence_adjustment}"
+        )
     return StepBudget(
-        default_steps=default_steps,
+        fallback_steps=fallback_steps,
         estimated_steps=estimated_steps,
-        safety_factor=safety_factor,
+        confidence=confidence,
+        safety_factor=effective_safety_factor,
         minimum_steps=minimum_steps,
         maximum_steps=maximum_steps,
         resolved_steps=resolved_steps,
         source=source,
+        reason=reason,
     )
 
 

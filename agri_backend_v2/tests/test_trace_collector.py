@@ -142,6 +142,8 @@ def test_trace_tool_call_can_mark_business_input_blocked(monkeypatch) -> None:
         step_budget={
             "resolved_steps": 20,
             "source": "runtime_default",
+            "confidence": None,
+            "reason": "fallback_steps(20): no estimated_steps",
         },
     )
 
@@ -149,6 +151,10 @@ def test_trace_tool_call_can_mark_business_input_blocked(monkeypatch) -> None:
     assert node["output_data"]["step_budget"]["resolved_steps"] == 20
     assert node["attributes"]["step_budget_source"] == "runtime_default"
     assert node["attributes"]["step_budget_limit"] == 20
+    assert node["attributes"]["step_budget_confidence"] is None
+    assert node["attributes"]["step_budget_reason"] == (
+        "fallback_steps(20): no estimated_steps"
+    )
     collector._queue.clear()
     monkeypatch.setattr(
         collector,
