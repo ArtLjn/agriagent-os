@@ -21,7 +21,7 @@ type ExecutionEventPayload =
   | { type: 'verification_warning'; issues: string[] }
   | { type: 'write_committed_reply_failed'; code: string; message: string }
   | { type: 'retrying'; code: string; category?: string; attempt: number; delay_ms: number }
-  | { type: 'progress'; message: string; phase?: string }
+  | { type: 'progress'; message?: string; phase?: string; tool_name?: string; tool_call_id?: string; step?: number; status?: string; reason?: string; observation_fingerprint?: string }
   | { type: 'step.started'; step_index: number; status: string }
   | { type: 'step.completed'; step_index: number; status: string; tool_count: number; error?: Record<string, unknown> }
   | { type: 'tool.failed'; tool_call_id: string; tool_name: string; step: number; duration_ms: number; error: Record<string, unknown> }
@@ -63,6 +63,8 @@ function executionEventFromChunkBase(chunk: StreamChunk): ExecutionEventPayload 
       return { type: 'tool_call_delta', ...chunk.data };
     case 'observation':
       return { type: 'observation', ...chunk.data };
+    case 'progress':
+      return { type: 'progress', ...chunk.data };
     case 'pending_action':
       return {
         type: 'approval_required',

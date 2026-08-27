@@ -1,4 +1,4 @@
-"""Verification 层：CallTracker + Doom Loop 检测 + 完成前 checklist。
+"""Verification 层：ProgressLedger + Doom Loop 检测 + 完成前 checklist。
 
 参考：harness_study/_example/tools/verify.py + tools/safety.py
 
@@ -13,7 +13,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
-# ─── CallTracker ──────────────────────────────────────────────
+# ─── ProgressLedger ──────────────────────────────────────────
 
 # 滑动窗口大小（看最近 N 次调用判断是否死循环）
 DOOM_LOOP_WINDOW = 5
@@ -29,14 +29,51 @@ _VOLATILE_RESULT_KEYS = {
 
 
 @dataclass
-class CallTracker:
-    """跟踪 (skill, args_key) 调用次数。每个 turn 重置一次。"""
+class ProgressDelta:
+    """一次工具观察相对历史观察的进度判定。"""
+
+    status: str
+    reason: str
+    observation_fingerprint: str
+
+    def to_dict(self) -> dict[str, str]:
+        return {
+            "status": self.status,
+            "reason": self.reason,
+            "observation_fingerprint": self.observation_fingerprint,
+        }
+
+
+@dataclass
+class ProgressLedger:
+    """记录动作、映射和观察结果；每个 Turn 创建一个实例。"""
 
     calls: list[dict[str, Any]] = field(default_factory=list)
 
-    def record(self, skill: str, args: dict[str, Any]) -> int:
-        """记录一次调用，返回该 (skill, args) 的累计次数。"""
-        self.calls.append({"skill": skill, "args": dict(args)})
+    def record(
+        self,
+        skill: str,
+        args: dict[str, Any],
+        *,
+        agent_tool_name: str = "",
+        business_tool_name: str = "",
+        operation: str = "",
+        tool_call_id: str = "",
+        step_index: int | None = None,
+    ) -> int:
+        """记录动作及其跨系统映射，返回该动作的累计次数。"""
+        call: dict[str, Any] = {"skill": skill, "args": dict(args)}
+        metadata = {
+            "agent_tool_name": agent_tool_name,
+            "business_tool_name": business_tool_name,
+            "operation": operation,
+            "tool_call_id": tool_call_id,
+            "step_index": step_index,
+        }
+        call.update(
+            {key: value for key, value in metadata.items() if value not in ("", None)}
+        )
+        self.calls.append(call)
         key = (skill, _args_key(args))
         return sum(1 for c in self.calls if (c["skill"], _args_key(c["args"])) == key)
 
@@ -46,13 +83,62 @@ class CallTracker:
     def total(self) -> int:
         return len(self.calls)
 
-    def record_observation(self, skill: str, args: dict[str, Any], result: Any) -> None:
-        """把结果指纹挂到最近一次调用，区分重复查询和数据已变化。"""
+    def record_observation(
+        self, skill: str, args: dict[str, Any], result: Any
+    ) -> dict[str, str]:
+        """挂载观察指纹并判定 advanced、unchanged 或 blocked。"""
         key = (skill, _args_key(args))
         for call in reversed(self.calls):
             if (call["skill"], _args_key(call["args"])) == key:
-                call["observation_fingerprint"] = observation_fingerprint(result)
-                return
+                fingerprint = observation_fingerprint(result)
+                previous = [
+                    item.get("observation_fingerprint")
+                    for item in self.calls
+                    if (item["skill"], _args_key(item["args"])) == key
+                    and item.get("observation_fingerprint")
+                    and item is not call
+                ]
+                result_data = result if isinstance(result, dict) else {}
+                if result_data.get("error") and not result_data.get("retryable", False):
+                    delta = ProgressDelta("blocked", "non_retryable_error", fingerprint)
+                elif previous and previous[-1] == fingerprint:
+                    delta = ProgressDelta("unchanged", "same_observation", fingerprint)
+                else:
+                    delta = ProgressDelta("advanced", "new_observation", fingerprint)
+                call["observation_fingerprint"] = fingerprint
+                call["progress"] = delta.status
+                call["progress_reason"] = delta.reason
+                return delta.to_dict()
+        return ProgressDelta(
+            "blocked", "observation_without_action", observation_fingerprint(result)
+        ).to_dict()
+
+    def last_action(self) -> dict[str, Any] | None:
+        """返回最近一次动作，供受控终止持久化恢复门。"""
+        return dict(self.calls[-1]) if self.calls else None
+
+
+# 兼容现有 Runtime 和外部测试调用方；新代码使用 ProgressLedger 语义。
+CallTracker = ProgressLedger
+
+
+def is_blocked_action(
+    task_state: dict[str, Any] | None,
+    skill: str,
+    args: dict[str, Any],
+) -> bool:
+    """判断跨 Turn 恢复是否仍在重复被阻断的相同动作。"""
+    if (
+        not isinstance(task_state, dict)
+        or task_state.get("resume_policy") != "ask_user"
+    ):
+        return False
+    blocked = task_state.get("blocked_action")
+    if not isinstance(blocked, dict):
+        return False
+    return blocked.get("agent_tool_name") == skill and _args_key(
+        blocked.get("arguments", {})
+    ) == _args_key(args)
 
 
 def check_duplication(

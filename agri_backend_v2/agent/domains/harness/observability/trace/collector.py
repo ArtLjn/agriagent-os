@@ -525,18 +525,42 @@ def trace_tool_call(
     duration_ms: int | None = None,
     error: str | None = None,
     attempt: int = 1,
+    *,
+    agent_tool_name: str = "",
+    business_tool_name: str = "",
+    operation: str = "",
+    tool_call_id: str = "",
+    progress: str = "",
+    progress_reason: str = "",
+    observation_fingerprint: str = "",
+    step_index: int | None = None,
 ) -> None:
-    """便捷方法：记录工具调用。"""
+    """记录 Agent 工具到 Business MCP 的真实映射和观察进度。"""
+    resolved_agent_name = agent_tool_name or tool_name
+    attributes = {
+        "tool_name": resolved_agent_name,
+        "agent_tool_name": resolved_agent_name,
+        "business_tool_name": business_tool_name,
+        "operation": operation,
+        "tool_call_id": tool_call_id,
+        "progress": progress,
+        "progress_reason": progress_reason,
+        "observation_fingerprint": observation_fingerprint,
+    }
+    attributes = {
+        key: value for key, value in attributes.items() if value not in ("", None)
+    }
     record(
         node_type="tool_call",
-        node_name=tool_name,
+        node_name=resolved_agent_name,
         input_data=arguments,
         output_data=result,
         duration_ms=duration_ms,
         error_message=error,
         phase="tool_executing",
         attempt=attempt,
-        attributes={"tool_name": tool_name},
+        attributes=attributes,
+        step_index=step_index,
     )
 
 

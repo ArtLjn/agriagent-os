@@ -91,6 +91,7 @@ class _SkillExecState:
     result: dict | None = None
     finalize_after_success: bool = False
     error: str | None = None
+    duration_ms: int = 0
 
 
 @dataclass
@@ -584,7 +585,9 @@ async def _run_single_reasoning_step(
     doom_msg = verify.detect_doom_loop(tracker.calls)
     if doom_msg:
         logger.warning("DOOM_LOOP: %s", doom_msg)
-        async for ev in _emit_doom_loop_terminal(turn, doom_msg):
+        async for ev in _emit_doom_loop_terminal(
+            turn, doom_msg, blocked_action=tracker.last_action()
+        ):
             yield ev
         return
 
@@ -1264,7 +1267,34 @@ async def _post_process_skill_result(
     turn.messages.append(
         context.tool_result_message(tc["id"], tc["name"], state.result)
     )
-    tracker.record_observation(skill.name, tc["arguments"], state.result)
+    progress_delta = tracker.record_observation(
+        skill.name, tc["arguments"], state.result
+    )
+    progress_ev = sse.progress(
+        skill.name,
+        progress_delta["status"],
+        progress_delta["reason"],
+        progress_delta["observation_fingerprint"],
+        step=turn.step_count,
+        tool_call_id=tc["id"],
+    )
+    turn.emit(progress_ev["type"], progress_ev["data"])
+    yield progress_ev
+    trace_tool_call(
+        skill.name,
+        tc["arguments"],
+        state.result,
+        duration_ms=state.duration_ms,
+        error=state.error,
+        agent_tool_name=skill.name,
+        business_tool_name=getattr(skill, "mcp_tool", ""),
+        operation=getattr(skill, "operation", ""),
+        tool_call_id=tc["id"],
+        progress=progress_delta["status"],
+        progress_reason=progress_delta["reason"],
+        observation_fingerprint=progress_delta["observation_fingerprint"],
+        step_index=turn.step_count,
+    )
     if state.error:
         result = state.result if isinstance(state.result, dict) else {}
         if not bool(result.get("retryable", False)):
@@ -1310,7 +1340,24 @@ async def _prepare_skill_call(
         tc["arguments"] = enriched  # 回写，确保 action 事件显示真实参数
     prepared.args = args
 
-    tracker.record(skill.name, args)
+    if verify.is_blocked_action(turn.task_state, skill.name, args):
+        async for ev in _emit_blocked_action_repeat(turn, skill, tc["id"], args):
+            yield ev
+        prepared.proceed = False
+        return
+    if isinstance(turn.task_state, dict) and turn.task_state.get("status") == "blocked":
+        # 用户已经给出不同动作，允许恢复并清理临时阻断状态。
+        turn.task_state = None
+
+    tracker.record(
+        skill.name,
+        args,
+        agent_tool_name=skill.name,
+        business_tool_name=getattr(skill, "mcp_tool", ""),
+        operation=getattr(skill, "operation", ""),
+        tool_call_id=tc["id"],
+        step_index=turn.step_count,
+    )
     missing = skill.missing_required_params(args)
     if missing:
         async for ev in _emit_missing_params(
@@ -1380,6 +1427,15 @@ async def _emit_unknown_tool(
     """未知工具错误：发 observation + 写 tool_msg。"""
     err_msg = f"未知工具: {tool_name}"
     result = {"error": err_msg}
+    trace_tool_call(
+        tool_name,
+        {},
+        result,
+        error=err_msg,
+        agent_tool_name=tool_name,
+        tool_call_id=tool_call_id,
+        step_index=turn.step_count,
+    )
     ev = sse.observation(
         tool_name,
         None,
@@ -1408,7 +1464,15 @@ async def _emit_not_exposed_tool(
         "code": "tool_not_exposed",
         "message": err_msg,
     }
-    trace_tool_call(tool_name, args, result, error=err_msg)
+    trace_tool_call(
+        tool_name,
+        args,
+        result,
+        error=err_msg,
+        agent_tool_name=tool_name,
+        tool_call_id=tool_call_id,
+        step_index=turn.step_count,
+    )
     ev = sse.observation(
         tool_name,
         None,
@@ -1438,7 +1502,17 @@ async def _emit_missing_params(
     """缺失必填参数：发 observation + 写 tool_msg。"""
     result = _missing_params_result(skill, missing)
     message = result["message"]
-    trace_tool_call(tool_name, args, result, error=message)
+    trace_tool_call(
+        tool_name,
+        args,
+        result,
+        error=message,
+        agent_tool_name=tool_name,
+        business_tool_name=getattr(skill, "mcp_tool", ""),
+        operation=getattr(skill, "operation", ""),
+        tool_call_id=tool_call_id,
+        step_index=turn.step_count,
+    )
     ev = sse.observation(
         tool_name,
         None,
@@ -1455,6 +1529,56 @@ async def _emit_missing_params(
     turn.emit("observation", ev["data"])
     yield ev
     turn.messages.append(context.tool_result_message(tool_call_id, tool_name, result))
+
+
+async def _emit_blocked_action_repeat(
+    turn: Turn, skill: Skill, tool_call_id: str, args: dict
+) -> AsyncGenerator[dict, None]:
+    """跨 Turn 恢复时阻止原样重试已终止动作，并保留明确错误码。"""
+    message = "上一次执行已因相同动作无进展而停止，请补充条件或明确下一步动作。"
+    result = {
+        "error": "blocked_action_repeat",
+        "code": "blocked_action_repeat",
+        "message": message,
+        "retryable": False,
+    }
+    trace_tool_call(
+        skill.name,
+        args,
+        result,
+        error=message,
+        agent_tool_name=skill.name,
+        business_tool_name=getattr(skill, "mcp_tool", ""),
+        operation=getattr(skill, "operation", ""),
+        tool_call_id=tool_call_id,
+        step_index=turn.step_count,
+    )
+    ev = sse.observation(
+        skill.name,
+        None,
+        error=message,
+        error_info={
+            "code": "blocked_action_repeat",
+            "message": message,
+            "phase": TurnPhase.TOOL_PREPARING.value,
+            "tool_name": skill.name,
+            "retryable": False,
+            "attempt": 0,
+        },
+    )
+    turn.emit("observation", ev["data"])
+    yield ev
+    turn.messages.append(context.tool_result_message(tool_call_id, skill.name, result))
+    async for terminal_ev in _emit_failure_terminal(
+        turn,
+        code="blocked_action_repeat",
+        message=message,
+        answer=message,
+        phase=TurnPhase.TOOL_PREPARING,
+        stop_reason=StopReason.RESUME_REQUIRES_NEW_ACTION,
+        status="terminated",
+    ):
+        yield terminal_ev
 
 
 async def _check_duplication(
@@ -1479,14 +1603,39 @@ async def _check_duplication(
             "相同查询没有产生新的结果，已停止继续调用工具。"
             "如需继续，请补充筛选条件或明确下一步业务动作。"
         )
-        async for ev in _emit_doom_loop_terminal(turn, message):
+        async for ev in _emit_doom_loop_terminal(
+            turn,
+            message,
+            blocked_action={"agent_tool_name": tool_name, "arguments": args},
+        ):
             yield ev
 
 
 async def _emit_doom_loop_terminal(
-    turn: Turn, detail: str
+    turn: Turn,
+    detail: str,
+    *,
+    blocked_action: dict[str, object] | None = None,
 ) -> AsyncGenerator[dict, None]:
     """发布 Doom 警告，再交给统一受控终止器收口。"""
+    if blocked_action:
+        turn.task_state = {
+            "status": "blocked",
+            "reason": StopReason.DOOM_LOOP_DETECTED.value,
+            "resume_policy": "ask_user",
+            "blocked_action": {
+                "agent_tool_name": str(
+                    blocked_action.get("agent_tool_name")
+                    or blocked_action.get("skill")
+                    or ""
+                ),
+                "arguments": dict(
+                    blocked_action.get("arguments")
+                    or blocked_action.get("args")
+                    or {}
+                ),
+            },
+        }
     warning_ev = sse.doom_loop_warning(detail, step=turn.step_count)
     turn.emit("doom_loop_warning", warning_ev["data"])
     yield warning_ev
@@ -1749,6 +1898,7 @@ async def _run_skill_call(
             turn.emit("heartbeat", heartbeat_ev["data"])
             yield heartbeat_ev
         _tool_ms = int((time.time() - _tool_start) * 1000)
+        state.duration_ms = _tool_ms
         # skill 兜底可能回写了 action 事件的 arguments
         action_data = _find_latest_action_data(turn, skill.name) or ev["data"]
         if action_data != ev["data"]:
@@ -1782,9 +1932,6 @@ async def _run_skill_call(
                 error=result_obj.error,
                 error_info=error_info,
             )
-            trace_tool_call(
-                skill.name, args, None, duration_ms=_tool_ms, error=result_obj.error
-            )
             finished_ev = sse.tool_finished(
                 turn.turn_id,
                 tool_call_id,
@@ -1797,7 +1944,6 @@ async def _run_skill_call(
             state.result = result_obj.data
             state.finalize_after_success = skill.finalize_after_success
             obs_ev = sse.observation(skill.name, state.result)
-            trace_tool_call(skill.name, args, state.result, duration_ms=_tool_ms)
             finished_ev = sse.tool_finished(
                 turn.turn_id,
                 tool_call_id,
@@ -1859,6 +2005,7 @@ async def _run_skill_call(
             error_info=error_info,
         )
         duration_ms = int((time.time() - _tool_start) * 1000)
+        state.duration_ms = duration_ms
         finished_ev = sse.tool_finished(
             turn.turn_id,
             tool_call_id,
@@ -1881,7 +2028,6 @@ async def _run_skill_call(
         yield failed_ev
         turn.emit("observation", obs_ev["data"])
         yield obs_ev
-        trace_tool_call(skill.name, args, None, error=str(exc))
 
 
 # ── prepare → commit 审批后继 ─────────────────────────────

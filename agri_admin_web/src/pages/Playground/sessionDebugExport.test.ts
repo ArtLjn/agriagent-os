@@ -191,4 +191,58 @@ describe('buildSessionDebugExport', () => {
       },
     ]);
   });
+
+  it('导出 Runtime 实际产生的 tool_call 及 Agent 到 MCP 映射', () => {
+    const timeline: TraceTimeline = {
+      request_id: 'request-2',
+      rounds: [
+        {
+          round_index: 0,
+          nodes: [
+            {
+              node_type: 'tool_call',
+              node_name: 'list_system_crop_templates',
+              step_index: 2,
+              duration_ms: 18,
+              status: 'success',
+              token_usage: null,
+              start_time: null,
+              error_message: null,
+              error_code: null,
+              input_data: { crop_type: '水稻' },
+              output_data: { templates: [] },
+              attributes: {
+                tool_call_id: 'call-2',
+                agent_tool_name: 'list_system_crop_templates',
+                business_tool_name: 'manage_crop_cycle',
+                operation: 'system_templates',
+                progress: 'advanced',
+                progress_reason: 'new_observation',
+                observation_fingerprint: 'sha256:test',
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const exported = buildSessionDebugExport({
+      sessionId: 'session-2',
+      copiedAt: '2026-06-10T00:00:00.000Z',
+      messages: [],
+      timeline,
+    });
+
+    expect(exported.skill_calls).toEqual([
+      expect.objectContaining({
+        skill_name: 'list_system_crop_templates',
+        step_index: 2,
+        tool_call_id: 'call-2',
+        agent_tool_name: 'list_system_crop_templates',
+        business_tool_name: 'manage_crop_cycle',
+        operation: 'system_templates',
+        progress: 'advanced',
+      }),
+    ]);
+  });
 });

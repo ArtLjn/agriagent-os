@@ -90,6 +90,45 @@ def test_trace_llm_call_keeps_model_input_and_output(monkeypatch) -> None:
     assert node["token_usage"]["total_tokens"] == 138
 
 
+def test_trace_tool_call_keeps_agent_business_mapping(monkeypatch) -> None:
+    collector._queue.clear()
+    monkeypatch.setattr(
+        collector,
+        "get_trace",
+        lambda: SimpleNamespace(
+            trace_id="trace-map",
+            request_id="request-map",
+            conversation_id="conversation-map",
+            turn_id="turn-map",
+            user_id="user-map",
+            farm_uid="farm-map",
+        ),
+    )
+    collector.trace_tool_call(
+        "list_system_crop_templates",
+        {"crop_type": "水稻"},
+        {"templates": []},
+        agent_tool_name="list_system_crop_templates",
+        business_tool_name="manage_crop_cycle",
+        operation="system_templates",
+        tool_call_id="call-map",
+        progress="advanced",
+        progress_reason="new_observation",
+        observation_fingerprint="sha256:test",
+        step_index=2,
+    )
+
+    node = collector._queue[-1]
+    assert node["node_type"] == "tool_call"
+    assert node["node_name"] == "list_system_crop_templates"
+    assert node["step_index"] == 2
+    assert node["attributes"]["business_tool_name"] == "manage_crop_cycle"
+    assert node["attributes"]["operation"] == "system_templates"
+    assert node["attributes"]["tool_call_id"] == "call-map"
+    assert node["attributes"]["progress"] == "advanced"
+    collector._queue.clear()
+
+
 def test_trace_nodes_form_parent_child_contract() -> None:
     collector._queue.clear()
     trace = init_trace(

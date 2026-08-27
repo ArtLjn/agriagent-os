@@ -20,6 +20,15 @@ export interface BuildSessionDebugExportArgs {
 export interface SessionDebugSkillCall {
   round_index: number;
   skill_name: string;
+  step_index?: number;
+  tool_call_id?: string;
+  agent_tool_name?: string;
+  business_tool_name?: string;
+  operation?: string;
+  progress?: string;
+  progress_reason?: string;
+  observation_fingerprint?: string;
+  error_code?: string | null;
   status: string;
   duration_ms: number | null;
   input_data: TracePayload;
@@ -162,16 +171,36 @@ function extractSkillCalls(
     round.nodes
       .filter(
         (node) =>
-          node.node_type === 'skill_call' && node.node_name !== 'pending_plan',
+          (node.node_type === 'skill_call' || node.node_type === 'tool_call') &&
+          node.node_name !== 'pending_plan',
       )
-      .map((node) => ({
-        round_index: round.round_index,
-        skill_name: node.node_name,
-        status: node.status,
-        duration_ms: node.duration_ms,
-        input_data: node.input_data,
-        output_data: node.output_data,
-        error_message: node.error_message,
-      })),
+      .map((node) => {
+        const attributes = node.attributes ?? {};
+        const item: SessionDebugSkillCall = {
+          round_index: round.round_index,
+          skill_name: node.node_name,
+          status: node.status,
+          duration_ms: node.duration_ms,
+          input_data: node.input_data,
+          output_data: node.output_data,
+          error_message: node.error_message,
+        };
+        if (node.step_index !== undefined) item.step_index = node.step_index;
+        if (node.error_code !== undefined) item.error_code = node.error_code;
+        const optionalFields = [
+          'tool_call_id',
+          'agent_tool_name',
+          'business_tool_name',
+          'operation',
+          'progress',
+          'progress_reason',
+          'observation_fingerprint',
+        ] as const;
+        optionalFields.forEach((field) => {
+          const value = attributes[field];
+          if (typeof value === 'string' && value) item[field] = value;
+        });
+        return item;
+      }),
   );
 }

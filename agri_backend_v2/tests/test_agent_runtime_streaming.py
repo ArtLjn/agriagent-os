@@ -15,7 +15,12 @@ from agent.domains.harness.router import SkillRoute
 from agent.domains.harness.runtime.turn import StopReason, Turn, TurnPhase
 from agent.platforms.persistence.redis import sse, turn_store
 from agent.domains.harness.observability import trace as trace_infra
-from agent.domains.harness.tools.base import McpSkill, OperationSkill, Skill, SkillResult
+from agent.domains.harness.tools.base import (
+    McpSkill,
+    OperationSkill,
+    Skill,
+    SkillResult,
+)
 from agent.domains.harness.tools.registry import SkillRegistry, SkillRegistryError
 
 
@@ -792,6 +797,55 @@ def test_changed_observation_does_not_trigger_doom_loop() -> None:
     tracker.record("query", {})
 
     assert react.verify.detect_doom_loop(tracker.calls) is None
+
+
+def test_progress_ledger_classifies_observation_changes() -> None:
+    ledger = react.verify.ProgressLedger()
+    ledger.record("query", {"crop": "水稻"})
+    first = ledger.record_observation("query", {"crop": "水稻"}, {"count": 1})
+    ledger.record("query", {"crop": "水稻"})
+    same = ledger.record_observation("query", {"crop": "水稻"}, {"count": 1})
+    ledger.record("query", {"crop": "水稻"})
+    changed = ledger.record_observation("query", {"crop": "水稻"}, {"count": 2})
+
+    assert first["status"] == "advanced"
+    assert same["status"] == "unchanged"
+    assert changed["status"] == "advanced"
+    assert ledger.last_action()["skill"] == "query"
+
+
+@pytest.mark.asyncio
+async def test_cross_turn_blocked_action_is_stopped_before_skill_execution() -> None:
+    skill = _ReadSkill("query_workers")
+    turn = Turn(
+        user_input="继续",
+        task_state={
+            "status": "blocked",
+            "resume_policy": "ask_user",
+            "blocked_action": {
+                "agent_tool_name": "query_workers",
+                "arguments": {},
+            },
+        },
+    )
+
+    events = [
+        event
+        async for event in react._dispatch_tool_calls(
+            tool_calls=[{"id": "resume-call", "name": skill.name, "arguments": {}}],
+            rationale="继续",
+            skill_index={skill.name: skill},
+            skill_ctx=SimpleNamespace(),
+            approval_waiter=_approve,
+            turn=turn,
+            tracker=react.verify.ProgressLedger(),
+            plan_box={"plan": None},
+        )
+    ]
+
+    assert turn.stop_reason == StopReason.RESUME_REQUIRES_NEW_ACTION
+    assert any(event["type"] == "observation" for event in events)
+    assert not any(event["type"] == "tool_started" for event in events)
 
 
 @pytest.mark.asyncio
