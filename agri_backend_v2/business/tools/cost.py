@@ -18,7 +18,7 @@ from decimal import Decimal, InvalidOperation
 from business.db import session_scope
 from business.mcp_app import mcp
 from business.services import cost_category_service, cost_service
-from business.tools._headers import get_farm_id_from_headers
+from business.tools._headers import require_farm_operation_permission
 
 
 def _to_decimal(value, field: str) -> Decimal:
@@ -146,8 +146,13 @@ def manage_cost(
         record_type="cost"
       - "删除分类 5" → operation="delete_category", category_id=5
     """
-    farm_id = get_farm_id_from_headers()
     op = (operation or "").lower()
+    principal = require_farm_operation_permission(
+        op,
+        read_operations={"query", "summary", "profit", "categories"},
+        write_operations={"create", "delete", "create_category", "delete_category"},
+    )
+    farm_id = principal["farm_id"]
 
     if op == "query":
         with session_scope() as db:

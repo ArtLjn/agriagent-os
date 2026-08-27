@@ -47,6 +47,7 @@ from agent.domains.harness.observability.trace import (  # noqa: E402
     start_trace_system,
     stop_trace_system,
 )
+from shared.api_response import install_api_exception_handlers  # noqa: E402
 
 setup_logging(app_name="agent")
 logger = get_logger(__name__)
@@ -70,6 +71,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="farm-manager agent", version="0.1.0", lifespan=lifespan)
+install_api_exception_handlers(app)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.include_router(api_router)
 

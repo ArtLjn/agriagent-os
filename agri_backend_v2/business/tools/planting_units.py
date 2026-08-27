@@ -7,7 +7,7 @@ from datetime import date
 from business.db import session_scope
 from business.mcp_app import mcp
 from business.services import work_order_service
-from business.tools._headers import get_farm_id_from_headers
+from business.tools._headers import require_farm_operation_permission
 
 
 @mcp.tool
@@ -22,8 +22,11 @@ def manage_planting_units(
     note: str | None = None,
 ) -> dict:
     """查询或创建真实种植单元，不使用茬口 field_name 代替。"""
-    farm_id = get_farm_id_from_headers()
     op = (operation or "").lower()
+    principal = require_farm_operation_permission(
+        op, read_operations={"query", "detail"}, write_operations={"create"}
+    )
+    farm_id = principal["farm_id"]
     with session_scope() as db:
         if op == "query":
             items = work_order_service.list_units(db, farm_id, cycle_id=cycle_id)

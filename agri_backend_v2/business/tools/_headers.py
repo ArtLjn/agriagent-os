@@ -1,22 +1,60 @@
 """MCP 工具共享的已验证身份读取工具。"""
+
 from __future__ import annotations
 
 import logging
 
+from shared.roles import Permission, has_permission
+
 logger = logging.getLogger(__name__)
 
 
-def get_farm_id_from_headers() -> int:
+class McpToolAuthorizationError(Exception):
+    """MCP 工具缺少最小权限时抛出的可序列化授权错误。"""
+
+    code = "permission_denied"
+
+    def __init__(self, permission: Permission):
+        self.permission = permission
+        super().__init__(f"MCP 工具需要权限: {permission.value}")
+
+
+_TOOL_OPERATION_PERMISSIONS = {
+    "manage_cost": {
+        "query": Permission.FARM_READ,
+        "summary": Permission.FARM_READ,
+        "profit": Permission.FARM_READ,
+        "categories": Permission.FARM_READ,
+        "create": Permission.FARM_WRITE,
+        "delete": Permission.FARM_WRITE,
+        "create_category": Permission.FARM_WRITE,
+        "delete_category": Permission.FARM_WRITE,
+    },
+    "manage_planting_units": {
+        "query": Permission.FARM_READ,
+        "detail": Permission.FARM_READ,
+        "create": Permission.FARM_WRITE,
+    },
+    "manage_user_settings": {
+        "query": Permission.PROFILE_READ,
+        "update": Permission.PROFILE_WRITE,
+    },
+    "commit_planting_plan": {"commit": Permission.FARM_WRITE},
+    "prepare_planting_plan": {"prepare": Permission.FARM_READ},
+}
+
+
+def get_farm_id_from_headers(permission: Permission = Permission.FARM_READ) -> int:
     """从 MCP 鉴权 middleware 注入的 Principal 读取内部 farm_id。"""
-    return get_principal()["farm_id"]
+    return get_principal(permission)["farm_id"]
 
 
-def get_user_id_from_headers() -> str:
+def get_user_id_from_headers(permission: Permission = Permission.PROFILE_READ) -> str:
     """从 MCP 鉴权 middleware 注入的 Principal 读取用户 ID。"""
-    return get_principal()["user_id"]
+    return get_principal(permission)["user_id"]
 
 
-def get_principal() -> dict:
+def get_principal(permission: Permission | None = None) -> dict:
     """读取已验证 Principal；缺失时 fail closed。"""
     from fastmcp.server.dependencies import get_http_request
 
@@ -24,4 +62,36 @@ def get_principal() -> dict:
     principal = getattr(request.state, "principal", None)
     if not principal:
         raise RuntimeError("MCP request principal missing")
+    if not has_permission(
+        principal.get("role"), principal.get("scope"), Permission.MCP_INVOKE
+    ):
+        raise McpToolAuthorizationError(Permission.MCP_INVOKE)
+    if permission is not None and not has_permission(
+        principal.get("role"), principal.get("scope"), permission
+    ):
+        raise McpToolAuthorizationError(permission)
     return principal
+
+
+def permission_for_tool(tool_name: str, operation: str) -> Permission | None:
+    """按工具和操作查找最小权限，未知操作保持兼容并返回空值。"""
+    permissions = _TOOL_OPERATION_PERMISSIONS.get(tool_name, {})
+    return permissions.get((operation or "").lower())
+
+
+def require_farm_operation_permission(
+    operation: str,
+    *,
+    read_operations: set[str],
+    write_operations: set[str],
+) -> dict:
+    """在访问数据库前按操作类型校验 MCP 工具权限。"""
+    normalized = (operation or "").lower()
+    permission = (
+        Permission.FARM_WRITE
+        if normalized in write_operations
+        else Permission.FARM_READ
+        if normalized in read_operations
+        else None
+    )
+    return get_principal(permission)

@@ -7,12 +7,48 @@ chat / approve / turns 路由通过 import 共享同一实例。
 from __future__ import annotations
 
 import asyncio
+from typing import Annotated
+
+from fastapi import Depends, Header, HTTPException
+
+from agent.auth import parse_identity
+from shared.roles import Permission, has_permission
 
 # Pending HITL approvals keyed by turn_id.
 pending_approvals: dict[str, asyncio.Future[tuple[bool, str]]] = {}
 
 # Live turn snapshots for /turns/{turn_id} status polling.
 active_turns: dict = {}
+
+
+def get_current_principal(
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """将 Agent User JWT 转换为受保护路由使用的 Principal。"""
+    return parse_identity(authorization)
+
+
+CurrentPrincipal = Annotated[dict, Depends(get_current_principal)]
+
+
+def require_permission(permission: Permission):
+    """创建 Agent 路由权限依赖，保持认证和资源归属分层。"""
+
+    def check(principal: CurrentPrincipal) -> dict:
+        if not has_permission(
+            principal.get("role"), principal.get("scope"), permission
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "permission_denied",
+                    "message": "当前身份没有所需权限",
+                    "meta": {"permission": permission.value},
+                },
+            )
+        return principal
+
+    return check
 
 
 async def approval_waiter(turn_id: str) -> tuple[bool, str]:

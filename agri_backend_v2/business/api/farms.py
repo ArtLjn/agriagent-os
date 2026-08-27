@@ -6,10 +6,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import Field
 from sqlalchemy.orm import Session
 
-from business.api.deps import get_current_user
+from business.api.deps import get_current_user, require_permission
 from business.api.schemas import StrictRequest
 from business.db import get_db
 from business.services import farm_crud_service, farm_service
+from shared.roles import Permission
 
 router = APIRouter(prefix="/farms", tags=["farms"])
 
@@ -40,7 +41,7 @@ def _farm_out(farm) -> dict:
     }
 
 
-@router.get("/my")
+@router.get("/my", dependencies=[Depends(require_permission(Permission.FARM_READ))])
 def my_farm(user: dict = Depends(get_current_user)) -> dict:
     result = farm_service.build_summary_by_user(user["user_id"])
     if result is None:

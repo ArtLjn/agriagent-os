@@ -10,7 +10,7 @@ import jwt
 from fastapi import HTTPException
 
 from agent.config import settings
-from shared.roles import UserRole, normalize_user_role
+from shared.roles import Permission, UserRole, normalize_user_role
 
 
 def _bearer_token(authorization: str | None) -> str:
@@ -121,7 +121,12 @@ def create_delegation_token(
         "type": "delegation",
         "farm_uid": identity["farm_uid"],
         "role": identity.get("role", UserRole.USER.value),
-        "scope": identity.get("scope") or "farm:read",
+        "scope": " ".join(
+            filter(
+                None,
+                [Permission.MCP_INVOKE.value, identity.get("scope") or "farm:read"],
+            )
+        ),
         "source_jti": identity.get("token_id", ""),
         "conversation_id": conversation_id,
         "turn_id": turn_id,

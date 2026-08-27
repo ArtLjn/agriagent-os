@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import Depends, Header, HTTPException
 
 from business.services import auth_service, farm_crud_service
@@ -14,7 +16,7 @@ from business.services.tokens import (
     TokenInvalidError,
     decode_access_token,
 )
-from shared.roles import is_admin_role
+from shared.roles import Permission, has_permission, is_admin_role
 
 
 def get_current_user(authorization: str | None = Header(default=None)) -> dict:
@@ -101,6 +103,8 @@ def get_current_user(authorization: str | None = Header(default=None)) -> dict:
         "farm_uid": farm.uid,
         "farm_id": farm.id,
         "role": user.role,
+        "scope": payload.get("scope") or "",
+        "token_id": str(payload.get("jti") or ""),
     }
 
 
@@ -124,3 +128,31 @@ def get_current_admin(user: dict = Depends(get_current_user)) -> dict:
             },
         )
     return user
+
+
+def get_current_principal(user: dict = Depends(get_current_user)) -> dict:
+    """以统一 Principal 名称暴露已完成 Business 身份校验的用户。"""
+    return user
+
+
+CurrentPrincipal = Annotated[dict, Depends(get_current_principal)]
+
+
+def require_permission(permission: Permission):
+    """创建 FastAPI 权限依赖，资源归属校验仍由具体 service 负责。"""
+
+    def check(principal: CurrentPrincipal) -> dict:
+        if not has_permission(
+            principal.get("role"), principal.get("scope"), permission
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "permission_denied",
+                    "message": "当前身份没有所需权限",
+                    "meta": {"permission": permission.value},
+                },
+            )
+        return principal
+
+    return check

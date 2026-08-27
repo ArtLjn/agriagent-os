@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from business.db import session_scope
 from business.mcp_app import mcp
 from business.services import planting_plan_service
-from business.tools._headers import get_farm_id_from_headers
+from business.tools._headers import require_farm_operation_permission
 
 
 def _handle_error(
@@ -46,7 +46,9 @@ def prepare_planting_plan(
 ) -> dict:
     """准备种植计划，不创建业务实体。"""
     try:
-        farm_id = get_farm_id_from_headers()
+        farm_id = require_farm_operation_permission(
+            "prepare", read_operations={"prepare"}, write_operations=set()
+        )["farm_id"]
         with session_scope() as db:
             return planting_plan_service.prepare_planting_plan(
                 db,
@@ -77,7 +79,9 @@ def commit_planting_plan(
 ) -> dict:
     """提交已经审批的完整种植计划，事务内创建全部业务实体。"""
     try:
-        farm_id = get_farm_id_from_headers()
+        farm_id = require_farm_operation_permission(
+            "commit", read_operations=set(), write_operations={"commit"}
+        )["farm_id"]
         with session_scope() as db:
             return planting_plan_service.commit_planting_plan(
                 db,

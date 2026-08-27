@@ -7,7 +7,8 @@ from __future__ import annotations
 
 from business.mcp_app import mcp
 from business.services import user_service
-from business.tools._headers import get_user_id_from_headers
+from business.tools._headers import get_principal
+from shared.roles import Permission
 
 
 def _error(code: str, message: str, **context: object) -> dict:
@@ -67,8 +68,13 @@ def manage_user_settings(
     assistant_role: str | None = None,
 ) -> dict:
     """查询或更新当前登录用户的偏好设置。"""
-    user_id = get_user_id_from_headers()
     op = (operation or "").lower()
+    permission = {
+        "query": Permission.PROFILE_READ,
+        "update": Permission.PROFILE_WRITE,
+    }.get(op)
+    principal = get_principal(permission)
+    user_id = principal["user_id"]
 
     if op == "query":
         settings = user_service.get_user_settings(user_id)

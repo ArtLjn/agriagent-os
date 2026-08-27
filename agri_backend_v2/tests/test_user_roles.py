@@ -91,7 +91,7 @@ def test_dev_token_contains_normal_user_scope(monkeypatch: pytest.MonkeyPatch) -
 
     payload = decode_access_token(token)
     assert payload["role"] == UserRole.DEV.value
-    assert payload["scope"] == "farm:read farm:write"
+    assert payload["scope"] == scope_for_role(UserRole.DEV)
 
 
 def test_dev_viewer_cannot_request_admin_debug_projection() -> None:
