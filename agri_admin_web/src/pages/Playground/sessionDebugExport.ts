@@ -75,6 +75,8 @@ export interface SessionDebugExport {
   used_skills: string[];
   pending_actions: SessionDebugPendingAction[];
   trace_request_id: string | null;
+  execution_record_status: 'available' | 'none' | 'unavailable';
+  execution_record_note: string | null;
   skill_calls: SessionDebugSkillCall[];
   router_diagnostics: SessionDebugRouterDiagnostic[];
   pending_plans: SessionDebugPendingPlan[];
@@ -110,6 +112,13 @@ export function buildSessionDebugExport({
     ];
   });
 
+  const skillCalls = extractSkillCalls(timeline);
+  const executionRecordStatus = timeline
+    ? skillCalls.length > 0
+      ? 'available'
+      : 'none'
+    : 'unavailable';
+
   return {
     format: 'farm-manager.chat-session-debug.v1',
     session_id: sessionId,
@@ -119,7 +128,10 @@ export function buildSessionDebugExport({
     used_skills: usedSkills,
     pending_actions: pendingActions,
     trace_request_id: timeline?.request_id ?? null,
-    skill_calls: extractSkillCalls(timeline),
+    execution_record_status: executionRecordStatus,
+    execution_record_note:
+      executionRecordStatus === 'none' ? '无实际 Tool 执行记录' : null,
+    skill_calls: skillCalls,
     router_diagnostics: extractRouterDiagnostics(timeline),
     pending_plans: extractPendingPlans(timeline),
   };

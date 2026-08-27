@@ -128,6 +128,24 @@ def _state_bool(value: object) -> bool:
     return value is True or str(value).lower() in {"1", "true", "yes"}
 
 
+async def _cleanup_runtime_resources(
+    turn: Turn,
+    lease: TurnLease,
+    renew_stop: asyncio.Event,
+    renew_task: asyncio.Task,
+    scope: str,
+) -> None:
+    """释放 Worker 运行资源，避免上下文冲突提前返回时遗留 lease。"""
+    renew_stop.set()
+    await renew_task
+    await release_turn(lease)
+    await wake_conversation(scope)
+    await wake_global_queue()
+    trace_turn_outcome(turn.status, turn.error)
+    await flush_now()
+    clear_trace()
+
+
 async def _persist_session_state(turn: Turn) -> dict:
     """在 Mongo 可见消息落库后推进 Session state；失败不伪装成成功。"""
     result = await memory.persist_session_turn(
@@ -548,6 +566,9 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
             ),
             trace_id=trace_id,
         )
+        await _cleanup_runtime_resources(
+            turn, lease, renew_stop, renew_task, scope
+        )
         return
     if turn.context_source_status == "unavailable":
         await _finalize_context_failure(
@@ -555,6 +576,9 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
             code="context_source_unavailable",
             message="Mongo Conversation state 暂不可用。",
             trace_id=trace_id,
+        )
+        await _cleanup_runtime_resources(
+            turn, lease, renew_stop, renew_task, scope
         )
         return
     turn.conversation_revision = _state_int(
@@ -752,14 +776,9 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
             trace_id=trace_id,
         )
     finally:
-        renew_stop.set()
-        await renew_task
-        await release_turn(lease)
-        await wake_conversation(scope)
-        await wake_global_queue()
-        trace_turn_outcome(turn.status, turn.error)
-        await flush_now()
-        clear_trace()
+        await _cleanup_runtime_resources(
+            turn, lease, renew_stop, renew_task, scope
+        )
 
 
 async def _worker_loop(stop: asyncio.Event, consumer: str) -> None:

@@ -339,6 +339,22 @@ def is_blocked_action(
     ) == _args_key(args)
 
 
+def is_allowed_resume_action(
+    task_state: dict[str, Any] | None,
+    skill: str,
+    args: dict[str, Any],
+) -> bool:
+    """只允许任务状态声明的下一动作恢复，避免凭空扩大恢复范围。"""
+    if not isinstance(task_state, dict):
+        return False
+    next_action = task_state.get("next_allowed_action")
+    if not isinstance(next_action, dict):
+        return False
+    return next_action.get("agent_tool_name") == skill and _args_key(
+        next_action.get("arguments", {})
+    ) == _args_key(args)
+
+
 def check_duplication(
     tracker: CallTracker,
     skill: str,

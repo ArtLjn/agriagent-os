@@ -59,6 +59,8 @@ describe('buildSessionDebugExport', () => {
         },
       ],
       trace_request_id: 'req-1',
+      execution_record_status: 'available',
+      execution_record_note: null,
       skill_calls: [
         {
           round_index: 1,
@@ -102,6 +104,7 @@ describe('buildSessionDebugExport', () => {
       },
     ]);
     expect(exported.used_skills).toEqual(['create_cost_record']);
+    expect(exported.execution_record_status).toBe('unavailable');
     expect(exported.pending_actions).toEqual([
       {
         message_index: 1,
@@ -190,6 +193,7 @@ describe('buildSessionDebugExport', () => {
         output_data: { action_id: 'action-1' },
       },
     ]);
+    expect(exported.execution_record_status).toBe('available');
   });
 
   it('导出 Runtime 实际产生的 tool_call 及 Agent 到 MCP 映射', () => {
@@ -244,5 +248,22 @@ describe('buildSessionDebugExport', () => {
         progress: 'advanced',
       }),
     ]);
+    expect(exported.execution_record_status).toBe('available');
+  });
+
+  it('没有实际 Tool 执行节点时明确标记证据缺失', () => {
+    const exported = buildSessionDebugExport({
+      sessionId: 'session-empty',
+      copiedAt: '2026-08-27T00:00:00.000Z',
+      messages: [{ role: 'assistant', content: '已选择查询能力', skills: ['query_workers'] }],
+      timeline: {
+        request_id: 'request-empty',
+        rounds: [{ round_index: 1, nodes: [] }],
+      },
+    });
+
+    expect(exported.skill_calls).toEqual([]);
+    expect(exported.execution_record_status).toBe('none');
+    expect(exported.execution_record_note).toBe('无实际 Tool 执行记录');
   });
 });

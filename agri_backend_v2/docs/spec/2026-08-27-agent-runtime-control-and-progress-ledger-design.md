@@ -106,7 +106,7 @@ list_system_crop_templates
 
 导出中 `skill_calls=[]`、`pending_actions=[]`，因此该导出本身不能证明每个选择都已经到达 Business MCP，也不能单独证明三次执行结果完全相同。`router_diagnostics` 只能作为模型选择证据，不能替代 Tool 执行记录。
 
-当前 Playground 的 `getTimeline()` 会把后端 flat nodes 兼容包装为一个 `round_index=0` 的 round；因此 `round_index` 不是实际 ReAct 步骤。实际调试必须使用 `turn_id`、`step_index`、`tool_call_id`、Trace 节点 ID 和时间顺序。
+当前 Playground 的 `getTimeline()` 将后端 flat nodes 按 `step_index` 分组，使用 `round_index` 作为旧组件兼容键；因此 `round_index` 不是独立的 Runtime 事实。实际调试必须使用 `turn_id`、`step_index`、`tool_call_id`、Trace 节点 ID 和时间顺序。
 
 ### 4.2 当前代码已经具备的能力
 
@@ -669,21 +669,21 @@ agri_admin_web/src/pages/Playground/sessionDebugExport.ts
 
 ### 13.2 Loop 与 Progress
 
-- [ ] 相同有效参数第二次产生一次 warning；
+- [x] 相同有效参数第二次产生一次 warning；
 - [x] 相同调用和等价 Observation 达到阈值后，在下一次 LLM 调用前终止；
 - [x] 同一 Tool 返回不同业务结果时不会误判 Doom；
 - [x] 不同数据范围的模板查询不会仅因名称相似而互相阻断；
-- [ ] 查询虽不修改数据库，但产生新实体/事实时记录 `advanced`；
+- [x] 查询虽不修改数据库，但产生新实体/事实时记录 `advanced`；
 - [x] 不可重试错误不会被重复喂回模型直到 `max_steps`；
 - [x] 写入成功后不会因收尾模型再次请求 Tool 而重复写入。
 
 ### 13.3 跨 Turn 恢复
 
 - [x] Doom 终止后发送“继续”不会自动重放相同 action；
-- [ ] 有明确下一计划条件时可以恢复下一步；
-- [ ] 没有安全下一步时会追问或重复说明阻断原因；
-- [ ] “继续”不会改变 HITL 授权状态；
-- [ ] Redis/Conversation state 版本冲突时不会执行旧的恢复动作。
+- [x] 有明确下一计划条件时可以恢复下一步；
+- [x] 没有安全下一步时会追问或重复说明阻断原因；
+- [x] “继续”不会改变 HITL 授权状态；
+- [x] Redis/Conversation state 版本冲突时不会执行旧的恢复动作。
 
 ### 13.4 预算和终态
 
@@ -696,10 +696,10 @@ agri_admin_web/src/pages/Playground/sessionDebugExport.ts
 ### 13.5 调试证据
 
 - [x] Debug Export 能同时显示 Agent Tool、Business MCP Tool、operation、step、tool_call_id 和错误 code；
-- [ ] `round_index=0` 不再被解释为所有动作发生在同一 ReAct 轮；
-- [ ] `skill_calls` 为空时，导出明确标记“无实际 Tool 执行记录”，不把 Router 选择当作执行成功；
-- [ ] Trace、Redis Event 和 Conversation Message 的身份关联保持 `message_id -> turn_id -> trace_id`；
-- [ ] 普通用户和管理员调试投影均不暴露隐藏思维链原文。
+- [x] `round_index=0` 不再被解释为所有动作发生在同一 ReAct 轮；
+- [x] `skill_calls` 为空时，导出明确标记“无实际 Tool 执行记录”，不把 Router 选择当作执行成功；
+- [x] Trace、Redis Event 和 Conversation Message 的身份关联保持 `message_id -> turn_id -> trace_id`；
+- [x] 普通用户和管理员调试投影均不暴露隐藏思维链原文。
 
 ## 14. 质量门禁与验证命令
 

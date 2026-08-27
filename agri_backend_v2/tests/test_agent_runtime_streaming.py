@@ -962,6 +962,120 @@ def test_progress_ledger_classifies_observation_changes() -> None:
     assert ledger.last_action()["skill"] == "query"
 
 
+@pytest.mark.asyncio
+async def test_second_valid_duplicate_emits_one_warning_without_stopping() -> None:
+    skill = _ReadSkill("query_workers")
+    turn = Turn(user_input="查询工人")
+    tracker = react.verify.ProgressLedger()
+
+    first = react._PreparedCall()
+    first_events = [
+        event
+        async for event in react._prepare_skill_call(
+            {"id": "call-1", "name": skill.name, "arguments": {}},
+            skill,
+            SimpleNamespace(),
+            turn,
+            tracker,
+            first,
+        )
+    ]
+    second = react._PreparedCall()
+    second_events = [
+        event
+        async for event in react._prepare_skill_call(
+            {"id": "call-2", "name": skill.name, "arguments": {}},
+            skill,
+            SimpleNamespace(),
+            turn,
+            tracker,
+            second,
+        )
+    ]
+
+    assert first_events == []
+    assert [event["type"] for event in second_events] == ["verification_warning"]
+    assert second.proceed is True
+    assert turn.status == "running"
+
+
+def test_read_only_query_observing_new_fact_is_advanced() -> None:
+    ledger = react.verify.ProgressLedger()
+    args = {"crop": "水稻"}
+
+    ledger.record("list_crop_templates", args)
+    delta = ledger.record_observation(
+        "list_crop_templates", args, {"templates": [{"id": 3, "name": "水稻"}]}
+    )
+
+    assert delta["status"] == "advanced"
+    assert delta["reason"] == "new_observation"
+
+
+@pytest.mark.asyncio
+async def test_different_action_is_explicit_resume_next_step() -> None:
+    skill = _ReadSkill("query_templates")
+    turn = Turn(
+        user_input="继续查询模板",
+        task_state={
+            "status": "blocked",
+            "resume_policy": "ask_user",
+            "blocked_action": {
+                "agent_tool_name": "query_workers",
+                "arguments": {},
+            },
+        },
+    )
+
+    events = [
+        event
+        async for event in react._dispatch_tool_calls(
+            tool_calls=[{"id": "next-call", "name": skill.name, "arguments": {}}],
+            rationale="下一步查询模板",
+            skill_index={skill.name: skill},
+            skill_ctx=SimpleNamespace(),
+            approval_waiter=_approve,
+            turn=turn,
+            tracker=react.verify.ProgressLedger(),
+            plan_box={"plan": None},
+        )
+    ]
+
+    assert turn.task_state is None
+    assert any(event["type"] == "tool_started" for event in events)
+
+
+@pytest.mark.asyncio
+async def test_declared_next_action_can_resume_blocked_task() -> None:
+    skill = _ReadSkill("query_templates")
+    turn = Turn(
+        user_input="继续执行下一步",
+        task_state={
+            "status": "blocked",
+            "resume_policy": "ask_user",
+            "blocked_action": {"agent_tool_name": "query_workers", "arguments": {}},
+            "next_allowed_action": {"agent_tool_name": skill.name, "arguments": {}},
+        },
+    )
+
+    events = [
+        event
+        async for event in react._dispatch_tool_calls(
+            tool_calls=[{"id": "next-call", "name": skill.name, "arguments": {}}],
+            rationale="执行已声明的下一步",
+            skill_index={skill.name: skill},
+            skill_ctx=SimpleNamespace(),
+            approval_waiter=_approve,
+            turn=turn,
+            tracker=react.verify.ProgressLedger(),
+            plan_box={"plan": None},
+        )
+    ]
+
+    assert turn.task_state is None
+    assert any(event["type"] == "tool_started" for event in events)
+
+
 def test_progress_ledger_counts_only_consecutive_unchanged_observations() -> None:
     ledger = react.verify.ProgressLedger()
     args = {"crop": "水稻"}
@@ -1142,6 +1256,46 @@ async def test_cross_turn_blocked_action_is_stopped_before_skill_execution() -> 
     assert turn.stop_reason == StopReason.RESUME_REQUIRES_NEW_ACTION
     assert any(event["type"] == "observation" for event in events)
     assert not any(event["type"] == "tool_started" for event in events)
+    assert any(event.get("data", {}).get("text") == (
+        "上一次执行已因相同动作无进展而停止，请补充条件或明确下一步动作。"
+    ) for event in events)
+
+
+@pytest.mark.asyncio
+async def test_resume_block_does_not_change_hitl_authorization_state() -> None:
+    skill = _ReadSkill("query_workers")
+    pending_approval = {
+        "tool_name": "create_work_order",
+        "arguments": {"value": "待审批"},
+        "risk_level": "write_confirm",
+    }
+    turn = Turn(
+        user_input="继续",
+        approved=False,
+        pending_approval=pending_approval,
+        task_state={
+            "status": "blocked",
+            "resume_policy": "ask_user",
+            "blocked_action": {"agent_tool_name": skill.name, "arguments": {}},
+        },
+    )
+
+    _ = [
+        event
+        async for event in react._dispatch_tool_calls(
+            tool_calls=[{"id": "resume-call", "name": skill.name, "arguments": {}}],
+            rationale="继续",
+            skill_index={skill.name: skill},
+            skill_ctx=SimpleNamespace(),
+            approval_waiter=_approve,
+            turn=turn,
+            tracker=react.verify.ProgressLedger(),
+            plan_box={"plan": None},
+        )
+    ]
+
+    assert turn.approved is False
+    assert turn.pending_approval == pending_approval
 
 
 @pytest.mark.asyncio

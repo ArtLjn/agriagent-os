@@ -1398,7 +1398,15 @@ async def _prepare_skill_call(
         prepared.proceed = False
         return
     if isinstance(turn.task_state, dict) and turn.task_state.get("status") == "blocked":
-        # 用户已经给出不同动作，允许恢复并清理临时阻断状态。
+        next_allowed = turn.task_state.get("next_allowed_action")
+        if isinstance(next_allowed, dict) and not verify.is_allowed_resume_action(
+            turn.task_state, skill.name, args
+        ):
+            async for ev in _emit_blocked_action_repeat(turn, skill, tc["id"], args):
+                yield ev
+            prepared.proceed = False
+            return
+        # 用户给出状态声明的下一动作，或明确给出不同动作，才清理临时阻断状态。
         turn.task_state = None
 
     tracker.record(

@@ -477,6 +477,7 @@ async def test_chat_worker_normal_chain_and_after_seq_reconnect(
         assert len(fake_runtime.dispatches) == 1
         assert len(fake_runtime.worker_runs) == 0
 
+
         observation_seq = max(event["seq"] for event in first if event["type"] == "progress")
         reconnected = await _post_chat(
             client,
@@ -494,6 +495,53 @@ async def test_chat_worker_normal_chain_and_after_seq_reconnect(
     assert len(fake_runtime.messages) == 2
     assert len(fake_runtime.dispatches) == 1
     assert len(fake_runtime.events[next(iter(fake_runtime.events))]) > len(first)
+
+
+@pytest.mark.asyncio
+async def test_context_revision_conflict_stops_before_business_tool_execution(
+    fake_runtime: _FakeStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def divergent_session_view(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        return {
+            "conversation_id": "conflict-conversation",
+            "messages": [],
+            "summary": None,
+            "conversation_revision": 2,
+            "summary_revision": 0,
+            "reset_generation": 0,
+            "source_status": "mongo",
+        }
+
+    monkeypatch.setattr(worker.memory, "get_session_view", divergent_session_view)
+    turn = Turn(
+        turn_id="conflict-turn",
+        conversation_id="conflict-conversation",
+        user_input="执行集成测试",
+        user_id=TEST_IDENTITY["user_id"],
+        farm_uid=TEST_IDENTITY["farm_uid"],
+        farm_id=TEST_IDENTITY["farm_id"],
+        scope=TEST_IDENTITY["scope"],
+    )
+    await fake_runtime.save_turn(
+        turn,
+        scope_hash="fake-scope",
+        lease_token="lease-conflict-turn",
+    )
+    fake_runtime.turns[turn.turn_id]["conversation_revision"] = 1
+    state = await fake_runtime.get_turn(turn.turn_id)
+    assert state is not None
+
+    await worker._run_turn(worker._turn_from_state(state), state)
+
+    events = fake_runtime.events[turn.turn_id]
+    assert fake_runtime.business_calls == []
+    assert any(event["type"] == "turn.failed" for event in events)
+    assert any(
+        event.get("data", {}).get("error", {}).get("code")
+        == "conversation_revision_divergence"
+        for event in events
+    )
 
 
 @pytest.mark.asyncio
