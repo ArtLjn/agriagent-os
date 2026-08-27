@@ -1069,6 +1069,7 @@ async def _dispatch_parallel_tool_calls(
     Plan 不会进入这个分支。
     """
     queue: asyncio.Queue[tuple[int, dict | None]] = asyncio.Queue()
+    parallel_batch_id = f"parallel-{turn.turn_id}-{turn.step_count}"
     semaphore = asyncio.Semaphore(max(1, max_parallel_skills))
     skill_semaphores: dict[str, asyncio.Semaphore] = {}
     for tool_call in tool_calls:
@@ -1100,6 +1101,7 @@ async def _dispatch_parallel_tool_calls(
                             approval_waiter=approval_waiter,
                             turn=turn,
                             tracker=tracker,
+                            parallel_batch_id=parallel_batch_id,
                         ):
                             await queue.put((index, event))
                     finally:
@@ -1119,6 +1121,7 @@ async def _dispatch_parallel_tool_calls(
                                 approval_waiter=approval_waiter,
                                 turn=turn,
                                 tracker=tracker,
+                                parallel_batch_id=parallel_batch_id,
                             ):
                                 await queue.put((index, event))
                         finally:
@@ -1199,6 +1202,7 @@ async def _process_skill_call(
     approval_waiter: ApprovalWaiter,
     turn: Turn,
     tracker: verify.CallTracker,
+    parallel_batch_id: str = "",
 ) -> AsyncGenerator[dict, None]:
     """单个 skill tool_call 完整处理：校验→审批→执行→后处理。终止分支通过 turn 状态通知外层。"""
     turn.set_phase(TurnPhase.TOOL_PREPARING)
@@ -1262,6 +1266,7 @@ async def _process_skill_call(
         skill_ctx=skill_ctx,
         approval_waiter=approval_waiter,
         rationale=rationale,
+        parallel_batch_id=parallel_batch_id,
     ):
         yield ev
 
@@ -1277,6 +1282,7 @@ async def _post_process_skill_result(
     skill_ctx: SkillContext,
     approval_waiter: ApprovalWaiter,
     rationale: str,
+    parallel_batch_id: str = "",
 ) -> AsyncGenerator[dict, None]:
     """后处理：append tool_msg → finalize/followup。"""
     turn.messages.append(
@@ -1311,6 +1317,7 @@ async def _post_process_skill_result(
         observation_fingerprint=progress_delta["observation_fingerprint"],
         semantic_progress=progress_delta["semantic_status"],
         semantic_progress_reason=progress_delta["semantic_reason"],
+        parallel_batch_id=parallel_batch_id,
         step_index=turn.step_count,
     )
     if tracker.unchanged_count(skill.name, tc["arguments"]) >= 2:

@@ -538,6 +538,7 @@ def trace_tool_call(
     observation_fingerprint: str = "",
     semantic_progress: str = "",
     semantic_progress_reason: str = "",
+    parallel_batch_id: str = "",
     step_index: int | None = None,
 ) -> None:
     """记录 Agent 工具到 Business MCP 的真实映射和观察进度。"""
@@ -556,6 +557,7 @@ def trace_tool_call(
         "observation_fingerprint": observation_fingerprint,
         "semantic_progress": semantic_progress,
         "semantic_progress_reason": semantic_progress_reason,
+        "parallel_batch_id": parallel_batch_id,
     }
     attributes = {
         key: value for key, value in attributes.items() if value not in ("", None)

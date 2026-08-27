@@ -149,6 +149,7 @@ def test_trace_catalog_recall_keeps_step_budget_evidence(monkeypatch) -> None:
         observation_fingerprint="sha256:test",
         semantic_progress="advanced",
         semantic_progress_reason="new_semantic_observation",
+        parallel_batch_id="parallel-turn-map-2",
         step_index=2,
     )
 
@@ -161,6 +162,7 @@ def test_trace_catalog_recall_keeps_step_budget_evidence(monkeypatch) -> None:
     assert node["attributes"]["tool_call_id"] == "call-map"
     assert node["attributes"]["progress"] == "advanced"
     assert node["attributes"]["semantic_progress"] == "advanced"
+    assert node["attributes"]["parallel_batch_id"] == "parallel-turn-map-2"
     collector._queue.clear()
 
 
