@@ -11,6 +11,12 @@ IDENTITY = {
     "user_id": "api-user",
     "farm_id": 7,
     "farm_uid": "api-farm",
+    "role": "user",
+    "scope": (
+        "agent:invoke conversation:read conversation:write farm:read farm:write "
+        "location:search mcp:invoke profile:read profile:write trace:read "
+        "turn:approve turn:cancel"
+    ),
 }
 
 

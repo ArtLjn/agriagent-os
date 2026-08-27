@@ -17,7 +17,7 @@ from business.api import auth
 from business.api.users import AdminCreateUserRequest
 from business.config import settings as business_settings
 from business.services.tokens import create_access_token, decode_access_token
-from shared.roles import UserRole, scope_for_role
+from shared.roles import Permission, UserRole, scope_for_role
 
 
 def test_dev_role_uses_normal_user_scope() -> None:
@@ -40,7 +40,9 @@ def test_register_rejects_privileged_role_without_admin_identity() -> None:
     assert raised.value.detail["code"] == "role_assignment_forbidden"
 
 
-def test_admin_can_select_dev_role_through_register(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_admin_can_select_dev_role_through_register(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls: dict[str, object] = {}
 
     def fake_register(phone: str, password: str, nickname: str, *, role):
@@ -92,6 +94,63 @@ def test_dev_token_contains_normal_user_scope(monkeypatch: pytest.MonkeyPatch) -
     payload = decode_access_token(token)
     assert payload["role"] == UserRole.DEV.value
     assert payload["scope"] == scope_for_role(UserRole.DEV)
+
+
+def test_legacy_scope_is_expanded_only_for_mcp_delegation(monkeypatch) -> None:
+    from agent import auth as agent_auth
+
+    monkeypatch.setattr(
+        agent_auth.settings.auth, "delegation_secret", "delegate-secret"
+    )
+    token = agent_auth.create_delegation_token(
+        {
+            "user_id": "user-1",
+            "farm_uid": "farm-1",
+            "role": UserRole.USER.value,
+            "scope": "farm:read farm:write",
+        },
+        conversation_id="conversation-1",
+        turn_id="turn-1",
+    )
+
+    payload = agent_auth.jwt.decode(
+        token,
+        "delegate-secret",
+        algorithms=[agent_auth.settings.auth.jwt_algorithm],
+        options={"verify_signature": False},
+    )
+    scope = set(payload["scope"].split())
+    assert Permission.PROFILE_READ.value in scope
+    assert Permission.LOCATION_SEARCH.value in scope
+
+
+def test_narrow_scope_is_not_expanded_for_mcp_delegation(monkeypatch) -> None:
+    from agent import auth as agent_auth
+
+    monkeypatch.setattr(
+        agent_auth.settings.auth, "delegation_secret", "delegate-secret"
+    )
+    token = agent_auth.create_delegation_token(
+        {
+            "user_id": "user-1",
+            "farm_uid": "farm-1",
+            "role": UserRole.USER.value,
+            "scope": Permission.FARM_READ.value,
+        },
+        conversation_id="conversation-1",
+        turn_id="turn-1",
+    )
+
+    payload = agent_auth.jwt.decode(
+        token,
+        "delegate-secret",
+        algorithms=[agent_auth.settings.auth.jwt_algorithm],
+        options={"verify_signature": False},
+    )
+    assert set(payload["scope"].split()) == {
+        Permission.MCP_INVOKE.value,
+        Permission.FARM_READ.value,
+    }
 
 
 def test_dev_viewer_cannot_request_admin_debug_projection() -> None:

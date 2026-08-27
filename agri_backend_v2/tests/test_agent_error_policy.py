@@ -29,6 +29,18 @@ def test_classify_exception_assigns_recovery_category(exc, category, retryable) 
     assert result.code
 
 
+def test_classify_mcp_permission_error_as_non_retryable_permission_denied() -> None:
+    result = error_policy.classify_exception(
+        RuntimeError(
+            "Error calling tool manage_user_settings: MCP 工具需要权限: profile:read"
+        )
+    )
+
+    assert result.code == "permission_denied"
+    assert result.category is error_policy.ErrorCategory.PERMANENT
+    assert result.retryable is False
+
+
 @pytest.mark.asyncio
 async def test_chat_stream_retries_before_first_output(monkeypatch) -> None:
     attempts = 0
@@ -124,7 +136,8 @@ async def test_react_preserves_stream_failure_category_and_final_state() -> None
 
     assert events[0]["data"]["code"] == "llm_stream_interrupted"
     assert events[0]["data"]["category"] == "transient"
-    assert events[-1]["type"] == "final_answer"
-    assert "中断" in events[-1]["data"]["text"]
+    assert events[-2]["type"] == "final_answer"
+    assert events[-1]["type"] == "turn.failed"
+    assert "中断" in events[-2]["data"]["text"]
     assert turn.stop_reason == StopReason.LLM_FAILED
     assert turn.error_details["category"] == "transient"

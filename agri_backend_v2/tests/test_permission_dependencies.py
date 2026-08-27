@@ -7,16 +7,38 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from agent import deps as agent_deps
+from agent.auth import require_identity_permission
 from business.api import api_router
 from business.api import deps as business_deps
 from business.api import users as users_api
 from business.mcp_auth import McpAuthFailure
 from business import mcp_auth
-from business.tools import cost, farm, planting_plan, planting_units, user_settings
+from business.tools import (
+    cost,
+    crop_cycle,
+    crop_templates,
+    debt,
+    farm,
+    location,
+    logs,
+    planting_plan,
+    planting_units,
+    user_settings,
+    weather,
+    work_orders,
+    workers,
+)
 from business.tools import _headers as mcp_headers
 from business.services.tokens import TokenExpiredError, TokenInvalidError
 from shared.api_response import install_api_exception_handlers
-from shared.roles import Permission, UserRole, has_permission, scope_for_role
+from shared.roles import (
+    Permission,
+    UserRole,
+    has_permission,
+    role_permissions,
+    scope_permissions,
+    scope_for_role,
+)
 
 
 def test_role_and_scope_permissions_use_intersection() -> None:
@@ -29,6 +51,11 @@ def test_role_and_scope_permissions_use_intersection() -> None:
     assert has_permission(
         UserRole.ADMIN, "admin:* farm:read", Permission.ADMIN_USER_READ
     )
+
+
+def test_unknown_role_cannot_receive_normal_user_scope() -> None:
+    with pytest.raises(ValueError):
+        scope_for_role("unknown")
 
 
 def test_business_permission_dependency_returns_principal_or_403() -> None:
@@ -54,6 +81,20 @@ def test_agent_permission_dependency_has_same_contract() -> None:
         "scope": "trace:read",
     }
     assert dependency(principal) is principal
+
+
+def test_agent_route_permission_rejects_narrow_scope() -> None:
+    principal = {
+        "role": UserRole.USER.value,
+        "scope": Permission.CONVERSATION_READ.value,
+    }
+
+    with pytest.raises(HTTPException) as raised:
+        require_identity_permission(principal, Permission.AGENT_INVOKE)
+
+    assert raised.value.status_code == 403
+    assert raised.value.detail["code"] == "permission_denied"
+    assert raised.value.detail["meta"]["permission"] == Permission.AGENT_INVOKE.value
 
 
 def test_mcp_operation_permission_rejects_write_without_scope(
@@ -102,6 +143,17 @@ def test_mcp_tool_registry_maps_read_and_write_operations() -> None:
         is Permission.FARM_WRITE
     )
     assert mcp_headers.permission_for_tool("manage_cost", "unknown") is None
+
+
+def test_default_role_scopes_cover_all_permissions_for_that_role() -> None:
+    for role in (UserRole.USER, UserRole.DEV, UserRole.ADMIN):
+        scope = scope_for_role(role)
+        permissions = scope_permissions(scope)
+        assert all(
+            permission.value in permissions
+            or f"{permission.value.split(':', 1)[0]}:*" in permissions
+            for permission in role_permissions(role)
+        )
 
 
 def _business_test_client(principal: dict | None = None) -> TestClient:
@@ -210,6 +262,75 @@ def test_mcp_query_tool_succeeds_with_read_permission(
         farm.farm_service, "build_summary", lambda farm_id: {"farm_id": farm_id}
     )
     assert farm.get_farm_status() == {"farm_id": 7}
+
+
+def test_explicit_weather_location_still_checks_farm_permission(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(
+        weather,
+        "get_principal",
+        lambda permission: (
+            captured.setdefault("permission", permission) or {"farm_id": 7}
+        ),
+    )
+    monkeypatch.setattr(
+        weather.weather_service,
+        "fetch_weather",
+        lambda **kwargs: kwargs,
+    )
+
+    assert weather.get_weather(location="苏州", days=1) == {
+        "location": "苏州",
+        "days": 1,
+    }
+    assert captured["permission"] is Permission.FARM_READ
+
+
+def test_location_search_requires_location_permission(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def reject(permission):
+        assert permission is Permission.LOCATION_SEARCH
+        raise mcp_headers.McpToolAuthorizationError(permission)
+
+    monkeypatch.setattr(location, "get_principal", reject)
+    with pytest.raises(mcp_headers.McpToolAuthorizationError):
+        location.search_cities("苏州")
+
+
+@pytest.mark.parametrize(
+    ("module", "function_name", "expected_tool_name", "operation"),
+    [
+        (crop_cycle, "manage_crop_cycle", "manage_crop_cycle", "create"),
+        (
+            crop_templates,
+            "manage_crop_templates",
+            "manage_crop_templates",
+            "create",
+        ),
+        (debt, "manage_debt", "manage_debt", "create"),
+        (logs, "manage_farm_logs", "manage_farm_logs", "create"),
+        (work_orders, "manage_work_orders", "manage_work_orders", "create"),
+        (workers, "manage_workers", "manage_workers", "create"),
+    ],
+)
+def test_aggregate_write_tools_check_write_permission_before_validation(
+    monkeypatch: pytest.MonkeyPatch,
+    module,
+    function_name: str,
+    expected_tool_name: str,
+    operation: str,
+) -> None:
+    def reject(operation_name, *, tool_name):
+        assert operation_name == operation
+        assert tool_name == expected_tool_name
+        raise mcp_headers.McpToolAuthorizationError(Permission.FARM_WRITE)
+
+    monkeypatch.setattr(module, "require_farm_operation_permission", reject)
+    with pytest.raises(mcp_headers.McpToolAuthorizationError):
+        getattr(module, function_name)(operation=operation)
 
 
 def test_mcp_write_tool_rejects_scope_before_database_access(

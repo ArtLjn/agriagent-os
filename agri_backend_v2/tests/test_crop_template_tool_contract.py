@@ -26,7 +26,11 @@ def test_create_template_returns_structured_error_for_missing_duration(
         called = True
         raise AssertionError("无效阶段不应进入查重或写库")
 
-    monkeypatch.setattr(crop_templates, "get_farm_id_from_headers", lambda: 1)
+    monkeypatch.setattr(
+        crop_templates,
+        "require_farm_operation_permission",
+        lambda *args, **kwargs: {"farm_id": 1},
+    )
     monkeypatch.setattr(crop_templates, "session_scope", fake_session_scope)
     monkeypatch.setattr(
         crop_templates.crop_service, "find_exact_duplicate", fail_if_called
@@ -64,7 +68,11 @@ def test_create_template_passes_complete_stage_contract_to_service(monkeypatch) 
         captured.update(kwargs)
         return {"id": 42, "name": kwargs["name"], "stages": kwargs["stages"]}
 
-    monkeypatch.setattr(crop_templates, "get_farm_id_from_headers", lambda: 1)
+    monkeypatch.setattr(
+        crop_templates,
+        "require_farm_operation_permission",
+        lambda *args, **kwargs: {"farm_id": 1},
+    )
     monkeypatch.setattr(crop_templates, "session_scope", fake_session_scope)
     monkeypatch.setattr(
         crop_templates.crop_service, "find_exact_duplicate", fake_find_duplicate
