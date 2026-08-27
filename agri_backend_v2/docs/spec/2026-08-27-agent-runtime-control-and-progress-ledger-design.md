@@ -46,6 +46,7 @@ User Request
 - Doom Loop 终止会将阻断动作写入已有 `task_state`；跨 Turn 原样重试会在 Skill 执行前返回 `blocked_action_repeat`，不同动作才清理临时阻断状态并继续。
 - 模板查询 operation 已声明 `capability_group`、`data_scope` 和 `freshness_requirement`，Registry catalog、Progress Ledger 和 Trace 具备读取这些字段的边界。
 - Agent Registry 未命中返回 `agent_tool_not_registered`；Business 返回明确未知工具结果时归一为 `business_tool_not_registered`。
+- Agent Registry、Business MCP 映射和不可暴露内部工具的确定性错误都会在当前调度批次进入 Finalizer，不再继续请求 LLM 或消耗后续决策轮。
 - Runtime 已提供受控 `StepBudget` resolver：默认使用固定 20 轮，显式估计值只能在 1-20 的硬上限内按安全系数计算；本轮只接入默认预算和 Trace 证据，尚未启用动态估计。
 - 同一动作连续两次得到相同 Observation 时，Runtime 会设置 `no_progress_detected` FinalizationRequest，由统一终态收口器停止继续消耗决策轮；一次相同结果不会单独触发终止。
 - `no_progress_detected` 与 Doom Loop 都会持久化最小 `blocked_action` 摘要（工具映射、语义范围和 Observation 指纹），跨 Turn 的“继续”不能原样重放该动作。
@@ -664,7 +665,7 @@ agri_admin_web/src/pages/Playground/sessionDebugExport.ts
 - [x] `query_crop_templates` 映射为 `manage_crop_templates/query`，不会被错误合并为系统模板查询；
 - [x] Agent-facing 名称缺失时返回 `agent_tool_not_registered`；
 - [x] Business 映射缺失时返回 `business_tool_not_registered`；
-- [ ] 所有映射错误不会继续请求 LLM，也不会退化为 `max_steps`。
+- [x] 所有映射错误不会继续请求 LLM，也不会退化为 `max_steps`。
 
 ### 13.2 Loop 与 Progress
 

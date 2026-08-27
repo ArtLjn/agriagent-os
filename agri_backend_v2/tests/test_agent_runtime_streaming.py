@@ -583,6 +583,42 @@ async def test_unknown_agent_tool_has_agent_registration_error_code() -> None:
 
     assert events[0]["data"]["error_info"]["code"] == "agent_tool_not_registered"
     assert json.loads(turn.messages[-1]["content"])["code"] == "agent_tool_not_registered"
+    assert turn.finalization_request == {
+        "code": "agent_tool_not_registered",
+        "message": "未知工具: list_system_crop_templates",
+        "tool_name": "list_system_crop_templates",
+        "result": {
+            "error": "未知工具: list_system_crop_templates",
+            "code": "agent_tool_not_registered",
+            "agent_tool_name": "list_system_crop_templates",
+        },
+    }
+
+
+@pytest.mark.asyncio
+async def test_unknown_agent_tool_finishes_without_another_llm_step() -> None:
+    skill = _ReadSkill("known-tool")
+    turn = Turn(user_input="调用不存在能力")
+
+    events = [
+        event
+        async for event in react._dispatch_tool_calls(
+            tool_calls=[{"id": "unknown-call", "name": "missing-tool", "arguments": {}}],
+            rationale="调用工具",
+            skill_index={skill.name: skill},
+            skill_ctx=SimpleNamespace(),
+            approval_waiter=_approve,
+            turn=turn,
+            tracker=react.verify.ProgressLedger(),
+            plan_box={"plan": None},
+        )
+    ]
+
+    assert turn.finalization_request is None
+    assert turn.status == "failed"
+    assert turn.stop_reason == StopReason.TOOL_FAILED
+    assert events[-1]["type"] == "turn.failed"
+    assert not any(event["type"] == "tool_started" for event in events)
 
 
 @pytest.mark.asyncio

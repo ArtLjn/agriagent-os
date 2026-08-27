@@ -1475,7 +1475,7 @@ def _mark_committed(turn: Turn, result: dict | None) -> None:
 async def _emit_unknown_tool(
     turn: Turn, tool_call_id: str, tool_name: str
 ) -> AsyncGenerator[dict, None]:
-    """未知工具错误：发 observation + 写 tool_msg。"""
+    """未知工具错误：发 observation，并阻止后续 LLM 继续猜工具。"""
     err_msg = f"未知工具: {tool_name}"
     result = {
         "error": err_msg,
@@ -1507,12 +1507,18 @@ async def _emit_unknown_tool(
     turn.emit("observation", ev["data"])
     yield ev
     turn.messages.append(context.tool_result_message(tool_call_id, tool_name, result))
+    turn.finalization_request = {
+        "code": "agent_tool_not_registered",
+        "message": err_msg,
+        "tool_name": tool_name,
+        "result": result,
+    }
 
 
 async def _emit_not_exposed_tool(
     turn: Turn, tool_call_id: str, tool_name: str, args: dict
 ) -> AsyncGenerator[dict, None]:
-    """阻止模型直接调用内部后继动作（如 commit_planting_plan）。"""
+    """阻止模型直接调用内部后继动作，并立即进入受控终态。"""
     err_msg = f"工具 {tool_name} 不可直接调用，需先准备计划并通过审批控件确认"
     result = {
         "error": "tool_not_exposed",
@@ -1544,6 +1550,12 @@ async def _emit_not_exposed_tool(
     turn.emit("observation", ev["data"])
     yield ev
     turn.messages.append(context.tool_result_message(tool_call_id, tool_name, result))
+    turn.finalization_request = {
+        "code": "tool_not_exposed",
+        "message": err_msg,
+        "tool_name": tool_name,
+        "result": result,
+    }
 
 
 async def _emit_missing_params(
