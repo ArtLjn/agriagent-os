@@ -31,6 +31,8 @@ export interface SessionDebugSkillCall {
   progress?: string;
   progress_reason?: string;
   observation_fingerprint?: string;
+  semantic_progress?: string;
+  semantic_progress_reason?: string;
   error_code?: string | null;
   status: string;
   duration_ms: number | null;
@@ -201,6 +203,8 @@ function extractSkillCalls(
           'progress',
           'progress_reason',
           'observation_fingerprint',
+          'semantic_progress',
+          'semantic_progress_reason',
         ] as const;
         optionalFields.forEach((field) => {
           const value = attributes[field];

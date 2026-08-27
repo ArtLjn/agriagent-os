@@ -239,6 +239,8 @@ def progress(
     *,
     step: int = 0,
     tool_call_id: str = "",
+    semantic_status: str = "",
+    semantic_reason: str = "",
 ) -> dict:
     """发布运行时进度判定；不把模型文本当作业务进度。"""
     return {
@@ -250,6 +252,8 @@ def progress(
             "status": status,
             "reason": reason,
             "observation_fingerprint": observation_fingerprint,
+            "semantic_status": semantic_status,
+            "semantic_reason": semantic_reason,
         },
     }
 

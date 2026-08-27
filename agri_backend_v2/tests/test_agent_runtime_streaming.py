@@ -887,6 +887,33 @@ def test_progress_ledger_counts_only_consecutive_unchanged_observations() -> Non
     assert ledger.unchanged_count("query", args) == 0
 
 
+def test_progress_ledger_tracks_semantic_scope_without_merging_data_ranges() -> None:
+    ledger = react.verify.ProgressLedger()
+    first_args = {"crop": "水稻"}
+    second_args = {"crop": "小麦"}
+
+    for skill, args in (
+        ("list_templates", first_args),
+        ("query_templates", second_args),
+    ):
+        ledger.record(
+            skill,
+            args,
+            capability_group="crop_template_catalog",
+            data_scope="farm_imported_templates",
+        )
+        delta = ledger.record_observation(skill, args, {"templates": []})
+
+    assert delta["status"] == "advanced"
+    assert delta["semantic_status"] == "unchanged"
+    assert ledger.semantic_unchanged_count(
+        "crop_template_catalog", "farm_imported_templates"
+    ) == 1
+    assert ledger.semantic_unchanged_count(
+        "crop_template_catalog", "system_templates"
+    ) == 0
+
+
 @pytest.mark.asyncio
 async def test_repeated_unchanged_observation_requests_controlled_finalization() -> None:
     skill = _ReadSkill("query_workers")

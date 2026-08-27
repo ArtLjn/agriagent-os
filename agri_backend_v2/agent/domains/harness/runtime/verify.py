@@ -116,12 +116,16 @@ class ProgressDelta:
     status: str
     reason: str
     observation_fingerprint: str
+    semantic_status: str = "unclassified"
+    semantic_reason: str = "metadata_missing"
 
     def to_dict(self) -> dict[str, str]:
         return {
             "status": self.status,
             "reason": self.reason,
             "observation_fingerprint": self.observation_fingerprint,
+            "semantic_status": self.semantic_status,
+            "semantic_reason": self.semantic_reason,
         }
 
 
@@ -160,6 +164,8 @@ class ProgressLedger:
         call.update(
             {key: value for key, value in metadata.items() if value not in ("", None)}
         )
+        if capability_group and data_scope:
+            call["semantic_key"] = _semantic_key(capability_group, data_scope)
         self.calls.append(call)
         key = (skill, _args_key(args))
         return sum(1 for c in self.calls if (c["skill"], _args_key(c["args"])) == key)
@@ -187,14 +193,46 @@ class ProgressLedger:
                 ]
                 result_data = result if isinstance(result, dict) else {}
                 if result_data.get("error") and not result_data.get("retryable", False):
-                    delta = ProgressDelta("blocked", "non_retryable_error", fingerprint)
+                    status, reason = "blocked", "non_retryable_error"
                 elif previous and previous[-1] == fingerprint:
-                    delta = ProgressDelta("unchanged", "same_observation", fingerprint)
+                    status, reason = "unchanged", "same_observation"
                 else:
-                    delta = ProgressDelta("advanced", "new_observation", fingerprint)
+                    status, reason = "advanced", "new_observation"
+                semantic = call.get("semantic_key")
+                semantic_previous = [
+                    item.get("observation_fingerprint")
+                    for item in self.calls
+                    if item is not call
+                    and item.get("semantic_key") == semantic
+                    and item.get("observation_fingerprint")
+                ]
+                if semantic and semantic_previous and semantic_previous[-1] == fingerprint:
+                    semantic_status, semantic_reason = (
+                        "unchanged",
+                        "same_semantic_observation",
+                    )
+                elif semantic:
+                    semantic_status, semantic_reason = (
+                        "advanced",
+                        "new_semantic_observation",
+                    )
+                else:
+                    semantic_status, semantic_reason = (
+                        "unclassified",
+                        "metadata_missing",
+                    )
+                delta = ProgressDelta(
+                    status,
+                    reason,
+                    fingerprint,
+                    semantic_status,
+                    semantic_reason,
+                )
                 call["observation_fingerprint"] = fingerprint
                 call["progress"] = delta.status
                 call["progress_reason"] = delta.reason
+                call["semantic_progress"] = delta.semantic_status
+                call["semantic_progress_reason"] = delta.semantic_reason
                 return delta.to_dict()
         return ProgressDelta(
             "blocked", "observation_without_action", observation_fingerprint(result)
@@ -212,6 +250,22 @@ class ProgressLedger:
             if (call["skill"], _args_key(call["args"])) != key:
                 break
             if call.get("progress") != "unchanged":
+                break
+            count += 1
+        return count
+
+    def semantic_unchanged_count(
+        self, capability_group: str, data_scope: str
+    ) -> int:
+        """返回同一显式语义范围连续无进展的 Observation 次数。"""
+        key = _semantic_key(capability_group, data_scope)
+        if not key:
+            return 0
+        count = 0
+        for call in reversed(self.calls):
+            if call.get("semantic_key") != key:
+                break
+            if call.get("semantic_progress") != "unchanged":
                 break
             count += 1
         return count
@@ -342,6 +396,13 @@ def _args_key(args: dict[str, Any]) -> str:
     if not isinstance(args, dict):
         return "n/a"
     return json.dumps(args, ensure_ascii=False, sort_keys=True, default=str)
+
+
+def _semantic_key(capability_group: str, data_scope: str) -> str:
+    """生成稳定语义范围键；数据范围隔离不同查询来源。"""
+    return json.dumps(
+        [capability_group, data_scope], ensure_ascii=False, separators=(",", ":")
+    )
 
 
 def observation_fingerprint(result: Any) -> str:

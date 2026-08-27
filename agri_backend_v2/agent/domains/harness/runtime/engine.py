@@ -1292,6 +1292,8 @@ async def _post_process_skill_result(
         progress_delta["observation_fingerprint"],
         step=turn.step_count,
         tool_call_id=tc["id"],
+        semantic_status=progress_delta["semantic_status"],
+        semantic_reason=progress_delta["semantic_reason"],
     )
     turn.emit(progress_ev["type"], progress_ev["data"])
     yield progress_ev
@@ -1307,6 +1309,8 @@ async def _post_process_skill_result(
         progress=progress_delta["status"],
         progress_reason=progress_delta["reason"],
         observation_fingerprint=progress_delta["observation_fingerprint"],
+        semantic_progress=progress_delta["semantic_status"],
+        semantic_progress_reason=progress_delta["semantic_reason"],
         step_index=turn.step_count,
     )
     if tracker.unchanged_count(skill.name, tc["arguments"]) >= 2:
