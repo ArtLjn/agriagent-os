@@ -1670,16 +1670,37 @@ async def _emit_blocked_action_repeat(
 async def _emit_empty_catalog_repeat(
     turn: Turn, skill: Skill, tool_call_id: str, args: dict
 ) -> AsyncGenerator[dict, None]:
-    """空系统模板目录只确认一次，避免模型把空结果反复查询成死循环。"""
+    """将空目录重复查询转换为自定义模板准备指引并继续 ReAct。"""
     message = (
-        "系统作物模板目录当前为空，已停止重复查询。"
-        "如需继续，请提供自定义模板信息，或明确查询其他模板范围。"
+        "系统作物模板目录当前为空，请不要再次查询该目录。"
+        "当前用户已经提出完整种植目标时，请结合已有农业常识生成自定义模板草案，"
+        "直接调用 prepare_planting_plan 准备计划；不要改用无关模板。"
     )
     result = {
         "status": "needs_information",
         "code": "system_template_catalog_empty",
         "message": message,
         "missing": ["custom_template.stages"],
+        "next_action": {
+            "agent_tool_name": "prepare_planting_plan",
+            "arguments": None,
+        },
+    }
+    blocked_action = {
+        "agent_tool_name": skill.name,
+        "arguments": dict(args),
+        **_skill_control_metadata(skill),
+    }
+    turn.task_state = {
+        "status": "blocked",
+        "reason": "empty_system_template_catalog",
+        "resume_policy": "ask_user",
+        "blocked_action": blocked_action,
+        "next_allowed_action": {
+            "agent_tool_name": "prepare_planting_plan",
+            # 自定义模板是当前用户目标的派生数据，不能在拦截时静态填充。
+            "arguments": None,
+        },
     }
     trace_tool_call(
         skill.name,
@@ -1691,6 +1712,7 @@ async def _emit_empty_catalog_repeat(
         tool_call_id=tool_call_id,
         progress="blocked",
         progress_reason="empty_catalog_already_observed",
+        status="blocked",
         step_index=turn.step_count,
     )
     ev = sse.observation(
@@ -1709,16 +1731,6 @@ async def _emit_empty_catalog_repeat(
     turn.emit("observation", ev["data"])
     yield ev
     turn.messages.append(context.tool_result_message(tool_call_id, skill.name, result))
-    async for terminal_ev in _emit_failure_terminal(
-        turn,
-        code="system_template_catalog_empty",
-        message=message,
-        answer=message,
-        phase=TurnPhase.TOOL_PREPARING,
-        stop_reason=StopReason.USER_INPUT_REQUIRED,
-        status="terminated",
-    ):
-        yield terminal_ev
 
 
 async def _check_duplication(

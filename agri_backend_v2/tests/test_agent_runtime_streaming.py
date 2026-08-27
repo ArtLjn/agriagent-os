@@ -1018,7 +1018,7 @@ async def test_second_valid_duplicate_emits_one_warning_without_stopping() -> No
 
 
 @pytest.mark.asyncio
-async def test_empty_system_template_catalog_is_not_queried_again() -> None:
+async def test_empty_system_template_catalog_guides_custom_prepare() -> None:
     skill = _SystemTemplatesSkill()
     turn = Turn(user_input="查系统模板")
     tracker = react.verify.ProgressLedger()
@@ -1051,18 +1051,143 @@ async def test_empty_system_template_catalog_is_not_queried_again() -> None:
     assert prepared.proceed is False
     assert first_delta["status"] == "advanced"
     assert first_delta["reason"] == "new_observation"
-    assert turn.stop_reason == StopReason.USER_INPUT_REQUIRED
+    assert turn.status == "running"
+    assert turn.stop_reason is None
     assert events[0]["data"]["error"] is None
     assert events[0]["data"]["result"]["status"] == "needs_information"
-    assert [event["type"] for event in events] == [
-        "observation",
-        "step.completed",
-        "final_answer_start",
-        "final_answer_delta",
-        "final_answer",
-        "turn.terminated",
-    ]
+    assert events[0]["data"]["result"]["next_action"] == {
+        "agent_tool_name": "prepare_planting_plan",
+        "arguments": None,
+    }
+    assert [event["type"] for event in events] == ["observation"]
     assert not any(event["type"] == "tool_started" for event in events)
+    assert turn.task_state == {
+        "status": "blocked",
+        "reason": "empty_system_template_catalog",
+        "resume_policy": "ask_user",
+        "blocked_action": {
+            "agent_tool_name": "list_system_crop_templates",
+            "arguments": {},
+            "business_tool_name": "",
+            "operation": "system_templates",
+            "capability_group": "crop_template_catalog",
+            "data_scope": "system_templates",
+            "freshness_requirement": "system_catalog",
+        },
+        "next_allowed_action": {
+            "agent_tool_name": "prepare_planting_plan",
+            "arguments": None,
+        },
+    }
+
+
+def test_dynamic_prepare_arguments_are_allowed_after_empty_catalog() -> None:
+    task_state = {
+        "status": "blocked",
+        "resume_policy": "ask_user",
+        "next_allowed_action": {
+            "agent_tool_name": "prepare_planting_plan",
+            "arguments": None,
+        },
+    }
+
+    assert react.verify.is_allowed_resume_action(
+        task_state,
+        "prepare_planting_plan",
+        {
+            "crop_name": "水稻",
+            "total_area_mu": 20,
+            "field_name": "虎丘",
+            "start_date": "2026-08-27",
+            "template_strategy": "create_custom",
+            "custom_template": {"stages": [{"name": "育苗期"}]},
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_empty_system_catalog_transitions_to_custom_prepare() -> None:
+    system_skill = _SystemTemplatesSkill()
+    prepare_calls: list[dict] = []
+
+    class _PrepareSkill(_ReadSkill):
+        async def execute(self, params: dict, ctx) -> SkillResult:
+            prepare_calls.append(params)
+            return SkillResult(data={"status": "ready"})
+
+    prepare_skill = _PrepareSkill("prepare_planting_plan")
+    turn = Turn(user_input="帮我规划水稻", max_steps=4)
+    tracker = react.verify.ProgressLedger()
+    skills = {
+        system_skill.name: system_skill,
+        prepare_skill.name: prepare_skill,
+    }
+
+    async for _ in react._dispatch_tool_calls(
+        tool_calls=[{"id": "system-1", "name": system_skill.name, "arguments": {}}],
+        rationale="查询系统模板",
+        skill_index=skills,
+        skill_ctx=SimpleNamespace(),
+        approval_waiter=_approve,
+        turn=turn,
+        tracker=tracker,
+        plan_box={"plan": None},
+    ):
+        pass
+    assert turn.status == "running"
+
+    async for _ in react._dispatch_tool_calls(
+        tool_calls=[{"id": "system-2", "name": system_skill.name, "arguments": {}}],
+        rationale="确认系统模板目录",
+        skill_index=skills,
+        skill_ctx=SimpleNamespace(),
+        approval_waiter=_approve,
+        turn=turn,
+        tracker=tracker,
+        plan_box={"plan": None},
+    ):
+        pass
+    assert turn.status == "running"
+    assert turn.task_state["next_allowed_action"] == {
+        "agent_tool_name": "prepare_planting_plan",
+        "arguments": None,
+    }
+
+    custom_args = {
+        "crop_name": "水稻",
+        "total_area_mu": 20,
+        "field_name": "虎丘",
+        "start_date": "2026-08-27",
+        "template_strategy": "create_custom",
+        "custom_template": {
+            "name": "水稻",
+            "stages": [{"name": "育苗期", "duration_days": 25}],
+        },
+    }
+    events = [
+        event
+        async for event in react._dispatch_tool_calls(
+            tool_calls=[
+                {
+                    "id": "prepare-1",
+                    "name": prepare_skill.name,
+                    "arguments": custom_args,
+                }
+            ],
+            rationale="使用常规水稻阶段生成自定义模板并准备计划",
+            skill_index=skills,
+            skill_ctx=SimpleNamespace(),
+            approval_waiter=_approve,
+            turn=turn,
+            tracker=tracker,
+            plan_box={"plan": None},
+        )
+    ]
+
+    assert turn.status == "running"
+    assert turn.task_state is None
+    assert prepare_calls == [custom_args]
+    assert any(event["type"] == "tool_started" for event in events)
 
 
 def test_read_only_query_observing_new_fact_is_advanced() -> None:

@@ -360,15 +360,20 @@ def is_allowed_resume_action(
     skill: str,
     args: dict[str, Any],
 ) -> bool:
-    """只允许任务状态声明的下一动作恢复，避免凭空扩大恢复范围。"""
+    """只允许声明的下一动作恢复；参数为 None 时由当前请求动态补齐。"""
     if not isinstance(task_state, dict):
         return False
     next_action = task_state.get("next_allowed_action")
     if not isinstance(next_action, dict):
         return False
-    return next_action.get("agent_tool_name") == skill and _args_key(
-        next_action.get("arguments", {})
-    ) == _args_key(args)
+    if next_action.get("agent_tool_name") != skill:
+        return False
+    expected_args = next_action.get("arguments", {})
+    # 空系统模板后，custom_template 由模型结合当前用户目标生成，不能在
+    # 空目录拦截时预先猜测参数；工具自身仍会执行完整 schema 和业务校验。
+    if expected_args is None:
+        return True
+    return _args_key(expected_args) == _args_key(args)
 
 
 def check_duplication(

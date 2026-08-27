@@ -51,7 +51,7 @@ User Request
 - 同一动作连续两次得到相同 Observation 时，Runtime 会设置 `no_progress_detected` FinalizationRequest，由统一终态收口器停止继续消耗决策轮；一次相同结果不会单独触发终止。
 - `no_progress_detected` 与 Doom Loop 都会持久化最小 `blocked_action` 摘要（工具映射、语义范围和 Observation 指纹），跨 Turn 的“继续”不能原样重放该动作。
 - Business 返回 `status=needs_information` 时保留业务错误码和 `missing` 字段，但 Agent 不再把它包装成 `tool.failed`；Runtime 以 `user_input_required` 受控终态向用户索取缺失信息，避免把可恢复业务前置条件误报为系统故障。
-- `prepare_planting_plan` 的 `custom_template_required` 已按上述规则修复：Trace Tool 节点为 `blocked`，不再产生 `tool.failed`，最终答复明确指出 `custom_template.stages`，下一轮可在补充模板后重新准备。
+- `prepare_planting_plan` 的 `custom_template_required` 已按上述规则修复：Trace Tool 节点为 `blocked`，不再产生 `tool.failed`；空系统模板目录的重复查询会转为自定义模板准备指引，完整种植目标可由 Agent 生成 `custom_template` 后继续 prepare，模板写入仍由审批后的聚合提交完成。
 - Trace summary 已统计真实 `decision_steps`，并通过并行执行路径生成的 `parallel_batch_id` 统计 `parallel_batches` 和 `parallel_tool_calls`，不会从同一 step 的工具数量推断并发。
 - 已实施 Semantic Group 的最小证据：显式 `capability_group + data_scope` 生成语义范围键，账本分别记录 exact progress 与 semantic progress；不同数据范围不会被合并。尚未实施语义 fallback、动态 `max_steps`、完整 ExecutionState/requirements/evidence 模型，以及 Trace Monitor 的完整可视化。
 
@@ -115,7 +115,7 @@ list_system_crop_templates
 | Turn 生命周期 | `agent/domains/harness/runtime/turn.py` | 已有 phase、status、step_count、stop_reason、task_state、finalization_pending。 |
 | ReAct 循环 | `agent/domains/harness/runtime/engine.py` | 已有每步 LLM 决策、Tool dispatch、Observation 回灌和 Finalizer 入口。 |
 | Tool Registry | `agent/domains/harness/tools/loader.py`、`registry.py` | 已有 YAML 展开、名称校验、公开 Schema 和 operation skill。 |
-| Exact Doom Loop | `agent/domains/harness/runtime/verify.py` | 已按有效参数和 Observation fingerprint 做局部重复检测；系统模板空目录在重复执行前直接收口。 |
+| Exact Doom Loop | `agent/domains/harness/runtime/verify.py` | 已按有效参数和 Observation fingerprint 做局部重复检测；系统模板空目录的重复动作在执行前转为 `prepare_planting_plan/create_custom` 指引，并阻止再次访问 Business MCP。 |
 | Plan | `agent/domains/harness/runtime/planner.py` | `make_plan` 可生成 2-5 步计划，但不是所有 ReAct 动作的统一状态账本。 |
 | Trace/SSE | `agent/domains/harness/observability/trace`、Redis SSE | 已有 step、Tool、Router 诊断和终态事件，但进度证据字段不完整。 |
 | 调试导出 | `agri_admin_web/src/pages/Playground/sessionDebugExport.ts` | 已导出消息、Skill、Router 诊断和 pending plan，缺少可信的执行关联字段。 |
@@ -674,7 +674,7 @@ agri_admin_web/src/pages/Playground/sessionDebugExport.ts
 - [x] 同一 Tool 返回不同业务结果时不会误判 Doom；
 - [x] 不同数据范围的模板查询不会仅因名称相似而互相阻断；
 - [x] 查询虽不修改数据库，但产生新实体/事实时记录 `advanced`；
-- [x] 系统模板目录明确返回空集合后，不重复访问 Business MCP，直接返回可解释的输入要求；
+- [x] 系统模板目录明确返回空集合后，不重复访问 Business MCP；完整种植目标进入自定义模板 prepare 指引，无法生成计划时才返回可解释的输入要求；
 - [x] 不可重试错误不会被重复喂回模型直到 `max_steps`；
 - [x] 写入成功后不会因收尾模型再次请求 Tool 而重复写入。
 

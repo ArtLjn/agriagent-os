@@ -13,7 +13,7 @@ operations:
     tool_name: prepare_planting_plan
     mcp_tool: business.prepare_planting_plan
     inject_operation: false
-    description: 准备完整种植计划并返回审批摘要，不写入业务实体。
+    description: 准备完整种植计划并返回审批摘要，不写入业务实体。无同作物模板且用户已要求规划时，生成名称与目标作物一致的自定义模板草案并使用 create_custom。
     risk_level: read
     capability_group: planting_plan
     data_scope: farm_operations
@@ -66,7 +66,7 @@ parameters:
     template_strategy:
       type: string
       enum: [auto, existing, import_system, create_custom]
-      description: 模板处理方式；auto 只允许同作物精确匹配，不允许无关模板兜底。
+      description: 模板处理方式；auto 只允许同作物精确匹配，不允许无关模板兜底；无匹配且用户要求规划时使用 create_custom。
     template_id:
       type: integer
       description: 已有农场模板 ID，仅在确认属于目标作物时使用。

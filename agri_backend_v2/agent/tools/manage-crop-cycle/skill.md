@@ -48,7 +48,7 @@ operations:
     capability_group: crop_template_catalog
     data_scope: system_templates
     freshness_requirement: system_catalog
-    description: 查询系统提供的作物模板，可按分类筛选。
+    description: 查询系统提供的作物模板，可按分类筛选；返回空目录后，完整种植目标应转为 prepare_planting_plan 的自定义模板草案，不要重复查询。
     risk_level: read
     execution: {mode: parallel_safe, max_concurrency: 4}
     parameters: [skip, limit, category]
