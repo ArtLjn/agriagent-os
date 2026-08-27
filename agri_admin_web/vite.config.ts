@@ -11,11 +11,6 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/agent/, '/api/v2'),
       },
-      '/api/admin/traces': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/admin/, '/api/v2'),
-      },
       '/api': {
         target: 'http://localhost:9876',
         changeOrigin: true,

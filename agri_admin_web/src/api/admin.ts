@@ -2,7 +2,7 @@ import apiClient from './client';
 import type { TracePayload } from '../utils/tracePayload';
 
 // ─── Trace API（对齐 agri_backend_v2 agent /api/v2/traces*）──────────────────────────────
-// vite proxy: /api/admin/traces* → http://localhost:8000/api/v2/traces*
+// vite proxy: /api/agent/traces* → http://localhost:8000/api/v2/traces*
 
 export interface TraceRootError {
   node_id?: number | string | null;
@@ -206,7 +206,7 @@ interface TraceTimelineResponse {
  * 兼容旧调用：返回 items + next_cursor + has_more。
  */
 export async function listTraces(params?: ListTracesParams): Promise<ListTracesResponse> {
-  const res = await apiClient.get<ListTracesResponse>('/admin/traces', { params });
+  const res = await apiClient.get<ListTracesResponse>('/agent/traces', { params });
   return res.data;
 }
 
@@ -232,7 +232,7 @@ export async function getTimeline(
   };
   if (params.include_resource_spans) query.include_resource_spans = true;
   const response = await apiClient.get<TraceTimelineResponse>(
-    `/admin/traces/${encodeURIComponent(traceId)}/timeline`,
+    `/agent/traces/${encodeURIComponent(traceId)}/timeline`,
     { params: query },
   );
   const data = response.data;
@@ -241,7 +241,7 @@ export async function getTimeline(
   const events = items.filter((item): item is TraceEvent => item.record_kind === 'event');
   const [summaryResp] = await Promise.all([
     apiClient.get<TraceRequestSummary | null>(
-      `/admin/traces/${encodeURIComponent(traceId)}/summary`,
+      `/agent/traces/${encodeURIComponent(traceId)}/summary`,
     ).catch(() => null),
   ]);
   return {
@@ -260,7 +260,7 @@ export async function getTimeline(
 
 export async function getTraceSummary(traceId: string): Promise<TraceRequestSummary | null> {
   const response = await apiClient.get<TraceRequestSummary | null>(
-    `/admin/traces/${encodeURIComponent(traceId)}/summary`,
+    `/agent/traces/${encodeURIComponent(traceId)}/summary`,
   );
   return response.data;
 }
@@ -417,7 +417,7 @@ export interface ListSkillsResponse {
 }
 
 export async function listSkills(): Promise<ListSkillsResponse> {
-  const res = await apiClient.get<ListSkillsResponse>('/admin/skills');
+  const res = await apiClient.get<ListSkillsResponse>('/agent/admin/skills');
   return res.data;
 }
 
@@ -468,7 +468,7 @@ export async function updateSkillEnabled(
   payload: UpdateSkillEnabledRequest
 ): Promise<SkillItem> {
   const res = await apiClient.put<SkillItem>(
-    `/admin/skills/${encodeURIComponent(skillName)}/enabled`,
+    `/agent/admin/skills/${encodeURIComponent(skillName)}/enabled`,
     payload
   );
   return res.data;
@@ -564,7 +564,7 @@ export async function previewSkillRouteRecall(
   payload: SkillRouteRecallRequest
 ): Promise<SkillRouteRecallResponse> {
   const res = await apiClient.post<SkillRouteRecallResponse>(
-    '/admin/skills/route-recall',
+    '/agent/admin/skills/route-recall',
     payload
   );
   return res.data;
@@ -574,7 +574,7 @@ export async function evaluateSkillRouteRecallDataset(
   payload: { top_k?: number } = {}
 ): Promise<SkillRouteRecallEvalResponse> {
   const res = await apiClient.post<SkillRouteRecallEvalResponse>(
-    '/admin/skills/route-recall/evaluate',
+    '/agent/admin/skills/route-recall/evaluate',
     payload
   );
   return res.data;

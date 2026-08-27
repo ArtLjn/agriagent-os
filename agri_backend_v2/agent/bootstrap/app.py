@@ -8,6 +8,7 @@ Run: uv run --package farm-manager-agent python -m agent.bootstrap.app
 
 from __future__ import annotations
 
+import importlib
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -48,6 +49,9 @@ from agent.domains.harness.observability.trace import (  # noqa: E402
     stop_trace_system,
 )
 from shared.api_response import install_api_exception_handlers  # noqa: E402
+
+# 导入模块以注册管理端 Skill 路由；其余 API 模块沿用下方的显式导入方式。
+importlib.import_module("agent.api.admin_skills")
 
 setup_logging(app_name="agent")
 logger = get_logger(__name__)

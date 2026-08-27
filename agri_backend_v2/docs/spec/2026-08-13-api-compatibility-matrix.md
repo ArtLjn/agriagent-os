@@ -1,6 +1,6 @@
 ---
 spec_id: 2026-08-13-api-compatibility-matrix
-last_updated: 2026-08-22
+last_updated: 2026-08-27
 status: draft
 ---
 
@@ -332,7 +332,7 @@ GET            /admin/stats/tokens
 GET            /admin/stats/tokens/daily
 GET            /admin/stats/tokens/hourly
 
-GET            /admin/skills
+GET            /admin/skills                 # Agent；管理员 JWT
 POST           /admin/skills/route-recall
 GET            /admin/skills/route-recall/dataset
 POST           /admin/skills/route-recall/evaluate

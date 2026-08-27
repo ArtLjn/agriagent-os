@@ -53,10 +53,10 @@ describe('admin api', () => {
 
     const result = await getTimeline('trace/1', { limit: 50, include_payload: false });
 
-    expect(mockedApiClient.get).toHaveBeenNthCalledWith(1, '/admin/traces/trace%2F1/timeline', {
+    expect(mockedApiClient.get).toHaveBeenNthCalledWith(1, '/agent/traces/trace%2F1/timeline', {
       params: { limit: 50, include_payload: false },
     });
-    expect(mockedApiClient.get).toHaveBeenNthCalledWith(2, '/admin/traces/trace%2F1/summary');
+    expect(mockedApiClient.get).toHaveBeenNthCalledWith(2, '/agent/traces/trace%2F1/summary');
     expect(result.trace_id).toBe('trace-1');
     expect(result.rounds[0].nodes).toHaveLength(1);
     expect(result.events?.[0].event_id).toBe('evt-1');
@@ -92,7 +92,7 @@ describe('admin api', () => {
 
     const result = await getTraceDiagnostics('req:1');
 
-    expect(mockedApiClient.get).toHaveBeenCalledWith('/admin/traces/req:1/diagnostics');
+    expect(mockedApiClient.get).toHaveBeenCalledWith('/agent/traces/req:1/diagnostics');
     expect(result.reflection_checks[0].checks).toEqual(['write_plan_consistency']);
   });
 });
