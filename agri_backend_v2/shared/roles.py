@@ -35,8 +35,8 @@ class Permission(str, Enum):
 
 
 NORMAL_USER_ROLES = frozenset({UserRole.USER, UserRole.DEV})
-ADMIN_SCOPE = "farm:read farm:write admin:*"
-NORMAL_USER_SCOPE = "farm:read farm:write"
+_LEGACY_NORMAL_SCOPE = frozenset({"farm:read", "farm:write"})
+_LEGACY_ADMIN_SCOPE = _LEGACY_NORMAL_SCOPE | {"admin:*"}
 
 _NORMAL_PERMISSIONS = frozenset(
     {
@@ -61,6 +61,15 @@ _ADMIN_PERMISSIONS = _NORMAL_PERMISSIONS | frozenset(
         Permission.ADMIN_USER_WRITE,
         Permission.ADMIN_DEBUG,
     }
+)
+
+# 默认签发的 Token 必须覆盖角色允许的全部普通能力，否则角色表虽允许，
+# scope 交集仍会把登录用户的 Agent、天气和个人设置请求全部拒绝。
+NORMAL_USER_SCOPE = " ".join(
+    sorted(permission.value for permission in _NORMAL_PERMISSIONS)
+)
+ADMIN_SCOPE = (
+    " ".join(sorted(permission.value for permission in _ADMIN_PERMISSIONS)) + " admin:*"
 )
 
 
@@ -92,7 +101,8 @@ def is_normal_user_role(role: str | UserRole | None) -> bool:
 
 def scope_for_role(role: str | UserRole) -> str:
     """根据角色生成 Token scope；dev 与 user 共用普通用户 scope。"""
-    return ADMIN_SCOPE if is_admin_role(role) else NORMAL_USER_SCOPE
+    normalized = normalize_user_role(role)
+    return ADMIN_SCOPE if normalized is UserRole.ADMIN else NORMAL_USER_SCOPE
 
 
 def role_permissions(role: str | UserRole) -> frozenset[Permission]:
@@ -126,6 +136,12 @@ def has_permission(
     if required not in role_permissions(role):
         return False
     scopes = scope_permissions(scope)
+    # 权限层上线前的 Token 只有 farm 两项 scope；按已签名角色兼容其原有能力，
+    # 避免线上用户因未重新登录导致天气、会话和 MCP 全部突然失败。
+    if (is_normal_user_role(role) and scopes == _LEGACY_NORMAL_SCOPE) or (
+        is_admin_role(role) and scopes == _LEGACY_ADMIN_SCOPE
+    ):
+        return required in role_permissions(role)
     return required.value in scopes or f"{required.value.split(':', 1)[0]}:*" in scopes
 
 

@@ -9,7 +9,8 @@ from __future__ import annotations
 
 from business.mcp_app import mcp
 from business.services import weather_service
-from business.tools._headers import get_farm_id_from_headers
+from business.tools._headers import get_farm_id_from_headers, get_principal
+from shared.roles import Permission
 
 
 @mcp.tool
@@ -27,6 +28,8 @@ def get_weather(location: str = "", days: int = 3) -> dict:
       - “最近有雨吗”
       - “宁德有没有灾害预警”
     """
+    # 明确城市时也要校验 MCP 和天气读取权限，不能让 location 分支跳过鉴权。
+    get_principal(Permission.FARM_READ)
     if location:
         return weather_service.fetch_weather(location=location, days=days)
 

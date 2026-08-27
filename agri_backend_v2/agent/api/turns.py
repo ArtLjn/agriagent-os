@@ -6,7 +6,7 @@ from fastapi import Header, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from agent.api import api_router
-from agent.auth import parse_identity
+from agent.auth import parse_identity, require_identity_permission
 from agent.domains.harness.runtime.turn import StopReason
 from agent.domains.harness.runtime.projection import (
     ProjectionPermissionError,
@@ -24,7 +24,7 @@ from agent.platforms.persistence.redis.turn_store import (
 )
 from agent.platforms.persistence.redis.coordination import scope_hash
 from agent.platforms.persistence.redis.turn_store import remove_from_queues, update_turn
-from shared.roles import UserRole, is_admin_role
+from shared.roles import Permission, UserRole, is_admin_role
 
 
 @api_router.get("/turns/{turn_id}")
@@ -35,7 +35,7 @@ async def turn_status(
     turn = await get_turn(turn_id)
     if turn is None:
         raise HTTPException(404, {"code": "turn_not_found", "message": "turn 不存在"})
-    _check_access(turn, authorization)
+    _check_access(turn, authorization, Permission.CONVERSATION_READ)
     legacy_status_fields(turn)
     for name in ("step_count", "last_event_seq"):
         if name in turn:
@@ -78,7 +78,7 @@ async def turn_events(
     turn = await get_turn(turn_id)
     if turn is None:
         raise HTTPException(404, {"code": "turn_not_found", "message": "turn 不存在"})
-    checked_identity = _check_access(turn, authorization)
+    checked_identity = _check_access(turn, authorization, Permission.CONVERSATION_READ)
     execution_identity = checked_identity or {
         "user_id": turn.get("user_id", ""),
         "farm_uid": turn.get("farm_uid", ""),
@@ -92,7 +92,9 @@ async def turn_events(
         presentation_profile if isinstance(presentation_profile, str) else None
     )
     if viewer_token:
-        viewer_identity = parse_identity(viewer_token)
+        viewer_identity = require_identity_permission(
+            parse_identity(viewer_token), Permission.TRACE_DEBUG
+        )
         if not is_admin_role(viewer_identity.get("role")):
             raise HTTPException(
                 403,
@@ -172,7 +174,7 @@ async def cancel_turn(
     turn = await get_turn(turn_id)
     if turn is None:
         raise HTTPException(404, {"code": "turn_not_found", "message": "turn 不存在"})
-    _check_access(turn, authorization)
+    _check_access(turn, authorization, Permission.TURN_CANCEL)
     if turn.get("status") in {
         "completed",
         "terminated",
@@ -241,8 +243,10 @@ async def cancel_turn(
     return {"ok": True, "turn_id": turn_id, "status": "cancelled"}
 
 
-def _check_access(turn: dict[str, str], authorization: str | None) -> dict:
-    identity = parse_identity(authorization)
+def _check_access(
+    turn: dict[str, str], authorization: str | None, permission: Permission
+) -> dict:
+    identity = require_identity_permission(parse_identity(authorization), permission)
     if str(turn.get("user_id", "")) != str(identity["user_id"]):
         raise HTTPException(
             403, {"code": "turn_forbidden", "message": "无权访问该 turn"}

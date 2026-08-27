@@ -80,6 +80,11 @@ def classify_exception(exc: Exception) -> ClassifiedError:
         return _classified(ErrorCategory.PERMANENT, "llm_request_rejected", message)
     if any(
         marker in lowered
+        for marker in ("permission_denied", "mcp tool needs permission", "需要权限")
+    ):
+        return _classified(ErrorCategory.PERMANENT, "permission_denied", message)
+    if any(
+        marker in lowered
         for marker in ("invalid_request", "authentication", "permission")
     ):
         return _classified(ErrorCategory.PERMANENT, "llm_request_rejected", message)

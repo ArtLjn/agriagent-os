@@ -10,7 +10,13 @@ import jwt
 from fastapi import HTTPException
 
 from agent.config import settings
-from shared.roles import Permission, UserRole, normalize_user_role
+from shared.roles import (
+    Permission,
+    UserRole,
+    has_permission,
+    normalize_user_role,
+    scope_for_role,
+)
 
 
 def _bearer_token(authorization: str | None) -> str:
@@ -95,6 +101,7 @@ def ensure_mcp_credentials() -> None:
                 "message": "AGENT_SERVICE_TOKEN 未配置",
             },
         )
+
     if not settings.auth.delegation_secret:
         raise HTTPException(
             status_code=503,
@@ -105,6 +112,22 @@ def ensure_mcp_credentials() -> None:
         )
 
 
+def require_identity_permission(
+    identity: dict[str, Any], permission: Permission
+) -> dict[str, Any]:
+    """在 JWT 认证后校验路由权限，拒绝窄 scope Token 越权调用。"""
+    if not has_permission(identity.get("role"), identity.get("scope"), permission):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "permission_denied",
+                "message": "当前身份没有所需权限",
+                "meta": {"permission": permission.value},
+            },
+        )
+    return identity
+
+
 def create_delegation_token(
     identity: dict[str, Any], *, conversation_id: str, turn_id: str
 ) -> str:
@@ -113,6 +136,15 @@ def create_delegation_token(
     if not secret:
         raise RuntimeError("AGENT_DELEGATION_SECRET 未配置")
     now = int(time.time())
+    source_scope = str(identity.get("scope") or "farm:read")
+    source_scope_items = set(source_scope.split())
+    # 旧登录 Token 只有 farm:*；确认它是旧版完整 scope 后补齐新权限，
+    # 但不扩大真正的窄 scope，避免委托链路绕过最小权限。
+    if source_scope_items in (
+        {"farm:read", "farm:write"},
+        {"farm:read", "farm:write", "admin:*"},
+    ):
+        source_scope = scope_for_role(identity.get("role", UserRole.USER.value))
     payload = {
         "iss": settings.auth.delegation_issuer,
         "aud": settings.auth.delegation_audience,
@@ -124,7 +156,7 @@ def create_delegation_token(
         "scope": " ".join(
             filter(
                 None,
-                [Permission.MCP_INVOKE.value, identity.get("scope") or "farm:read"],
+                [Permission.MCP_INVOKE.value, source_scope],
             )
         ),
         "source_jti": identity.get("token_id", ""),

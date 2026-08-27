@@ -10,7 +10,7 @@ from collections.abc import Mapping
 from business.db import session_scope
 from business.mcp_app import mcp
 from business.services import crop_service
-from business.tools._headers import get_farm_id_from_headers
+from business.tools._headers import require_farm_operation_permission
 
 
 def _error(code: str, message: str, **context: object) -> dict:
@@ -106,8 +106,11 @@ def manage_crop_templates(
     limit: int = 100,
 ) -> dict:
     """查询、创建农场模板，或导入系统模板。"""
-    farm_id = get_farm_id_from_headers()
     op = (operation or "").lower()
+    farm_id = require_farm_operation_permission(
+        op,
+        tool_name="manage_crop_templates",
+    )["farm_id"]
     with session_scope() as db:
         if op == "query":
             templates = crop_service.get_crop_templates(db, farm_id, skip, limit)

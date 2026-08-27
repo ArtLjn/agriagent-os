@@ -11,7 +11,11 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from agent.api import api_router
-from agent.auth import ensure_mcp_credentials, parse_identity
+from agent.auth import (
+    ensure_mcp_credentials,
+    parse_identity,
+    require_identity_permission,
+)
 from agent.domains.harness.runtime.turn import Turn
 from agent.domains.harness.runtime.projection import (
     ProjectionPermissionError,
@@ -37,6 +41,7 @@ from agent.platforms.persistence.redis.turn_store import (
     stream_events,
     update_turn,
 )
+from shared.roles import Permission
 from shared.roles import UserRole, is_admin_role
 
 logger = logging.getLogger(__name__)
@@ -63,7 +68,9 @@ async def chat(
 ) -> StreamingResponse:
     """Create a durable turn and stream replayable Redis events."""
     conv_id = req.conversation_id or "default"
-    identity = parse_identity(authorization)
+    identity = require_identity_permission(
+        parse_identity(authorization), Permission.AGENT_INVOKE
+    )
     viewer_identity = identity
     if viewer_authorization:
         viewer_identity = parse_identity(viewer_authorization)

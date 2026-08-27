@@ -47,7 +47,7 @@ def prepare_planting_plan(
     """准备种植计划，不创建业务实体。"""
     try:
         farm_id = require_farm_operation_permission(
-            "prepare", read_operations={"prepare"}, write_operations=set()
+            "prepare", tool_name="prepare_planting_plan"
         )["farm_id"]
         with session_scope() as db:
             return planting_plan_service.prepare_planting_plan(
@@ -80,7 +80,7 @@ def commit_planting_plan(
     """提交已经审批的完整种植计划，事务内创建全部业务实体。"""
     try:
         farm_id = require_farm_operation_permission(
-            "commit", read_operations=set(), write_operations={"commit"}
+            "commit", tool_name="commit_planting_plan"
         )["farm_id"]
         with session_scope() as db:
             return planting_plan_service.commit_planting_plan(

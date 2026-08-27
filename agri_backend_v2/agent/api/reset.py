@@ -6,8 +6,9 @@ from pydantic import BaseModel
 
 from agent.api import api_router
 from agent.domains.harness.memory import service as memory
-from agent.auth import parse_identity
+from agent.auth import parse_identity, require_identity_permission
 from fastapi import Header
+from shared.roles import Permission
 
 
 class ResetRequest(BaseModel):
@@ -19,7 +20,9 @@ async def reset(
     req: ResetRequest,
     authorization: str | None = Header(default=None),
 ) -> dict:
-    identity = parse_identity(authorization)
+    identity = require_identity_permission(
+        parse_identity(authorization), Permission.CONVERSATION_WRITE
+    )
     result = await memory.reset_session(
         req.conversation_id,
         user_id=identity["user_id"],

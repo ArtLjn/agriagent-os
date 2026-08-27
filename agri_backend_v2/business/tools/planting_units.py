@@ -23,9 +23,7 @@ def manage_planting_units(
 ) -> dict:
     """查询或创建真实种植单元，不使用茬口 field_name 代替。"""
     op = (operation or "").lower()
-    principal = require_farm_operation_permission(
-        op, read_operations={"query", "detail"}, write_operations={"create"}
-    )
+    principal = require_farm_operation_permission(op, tool_name="manage_planting_units")
     farm_id = principal["farm_id"]
     with session_scope() as db:
         if op == "query":

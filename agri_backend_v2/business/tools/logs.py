@@ -16,7 +16,7 @@ from __future__ import annotations
 from business.mcp_app import mcp
 from business.services import log_service
 from business.services import worker_service
-from business.tools._headers import get_farm_id_from_headers
+from business.tools._headers import require_farm_operation_permission
 
 
 @mcp.tool
@@ -70,8 +70,11 @@ def manage_farm_logs(
       - "把记录8的备注改成下午浇水" → operation="update", log_id=8, note="下午浇水"
       - "删除农事记录 8" → operation="delete", log_id=8
     """
-    farm_id = get_farm_id_from_headers()
     op = (operation or "").lower()
+    farm_id = require_farm_operation_permission(
+        op,
+        tool_name="manage_farm_logs",
+    )["farm_id"]
 
     if op == "query":
         return log_service.query_logs(

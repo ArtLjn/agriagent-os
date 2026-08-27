@@ -7,7 +7,7 @@ import logging
 from fastapi import Header, HTTPException, Query
 
 from agent.api import api_router
-from agent.auth import parse_identity
+from agent.auth import parse_identity, require_identity_permission
 from agent.domains.harness.observability.trace.store import (
     get_trace_events,
     get_trace_nodes,
@@ -15,6 +15,7 @@ from agent.domains.harness.observability.trace.store import (
     get_trace_timeline,
     list_traces,
 )
+from shared.roles import Permission
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,9 @@ async def traces_list(
 ) -> dict:
     """List trace request summaries."""
     try:
-        identity = parse_identity(authorization)
+        identity = require_identity_permission(
+            parse_identity(authorization), Permission.TRACE_READ
+        )
         return await list_traces(
             conversation_id=conversation_id,
             turn_id=turn_id,
@@ -57,7 +60,9 @@ async def trace_nodes_formal(
 ) -> dict:
     """使用正式 trace_id 查询内部执行节点。"""
     try:
-        identity = parse_identity(authorization)
+        identity = require_identity_permission(
+            parse_identity(authorization), Permission.TRACE_READ
+        )
         return await get_trace_nodes(
             trace_id,
             limit=limit,
@@ -85,7 +90,9 @@ async def trace_events(
 ) -> dict:
     """查询持久化 SSE 事件账本；traceEvents 不可用时返回证据状态。"""
     try:
-        identity = parse_identity(authorization)
+        identity = require_identity_permission(
+            parse_identity(authorization), Permission.TRACE_READ
+        )
         return await get_trace_events(
             trace_id,
             after_seq=after_seq,
@@ -111,7 +118,9 @@ async def trace_timeline(
 ) -> dict:
     """查询按时间合并的 Trace 节点和 SSE 事件。"""
     try:
-        identity = parse_identity(authorization)
+        identity = require_identity_permission(
+            parse_identity(authorization), Permission.TRACE_READ
+        )
         return await get_trace_timeline(
             trace_id,
             limit=limit,
@@ -139,7 +148,9 @@ async def trace_nodes(
 ) -> dict:
     """Get all trace nodes for a request."""
     try:
-        identity = parse_identity(authorization)
+        identity = require_identity_permission(
+            parse_identity(authorization), Permission.TRACE_READ
+        )
         result = await get_trace_nodes(
             request_id,
             limit=limit,
@@ -166,7 +177,9 @@ async def trace_summary(
 ) -> dict:
     """Get aggregated trace summary for a request."""
     try:
-        identity = parse_identity(authorization)
+        identity = require_identity_permission(
+            parse_identity(authorization), Permission.TRACE_READ
+        )
         result = await get_trace_summary(
             request_id,
             user_id=identity["user_id"],

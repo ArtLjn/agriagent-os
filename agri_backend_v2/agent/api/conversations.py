@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import Header, HTTPException, Query
 
 from agent.api import api_router
-from agent.auth import parse_identity
+from agent.auth import parse_identity, require_identity_permission
 from agent.platforms.persistence.mongo.chat_store import (
     ConversationCursorError,
     get_conversation,
@@ -23,7 +23,7 @@ from agent.domains.harness.observability.trace.store import (
     list_traces,
 )
 from agent.domains.harness.observability.trace.safety import sanitize_payload
-from shared.roles import is_admin_role
+from shared.roles import Permission, is_admin_role
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +100,9 @@ async def conversations_list(
 ) -> dict:
     """List conversations with pagination."""
     try:
-        identity = parse_identity(authorization)
+        identity = require_identity_permission(
+            parse_identity(authorization), Permission.CONVERSATION_READ
+        )
         return await list_conversations(
             limit=limit,
             cursor=cursor,
@@ -123,7 +125,9 @@ async def conversation_detail(
 ) -> dict:
     """Get conversation messages."""
     try:
-        identity = parse_identity(authorization)
+        identity = require_identity_permission(
+            parse_identity(authorization), Permission.CONVERSATION_READ
+        )
         result = await get_conversation(
             conversation_id,
             limit=limit,
@@ -168,7 +172,9 @@ async def conversation_messages(
 ) -> dict:
     """读取最新消息页或使用 cursor 加载更早历史。"""
     try:
-        identity = parse_identity(authorization)
+        identity = require_identity_permission(
+            parse_identity(authorization), Permission.CONVERSATION_READ
+        )
         state = await get_conversation_state(
             conversation_id,
             user_id=identity["user_id"],
@@ -231,7 +237,9 @@ async def conversation_turns(
 ) -> dict:
     """按会话返回 Turn 摘要，并保留消息到 Turn 的稳定回链。"""
     try:
-        identity = parse_identity(authorization)
+        identity = require_identity_permission(
+            parse_identity(authorization), Permission.CONVERSATION_READ
+        )
         messages = await get_conversation(
             conversation_id,
             limit=500,
@@ -329,7 +337,9 @@ async def conversation_turn_detail(
 ) -> dict:
     """聚合运行态 Turn、Trace summary 和受控执行时间线。"""
     try:
-        identity = parse_identity(authorization)
+        identity = require_identity_permission(
+            parse_identity(authorization), Permission.CONVERSATION_READ
+        )
         runtime_turn = await get_turn(turn_id)
         if runtime_turn is not None:
             _check_turn_scope(runtime_turn, identity)

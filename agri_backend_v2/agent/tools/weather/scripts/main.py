@@ -12,6 +12,7 @@ from typing import Any
 
 from agent.domains.harness.tools.base import Skill, SkillResult
 from agent.domains.harness.tools.context import SkillContext
+from agent.platforms.mcp.client import McpCallError
 
 
 class WeatherSkill(Skill):
@@ -91,11 +92,17 @@ def _as_skill_result(result: Any) -> SkillResult:
 
 async def _resolve_user_default_location(ctx: SkillContext) -> str | None:
     """读取当前用户默认城市，失败时保留 Business 的兼容兜底。"""
-    result = await ctx.call_mcp_tool(
-        "manage_user_settings",
-        {"operation": "query"},
-        risk_level="read",
-    )
+    try:
+        result = await ctx.call_mcp_tool(
+            "manage_user_settings",
+            {"operation": "query"},
+            risk_level="read",
+        )
+    except McpCallError as exc:
+        # 默认城市是天气查询的增强信息；profile 权限不足时仍应回退农场位置。
+        if exc.classified.code != "permission_denied":
+            raise
+        return None
     if not isinstance(result, dict) or result.get("error"):
         return None
     settings = result.get("settings")

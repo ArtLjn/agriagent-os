@@ -15,7 +15,7 @@ from __future__ import annotations
 from business.db import session_scope
 from business.mcp_app import mcp
 from business.services import worker_service
-from business.tools._headers import get_farm_id_from_headers
+from business.tools._headers import require_farm_operation_permission
 
 
 @mcp.tool
@@ -70,8 +70,11 @@ def manage_workers(
         worker_id=5, phone="13800000000"
       - "停用工人 5" → operation="delete", worker_id=5
     """
-    farm_id = get_farm_id_from_headers()
     op = (operation or "").lower()
+    farm_id = require_farm_operation_permission(
+        op,
+        tool_name="manage_workers",
+    )["farm_id"]
 
     if op == "query":
         with session_scope() as db:

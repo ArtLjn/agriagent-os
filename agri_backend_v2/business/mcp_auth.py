@@ -31,7 +31,10 @@ def _headers(scope: dict[str, Any]) -> dict[str, str]:
 
 
 def _error_body(code: str, message: str) -> bytes:
-    return json.dumps({"error": code, "message": message}).encode("utf-8")
+    return json.dumps(
+        {"error": code, "code": code, "message": message},
+        ensure_ascii=False,
+    ).encode("utf-8")
 
 
 def _reject(send, status: int, code: str, message: str):

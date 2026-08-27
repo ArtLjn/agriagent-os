@@ -21,7 +21,7 @@ from business.mcp_app import mcp
 from business.models import CropCycle, OperationWorkOrder
 from business.services import labor_service, worker_service, work_order_service
 from business.services.work_order_service import _UNSET
-from business.tools._headers import get_farm_id_from_headers
+from business.tools._headers import require_farm_operation_permission
 
 
 def _to_date(value: str | None, field: str) -> date | None:
@@ -135,8 +135,11 @@ def manage_work_orders(
       - "月底结算张三的未付人工" → 先解析 worker_id，再 operation="settle",
         worker_id=<工人ID>, start_date="2026-08-01", end_date="2026-08-31"
     """
-    farm_id = get_farm_id_from_headers()
     op = (operation or "").lower()
+    farm_id = require_farm_operation_permission(
+        op,
+        tool_name="manage_work_orders",
+    )["farm_id"]
 
     if op == "query":
         with session_scope() as db:

@@ -3,8 +3,11 @@
 提供城市坐标查询能力，让 LLM 在调 get_weather 前先确认城市的精确名称和坐标。
 解决"LLM 不知道 regions.json 支持哪些城市"的盲点。
 """
+
 from business.mcp_app import mcp
 from business.services import location_service
+from business.tools._headers import get_principal
+from shared.roles import Permission
 
 
 @mcp.tool
@@ -34,6 +37,8 @@ def search_cities(keyword: str = "", limit: int = 10) -> dict:
         - After get_weather returns error=unknown_location
         - To discover what regions the system supports
     """
+    # 城市数据虽是只读，也必须经过 MCP 主体校验，不能因不访问农场表而绕过委托权限。
+    get_principal(Permission.LOCATION_SEARCH)
     if not keyword:
         # LLM 偶尔会传空 keyword，返回热门城市作为示例引导
         return {

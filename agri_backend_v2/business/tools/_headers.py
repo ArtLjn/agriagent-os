@@ -35,6 +35,50 @@ _TOOL_OPERATION_PERMISSIONS = {
         "detail": Permission.FARM_READ,
         "create": Permission.FARM_WRITE,
     },
+    "manage_crop_cycle": {
+        "query": Permission.FARM_READ,
+        "detail": Permission.FARM_READ,
+        "templates": Permission.FARM_READ,
+        "system_templates": Permission.FARM_READ,
+        "create": Permission.FARM_WRITE,
+        "advance": Permission.FARM_WRITE,
+        "update": Permission.FARM_WRITE,
+        "delete": Permission.FARM_WRITE,
+    },
+    "manage_crop_templates": {
+        "query": Permission.FARM_READ,
+        "create": Permission.FARM_WRITE,
+        "import_system": Permission.FARM_WRITE,
+    },
+    "manage_debt": {
+        "query": Permission.FARM_READ,
+        "summary": Permission.FARM_READ,
+        "create": Permission.FARM_WRITE,
+        "repay": Permission.FARM_WRITE,
+    },
+    "manage_farm_logs": {
+        "query": Permission.FARM_READ,
+        "create": Permission.FARM_WRITE,
+        "update": Permission.FARM_WRITE,
+        "delete": Permission.FARM_WRITE,
+    },
+    "manage_work_orders": {
+        "query": Permission.FARM_READ,
+        "detail": Permission.FARM_READ,
+        "wages": Permission.FARM_READ,
+        "create": Permission.FARM_WRITE,
+        "add_labor": Permission.FARM_WRITE,
+        "update": Permission.FARM_WRITE,
+        "settle": Permission.FARM_WRITE,
+    },
+    "manage_workers": {
+        "query": Permission.FARM_READ,
+        "create": Permission.FARM_WRITE,
+        "update": Permission.FARM_WRITE,
+        "delete": Permission.FARM_WRITE,
+    },
+    "get_weather": {"query": Permission.FARM_READ},
+    "search_cities": {"query": Permission.LOCATION_SEARCH},
     "manage_user_settings": {
         "query": Permission.PROFILE_READ,
         "update": Permission.PROFILE_WRITE,
@@ -82,16 +126,22 @@ def permission_for_tool(tool_name: str, operation: str) -> Permission | None:
 def require_farm_operation_permission(
     operation: str,
     *,
-    read_operations: set[str],
-    write_operations: set[str],
+    tool_name: str | None = None,
+    read_operations: set[str] | None = None,
+    write_operations: set[str] | None = None,
 ) -> dict:
-    """在访问数据库前按操作类型校验 MCP 工具权限。"""
+    """在访问数据库前按集中映射校验 MCP 工具权限。
+
+    新工具应传入 tool_name 使用集中策略；保留读写集合参数兼容迁移期调用方。
+    """
     normalized = (operation or "").lower()
-    permission = (
-        Permission.FARM_WRITE
-        if normalized in write_operations
-        else Permission.FARM_READ
-        if normalized in read_operations
-        else None
-    )
+    permission = permission_for_tool(tool_name, normalized) if tool_name else None
+    if tool_name is None:
+        permission = (
+            Permission.FARM_WRITE
+            if normalized in (write_operations or set())
+            else Permission.FARM_READ
+            if normalized in (read_operations or set())
+            else None
+        )
     return get_principal(permission)

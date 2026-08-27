@@ -6,8 +6,9 @@ from fastapi import Header, HTTPException
 from pydantic import BaseModel
 
 from agent.api import api_router
-from agent.auth import parse_identity
+from agent.auth import parse_identity, require_identity_permission
 from agent.platforms.persistence.redis.turn_store import get_turn, resolve_approval
+from shared.roles import Permission
 
 
 class ApproveRequest(BaseModel):
@@ -25,7 +26,9 @@ async def approve(
     turn = await get_turn(req.turn_id)
     if turn is None:
         raise HTTPException(404, {"code": "turn_not_found", "message": "turn 不存在"})
-    identity = parse_identity(authorization)
+    identity = require_identity_permission(
+        parse_identity(authorization), Permission.TURN_APPROVE
+    )
     if not _same_identity(turn, identity):
         raise HTTPException(
             403, {"code": "turn_forbidden", "message": "无权操作该 turn"}

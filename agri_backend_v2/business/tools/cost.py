@@ -149,8 +149,7 @@ def manage_cost(
     op = (operation or "").lower()
     principal = require_farm_operation_permission(
         op,
-        read_operations={"query", "summary", "profit", "categories"},
-        write_operations={"create", "delete", "create_category", "delete_category"},
+        tool_name="manage_cost",
     )
     farm_id = principal["farm_id"]
 

@@ -11,6 +11,7 @@
 record_type 映射：debt_payable（应付，我欠他人）→ cost；
 debt_receivable（应收，他人欠我）→ income。
 """
+
 from __future__ import annotations
 
 from datetime import date
@@ -19,7 +20,7 @@ from decimal import Decimal, InvalidOperation
 from business.db import session_scope
 from business.mcp_app import mcp
 from business.services import debt_service
-from business.tools._headers import get_farm_id_from_headers
+from business.tools._headers import require_farm_operation_permission
 
 # 赊账方向映射：agent 传入语义化的 payable/receivable，service 层用 cost/income。
 _DEBT_TYPE_MAP = {
@@ -101,8 +102,11 @@ def manage_debt(
       - "还清张三全部赊账" → operation="repay", counterparty="张三"
       - "赊账汇总" → operation="summary"
     """
-    farm_id = get_farm_id_from_headers()
     op = (operation or "").lower()
+    farm_id = require_farm_operation_permission(
+        op,
+        tool_name="manage_debt",
+    )["farm_id"]
 
     if op == "query":
         with session_scope() as db:

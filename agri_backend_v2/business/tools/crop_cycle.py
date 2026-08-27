@@ -18,7 +18,7 @@ from decimal import Decimal, InvalidOperation
 from business.db import session_scope
 from business.mcp_app import mcp
 from business.services import crop_service, cycle_service
-from business.tools._headers import get_farm_id_from_headers
+from business.tools._headers import require_farm_operation_permission
 
 
 def _to_decimal(value, field: str) -> Decimal | None:
@@ -118,8 +118,11 @@ def manage_crop_cycle(
       - "有哪些作物模板" → operation="templates"
       - "系统有哪些作物模板" → operation="system_templates"
     """
-    farm_id = get_farm_id_from_headers()
     op = (operation or "").lower()
+    farm_id = require_farm_operation_permission(
+        op,
+        tool_name="manage_crop_cycle",
+    )["farm_id"]
 
     if op == "query":
         with session_scope() as db:
