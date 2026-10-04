@@ -9,8 +9,8 @@ import '../../support/api_test_fixtures.dart';
 void main() {
   test('账本 controller 聚合成本列表、年度汇总和欠款提醒', () async {
     final adapter = RecordingAdapter({
-      '/costs': paginatedCostsResponse,
-      '/costs/summary/2026': yearlySummaryResponse,
+      '/cost-records': paginatedCostsResponse,
+      '/cost-records/summary/yearly': yearlySummaryResponse,
       '/debts': debtsResponse,
     });
     final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
@@ -32,19 +32,19 @@ void main() {
     expect(model.receivables, hasLength(1));
     expect(model.receivables.single.counterparty, '老王');
     expect(model.receivables.single.amountText, '¥200');
-    expect(adapter.find('GET', '/costs').query['size'], 10);
-    expect(adapter.find('GET', '/debts').query['size'], 10);
+    expect(adapter.find('GET', '/cost-records').query['page_size'], 100);
+    expect(adapter.find('GET', '/debts').query['page_size'], 10);
   });
 
   test('成本记录即使返回负金额也按支出显示', () async {
     final adapter = RecordingAdapter({
-      '/costs': {
+      '/cost-records': {
         'items': [
           {...costRecordResponse, 'record_type': 'cost', 'amount': '-200'}
         ],
         'total': 1,
       },
-      '/costs/summary/2026': yearlySummaryResponse,
+      '/cost-records/summary/yearly': yearlySummaryResponse,
       '/debts': debtsResponse,
     });
     final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
@@ -62,8 +62,8 @@ void main() {
 
   test('账本年度净收益大金额使用紧凑显示', () async {
     final adapter = RecordingAdapter({
-      '/costs': paginatedCostsResponse,
-      '/costs/summary/2026': {
+      '/cost-records': paginatedCostsResponse,
+      '/cost-records/summary/yearly': {
         ...yearlySummaryResponse,
         'net_profit': '-110970.16',
       },
@@ -83,8 +83,8 @@ void main() {
 
   test('账本概览指标大金额使用万和亿', () async {
     final adapter = RecordingAdapter({
-      '/costs': paginatedCostsResponse,
-      '/costs/summary/2026': {
+      '/cost-records': paginatedCostsResponse,
+      '/cost-records/summary/yearly': {
         ...yearlySummaryResponse,
         'total_income': '123456789',
         'total_cost': '116470.16',

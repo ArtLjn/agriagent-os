@@ -61,6 +61,7 @@ class ProfileController {
   }
 
   String _versionStatus(VersionInfo version, bool hasUpdate) {
+    if (version.latestVersion.isEmpty) return '暂不可用';
     if (hasUpdate) return '可更新';
     return '已是最新';
   }
@@ -161,6 +162,7 @@ class ProfileViewModel {
   }
 
   String get updateSummary {
+    if (safeLatestVersion == '未知版本') return '暂无更新说明';
     if (!hasVersionUpdate) return '当前已是最新版本';
     return '更新至 $latestVersionWithPrefix';
   }

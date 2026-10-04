@@ -13,7 +13,7 @@ void main() {
     final decorated =
         tester.widget<DecoratedBox>(find.byType(DecoratedBox).first);
     final decoration = decorated.decoration as BoxDecoration;
-    expect(decoration.borderRadius, BorderRadius.circular(16));
+    expect(decoration.borderRadius, BorderRadius.circular(20));
     expect(decoration.color, AppColors.surface);
   });
 

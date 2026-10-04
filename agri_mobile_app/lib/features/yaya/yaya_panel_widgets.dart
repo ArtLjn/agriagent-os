@@ -66,119 +66,70 @@ class _SuggestionPillsState extends State<_SuggestionPills> {
   @override
   Widget build(BuildContext context) {
     final suggestions = _suggestionGroups[_groupIndex];
-    return Padding(
-      padding: EdgeInsets.zero,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '常用问题',
-                  style: AppTextStyles.small.copyWith(
-                    color: AppColors.subtle,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              TextButton(
-                onPressed: _shuffleSuggestions,
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.subtle,
-                  minimumSize: const Size(0, 28),
-                  padding: EdgeInsets.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  textStyle: AppTextStyles.small.copyWith(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                child: const Text('换一批'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 2),
-          Container(
-            decoration: const BoxDecoration(
-              border: Border(
-                top: BorderSide(color: AppColors.lineSoft),
-              ),
-            ),
-            child: Column(
-              children: [
-                for (var index = 0; index < suggestions.length; index++)
-                  _SuggestionRow(
-                    number: index + 1,
-                    spec: suggestions[index],
-                    showDivider: index != suggestions.length - 1,
-                    onTap: () => widget.onSelected(suggestions[index].label),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        const Expanded(child: Text('从一个话题开始', style: AppTextStyles.small)),
+        TextButton.icon(
+            onPressed: _shuffleSuggestions,
+            icon: const Icon(LucideIcons.refreshCw, size: 14),
+            label: const Text('换一批'),
+            style: TextButton.styleFrom(foregroundColor: AppColors.muted)),
+      ]),
+      const SizedBox(height: 8),
+      LayoutBuilder(
+          builder: (context, constraints) => Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  for (var index = 0; index < suggestions.length; index++)
+                    SizedBox(
+                        width: (constraints.maxWidth - 12) / 2,
+                        child: _SuggestionRow(
+                            spec: suggestions[index],
+                            icon: [
+                              LucideIcons.sprout,
+                              LucideIcons.cloudSun,
+                              LucideIcons.chartNoAxesCombined,
+                              LucideIcons.notebookText
+                            ][index],
+                            onTap: () =>
+                                widget.onSelected(suggestions[index].label))),
+                ],
+              )),
+    ]);
   }
 }
 
 class _SuggestionRow extends StatelessWidget {
-  const _SuggestionRow({
-    required this.number,
-    required this.spec,
-    required this.showDivider,
-    required this.onTap,
-  });
-
-  final int number;
+  const _SuggestionRow(
+      {required this.spec, required this.icon, required this.onTap});
   final _SuggestionSpec spec;
-  final bool showDivider;
+  final IconData icon;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.transparent,
+      color: AppColors.surface,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: AppColors.line)),
       child: InkWell(
         onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
         child: Container(
-          height: 44,
-          alignment: Alignment.centerLeft,
-          padding: const EdgeInsets.symmetric(horizontal: 2),
-          decoration: BoxDecoration(
-            border: showDivider
-                ? const Border(bottom: BorderSide(color: AppColors.lineSoft))
-                : null,
-          ),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 28,
-                child: Text(
-                  number.toString().padLeft(2, '0'),
-                  style: AppTextStyles.small.copyWith(
-                    color: AppColors.subtle,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              Expanded(
-                child: Text(
-                  spec.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.body.copyWith(
-                    color: AppColors.ink2,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    height: 1.2,
-                  ),
-                ),
-              ),
-            ],
-          ),
+          constraints: const BoxConstraints(minHeight: 104),
+          padding: const EdgeInsets.all(16),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Icon(icon, color: AppColors.blue, size: 20),
+              const Icon(LucideIcons.arrowUpRight,
+                  color: AppColors.subtle, size: 16),
+            ]),
+            const SizedBox(height: 16),
+            Text(spec.label, style: AppTextStyles.body),
+          ]),
         ),
       ),
     );
@@ -199,13 +150,11 @@ class AssistantInputBar extends StatefulWidget {
     required this.onSubmit,
     this.sending = false,
     this.onMorePressed,
-    this.embedded = false,
   });
 
   final Future<void> Function(String text) onSubmit;
   final bool sending;
   final VoidCallback? onMorePressed;
-  final bool embedded;
 
   @override
   State<AssistantInputBar> createState() => _AssistantInputBarState();
@@ -229,115 +178,56 @@ class _AssistantInputBarState extends State<AssistantInputBar> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: widget.embedded ? 52 : 56,
-      padding: EdgeInsets.fromLTRB(
-          10, widget.embedded ? 6 : 7, 6, widget.embedded ? 6 : 7),
-      decoration: BoxDecoration(
-        color: widget.embedded ? AppColors.surface3 : AppColors.surface,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: AppColors.lineSoft),
-        boxShadow: widget.embedded
-            ? null
-            : const [
-                BoxShadow(
-                  color: Color(0x080B2447),
-                  blurRadius: 12,
-                  offset: Offset(0, 5),
-                ),
-              ],
-      ),
-      child: Row(
-        children: [
-          const YayaMascot(size: 30),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Material(
-              color: Colors.transparent,
-              child: TextField(
-                controller: textController,
-                enabled: !widget.sending,
-                minLines: 1,
-                maxLines: 1,
-                textInputAction: TextInputAction.send,
-                onSubmitted: (_) => _submit(),
-                decoration: InputDecoration(
-                  hintText: '发消息或按住说话...',
-                  hintStyle: AppTextStyles.body.copyWith(
-                    color: AppColors.subtle,
-                    fontSize: 15,
-                  ),
-                  border: InputBorder.none,
-                  isDense: true,
-                  contentPadding: EdgeInsets.zero,
-                ),
-                style: AppTextStyles.body.copyWith(
-                  color: AppColors.ink,
-                  fontSize: 15,
-                ),
-              ),
+    return Material(
+      color: AppColors.surface,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: const BorderSide(color: AppColors.line)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 12, 10),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(
+            controller: textController,
+            enabled: !widget.sending,
+            minLines: 1,
+            maxLines: 4,
+            textInputAction: TextInputAction.send,
+            onSubmitted: (_) => _submit(),
+            decoration: const InputDecoration(
+              hintText: '说说你的农场问题…',
+              hintStyle: AppTextStyles.body,
+              border: InputBorder.none,
+              isDense: true,
+              contentPadding: EdgeInsets.zero,
             ),
+            style:
+                AppTextStyles.body.copyWith(color: AppColors.ink, height: 1.5),
           ),
-          const SizedBox(width: 4),
-          _RoundActionButton(
-            icon: widget.sending ? LucideIcons.loaderCircle : LucideIcons.send,
-            filled: true,
-            onTap: widget.sending ? null : _submit,
-          ),
-          const SizedBox(width: 6),
-          _RoundActionButton(
-            icon: LucideIcons.plus,
-            onTap: widget.sending ? null : widget.onMorePressed,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RoundActionButton extends StatelessWidget {
-  const _RoundActionButton({
-    required this.icon,
-    this.filled = false,
-    this.onTap,
-  });
-
-  final IconData icon;
-  final bool filled;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final active = onTap != null;
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Opacity(
-        opacity: active ? 1 : 0.58,
-        child: Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            color: filled ? AppColors.blue : AppColors.surface,
-            borderRadius: BorderRadius.circular(21),
-            border:
-                filled ? null : Border.all(color: AppColors.blue, width: 1.5),
-            boxShadow: filled
-                ? const [
-                    BoxShadow(
-                      color: Color(0x1A2F73F6),
-                      blurRadius: 10,
-                      offset: Offset(0, 4),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Icon(
-            icon,
-            color: filled ? Colors.white : AppColors.blue,
-            size: 21,
-          ),
-        ),
+          const SizedBox(height: 12),
+          Row(children: [
+            TextButton.icon(
+              onPressed: widget.sending ? null : widget.onMorePressed,
+              icon: const Icon(LucideIcons.plus, size: 18),
+              label: const Text('技能'),
+              style: TextButton.styleFrom(
+                  foregroundColor: AppColors.muted,
+                  padding: const EdgeInsets.symmetric(horizontal: 8)),
+            ),
+            const Spacer(),
+            IconButton.filled(
+              tooltip: widget.sending ? '正在回复' : '发送',
+              onPressed: widget.sending ? null : _submit,
+              style: IconButton.styleFrom(
+                  backgroundColor: AppColors.blue,
+                  disabledBackgroundColor: AppColors.blueSoft,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(44, 44)),
+              icon: Icon(
+                  widget.sending ? LucideIcons.loaderCircle : LucideIcons.send,
+                  size: 20),
+            ),
+          ]),
+        ]),
       ),
     );
   }
@@ -373,7 +263,7 @@ class _DrawerSkillEntry extends StatelessWidget {
               child: Text(
                 '全部技能',
                 style: AppTextStyles.listTitle.copyWith(
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -414,7 +304,7 @@ class _RecentChatHeader extends StatelessWidget {
             '芽芽对话',
             style: AppTextStyles.small.copyWith(
               color: AppColors.blue,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),
@@ -445,7 +335,7 @@ class _ChatSection extends StatelessWidget {
             title,
             style: AppTextStyles.small.copyWith(
               color: AppColors.subtle,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),
@@ -504,7 +394,7 @@ class _ChatItem extends StatelessWidget {
                             color: spec.selected
                                 ? AppColors.blueDark
                                 : AppColors.ink,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
@@ -520,7 +410,7 @@ class _ChatItem extends StatelessWidget {
                             color: spec.selected
                                 ? AppColors.blue
                                 : AppColors.subtle,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
@@ -633,24 +523,6 @@ class _DrawerUserBar extends StatelessWidget {
               ],
             ),
           ),
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              const _HeaderIconButton(icon: LucideIcons.settings),
-              Positioned(
-                top: 8,
-                right: 8,
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: AppColors.red,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-            ],
-          ),
         ],
       ),
     );
@@ -665,77 +537,42 @@ class _SkillCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(minHeight: 92),
-      padding: const EdgeInsets.fromLTRB(16, 16, 14, 16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppColors.line),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x07000000),
-            blurRadius: 18,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          _SoftIcon(
-            icon: spec.icon,
-            color: spec.color,
-            background: spec.background,
-            size: 52,
-            iconSize: 24,
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  spec.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.sectionTitle.copyWith(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                    height: 22 / 17,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  spec.subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.small.copyWith(
-                    color: AppColors.muted,
-                    height: 18 / 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          IconButton(
-            onPressed: onDetailsTap,
-            tooltip: '查看${spec.title}详情',
-            style: IconButton.styleFrom(
-              backgroundColor: AppColors.surface2,
-              fixedSize: const Size(36, 36),
-              minimumSize: const Size(36, 36),
-              padding: EdgeInsets.zero,
-            ),
-            icon: const Icon(
-              LucideIcons.chevronRight,
-              size: 19,
-              color: AppColors.subtle,
-            ),
-          ),
-        ],
+    return Material(
+      color: AppColors.surface,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: AppColors.lineSoft)),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onDetailsTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 4, 16),
+          child: Row(children: [
+            _SoftIcon(
+                icon: spec.icon,
+                color: spec.color,
+                background: spec.background,
+                size: 40,
+                iconSize: 20),
+            const SizedBox(width: 14),
+            Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  Text(spec.title, style: AppTextStyles.listTitle),
+                  const SizedBox(height: 6),
+                  Text(spec.subtitle,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.small),
+                ])),
+            IconButton(
+                onPressed: onDetailsTap,
+                tooltip: '查看${spec.title}详情',
+                icon: const Icon(LucideIcons.chevronRight,
+                    size: 18, color: AppColors.subtle)),
+          ]),
+        ),
       ),
     );
   }
@@ -748,113 +585,67 @@ class _SkillDetailsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      child: Container(
-        margin: const EdgeInsets.all(12),
-        padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
-        decoration: BoxDecoration(
+    return Container(
+      constraints:
+          BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.85),
+      decoration: const BoxDecoration(
           color: AppColors.surface,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x1A000000),
-              blurRadius: 28,
-              offset: Offset(0, 12),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 18),
-                decoration: BoxDecoration(
-                  color: AppColors.line,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-            ),
-            Row(
-              children: [
-                _SoftIcon(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Row(children: [
+              _SoftIcon(
                   icon: spec.icon,
                   color: spec.color,
                   background: spec.background,
-                  size: 48,
-                  iconSize: 23,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
+                  size: 40,
+                  iconSize: 20),
+              const SizedBox(width: 12),
+              Expanded(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        spec.title,
-                        style: AppTextStyles.sectionTitle.copyWith(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        spec.category,
-                        style: AppTextStyles.small.copyWith(
-                          color: AppColors.subtle,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            Text(
-              spec.details,
-              style: AppTextStyles.body.copyWith(
-                color: AppColors.ink2,
-                height: 22 / 14,
-              ),
-            ),
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    Text(spec.title, style: AppTextStyles.sectionTitle),
+                    const SizedBox(height: 4),
+                    Text(spec.category, style: AppTextStyles.small),
+                  ])),
+              IconButton(
+                  tooltip: '关闭',
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(LucideIcons.x, size: 20)),
+            ]),
+            const SizedBox(height: 24),
+            Text(spec.details, style: AppTextStyles.body),
             if (spec.examples.isNotEmpty) ...[
-              const SizedBox(height: 18),
-              Text(
-                '可以这样问',
-                style: AppTextStyles.listTitle.copyWith(
-                  fontWeight: FontWeight.w800,
+              const SizedBox(height: 28),
+              const Text('可以这样问', style: AppTextStyles.listTitle),
+              const SizedBox(height: 8),
+              const Text('点击一个例子，向芽芽提问', style: AppTextStyles.small),
+              const SizedBox(height: 16),
+              for (final example in spec.examples) ...[
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.all(16),
+                      foregroundColor: AppColors.ink,
+                      side: const BorderSide(color: AppColors.lineSoft),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12))),
+                  onPressed: () => Navigator.of(context).pop(example),
+                  child: Row(children: [
+                    Expanded(child: Text(example, style: AppTextStyles.body)),
+                    const SizedBox(width: 12),
+                    const Icon(LucideIcons.arrowUpRight,
+                        size: 18, color: AppColors.blue)
+                  ]),
                 ),
-              ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final example in spec.examples)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface2,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: AppColors.lineSoft),
-                      ),
-                      child: Text(
-                        example,
-                        style: AppTextStyles.small.copyWith(
-                          color: AppColors.ink2,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
+                const SizedBox(height: 12),
+              ],
             ],
-          ],
+          ]),
         ),
       ),
     );

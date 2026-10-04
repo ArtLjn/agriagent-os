@@ -48,18 +48,12 @@ class BackendAppDependencies implements AppDependencies {
       : this._(
           client ??
               ApiClient(
-                baseUrl: const String.fromEnvironment(
-                  'BUSINESS_API_BASE_URL',
-                  defaultValue: 'http://192.168.1.13:9876/api/v2',
-                ),
+                baseUrl: ApiClient.businessApiBaseUrl,
               ),
           agentClient ??
               client ??
               ApiClient(
-                baseUrl: const String.fromEnvironment(
-                  'AGENT_API_BASE_URL',
-                  defaultValue: 'http://192.168.1.13:8000/api/v2',
-                ),
+                baseUrl: ApiClient.agentApiBaseUrl,
               ),
         );
 

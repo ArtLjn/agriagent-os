@@ -459,14 +459,6 @@ function mapSsePayloadToChunk(event: SseEvent): StreamChunk | null {
           delay_ms: Number(data.delay_ms ?? 0),
         },
       };
-    case 'progress':
-      return {
-        type: 'progress',
-        data: {
-          message: String(data.message ?? '正在处理请求'),
-          phase: typeof data.phase === 'string' ? data.phase : undefined,
-        },
-      };
     case 'step.started':
       return {
         type: 'step.started',

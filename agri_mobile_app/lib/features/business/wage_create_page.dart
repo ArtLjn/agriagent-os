@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../data/api/api_client.dart';
 import '../../data/api/api_models.dart';
 import '../../data/repositories/business_repository.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_text_styles.dart';
 import 'business_ui.dart';
 
 class WageCreatePage extends StatefulWidget {
@@ -67,8 +69,8 @@ class _WageCreatePageState extends State<WageCreatePage> {
         'client_request_id': DateTime.now().microsecondsSinceEpoch.toString(),
       }..removeWhere((_, value) => value == null || value == ''));
       _showMessage('保存工资成功');
-    } catch (_) {
-      _showMessage('保存失败，请稍后再试');
+    } catch (error) {
+      _showMessage(ApiClient.userMessageFor(error));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -140,12 +142,15 @@ class _WageCreatePageState extends State<WageCreatePage> {
         onSecondary: () => Navigator.of(context).maybePop(),
       ),
       children: [
-        _WageAmountHero(
-          payType: _payType,
-          quantity: _quantity.text,
-          unitPrice: _unitPrice.text,
-          paidAmount: _paidAmount.text,
-          onPayTypeChanged: (value) => setState(() => _payType = value),
+        AnimatedBuilder(
+          // 金额预览随输入更新，计算过程不触发保存请求。
+          animation: Listenable.merge([_quantity, _unitPrice, _paidAmount]),
+          builder: (context, _) => _WageAmountHero(
+            payType: _payType,
+            quantity: _quantity.text,
+            unitPrice: _unitPrice.text,
+            paidAmount: _paidAmount.text,
+          ),
         ),
         FormRowsCard(
           title: '用工信息',
@@ -338,7 +343,7 @@ class _WageDateTimeFormRow extends StatelessWidget {
                       color: AppColors.ink,
                       fontSize: 16,
                       height: 22 / 16,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                       letterSpacing: 0,
                     ),
                   ),
@@ -378,290 +383,61 @@ class _WageAmountHero extends StatelessWidget {
     required this.quantity,
     required this.unitPrice,
     required this.paidAmount,
-    required this.onPayTypeChanged,
   });
 
   final String payType;
   final String quantity;
   final String unitPrice;
   final String paidAmount;
-  final ValueChanged<String> onPayTypeChanged;
 
   @override
   Widget build(BuildContext context) {
     final q = num.tryParse(quantity.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
     final p = num.tryParse(unitPrice.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
     final total = q * p;
-    final paid = num.tryParse(paidAmount.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
+    final paid =
+        num.tryParse(paidAmount.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
     final unpaid = total - paid;
     final isPiece = payType == 'piece';
-    final accent = isPiece ? AppColors.purple : AppColors.blue;
-    final accentSoft = isPiece ? AppColors.purpleSoft : AppColors.blueSoft;
-    final hasTotal = total > 0;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.surface, accentSoft.withValues(alpha: 0.55)],
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('本次应付工资', style: AppTextStyles.body),
+        const SizedBox(height: 12),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text('¥${_trimNumber(total)}',
+              style: const TextStyle(
+                  color: AppColors.ink,
+                  fontSize: 40,
+                  height: 1.15,
+                  fontWeight: FontWeight.w600)),
         ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.lineSoft),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x08000000),
-            blurRadius: 18,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 28,
-                height: 28,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      accent,
-                      accent.withValues(alpha: 0.75),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: [
-                    BoxShadow(
-                      color: accent.withValues(alpha: 0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  LucideIcons.coins,
-                  size: 14,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Text(
-                  '工资计算',
-                  style: TextStyle(
-                    color: AppColors.ink,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0,
-                  ),
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: accentSoft,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      isPiece
-                          ? LucideIcons.package
-                          : LucideIcons.calendarDays,
-                      size: 12,
-                      color: accent,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      isPiece ? '计件' : '按天',
-                      style: TextStyle(
-                        color: accent,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.1,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '¥',
-                style: TextStyle(
-                  color: hasTotal ? accent : AppColors.subtle,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  height: 1.1,
-                ),
-              ),
-              const SizedBox(width: 2),
-              Flexible(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 240),
-                    transitionBuilder: (child, anim) => FadeTransition(
-                      opacity: anim,
-                      child: SlideTransition(
-                        position: Tween<Offset>(
-                          begin: const Offset(0, 0.08),
-                          end: Offset.zero,
-                        ).animate(anim),
-                        child: child,
-                      ),
-                    ),
-                    child: Text(
-                      hasTotal ? _trimNumber(total) : '0',
-                      key: ValueKey('wage-total-$total'),
-                      style: TextStyle(
-                        color: hasTotal ? AppColors.ink : AppColors.subtle,
-                        fontSize: 40,
-                        fontWeight: FontWeight.w900,
-                        height: 1.05,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Text(
-                  hasTotal
-                      ? (isPiece ? '$_trimQ($q) × $_trimQ($p)' : '$q 天 × ¥$p')
-                      : '输入数量与单价',
-                  style: TextStyle(
-                    color: hasTotal ? AppColors.muted : AppColors.subtle,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          if (hasTotal && paid > 0)
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: AppColors.surface.withValues(alpha: 0.7),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    LucideIcons.wallet,
-                    size: 13,
-                    color: AppColors.subtle,
-                  ),
-                  const SizedBox(width: 5),
-                  const Text(
-                    '已付',
-                    style: TextStyle(
-                      color: AppColors.muted,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    '¥${_trimNumber(paid)}',
-                    style: const TextStyle(
-                      color: AppColors.greenDark,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Container(
-                    width: 1,
-                    height: 12,
-                    color: AppColors.line,
-                  ),
-                  const SizedBox(width: 10),
-                  const Text(
-                    '未付',
-                    style: TextStyle(
-                      color: AppColors.muted,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(width: 5),
-                  Text(
-                    unpaid > 0 ? '¥${_trimNumber(unpaid)}' : '已结清',
-                    style: TextStyle(
-                      color: unpaid > 0 ? AppColors.red : AppColors.subtle,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-            )
-          else
-            Row(
-              children: [
-                _WageHint(icon: LucideIcons.userRound, text: '选择工人'),
-                const SizedBox(width: 14),
-                _WageHint(icon: LucideIcons.hash, text: '填数量'),
-                const SizedBox(width: 14),
-                _WageHint(icon: LucideIcons.circleDollarSign, text: '填单价'),
-              ],
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _WageHint extends StatelessWidget {
-  const _WageHint({required this.icon, required this.text});
-
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 11, color: AppColors.subtle),
-        const SizedBox(width: 4),
+        const SizedBox(height: 8),
         Text(
-          text,
-          style: const TextStyle(
-            color: AppColors.subtle,
-            fontSize: 11.5,
-            fontWeight: FontWeight.w600,
-          ),
+          total > 0
+              ? '${_trimNumber(q)}${isPiece ? ' 件' : ' 天'} × ¥${_trimNumber(p)}'
+              : '填写数量和单价后自动计算',
+          style: AppTextStyles.small,
         ),
-      ],
+        if (paid > 0) ...[
+          const SizedBox(height: 16),
+          Wrap(spacing: 24, runSpacing: 8, children: [
+            Text('已付 ¥${_trimNumber(paid)}', style: AppTextStyles.small),
+            Text(unpaid > 0 ? '未付 ¥${_trimNumber(unpaid)}' : '已结清',
+                style: AppTextStyles.small.copyWith(
+                    color: unpaid > 0 ? AppColors.blue : AppColors.greenDark)),
+          ]),
+        ],
+      ]),
     );
   }
 }
 
 String _trimNumber(num value) {
   if (value == value.toInt()) return '${value.toInt()}';
-  return value.toStringAsFixed(2).replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
-}
-
-String _trimQ(num value) {
-  if (value == value.toInt()) return '${value.toInt()}';
-  return value.toStringAsFixed(1);
+  return value
+      .toStringAsFixed(2)
+      .replaceAll(RegExp(r'0+$'), '')
+      .replaceAll(RegExp(r'\.$'), '');
 }

@@ -43,6 +43,104 @@ class _ReadSkill(Skill):
         return SkillResult(data={"skill": self.name})
 
 
+@pytest.mark.asyncio
+async def test_read_finalization_never_claims_business_commit() -> None:
+    skill = _ReadSkill("get_farm_status")
+    turn = Turn(user_input="今天适合干什么")
+    state = react._SkillExecState()
+    state.result = {"cycles": [], "message": "农场概览"}
+    state.finalize_after_success = True
+    events = [
+        event
+        async for event in react._post_process_skill_result(
+            tc={"id": "read-1", "name": skill.name, "arguments": {}},
+            turn=turn,
+            skill=skill,
+            tracker=react.verify.CallTracker(),
+            state=state,
+            skill_index={skill.name: skill},
+            skill_ctx=SimpleNamespace(),
+            approval_waiter=_approve,
+            rationale="查看农场",
+        )
+    ]
+    assert turn.finalization_pending is True
+    assert turn.committed_result is None
+    assert not any(event["type"] == "operation_committed" for event in events)
+
+
+@pytest.mark.asyncio
+async def test_read_finalization_disables_tools_and_returns_model_answer(
+    monkeypatch,
+) -> None:
+    choices = []
+
+    async def answer(messages, tools, **kwargs):
+        choices.append(kwargs.get("tool_choice"))
+        yield react._LlmResult(full_content="今天建议检查土壤湿度")
+
+    monkeypatch.setattr(react, "_call_llm_stream", answer)
+    turn = Turn(user_input="今天适合干什么")
+    turn.finalization_pending = True
+    events = [
+        event
+        async for event in react._run_single_reasoning_step(
+            turn=turn,
+            tools_schema=[],
+            tracker=react.verify.CallTracker(),
+            plan_box={"plan": None},
+            skill_index={},
+            skill_ctx=SimpleNamespace(),
+            approval_waiter=_approve,
+        )
+    ]
+    assert choices == ["none"]
+    assert turn.final_answer == "今天建议检查土壤湿度"
+    assert turn.committed_result is None
+    assert any(event["type"] == "final_answer" for event in events)
+
+
+def test_commit_fallback_requires_real_planting_entities() -> None:
+    assert "种植计划" not in react._structured_commit_answer({"message": "农场概览"})
+    assert "种植计划" not in react._structured_commit_answer({"id": 12})
+    assert "种植计划已提交成功" in react._structured_commit_answer(
+        {
+            "template": {"id": 1},
+            "cycle": {"id": 2},
+            "planting_unit": {"id": 3},
+        }
+    )
+
+
+@pytest.mark.asyncio
+async def test_read_finalization_tool_request_fails_without_write_success(
+    monkeypatch,
+) -> None:
+    async def answer(messages, tools, **kwargs):
+        yield react._LlmResult(
+            tool_calls=[{"id": "unexpected", "name": "get_weather", "arguments": {}}]
+        )
+
+    monkeypatch.setattr(react, "_call_llm_stream", answer)
+    turn = Turn(user_input="今天适合干什么")
+    turn.finalization_pending = True
+    events = [
+        event
+        async for event in react._run_single_reasoning_step(
+            turn=turn,
+            tools_schema=[],
+            tracker=react.verify.CallTracker(),
+            plan_box={"plan": None},
+            skill_index={},
+            skill_ctx=SimpleNamespace(),
+            approval_waiter=_approve,
+        )
+    ]
+    assert turn.status == "failed"
+    assert "提交成功" not in turn.final_answer
+    assert not any(event["type"] == "operation_committed" for event in events)
+
+
 class _UnknownBusinessSkill(_ReadSkill):
     mcp_tool = "manage_crop_cycle"
 
@@ -399,6 +497,18 @@ class _EnvelopeRedis:
     async def incr(self, _key: str) -> int:
         self.sequence += 1
         return self.sequence
+
+    async def eval(self, _script: str, _key_count: int, *args):
+        if "terminal_event" in self.state:
+            return [0, self.sequence]
+        self.sequence += 1
+        fields = json.loads(args[4])
+        fields["seq"] = str(self.sequence)
+        await self.xadd(args[1], fields)
+        self.state["last_event_seq"] = str(self.sequence)
+        if fields["terminal"] == "1":
+            self.state["terminal_event"] = fields["type"]
+        return [1, self.sequence]
 
     async def xadd(self, _key: str, fields: dict[str, str], **_kwargs) -> str:
         stream_id = f"{fields['seq']}-0"

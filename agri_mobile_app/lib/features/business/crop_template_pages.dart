@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../data/api/api_client.dart';
 import '../../data/api/api_models.dart';
 import '../../data/repositories/business_repository.dart';
-import '../../shared/assets/app_assets.dart';
 import '../../shared/widgets/animated_press.dart';
-import '../../shared/widgets/textured_card.dart';
 import '../../theme/app_colors.dart';
 import 'bulk_delete_ui.dart';
 import 'business_ui.dart';
@@ -36,7 +35,7 @@ class _CropTemplateListPageState extends State<CropTemplateListPage> {
   @override
   void initState() {
     super.initState();
-    _templatesFuture = widget.repository.listCropTemplates();
+    _templatesFuture = widget.repository.listAllCropTemplates();
   }
 
   @override
@@ -46,8 +45,9 @@ class _CropTemplateListPageState extends State<CropTemplateListPage> {
   }
 
   void _reloadTemplates() {
+    if (!mounted) return;
     setState(() {
-      _templatesFuture = widget.repository.listCropTemplates();
+      _templatesFuture = widget.repository.listAllCropTemplates();
     });
   }
 
@@ -56,14 +56,18 @@ class _CropTemplateListPageState extends State<CropTemplateListPage> {
     return BusinessPageFrame(
       title: '作物模板',
       trailingIcon: LucideIcons.plus,
-      trailingOnTap: () => Navigator.of(context).push(
+      trailingOnTap: () => Navigator.of(context)
+          .push(
         MaterialPageRoute(
           builder: (_) => CropTemplateFormPage(
             repository: widget.repository,
             onBottomTabChanged: widget.onBottomTabChanged,
           ),
         ),
-      ),
+      )
+          .then((_) {
+        if (mounted) _reloadTemplates();
+      }),
       showBottomTabs: true,
       onBottomTabChanged: widget.onBottomTabChanged,
       children: [
@@ -71,14 +75,7 @@ class _CropTemplateListPageState extends State<CropTemplateListPage> {
           future: _templatesFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _TemplateLibraryHero(templateCount: 0),
-                  const SizedBox(height: 16),
-                  const LoadingCard(),
-                ],
-              );
+              return const LoadingCard();
             }
             final items = snapshot.data?.items ?? const <ApiRecord>[];
             final visibleItems = _filterTemplates(
@@ -100,7 +97,7 @@ class _CropTemplateListPageState extends State<CropTemplateListPage> {
                 ChipRail(
                   items: _filters,
                   activeIndex: _filterIndex,
-                  activeColor: AppColors.ink,
+                  activeColor: AppColors.blue,
                   onSelected: (index) => setState(() => _filterIndex = index),
                 ),
                 const SizedBox(height: 16),
@@ -115,6 +112,7 @@ class _CropTemplateListPageState extends State<CropTemplateListPage> {
                   onDeleted: _reloadTemplates,
                   cardBuilder: (record, selectionMode, selected) =>
                       TemplateListCard(
+                    onSaved: _reloadTemplates,
                     record: record,
                     repository: widget.repository,
                     onBottomTabChanged: widget.onBottomTabChanged,
@@ -138,78 +136,9 @@ class _TemplateLibraryHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TexturedCard(
-      accent: AppColors.blue,
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          GradientIconTile(
-            icon: LucideIcons.bookOpenText,
-            accent: AppColors.blue,
-            size: 44,
-            iconSize: 20,
-            borderRadius: 14,
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  '模板库',
-                  style: TextStyle(
-                    color: AppColors.ink,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  templateCount == 0
-                      ? '还没有模板，新建后生成茬口更快'
-                      : '已创建 $templateCount 个作物模板',
-                  style: const TextStyle(
-                    color: AppColors.muted,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 0,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: AppColors.blueSoft,
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  LucideIcons.layers,
-                  size: 12,
-                  color: AppColors.blue,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  '$templateCount',
-                  style: const TextStyle(
-                    color: AppColors.blue,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -0.2,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+    return Text(
+      templateCount == 0 ? '建立模板，让下一季种植有章可循' : '$templateCount 个模板 · 为下一季积累经验',
+      style: const TextStyle(color: AppColors.muted, fontSize: 14, height: 1.5),
     );
   }
 }
@@ -331,8 +260,8 @@ class _CropTemplateFormPageState extends State<CropTemplateFormPage> {
         templateId: widget.templateId ?? widget.initialRecord?.id,
       );
       _showMessage('保存模板成功');
-    } catch (_) {
-      _showMessage('保存失败，请稍后再试');
+    } catch (error) {
+      _showMessage(ApiClient.userMessageFor(error));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -379,18 +308,12 @@ class _CropTemplateFormPageState extends State<CropTemplateFormPage> {
       title: widget.templateId == null ? '新建模板' : '编辑模板',
       trailingIcon: LucideIcons.sparkles,
       bottomBar: BottomActions(
-        secondaryLabel: '预览',
+        secondaryLabel: '取消',
         primaryLabel: _saving ? '保存中' : '保存模板',
         onPrimary: _save,
-        onSecondary: () => _showMessage('已生成阶段预览'),
+        onSecondary: () => Navigator.of(context).maybePop(),
       ),
       children: [
-        const AiLandscapeBanner(
-          title: '模板信息',
-          subtitle: '保存后可复用',
-          asset: AppAssets.businessTemplateBanner,
-          accent: businessGreen,
-        ),
         FormRowsCard(
           title: '作物信息',
           icon: LucideIcons.sprout,
@@ -523,6 +446,7 @@ class _StageEditorCard extends StatelessWidget {
 class TemplateListCard extends StatelessWidget {
   const TemplateListCard({
     super.key,
+    this.onSaved,
     required this.record,
     required this.repository,
     this.onBottomTabChanged,
@@ -530,6 +454,7 @@ class TemplateListCard extends StatelessWidget {
     this.selected = false,
   });
 
+  final VoidCallback? onSaved;
   final ApiRecord record;
   final BusinessRepository repository;
   final ValueChanged<int>? onBottomTabChanged;
@@ -549,7 +474,8 @@ class TemplateListCard extends StatelessWidget {
       scale: 0.99,
       onTap: selectionMode
           ? null
-          : () => Navigator.of(context).push(
+          : () => Navigator.of(context)
+              .push(
                 MaterialPageRoute(
                   builder: (_) => CropTemplateFormPage(
                     repository: repository,
@@ -558,7 +484,8 @@ class TemplateListCard extends StatelessWidget {
                     onBottomTabChanged: onBottomTabChanged,
                   ),
                 ),
-              ),
+              )
+              .then((_) => onSaved?.call()),
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
         decoration: BoxDecoration(
@@ -601,7 +528,7 @@ class TemplateListCard extends StatelessWidget {
                           style: const TextStyle(
                             color: AppColors.ink,
                             fontSize: 16,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w600,
                             letterSpacing: -0.2,
                             height: 1.2,
                           ),
@@ -623,19 +550,19 @@ class TemplateListCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 5),
-                  Row(
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 8,
                     children: [
                       _MetaItem(
                         icon: LucideIcons.gitBranch,
                         text: '$stageCount 阶段',
                       ),
-                      const SizedBox(width: 12),
                       if (days.isNotEmpty) ...[
                         _MetaItem(
                           icon: LucideIcons.calendarDays,
                           text: '$days 天',
                         ),
-                        const SizedBox(width: 12),
                       ],
                       _MetaItem(
                         icon: LucideIcons.layers,

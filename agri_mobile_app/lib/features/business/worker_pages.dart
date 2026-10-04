@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../data/api/api_client.dart';
 import '../../data/api/api_models.dart';
 import '../../data/repositories/business_repository.dart';
-import '../../shared/assets/app_assets.dart';
 import '../../shared/widgets/animated_press.dart';
-import '../../shared/widgets/textured_card.dart';
 import '../../theme/app_colors.dart';
 import 'bulk_delete_ui.dart';
 import 'business_ui.dart';
@@ -46,6 +45,7 @@ class _WorkerListPageState extends State<WorkerListPage> {
   }
 
   void _reloadWorkers() {
+    if (!mounted) return;
     setState(() {
       _workersFuture = widget.repository.listWorkerSummaries();
     });
@@ -60,33 +60,25 @@ class _WorkerListPageState extends State<WorkerListPage> {
       onBottomTabChanged: widget.onBottomTabChanged,
       bottomOverlay: _WorkerCreatePill(
         label: '新增工人',
-        onTap: () => Navigator.of(context).push(
+        onTap: () => Navigator.of(context)
+            .push(
           MaterialPageRoute(
             builder: (_) => WorkerFormPage(
               repository: widget.repository,
               onBottomTabChanged: widget.onBottomTabChanged,
             ),
           ),
-        ),
+        )
+            .then((_) {
+          if (mounted) _reloadWorkers();
+        }),
       ),
       children: [
         FutureBuilder<PageResult<ApiRecord>>(
           future: _workersFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _workerSummaryHero(const _WorkerSummary(
-                    unpaidText: '0',
-                    workerCount: 0,
-                    monthlyWorkCount: 0,
-                    relatedCycleCount: 0,
-                  )),
-                  const SizedBox(height: 16),
-                  const LoadingCard(),
-                ],
-              );
+              return const LoadingCard();
             }
             final items = snapshot.data?.items ?? const <ApiRecord>[];
             final visibleItems = _filterWorkers(
@@ -109,7 +101,7 @@ class _WorkerListPageState extends State<WorkerListPage> {
                 ChipRail(
                   items: _filters,
                   activeIndex: _filterIndex,
-                  activeColor: AppColors.ink,
+                  activeColor: AppColors.blue,
                   onSelected: (index) => setState(() => _filterIndex = index),
                 ),
                 const SizedBox(height: 16),
@@ -124,6 +116,7 @@ class _WorkerListPageState extends State<WorkerListPage> {
                   onDeleted: _reloadWorkers,
                   cardBuilder: (record, selectionMode, selected) =>
                       WorkerListCard(
+                    onSaved: _reloadWorkers,
                     record: record,
                     repository: widget.repository,
                     onBottomTabChanged: widget.onBottomTabChanged,
@@ -164,153 +157,24 @@ class _WorkerSummaryHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final unpaidValue = num.tryParse(unpaidText) ?? 0;
-    final hasUnpaid = unpaidValue > 0;
-    return TexturedCard(
-      accent: hasUnpaid ? AppColors.red : AppColors.blue,
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              GradientIconTile(
-                icon: LucideIcons.users,
-                accent: hasUnpaid ? AppColors.red : AppColors.blue,
-                size: 32,
-                iconSize: 17,
-                borderRadius: 10,
-              ),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Text(
-                  '工人概览',
-                  style: TextStyle(
-                    color: AppColors.ink,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0,
-                  ),
-                ),
-              ),
-              if (hasUnpaid)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: AppColors.redSoft,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        LucideIcons.circleAlert,
-                        size: 12,
-                        color: AppColors.red,
-                      ),
-                      SizedBox(width: 4),
-                      Text(
-                        '有欠款',
-                        style: TextStyle(
-                          color: AppColors.red,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.1,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: _MetricValue(
-                  value: '¥$unpaidText',
-                  label: '未结金额',
-                  accent: hasUnpaid ? AppColors.red : AppColors.ink,
-                ),
-              ),
-              Container(
-                width: 1,
-                height: 44,
-                margin: const EdgeInsets.symmetric(horizontal: 12),
-                color: AppColors.line,
-              ),
-              Expanded(
-                child: _MetricValue(
-                  value: '$workerCount',
-                  unit: '人',
-                  label: '工人总数',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: AppColors.surface2,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  LucideIcons.calendarClock,
-                  size: 13,
-                  color: AppColors.subtle,
-                ),
-                const SizedBox(width: 5),
-                const Text(
-                  '本月用工',
-                  style: TextStyle(
-                    color: AppColors.muted,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  '$monthlyWorkCount 次',
-                  style: const TextStyle(
-                    color: AppColors.ink,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Container(
-                  width: 1,
-                  height: 12,
-                  color: AppColors.line,
-                ),
-                const SizedBox(width: 12),
-                const Text(
-                  '相关茬口',
-                  style: TextStyle(
-                    color: AppColors.muted,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(width: 5),
-                Text(
-                  '$relatedCycleCount',
-                  style: const TextStyle(
-                    color: AppColors.ink,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(child: _MetricValue(value: '¥$unpaidText', label: '未结工资')),
+          const SizedBox(width: 24),
+          Expanded(
+              child: _MetricValue(
+                  value: '$workerCount', unit: '人', label: '工人总数')),
+        ]),
+        const SizedBox(height: 16),
+        Wrap(spacing: 16, runSpacing: 8, children: [
+          Text('本月用工 $monthlyWorkCount 次',
+              style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+          Text('关联 $relatedCycleCount 个茬口',
+              style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+        ]),
+      ]),
     );
   }
 }
@@ -320,13 +184,11 @@ class _MetricValue extends StatelessWidget {
     required this.value,
     required this.label,
     this.unit = '',
-    this.accent = AppColors.ink,
   });
 
   final String value;
   final String label;
   final String unit;
-  final Color accent;
 
   @override
   Widget build(BuildContext context) {
@@ -346,9 +208,9 @@ class _MetricValue extends StatelessWidget {
                   value,
                   maxLines: 1,
                   style: TextStyle(
-                    color: accent,
+                    color: AppColors.ink,
                     fontSize: 24,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                     letterSpacing: -0.5,
                     height: 1.1,
                   ),
@@ -362,7 +224,7 @@ class _MetricValue extends StatelessWidget {
                 style: const TextStyle(
                   color: AppColors.muted,
                   fontSize: 13,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
@@ -393,30 +255,10 @@ class _WorkerCreatePill extends StatelessWidget {
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.centerRight,
-      child: AnimatedPress(
-        scale: 0.92,
-        onTap: onTap,
-        child: Container(
-          width: 56,
-          height: 56,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: AppColors.ink,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.ink.withValues(alpha: 0.22),
-                blurRadius: 18,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: const Icon(
-            LucideIcons.plus,
-            color: Colors.white,
-            size: 24,
-          ),
-        ),
+      child: FilledButton.icon(
+        onPressed: onTap,
+        icon: const Icon(LucideIcons.plus, size: 20),
+        label: Text(label),
       ),
     );
   }
@@ -577,8 +419,8 @@ class _WorkerFormPageState extends State<WorkerFormPage> {
           }..removeWhere((_, value) => value == null || value == ''),
           workerId: widget.workerId ?? widget.initialRecord?.id);
       _showMessage('保存工人成功');
-    } catch (_) {
-      _showMessage('保存失败，请稍后再试');
+    } catch (error) {
+      _showMessage(ApiClient.userMessageFor(error));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -602,13 +444,6 @@ class _WorkerFormPageState extends State<WorkerFormPage> {
         onSecondary: () => Navigator.of(context).maybePop(),
       ),
       children: [
-        const AiLandscapeBanner(
-          title: '工人档案',
-          subtitle: '用于记工资、查欠款和茬口用工统计',
-          asset: AppAssets.businessWorkerBanner,
-          avatarAsset: AppAssets.businessWorkerAvatar1,
-          accent: businessBlue,
-        ),
         FormRowsCard(
           title: '基础信息',
           icon: LucideIcons.userRound,
@@ -663,10 +498,6 @@ class _WorkerFormPageState extends State<WorkerFormPage> {
             ),
           ],
         ),
-        const AssistEntryCard(
-          text: '保存后可在记工资时直接选择',
-          icon: LucideIcons.badgeCheck,
-        ),
       ],
     );
   }
@@ -682,6 +513,7 @@ String _normalizeWorkerStatus(String value) {
 class WorkerListCard extends StatelessWidget {
   const WorkerListCard({
     super.key,
+    this.onSaved,
     required this.record,
     required this.repository,
     this.onBottomTabChanged,
@@ -689,6 +521,7 @@ class WorkerListCard extends StatelessWidget {
     this.selected = false,
   });
 
+  final VoidCallback? onSaved;
   final ApiRecord record;
   final BusinessRepository repository;
   final ValueChanged<int>? onBottomTabChanged;
@@ -710,7 +543,8 @@ class WorkerListCard extends StatelessWidget {
       scale: 0.99,
       onTap: selectionMode
           ? null
-          : () => Navigator.of(context).push(
+          : () => Navigator.of(context)
+              .push(
                 MaterialPageRoute(
                   builder: (_) => WorkerFormPage(
                     repository: repository,
@@ -719,7 +553,8 @@ class WorkerListCard extends StatelessWidget {
                     onBottomTabChanged: onBottomTabChanged,
                   ),
                 ),
-              ),
+              )
+              .then((_) => onSaved?.call()),
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
         decoration: BoxDecoration(
@@ -746,7 +581,7 @@ class WorkerListCard extends StatelessWidget {
                 style: const TextStyle(
                   color: AppColors.ink2,
                   fontSize: 16,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -765,7 +600,7 @@ class WorkerListCard extends StatelessWidget {
                           style: const TextStyle(
                             color: AppColors.ink,
                             fontSize: 16,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w600,
                             letterSpacing: -0.2,
                             height: 1.2,
                           ),
@@ -795,7 +630,7 @@ class WorkerListCard extends StatelessWidget {
                           style: const TextStyle(
                             color: AppColors.ink2,
                             fontSize: 12.5,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -836,7 +671,7 @@ class WorkerListCard extends StatelessWidget {
                     style: TextStyle(
                       color: AppColors.red,
                       fontSize: 10,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                       letterSpacing: 0.1,
                     ),
                   ),
@@ -845,7 +680,7 @@ class WorkerListCard extends StatelessWidget {
                     style: const TextStyle(
                       color: AppColors.red,
                       fontSize: 15,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                       letterSpacing: -0.3,
                       height: 1.1,
                     ),

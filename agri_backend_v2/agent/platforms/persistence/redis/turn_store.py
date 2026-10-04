@@ -17,12 +17,83 @@ from agent.domains.harness.runtime.turn import Turn
 from agent.domains.harness.runtime.events import DomainEvent
 from agent.platforms.persistence.redis.redis_store import get_client, key
 from agent.domains.harness.observability.trace.collector import record_event
-from agent.domains.harness.observability.trace.context import current_span_id, get_trace, trace_id_for_turn
+from agent.domains.harness.observability.trace.context import (
+    current_span_id,
+    get_trace,
+    trace_id_for_turn,
+)
 
 logger = logging.getLogger(__name__)
 
 # timeout/cancelled 是过程结果事件，允许随后发布唯一的 done 终态事件。
 _TERMINAL_EVENTS = {"done"}
+TERMINAL_STATUSES = frozenset(
+    {"completed", "terminated", "failed", "rejected", "cancelled", "timeout"}
+)
+_OUTCOME_FIELDS = frozenset(
+    {
+        "status",
+        "phase",
+        "stop_reason",
+        "error_code",
+        "error_message",
+        "error_details",
+        "final_answer",
+        "pending_approval",
+    }
+)
+
+_UPDATE_TURN_SCRIPT = """
+if redis.call('EXISTS', KEYS[1]) == 0 then return 0 end
+local fields = cjson.decode(ARGV[1])
+local current = redis.call('HGET', KEYS[1], 'status')
+local expected = cjson.decode(ARGV[5])
+if #expected > 0 then
+  local matches = false
+  for _, status in ipairs(expected) do
+    if current == status then matches = true end
+  end
+  if not matches then return 0 end
+end
+for _, status in ipairs(cjson.decode(ARGV[2])) do
+  if current == status and fields.status and fields.status ~= current then
+    return 0
+  end
+end
+if redis.call('HEXISTS', KEYS[1], 'terminal_event') == 1 then
+  for _, name in ipairs(cjson.decode(ARGV[3])) do
+    if fields[name] ~= nil then return 0 end
+  end
+end
+for name, value in pairs(fields) do redis.call('HSET', KEYS[1], name, value) end
+redis.call('HINCRBY', KEYS[1], 'version', 1)
+redis.call('EXPIRE', KEYS[1], ARGV[4])
+return 1
+"""
+
+_PUBLISH_EVENT_SCRIPT = """
+local last_seq = tonumber(redis.call('HGET', KEYS[1], 'last_event_seq') or '0')
+if redis.call('EXISTS', KEYS[1]) == 0 or
+   redis.call('HEXISTS', KEYS[1], 'terminal_event') == 1 then
+  return {0, last_seq}
+end
+local fields = cjson.decode(ARGV[2])
+local seq = redis.call('INCR', KEYS[3])
+fields.seq = tostring(seq)
+local args = {'MAXLEN', ARGV[3], '*'}
+for name, value in pairs(fields) do
+  table.insert(args, name)
+  table.insert(args, value)
+end
+redis.call('XADD', KEYS[2], unpack(args))
+redis.call('HSET', KEYS[1], 'last_event_seq', seq, 'updated_at', ARGV[5])
+if fields.terminal == '1' then
+  redis.call('HSET', KEYS[1], 'terminal_event', ARGV[1])
+end
+redis.call('HINCRBY', KEYS[1], 'version', 1)
+for _, key in ipairs(KEYS) do redis.call('EXPIRE', key, ARGV[4]) end
+return {1, seq}
+"""
 _EVENT_STATUS_AFTER = {
     "queued": "queued",
     "accepted": "accepted",
@@ -171,10 +242,13 @@ def legacy_status_fields(turn: dict[str, str]) -> dict[str, str]:
     return turn
 
 
-async def update_turn(turn_id: str, **fields: Any) -> None:
+async def update_turn(
+    turn_id: str, *, expected_statuses: tuple[str, ...] = (), **fields: Any
+) -> bool:
+    """原子推进状态，保留既有终态；done 后只允许持久化元数据收尾。"""
     client = get_client()
     if client is None:
-        return
+        return False
     normalized = {
         name: value
         if isinstance(value, str)
@@ -184,11 +258,18 @@ async def update_turn(turn_id: str, **fields: Any) -> None:
         for name, value in fields.items()
     }
     normalized["updated_at"] = str(time.time())
-    async with client.pipeline(transaction=True) as pipe:
-        await pipe.hset(turn_key(turn_id), mapping=normalized)
-        await pipe.hincrby(turn_key(turn_id), "version", 1)
-        await pipe.expire(turn_key(turn_id), settings.redis.turn_state_ttl_seconds)
-        await pipe.execute()
+    return bool(
+        await client.eval(
+            _UPDATE_TURN_SCRIPT,
+            1,
+            turn_key(turn_id),
+            json.dumps(normalized, ensure_ascii=False),
+            json.dumps(sorted(TERMINAL_STATUSES)),
+            json.dumps(sorted(_OUTCOME_FIELDS)),
+            settings.redis.turn_state_ttl_seconds,
+            json.dumps(expected_statuses),
+        )
+    )
 
 
 async def mark_timeout_if_active(turn_id: str, error_code: str) -> bool:
@@ -260,10 +341,6 @@ async def publish_event(turn_id: str, event: DomainEvent | dict[str, Any]) -> in
     data = event.get("data", {})
     seq_key = key("event-seq", turn_id)
     terminal = event_type in _TERMINAL_EVENTS
-    if terminal:
-        claimed = await client.hsetnx(turn_key(turn_id), "terminal_event", event_type)
-        if not claimed:
-            return int(await client.hget(turn_key(turn_id), "last_event_seq") or 0)
     state = await client.hgetall(turn_key(turn_id))
     trace_id = str(
         event.get("trace_id") or state.get("trace_id") or trace_id_for_turn(turn_id)
@@ -339,9 +416,7 @@ async def publish_event(turn_id: str, event: DomainEvent | dict[str, Any]) -> in
         or (trace_context.root_span_id if trace_context else "")
         or ""
     )
-    seq = int(await client.incr(seq_key))
     envelope = {
-        "seq": seq,
         "event_id": event_id,
         "trace_id": trace_id,
         "request_id": request_id,
@@ -368,42 +443,50 @@ async def publish_event(turn_id: str, event: DomainEvent | dict[str, Any]) -> in
         "source_status": source_status,
         "context_source_status": source_status,
     }
-    await client.xadd(
+    fields = {
+        "event_id": event_id,
+        "trace_id": trace_id,
+        "request_id": request_id,
+        "user_id": state.get("user_id", ""),
+        "farm_uid": state.get("farm_uid", ""),
+        "farm_id": state.get("farm_id", ""),
+        "turn_id": turn_id,
+        "conversation_id": conversation_id,
+        "span_id": span_id,
+        "parent_span_id": str(event.get("parent_span_id") or ""),
+        "type": event_type,
+        "event_type": event_type,
+        "data": json.dumps(data, ensure_ascii=False),
+        "occurred_at": occurred_at,
+        "phase": phase,
+        "step": str(step),
+        "step_index": str(step),
+        "terminal": "1" if terminal else "0",
+        "status_before": status_before,
+        "status_after": status_after,
+        "conversation_revision": str(conversation_revision),
+        "summary_revision": str(summary_revision),
+        "reset_generation": str(reset_generation),
+        "source_status": source_status,
+        "context_source_status": source_status,
+    }
+    # 序号分配、追加事件和 done 栅栏必须在同一原子操作内，关闭后不再接受任何事件。
+    accepted, seq = await client.eval(
+        _PUBLISH_EVENT_SCRIPT,
+        3,
+        turn_key(turn_id),
         event_key(turn_id),
-        {
-            "seq": str(seq),
-            "event_id": event_id,
-            "trace_id": trace_id,
-            "request_id": request_id,
-            "user_id": state.get("user_id", ""),
-            "farm_uid": state.get("farm_uid", ""),
-            "farm_id": state.get("farm_id", ""),
-            "turn_id": turn_id,
-            "conversation_id": conversation_id,
-            "span_id": span_id,
-            "parent_span_id": str(event.get("parent_span_id") or ""),
-            "type": event_type,
-            "event_type": event_type,
-            "data": json.dumps(data, ensure_ascii=False),
-            "occurred_at": occurred_at,
-            "phase": phase,
-            "step": str(step),
-            "step_index": str(step),
-            "terminal": "1" if terminal else "0",
-            "status_before": status_before,
-            "status_after": status_after,
-            "conversation_revision": str(conversation_revision),
-            "summary_revision": str(summary_revision),
-            "reset_generation": str(reset_generation),
-            "source_status": source_status,
-            "context_source_status": source_status,
-        },
-        maxlen=settings.redis.event_stream_maxlen,
-        approximate=False,
+        seq_key,
+        event_type,
+        json.dumps(fields, ensure_ascii=False),
+        settings.redis.event_stream_maxlen,
+        settings.redis.turn_state_ttl_seconds,
+        str(time.time()),
     )
-    await client.expire(event_key(turn_id), settings.redis.turn_state_ttl_seconds)
-    await client.expire(seq_key, settings.redis.turn_state_ttl_seconds)
-    await update_turn(turn_id, last_event_seq=seq)
+    seq = int(seq)
+    if not accepted:
+        return seq
+    envelope["seq"] = seq
     try:
         # 收集器交接是同步且有界的；SSE 热路径不等待 Mongo 持久化。
         record_event(envelope)
@@ -650,9 +733,9 @@ async def create_approval(turn: Turn, event_data: dict[str, Any]) -> None:
     pending_action.setdefault("source_turn_id", turn.turn_id)
     pending_action.setdefault(
         "created_at",
-        datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace(
-            "+00:00", "Z"
-        ),
+        datetime.now(timezone.utc)
+        .isoformat(timespec="milliseconds")
+        .replace("+00:00", "Z"),
     )
     pending_action.setdefault(
         "expires_at",

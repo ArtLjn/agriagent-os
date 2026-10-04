@@ -8,8 +8,8 @@ import '../../data/api/api_models.dart';
 import '../../data/repositories/profile_repository.dart';
 import '../../data/repositories/yaya_repository.dart';
 import '../../shared/assets/app_assets.dart';
-import '../../shared/widgets/reference_page.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_theme.dart';
 import '../../theme/app_text_styles.dart';
 import 'yaya_controller.dart';
 
@@ -40,13 +40,14 @@ class _YayaScreenState extends State<YayaScreen> {
 
   void _closeDrawer() => setState(() => drawerOpen = false);
 
-  void _openSkills() {
+  Future<void> _openSkills() async {
     _closeDrawer();
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => YayaSkillsPage(repository: widget.repository),
-      ),
+    final prompt = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+          builder: (_) => YayaSkillsPage(repository: widget.repository)),
     );
+    if (!mounted || prompt == null) return;
+    controller.send(prompt);
   }
 
   void _startNewConversation() {
@@ -167,89 +168,42 @@ class _YayaHomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasMessages = controller.messages.isNotEmpty;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final size = MediaQuery.sizeOf(context);
-        final bottomInset = MediaQuery.paddingOf(context).bottom;
-        final compactHeight = size.height < 760;
-        final horizontalPadding = constraints.maxWidth < 370 ? 16.0 : 20.0;
-        final composerHorizontalPadding = horizontalPadding / 2 - 1;
-        final inputReserve = (compactHeight ? 84.0 : 92.0) + bottomInset;
-        final emptyTopGap = compactHeight ? 18.0 : 28.0;
-
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            Positioned.fill(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(
-                  horizontalPadding,
-                  6,
-                  horizontalPadding,
-                  inputReserve,
-                ),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 430),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _YayaHeader(
-                          onMenuPressed: onMenuPressed,
-                          onNewConversationPressed: onNewConversationPressed,
-                        ),
-                        if (hasMessages) ...[
-                          const SizedBox(height: 18),
-                          _MessageList(
-                            messages: controller.messages,
-                            errorMessage: controller.errorMessage,
-                            onPendingAction: controller.respondToPendingAction,
-                          ),
-                        ] else ...[
-                          SizedBox(height: emptyTopGap),
-                          _YayaEmptyPanel(onSelected: controller.send),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: SafeArea(
-                top: false,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.background.withValues(alpha: 0.96),
-                    border: const Border(
-                      top: BorderSide(color: AppColors.lineSoft),
-                    ),
-                  ),
-                  padding: EdgeInsets.fromLTRB(
-                    composerHorizontalPadding,
-                    10,
-                    composerHorizontalPadding,
-                    10,
-                  ),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 430),
-                      child: _ComposerPanel(
-                        sending: controller.sending,
-                        onSelected: controller.send,
-                        onSkillsPressed: onSkillsPressed,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
+    return Material(
+      color: Colors.transparent,
+      child: Column(children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+          child: _YayaHeader(
+            onMenuPressed: onMenuPressed,
+            onNewConversationPressed: onNewConversationPressed,
+          ),
+        ),
+        Expanded(
+            child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+          child: Center(
+              child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 430),
+            child: hasMessages
+                ? _MessageList(
+                    messages: controller.messages,
+                    errorMessage: controller.errorMessage,
+                    onPendingAction: controller.respondToPendingAction)
+                : _YayaEmptyPanel(onSelected: controller.send),
+          )),
+        )),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: Center(
+              child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 430),
+            child: _ComposerPanel(
+                sending: controller.sending,
+                onSelected: controller.send,
+                onSkillsPressed: onSkillsPressed),
+          )),
+        ),
+      ]),
     );
   }
 }
@@ -324,36 +278,25 @@ class _MessageBubble extends StatelessWidget {
             isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (!isUser) ...[
-            const YayaMascot(size: 30),
-            const SizedBox(width: 8),
-          ],
           Flexible(
             child: Container(
-              constraints: const BoxConstraints(maxWidth: 320),
+              constraints: BoxConstraints(maxWidth: isUser ? 320 : 430),
               padding: const EdgeInsets.fromLTRB(14, 11, 14, 11),
               decoration: BoxDecoration(
-                color: isUser ? AppColors.blue : AppColors.surface,
+                color: isUser ? AppColors.blueSoft : Colors.transparent,
                 borderRadius: BorderRadius.only(
                   topLeft: Radius.circular(isUser ? 18 : 8),
                   topRight: Radius.circular(isUser ? 8 : 18),
                   bottomLeft: const Radius.circular(18),
                   bottomRight: const Radius.circular(18),
                 ),
-                border: isUser ? null : Border.all(color: AppColors.line),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x08000000),
-                    blurRadius: 16,
-                    offset: Offset(0, 8),
-                  ),
-                ],
+                border: null,
               ),
               child: isUser
                   ? Text(
                       content,
                       style: AppTextStyles.body.copyWith(
-                        color: Colors.white,
+                        color: AppColors.ink,
                         height: 1.45,
                       ),
                     )
@@ -362,22 +305,13 @@ class _MessageBubble extends StatelessWidget {
                       children: [
                         Row(
                           children: [
-                            Container(
-                              width: 7,
-                              height: 7,
-                              decoration: BoxDecoration(
-                                color: message.content.isEmpty
-                                    ? AppColors.amber
-                                    : AppColors.green,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
+                            const YayaMascot(size: 20),
                             const SizedBox(width: 6),
                             Text(
-                              message.content.isEmpty ? '正在分析' : '芽芽建议',
+                              message.content.isEmpty ? '正在分析' : '芽芽',
                               style: AppTextStyles.small.copyWith(
                                 color: AppColors.muted,
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ],
@@ -395,7 +329,7 @@ class _MessageBubble extends StatelessWidget {
                             ),
                             strong: AppTextStyles.body.copyWith(
                               color: AppColors.ink,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w600,
                               height: 1.45,
                             ),
                             listBullet: AppTextStyles.body.copyWith(
@@ -442,7 +376,8 @@ class _PendingActionCard extends StatelessWidget {
     final notes = _stringList(contextData?['notes'])
         .where((note) => originalInput.isEmpty || !note.contains(originalInput))
         .toList();
-    final params = _mapValue(pendingAction['params']) ??
+    final params = _mapValue(pendingAction['arguments']) ??
+        _mapValue(pendingAction['params']) ??
         _mapValue(contextData?['extracted_params']);
 
     return Container(
@@ -476,7 +411,7 @@ class _PendingActionCard extends StatelessWidget {
                   '待确认执行',
                   style: AppTextStyles.body.copyWith(
                     color: AppColors.ink,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -608,7 +543,7 @@ class _PendingParamList extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.small.copyWith(
                       color: AppColors.ink,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -651,7 +586,7 @@ class _PendingActionButton extends StatelessWidget {
           label,
           style: AppTextStyles.body.copyWith(
             color: color,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
@@ -677,7 +612,7 @@ class _ErrorBanner extends StatelessWidget {
         message,
         style: AppTextStyles.body.copyWith(
           color: AppColors.red,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -685,134 +620,53 @@ class _ErrorBanner extends StatelessWidget {
 }
 
 class _YayaHeader extends StatelessWidget {
-  const _YayaHeader({
-    required this.onMenuPressed,
-    required this.onNewConversationPressed,
-  });
-
+  const _YayaHeader(
+      {required this.onMenuPressed, required this.onNewConversationPressed});
   final VoidCallback onMenuPressed;
   final VoidCallback onNewConversationPressed;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 64,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Align(
-            alignment: Alignment.centerLeft,
-            child: _HeaderIconButton(
-              icon: LucideIcons.menu,
-              onPressed: onMenuPressed,
-            ),
-          ),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: const [FarmBrandLockup(height: 34)],
-          ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const _HeaderIconButton(icon: LucideIcons.volume2),
-                const SizedBox(width: 2),
-                _HeaderIconButton(
-                  icon: LucideIcons.plus,
-                  onPressed: onNewConversationPressed,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+    return Row(children: [
+      IconButton(
+          tooltip: '历史对话',
+          onPressed: onMenuPressed,
+          icon: const Icon(LucideIcons.menu, size: 22)),
+      Expanded(
+          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        const YayaMascot(size: 28),
+        const SizedBox(width: 8),
+        Text('芽芽', style: AppTextStyles.sectionTitle.copyWith(fontSize: 20)),
+      ])),
+      IconButton(
+          tooltip: '新对话',
+          onPressed: onNewConversationPressed,
+          icon: const Icon(LucideIcons.plus, size: 22)),
+    ]);
   }
 }
 
 class _YayaEmptyPanel extends StatelessWidget {
   const _YayaEmptyPanel({required this.onSelected});
-
   final ValueChanged<String> onSelected;
 
   @override
   Widget build(BuildContext context) {
-    final greeting = _greetingText(DateTime.now());
-    return Container(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.lineSoft),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x080B2447),
-            blurRadius: 24,
-            offset: Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              const YayaMascot(size: 42),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          '芽芽',
-                          style: AppTextStyles.sectionTitle.copyWith(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          '在线 · 操作前确认',
-                          style: AppTextStyles.small.copyWith(
-                            color: AppColors.greenDark,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      '$greeting，我是芽芽，你的农场助手。',
-                      maxLines: 2,
-                      style: AppTextStyles.body.copyWith(
-                        color: AppColors.muted,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text(
-            '把今天要处理的农事、天气、账本说给我，我会整理成可确认的记录。',
-            style: AppTextStyles.body.copyWith(
-              color: AppColors.ink,
-              fontSize: 14,
-              height: 1.5,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 16),
-          _SuggestionPills(onSelected: onSelected),
-        ],
-      ),
-    );
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const SizedBox(height: 24),
+      const YayaMascot(size: 64),
+      const SizedBox(height: 24),
+      Text(_greetingText(DateTime.now()),
+          style: AppTextStyles.body.copyWith(color: AppColors.muted)),
+      const SizedBox(height: 8),
+      Text('今天，想先理清\n哪件事？',
+          style: AppTextStyles.title
+              .copyWith(fontSize: 28, height: 1.4, letterSpacing: -0.5)),
+      const SizedBox(height: 12),
+      const Text('农事安排、账目分析，或一条随手记录。', style: AppTextStyles.body),
+      const SizedBox(height: 32),
+      _SuggestionPills(onSelected: onSelected),
+    ]);
   }
 }
 
@@ -928,9 +782,14 @@ class _YayaSkillsPageState extends State<YayaSkillsPage> {
     ..._fallbackListSkills,
   ];
   String _selectedCategory = '推荐';
+  String _searchKeyword = '';
 
   List<_SkillSpec> get _visibleSkills => _skills
-      .where((skill) => skill.category == _selectedCategory)
+      .where((skill) => _searchKeyword.isEmpty
+          ? skill.category == _selectedCategory
+          : '${skill.title} ${skill.subtitle} ${skill.details}'
+              .toLowerCase()
+              .contains(_searchKeyword.toLowerCase()))
       .toList(growable: false);
 
   @override
@@ -960,13 +819,16 @@ class _YayaSkillsPageState extends State<YayaSkillsPage> {
     }
   }
 
-  void _showSkillDetails(_SkillSpec skill) {
-    showModalBottomSheet<void>(
+  Future<void> _showSkillDetails(_SkillSpec skill) async {
+    final prompt = await showModalBottomSheet<String>(
       context: context,
+      sheetAnimationStyle: AppMotion.sheetStyle(context),
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) => _SkillDetailsSheet(spec: skill),
     );
+    if (!mounted || prompt == null) return;
+    Navigator.of(context).pop(prompt);
   }
 
   @override
@@ -988,8 +850,16 @@ class _YayaSkillsPageState extends State<YayaSkillsPage> {
                   ),
                 ),
                 const SliverPadding(
-                  padding: EdgeInsets.fromLTRB(20, 12, 20, 0),
-                  sliver: SliverToBoxAdapter(child: _SkillsSearchBox()),
+                  padding: EdgeInsets.fromLTRB(24, 12, 24, 0),
+                  sliver: SliverToBoxAdapter(
+                      child: Text('常用场景与提问方式', style: AppTextStyles.small)),
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+                  sliver: SliverToBoxAdapter(
+                      child: _SkillsSearchBox(
+                          onChanged: (value) =>
+                              setState(() => _searchKeyword = value.trim()))),
                 ),
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
@@ -1023,16 +893,22 @@ class _YayaSkillsPageState extends State<YayaSkillsPage> {
                 ),
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                  sliver: SliverList.separated(
-                    itemCount: _visibleSkills.length,
-                    itemBuilder: (context, index) => _SkillCard(
-                      spec: _visibleSkills[index],
-                      onDetailsTap: () =>
-                          _showSkillDetails(_visibleSkills[index]),
-                    ),
-                    separatorBuilder: (context, index) =>
-                        const SizedBox(height: 12),
-                  ),
+                  sliver: _visibleSkills.isEmpty
+                      ? const SliverToBoxAdapter(
+                          child: Padding(
+                              padding: EdgeInsets.all(24),
+                              child: Text('没有匹配的技能，试试其他关键词。',
+                                  style: AppTextStyles.body)))
+                      : SliverList.separated(
+                          itemCount: _visibleSkills.length,
+                          itemBuilder: (context, index) => _SkillCard(
+                            spec: _visibleSkills[index],
+                            onDetailsTap: () =>
+                                _showSkillDetails(_visibleSkills[index]),
+                          ),
+                          separatorBuilder: (context, index) =>
+                              const SizedBox(height: 12),
+                        ),
                 ),
                 const SliverToBoxAdapter(child: SizedBox(height: 120)),
               ],
@@ -1074,34 +950,23 @@ class _SkillsHeader extends StatelessWidget {
 }
 
 class _SkillsSearchBox extends StatelessWidget {
-  const _SkillsSearchBox();
+  const _SkillsSearchBox({required this.onChanged});
+  final ValueChanged<String> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: 17),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: AppColors.line),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x08000000),
-            blurRadius: 18,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          const Icon(LucideIcons.search, size: 20, color: AppColors.subtle),
-          const SizedBox(width: 10),
-          Text(
-            '搜索技能',
-            style: AppTextStyles.body.copyWith(color: AppColors.subtle),
-          ),
-        ],
+    return TextField(
+      onChanged: onChanged,
+      textInputAction: TextInputAction.search,
+      decoration: InputDecoration(
+        hintText: '搜索技能',
+        prefixIcon: const Icon(LucideIcons.search, size: 20),
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding: const EdgeInsets.all(16),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: AppColors.lineSoft)),
       ),
     );
   }
@@ -1158,7 +1023,7 @@ class _CategoryChip extends StatelessWidget {
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: Container(
-          height: 38,
+          height: 44,
           constraints: const BoxConstraints(minWidth: 58),
           padding: const EdgeInsets.symmetric(horizontal: 16),
           alignment: Alignment.center,
@@ -1172,7 +1037,7 @@ class _CategoryChip extends StatelessWidget {
             label,
             style: AppTextStyles.body.copyWith(
               color: selected ? Colors.white : AppColors.muted,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),
@@ -1382,7 +1247,7 @@ class _DrawerHeader extends StatelessWidget {
                       ),
                       const SizedBox(width: 5),
                       Text(
-                        '在线',
+                        '农场助手',
                         style: AppTextStyles.small.copyWith(
                           color: AppColors.muted,
                         ),
@@ -1392,7 +1257,6 @@ class _DrawerHeader extends StatelessWidget {
                 ],
               ),
             ),
-            const _HeaderIconButton(icon: LucideIcons.search),
             _HeaderIconButton(
               icon: LucideIcons.squarePen,
               onPressed: onNewConversationTap,
@@ -1418,25 +1282,9 @@ class _NewChatCard extends StatelessWidget {
         height: 92,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            stops: [0, 0.62, 1],
-            colors: [
-              Color(0xFFF5FBF2),
-              Color(0xFFEAF6EF),
-              Color(0xFFFFFBF0),
-            ],
-          ),
-          border: Border.all(color: Color(0xFFDCEBDF)),
+          color: AppColors.blueSoft,
+          border: Border.all(color: AppColors.blueSoft),
           borderRadius: BorderRadius.circular(24),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x120F3D2E),
-              blurRadius: 18,
-              offset: Offset(0, 10),
-            ),
-          ],
         ),
         child: Row(
           children: [
@@ -1444,9 +1292,9 @@ class _NewChatCard extends StatelessWidget {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: Color(0xFFE0F1E7),
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: Color(0xFFC9E3D1)),
+                border: Border.all(color: AppColors.lineSoft),
               ),
               child: const Icon(LucideIcons.plus,
                   color: AppColors.greenDark, size: 24),

@@ -25,6 +25,11 @@ class BillingRepository {
     return PageResult.fromJson(data, ApiRecord.fromJson);
   }
 
+  Future<PageResult<ApiRecord>> listAllCosts() async {
+    final data = await client.getAllPages('/cost-records');
+    return PageResult.fromJson(data, ApiRecord.fromJson);
+  }
+
   Future<ApiRecord> createCost(Map<String, Object?> data) async {
     return ApiRecord.fromJson(
       await client.postMap('/cost-records', data: data),

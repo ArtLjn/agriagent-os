@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
+from unittest.mock import AsyncMock
+
 import pytest
+from redis.exceptions import TimeoutError as RedisTimeoutError
 
 from agent.config import settings
 from agent.platforms.persistence.redis import coordination
@@ -91,3 +95,73 @@ async def test_acquire_turn_rejects_capacity_conflicts(
         settings.redis.enabled = original_enabled
 
     assert exc_info.value.code == code
+
+
+@pytest.mark.asyncio
+async def test_renew_timeout_is_unavailable_not_confirmed_lease_loss(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        coordination,
+        "eval_script",
+        AsyncMock(side_effect=RedisTimeoutError("读取超时")),
+    )
+    lease = coordination.TurnLease("turn-1", "scope-1", "user-1", "token-1")
+    with pytest.raises(coordination.CoordinationError) as error:
+        await coordination.renew_turn(lease)
+    assert not isinstance(error.value, coordination.TurnLeaseLost)
+    assert isinstance(error.value.__cause__, RedisTimeoutError)
+
+
+@pytest.mark.asyncio
+async def test_transient_renew_timeout_recovers_without_stopping_worker(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(settings.redis, "conversation_lock_ttl_ms", 200)
+    monkeypatch.setattr(settings.redis, "conversation_lock_renew_ms", 15)
+    monkeypatch.setattr(settings.redis, "socket_timeout_ms", 10)
+    stop, ready = asyncio.Event(), asyncio.Event()
+    calls = 0
+
+    async def renew(_lease):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise coordination.CoordinationError("暂时超时")
+        if calls == 3:
+            stop.set()
+        return True
+
+    monkeypatch.setattr(coordination, "renew_turn", renew)
+    lease = coordination.TurnLease("turn-1", "scope-1", "user-1", "token-1")
+    await asyncio.wait_for(coordination.renew_until_done(lease, stop, ready=ready), 1)
+    assert calls == 3
+    assert ready.is_set()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["unavailable", "missing", "blocked"])
+async def test_renew_failure_stops_at_confirmed_lease_deadline(
+    monkeypatch, failure
+) -> None:
+    monkeypatch.setattr(settings.redis, "conversation_lock_ttl_ms", 60)
+    monkeypatch.setattr(settings.redis, "conversation_lock_renew_ms", 15)
+    monkeypatch.setattr(settings.redis, "socket_timeout_ms", 10)
+    calls = 0
+
+    async def renew(_lease):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return True
+        if failure == "missing":
+            return False
+        if failure == "blocked":
+            await asyncio.Event().wait()
+        raise coordination.CoordinationError("持续超时")
+
+    monkeypatch.setattr(coordination, "renew_turn", renew)
+    lease = coordination.TurnLease("turn-1", "scope-1", "user-1", "token-1")
+    with pytest.raises(coordination.TurnLeaseLost):
+        await asyncio.wait_for(coordination.renew_until_done(lease, asyncio.Event()), 1)
+    assert calls >= 2

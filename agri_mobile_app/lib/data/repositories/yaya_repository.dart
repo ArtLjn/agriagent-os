@@ -63,34 +63,52 @@ class YayaRepository {
   }
 
   Future<List<ConversationSummary>> loadConversations({int limit = 20}) async {
-    final response =
-        await client.get('/conversations', query: {'limit': limit});
-    final raw = response.data;
-    final items = raw is Map
-        ? (raw['items'] is List
-            ? ApiClient.asList(raw['items'])
-            : const <dynamic>[])
-        : ApiClient.asList(raw);
-    return items
-        .map((item) => ConversationSummary.fromJson(
-              Map<String, dynamic>.from(item as Map),
-            ))
-        .toList();
+    final conversations = <ConversationSummary>[];
+    String? cursor;
+    final cursors = <String>{};
+    do {
+      final raw = (await client.get('/conversations', query: {
+        'limit': limit,
+        if (cursor != null) 'cursor': cursor,
+      }))
+          .data;
+      final items =
+          raw is Map ? ApiClient.asList(raw['items']) : ApiClient.asList(raw);
+      conversations.addAll(items.map((item) => ConversationSummary.fromJson(
+          Map<String, dynamic>.from(item as Map))));
+      cursor = raw is Map && raw['has_more'] == true
+          ? raw['next_cursor']?.toString()
+          : null;
+      if (cursor != null && !cursors.add(cursor)) {
+        throw StateError('会话分页游标重复');
+      }
+    } while (cursor != null);
+    return conversations;
   }
 
   Future<List<ConversationMessage>> loadMessages(String conversationId) async {
-    final response = await client.get('/conversations/$conversationId');
-    final raw = response.data;
-    final items = raw is Map
-        ? (raw['items'] is List
-            ? ApiClient.asList(raw['items'])
-            : const <dynamic>[])
-        : ApiClient.asList(raw);
-    return items
-        .map((item) => ConversationMessage.fromJson(
-              Map<String, dynamic>.from(item as Map),
-            ))
-        .toList();
+    final messages = <ConversationMessage>[];
+    String? cursor;
+    final cursors = <String>{};
+    do {
+      final raw = await client
+          .getMap('/conversations/$conversationId/messages', query: {
+        'limit': 100,
+        if (cursor != null) 'cursor': cursor,
+      });
+      final items = ApiClient.asList(raw['items']);
+      final page = items
+          .map((item) => ConversationMessage.fromJson(
+              Map<String, dynamic>.from(item as Map)))
+          .toList();
+      // 后端先返回最新页，每个页面内部按时间正序，旧页应插在已有消息之前。
+      messages.insertAll(0, page);
+      cursor = raw['has_more'] == true ? raw['next_cursor']?.toString() : null;
+      if (cursor != null && !cursors.add(cursor)) {
+        throw StateError('消息分页游标重复');
+      }
+    } while (cursor != null);
+    return messages;
   }
 
   Future<List<YayaSkill>> loadSkills() async {
@@ -176,14 +194,16 @@ class YayaStreamEvent {
     Map<String, dynamic> json, {
     String? eventType,
   }) {
-    final type = (eventType ?? json['type'] as String?) ?? '';
+    final type = eventType?.trim().isNotEmpty == true
+        ? eventType!
+        : (json['type'] as String? ?? '');
     final rawData = json['data'];
     final data = rawData is Map
         ? Map<String, dynamic>.from(rawData)
         : <String, dynamic>{};
     final merged = <String, dynamic>{...json, ...data};
     final pending = type == 'approval_required' || type == 'pending_action'
-        ? <String, dynamic>{...data, 'type': type}
+        ? <String, dynamic>{...merged, 'type': type}
         : json['pending_action'] is Map
             ? Map<String, dynamic>.from(json['pending_action'] as Map)
             : null;
@@ -193,7 +213,13 @@ class YayaStreamEvent {
       'content' => rawData is String ? rawData : '${merged['content'] ?? ''}',
       _ => json['content'] as String?,
     };
-    final error = type == 'error'
+    final error = {
+      'error',
+      'turn.failed',
+      'turn.terminated',
+      'timeout',
+      'cancelled'
+    }.contains(type)
         ? '${merged['message'] ?? merged['error'] ?? '芽芽处理失败'}'
         : json['error'] as String?;
     return YayaStreamEvent(

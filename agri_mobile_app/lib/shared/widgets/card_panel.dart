@@ -10,8 +10,8 @@ class CardPanel extends StatelessWidget {
     this.background = AppColors.surface,
     this.borderColor = AppColors.lineSoft,
     this.gradient,
-    this.shadow = true,
-    this.radius = 16,
+    this.shadow = false,
+    this.radius = 20,
   });
 
   final Widget child;

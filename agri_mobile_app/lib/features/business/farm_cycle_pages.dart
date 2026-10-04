@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../data/api/api_client.dart';
 import '../../data/api/api_models.dart';
 import '../../data/repositories/business_repository.dart';
-import '../../shared/assets/app_assets.dart';
 import '../../shared/widgets/animated_press.dart';
-import '../../shared/widgets/textured_card.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import 'bulk_delete_ui.dart';
@@ -30,16 +29,25 @@ class FarmCycleListPage extends StatefulWidget {
 
 class _FarmCycleListPageState extends State<FarmCycleListPage> {
   late Future<PageResult<ApiRecord>> _cyclesFuture;
+  final _searchController = TextEditingController();
+  int _filterIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    _cyclesFuture = widget.repository.listCycles();
+    _cyclesFuture = widget.repository.listAllCycles();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   void _reloadCycles() {
+    if (!mounted) return;
     setState(() {
-      _cyclesFuture = widget.repository.listCycles();
+      _cyclesFuture = widget.repository.listAllCycles();
     });
   }
 
@@ -52,44 +60,64 @@ class _FarmCycleListPageState extends State<FarmCycleListPage> {
       onBottomTabChanged: widget.onBottomTabChanged,
       bottomOverlay: _CycleCreatePill(
         label: '新建茬口',
-        onTap: () => Navigator.of(context).push(
+        onTap: () => Navigator.of(context)
+            .push(
           MaterialPageRoute(
             builder: (_) => FarmCycleFormPage(
               repository: widget.repository,
               onBottomTabChanged: widget.onBottomTabChanged,
             ),
           ),
-        ),
+        )
+            .then((_) {
+          if (mounted) _reloadCycles();
+        }),
       ),
       children: [
         FutureBuilder<PageResult<ApiRecord>>(
           future: _cyclesFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _cycleSummaryHero(const <ApiRecord>[]),
-                  const SizedBox(height: 16),
-                  const LoadingCard(),
-                ],
-              );
+              return const LoadingCard();
             }
             final items = snapshot.data?.items ?? const <ApiRecord>[];
+            final keyword = _searchController.text.trim().toLowerCase();
+            final visibleItems = items.where((item) {
+              final json = item.json;
+              final status = '${json['status'] ?? ''}'.toLowerCase();
+              final statusIndex = ['planned', 'plan'].contains(status)
+                  ? 2
+                  : ['ended', 'finished', 'completed', 'cancelled']
+                          .contains(status)
+                      ? 3
+                      : 1;
+              final matchesText = [
+                json['name'],
+                json['crop_name'],
+                json['field_name']
+              ].join(' ').toLowerCase().contains(keyword);
+              return matchesText &&
+                  (_filterIndex == 0 || _filterIndex == statusIndex);
+            }).toList();
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _cycleSummaryHero(items),
                 const SizedBox(height: 16),
-                const SearchFieldCard(text: '搜索作物、地块、茬口'),
+                SearchFieldCard(
+                    text: '搜索作物、地块、茬口',
+                    controller: _searchController,
+                    onChanged: (_) => setState(() {})),
                 const SizedBox(height: 12),
-                const ChipRail(
-                  items: ['全部', '在种', '计划', '已结束'],
-                  activeColor: AppColors.ink,
+                ChipRail(
+                  items: const ['全部', '在种', '计划', '已结束'],
+                  activeIndex: _filterIndex,
+                  onSelected: (index) => setState(() => _filterIndex = index),
+                  activeColor: AppColors.blue,
                 ),
                 const SizedBox(height: 16),
                 BulkDeleteListSection(
-                  items: items,
+                  items: visibleItems,
                   hasError: snapshot.hasError,
                   emptyMessage: '还没有茬口，先新建一个生产批次。',
                   errorMessage: '茬口数据加载失败，请稍后重试。',
@@ -99,6 +127,7 @@ class _FarmCycleListPageState extends State<FarmCycleListPage> {
                   onDeleted: _reloadCycles,
                   cardBuilder: (record, selectionMode, selected) =>
                       CycleListCard(
+                    onSaved: _reloadCycles,
                     record: record,
                     repository: widget.repository,
                     onBottomTabChanged: widget.onBottomTabChanged,
@@ -150,13 +179,15 @@ class _FarmCycleFormPageState extends State<FarmCycleFormPage> {
   final _plantedDate = TextEditingController(text: _todayText());
   late Future<PageResult<ApiRecord>> _templatesFuture;
   ApiRecord? _selectedTemplate;
+  int? _savedCycleId;
+  bool _unitSaved = false;
   bool _showMore = false;
   bool _saving = false;
 
   @override
   void initState() {
     super.initState();
-    _templatesFuture = widget.repository.listCropTemplates(size: 100);
+    _templatesFuture = widget.repository.listAllCropTemplates();
     _hydrateInitialRecord();
     final templateId = widget.initialTemplateId;
     if (templateId != null && _selectedTemplate == null) {
@@ -225,10 +256,12 @@ class _FarmCycleFormPageState extends State<FarmCycleFormPage> {
           'season': _season.text.trim(),
           'batch_note': _note.text.trim(),
         }..removeWhere((_, value) => value == null || value == ''),
-        cycleId: widget.cycleId,
+        cycleId: widget.cycleId ?? _savedCycleId,
       );
+      // 茬口和单元分两次写入，第二步失败重试时必须更新已创建茬口。
+      _savedCycleId = cycle.id;
       final unitName = _unitName.text.trim();
-      if (widget.cycleId == null && unitName.isNotEmpty) {
+      if (widget.cycleId == null && !_unitSaved && unitName.isNotEmpty) {
         await widget.repository.createPlantingUnit(
           {
             'cycle_id': cycle.id,
@@ -240,9 +273,10 @@ class _FarmCycleFormPageState extends State<FarmCycleFormPage> {
           }..removeWhere((_, value) => value == null || value == ''),
         );
       }
+      _unitSaved = true;
       _showMessage(widget.cycleId == null ? '创建茬口成功' : '保存茬口成功');
-    } catch (_) {
-      _showMessage('保存失败，请稍后再试');
+    } catch (error) {
+      _showMessage(ApiClient.userMessageFor(error));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -307,26 +341,16 @@ class _FarmCycleFormPageState extends State<FarmCycleFormPage> {
       title: widget.cycleId == null ? '新建茬口' : '编辑茬口',
       trailingIcon: LucideIcons.sparkles,
       bottomBar: BottomActions(
-        secondaryLabel: '保存草稿',
+        secondaryLabel: '取消',
         primaryLabel: _saving
             ? '保存中'
             : widget.cycleId == null
                 ? '创建茬口'
                 : '保存茬口',
         onPrimary: _save,
-        onSecondary: () => _showMessage('草稿已保留在当前页面'),
+        onSecondary: () => Navigator.of(context).maybePop(),
       ),
       children: [
-        const AiLandscapeBanner(
-          title: '新建茬口',
-          subtitle: '选择模板后自动带出阶段',
-          asset: AppAssets.businessCycleBanner,
-          accent: AppColors.green,
-        ),
-        const AssistEntryCard(
-          text: '说一句生成茬口草稿',
-          icon: LucideIcons.bot,
-        ),
         FormRowsCard(
           title: '基础信息',
           icon: LucideIcons.layers,
@@ -429,6 +453,7 @@ class _FarmCycleFormPageState extends State<FarmCycleFormPage> {
 class CycleListCard extends StatelessWidget {
   const CycleListCard({
     super.key,
+    this.onSaved,
     required this.record,
     required this.repository,
     this.onBottomTabChanged,
@@ -436,6 +461,7 @@ class CycleListCard extends StatelessWidget {
     this.selected = false,
   });
 
+  final VoidCallback? onSaved;
   final ApiRecord record;
   final BusinessRepository repository;
   final ValueChanged<int>? onBottomTabChanged;
@@ -451,9 +477,7 @@ class CycleListCard extends StatelessWidget {
       json['crop_template_name'],
       json['template_name'],
       json['variety'],
-      json['crop_template_id'] == null
-          ? null
-          : '模板ID ${json['crop_template_id']}',
+      json['crop_template_id'] == null ? null : '未命名作物模板',
     ], fallback: '未关联模板');
     final field = _firstNonEmpty([json['field_name']], fallback: '未填写地块');
     final area = _firstNonEmpty([json['total_area_mu'], json['unit_area_mu']],
@@ -488,188 +512,187 @@ class CycleListCard extends StatelessWidget {
                   color: AppColors.ink2,
                 ),
               ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppColors.ink,
-                            fontSize: 17,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.2,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          variety,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppColors.muted,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 9, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: isPlan ? AppColors.blueSoft : AppColors.greenSoft,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      stage,
-                      style: TextStyle(
-                        color: isPlan ? AppColors.blue : AppColors.greenDark,
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.1,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: AppColors.surface2,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(
-                      LucideIcons.mapPin,
-                      size: 13,
-                      color: AppColors.subtle,
-                    ),
-                    const SizedBox(width: 5),
-                    Expanded(
-                      child: Text(
-                        '$field · $area',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.ink2,
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
-                        ),
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.ink,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.2,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    const Icon(
-                      LucideIcons.calendarDays,
-                      size: 13,
-                      color: AppColors.subtle,
-                    ),
-                    const SizedBox(width: 4),
+                    const SizedBox(height: 3),
                     Text(
-                      startDate,
+                      variety,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: AppColors.muted,
-                        fontSize: 12.5,
+                        fontSize: 13,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  const Text(
-                    '进度',
-                    style: TextStyle(
-                      color: AppColors.muted,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isPlan ? AppColors.blueSoft : AppColors.greenSoft,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  stage,
+                  style: TextStyle(
+                    color: isPlan ? AppColors.blue : AppColors.greenDark,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.1,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.surface2,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  LucideIcons.mapPin,
+                  size: 13,
+                  color: AppColors.subtle,
+                ),
+                const SizedBox(width: 5),
+                Expanded(
+                  child: Text(
+                    '$field · $area',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.ink2,
                       fontSize: 12.5,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '${progressValue.round()}%',
-                    style: const TextStyle(
-                      color: AppColors.ink,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 13,
-                    ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(
+                  LucideIcons.calendarDays,
+                  size: 13,
+                  color: AppColors.subtle,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  startDate,
+                  style: const TextStyle(
+                    color: AppColors.muted,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(999),
-                      child: LinearProgressIndicator(
-                        value: progress.clamp(0, 1),
-                        minHeight: 5,
-                        backgroundColor: AppColors.line,
-                        valueColor: const AlwaysStoppedAnimation(AppColors.ink2),
-                      ),
-                    ),
-                  ),
-                ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Text(
+                '进度',
+                style: TextStyle(
+                  color: AppColors.muted,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _CycleAction(
-                      icon: LucideIcons.pencil,
-                      label: '编辑',
-                      onTap: selectionMode
-                          ? null
-                          : () => Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => FarmCycleFormPage(
-                                    repository: repository,
-                                    cycleId: record.id,
-                                    initialRecord: record,
-                                    onBottomTabChanged: onBottomTabChanged,
-                                  ),
-                                ),
-                              ),
-                    ),
+              const SizedBox(width: 8),
+              Text(
+                '${progressValue.round()}%',
+                style: const TextStyle(
+                  color: AppColors.ink,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(999),
+                  child: LinearProgressIndicator(
+                    value: progress.clamp(0, 1),
+                    minHeight: 5,
+                    backgroundColor: AppColors.line,
+                    valueColor: const AlwaysStoppedAnimation(AppColors.ink2),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _CycleAction(
-                      icon: LucideIcons.squarePen,
-                      label: '记农事',
-                      onTap: selectionMode
-                          ? null
-                          : () => Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => FarmLogCreatePage(
-                                    repository: repository,
-                                    onBottomTabChanged: onBottomTabChanged,
-                                  ),
-                                ),
-                              ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _CycleAction(
-                      icon: LucideIcons.bookOpenText,
-                      label: '账本',
-                      accent: AppColors.blue,
-                      onTap: selectionMode
-                          ? null
-                          : () => onBottomTabChanged?.call(3),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ],
           ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _CycleAction(
+                  icon: LucideIcons.pencil,
+                  label: '编辑',
+                  onTap: selectionMode
+                      ? null
+                      : () => Navigator.of(context)
+                          .push(
+                            MaterialPageRoute(
+                              builder: (_) => FarmCycleFormPage(
+                                repository: repository,
+                                cycleId: record.id,
+                                initialRecord: record,
+                                onBottomTabChanged: onBottomTabChanged,
+                              ),
+                            ),
+                          )
+                          .then((_) => onSaved?.call()),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _CycleAction(
+                  icon: LucideIcons.squarePen,
+                  label: '记农事',
+                  onTap: selectionMode
+                      ? null
+                      : () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => FarmLogCreatePage(
+                                repository: repository,
+                                onBottomTabChanged: onBottomTabChanged,
+                              ),
+                            ),
+                          ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _CycleAction(
+                  icon: LucideIcons.bookOpenText,
+                  label: '账本',
+                  accent: AppColors.blue,
+                  onTap:
+                      selectionMode ? null : () => onBottomTabChanged?.call(3),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -693,7 +716,7 @@ class _CycleAction extends StatelessWidget {
       scale: 0.97,
       onTap: onTap,
       child: Container(
-        height: 36,
+        constraints: const BoxConstraints(minHeight: 44),
         padding: const EdgeInsets.symmetric(horizontal: 8),
         decoration: BoxDecoration(
           color: AppColors.surface2,
@@ -704,14 +727,15 @@ class _CycleAction extends StatelessWidget {
           children: [
             Icon(icon, size: 13, color: accent),
             const SizedBox(width: 5),
-            Text(
+            Flexible(
+                child: Text(
               label,
               style: const TextStyle(
                 color: AppColors.ink2,
                 fontSize: 12.5,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w600,
               ),
-            ),
+            )),
           ],
         ),
       ),
@@ -729,30 +753,10 @@ class _CycleCreatePill extends StatelessWidget {
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.centerRight,
-      child: AnimatedPress(
-        scale: 0.92,
-        onTap: onTap,
-        child: Container(
-          width: 56,
-          height: 56,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: AppColors.ink,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.ink.withValues(alpha: 0.22),
-                blurRadius: 18,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: const Icon(
-            LucideIcons.plus,
-            color: Colors.white,
-            size: 24,
-          ),
-        ),
+      child: FilledButton.icon(
+        onPressed: onTap,
+        icon: const Icon(LucideIcons.plus, size: 20),
+        label: Text(label),
       ),
     );
   }
@@ -851,7 +855,7 @@ class StagePreviewCard extends StatelessWidget {
                                         stages[i].name,
                                         style: AppTextStyles.body.copyWith(
                                           color: AppColors.ink,
-                                          fontWeight: FontWeight.w700,
+                                          fontWeight: FontWeight.w600,
                                         ),
                                       ),
                                     ),
@@ -859,7 +863,7 @@ class StagePreviewCard extends StatelessWidget {
                                       stages[i].days,
                                       style: AppTextStyles.body.copyWith(
                                         color: AppColors.ink,
-                                        fontWeight: FontWeight.w700,
+                                        fontWeight: FontWeight.w600,
                                       ),
                                     ),
                                   ],
@@ -882,7 +886,6 @@ _CycleSummaryHero _cycleSummaryHero(List<ApiRecord> items) {
   return _CycleSummaryHero(
     cycleCount: items.length,
     totalAreaText: summary.totalAreaText,
-    currentStageText: summary.currentStageText,
     activeCount: summary.activeCount,
     plannedCount: summary.plannedCount,
     endedCount: summary.endedCount,
@@ -893,7 +896,6 @@ class _CycleSummaryHero extends StatelessWidget {
   const _CycleSummaryHero({
     required this.cycleCount,
     required this.totalAreaText,
-    required this.currentStageText,
     required this.activeCount,
     required this.plannedCount,
     required this.endedCount,
@@ -901,154 +903,33 @@ class _CycleSummaryHero extends StatelessWidget {
 
   final int cycleCount;
   final String totalAreaText;
-  final String currentStageText;
   final int activeCount;
   final int plannedCount;
   final int endedCount;
 
   @override
   Widget build(BuildContext context) {
-    final total = activeCount + plannedCount + endedCount;
-    final activeRatio = total == 0 ? 0.0 : activeCount / total;
-    final plannedRatio = total == 0 ? 0.0 : plannedCount / total;
-    final endedRatio = total == 0 ? 0.0 : endedCount / total;
-    return TexturedCard(
-      accent: AppColors.blue,
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              GradientIconTile(
-                icon: LucideIcons.layers,
-                accent: AppColors.blue,
-                size: 32,
-                iconSize: 17,
-                borderRadius: 10,
-              ),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Text(
-                  '茬口概览',
-                  style: TextStyle(
-                    color: AppColors.ink,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0,
-                  ),
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: AppColors.greenSoft,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      LucideIcons.sprout,
-                      size: 12,
-                      color: AppColors.greenDark,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      currentStageText,
-                      style: const TextStyle(
-                        color: AppColors.greenDark,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.1,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: _MetricValue(
-                  value: '$cycleCount',
-                  unit: '个',
-                  label: '茬口总数',
-                ),
-              ),
-              Container(
-                width: 1,
-                height: 44,
-                margin: const EdgeInsets.symmetric(horizontal: 12),
-                color: AppColors.line,
-              ),
-              Expanded(
-                child: _MetricValue(
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(
+              child:
+                  _MetricValue(value: '$cycleCount', unit: '个', label: '茬口总数')),
+          const SizedBox(width: 24),
+          Expanded(
+              child: _MetricValue(
                   value: totalAreaText.replaceAll('亩', ''),
                   unit: totalAreaText.contains('亩') ? '亩' : '',
-                  label: '种植总面积',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: SizedBox(
-              height: 6,
-              child: Stack(
-                children: [
-                  Container(color: AppColors.line),
-                  FractionallySizedBox(
-                    widthFactor: activeRatio,
-                    child: Container(color: AppColors.green),
-                  ),
-                  FractionallySizedBox(
-                    alignment: Alignment.centerLeft,
-                    widthFactor: activeRatio + plannedRatio,
-                    child: Row(
-                      children: [
-                        const Spacer(),
-                        Expanded(
-                          flex: plannedRatio == 0 ? 0 : 1,
-                          child: Container(color: AppColors.amber),
-                        ),
-                      ],
-                    ),
-                  ),
-                  FractionallySizedBox(
-                    alignment: Alignment.centerLeft,
-                    widthFactor: 1,
-                    child: Row(
-                      children: [
-                        const Spacer(),
-                        Expanded(
-                          flex: endedRatio == 0 ? 0 : 1,
-                          child: Container(color: AppColors.subtle),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              _StatusDot(color: AppColors.green, label: '在种 $activeCount'),
-              const SizedBox(width: 14),
-              _StatusDot(color: AppColors.amber, label: '计划 $plannedCount'),
-              const SizedBox(width: 14),
-              _StatusDot(color: AppColors.subtle, label: '已结束 $endedCount'),
-            ],
-          ),
-        ],
-      ),
+                  label: '种植总面积')),
+        ]),
+        const SizedBox(height: 16),
+        Wrap(spacing: 16, runSpacing: 8, children: [
+          _StatusDot(color: AppColors.greenDark, label: '在种 $activeCount'),
+          _StatusDot(color: AppColors.amber, label: '计划 $plannedCount'),
+          _StatusDot(color: AppColors.subtle, label: '已结束 $endedCount'),
+        ]),
+      ]),
     );
   }
 }
@@ -1084,7 +965,7 @@ class _MetricValue extends StatelessWidget {
                   style: const TextStyle(
                     color: AppColors.ink,
                     fontSize: 28,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                     letterSpacing: -0.5,
                     height: 1.1,
                   ),
@@ -1098,7 +979,7 @@ class _MetricValue extends StatelessWidget {
                 style: const TextStyle(
                   color: AppColors.muted,
                   fontSize: 13,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
@@ -1153,7 +1034,6 @@ class _StatusDot extends StatelessWidget {
 class _CycleSummary {
   const _CycleSummary({
     required this.totalAreaText,
-    required this.currentStageText,
     required this.activeCount,
     required this.plannedCount,
     required this.endedCount,
@@ -1165,7 +1045,6 @@ class _CycleSummary {
     var activeCount = 0;
     var plannedCount = 0;
     var endedCount = 0;
-    var currentStageText = '暂无';
     for (final item in items) {
       final json = item.json;
       final area = _parseDouble(json['total_area_mu'] ?? json['unit_area_mu']);
@@ -1178,21 +1057,15 @@ class _CycleSummary {
         plannedCount++;
       } else if (status == 'ended' ||
           status == 'finished' ||
-          status == 'completed') {
+          status == 'completed' ||
+          status == 'cancelled') {
         endedCount++;
       } else if (status.isNotEmpty) {
         activeCount++;
       }
-      if (currentStageText == '暂无') {
-        currentStageText = _firstNonEmpty(
-          [json['current_stage_name']],
-          fallback: '暂无',
-        );
-      }
     }
     return _CycleSummary(
       totalAreaText: hasArea ? '${_trimNumber(totalArea)}亩' : '暂无',
-      currentStageText: currentStageText,
       activeCount: activeCount,
       plannedCount: plannedCount,
       endedCount: endedCount,
@@ -1200,7 +1073,6 @@ class _CycleSummary {
   }
 
   final String totalAreaText;
-  final String currentStageText;
   final int activeCount;
   final int plannedCount;
   final int endedCount;

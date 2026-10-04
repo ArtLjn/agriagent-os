@@ -15,65 +15,58 @@ void main() {
     final adapter = RecordingAdapter({
       '/auth/login': tokenResponse,
       '/auth/register': tokenResponse,
-      '/auth/me': userResponse,
-      'PUT /auth/me': userResponse,
-      'PUT /auth/me/farm-location': {
-        ...userResponse,
-        'farm': {
-          'id': 1,
-          'name': '农友的农场',
-          'location': '邳州市',
-        },
+      '/users/me': userResponse,
+      'PATCH /users/me': userResponse,
+      'PATCH /farms/1/location': {'id': 1, 'name': '农友的农场', 'location': '邳州市'},
+      '/users/me/settings': settingsResponse,
+      'PATCH /users/me/settings': settingsResponse,
+      '/conversations': [conversationResponse],
+      '/conversations/s1/messages': {
+        'items': [messageResponse]
       },
-      '/settings': settingsResponse,
-      'PUT /settings': settingsResponse,
-      '/api/app/version': versionResponse,
-      '/agent/chat': {'reply': '收到'},
-      '/agent/conversations': [conversationResponse],
-      '/agent/conversations/s1/messages': [messageResponse],
-      '/agent/skills': yayaSkillsResponse,
-      '/agent/daily': dailyAdviceResponse,
-      '/agent/daily/refresh': dailyAdviceResponse,
-      '/agent/report': reportResponse,
-      '/agent/advice-history': [adviceHistoryResponse],
-      '/agent/report-history': [reportHistoryResponse],
-      '/agent/reports': paginatedReportsResponse,
-      '/costs': paginatedCostsResponse,
-      'POST /costs': costRecordResponse,
-      '/costs/summary/2026': yearlySummaryResponse,
-      '/costs/cycles/7/profit': cycleProfitResponse,
-      '/costs/parse': costParseResponse,
-      '/cost-categories': [categoryResponse],
+      '/dashboard': {'cycles': [], 'recent_logs': []},
+      '/cost-records': paginatedCostsResponse,
+      'POST /cost-records': costRecordResponse,
+      '/cost-records/summary/yearly': yearlySummaryResponse,
+      '/cost-records/cycles/7/profit': cycleProfitResponse,
+      '/cost-categories': {
+        'items': [categoryResponse]
+      },
       'POST /cost-categories': categoryResponse,
       '/debts': debtsResponse,
       'POST /debts': costRecordResponse,
       '/debts/settle': costRecordResponse,
-      '/weather/forecast': weatherResponse,
-      '/cycles': paginatedCyclesResponse,
-      'POST /cycles': cycleResponse,
-      '/cycles/7': cycleResponse,
-      '/cycles/7/advance-stage': cycleResponse,
-      '/cycles/parse': cycleParseResponse,
-      '/planting/units': [plantingUnitResponse],
-      'POST /planting/units': plantingUnitResponse,
-      '/planting/units/3': plantingUnitResponse,
-      '/planting/workers': [workerResponse],
-      'POST /planting/workers': workerResponse,
-      '/planting/workers/summary': paginatedWorkersResponse,
-      '/planting/workers/4': workerResponse,
-      '/planting/operation-types': [operationTypeResponse],
-      '/planting/labor/wages': wageResponse,
-      '/planting/labor/wages/5': wageResponse,
-      '/planting/work-orders': paginatedWorkOrdersResponse,
-      'POST /planting/work-orders': workOrderResponse,
-      '/planting/work-orders/9': workOrderResponse,
-      '/planting/recent-operations': [recentOperationResponse],
-      '/planting/labor/unsettled-summary': unsettledLaborSummaryResponse,
-      '/logs': paginatedLogsResponse,
-      'POST /logs': logResponse,
-      '/logs/11': logResponse,
-      '/smart-fill/scenarios': smartFillScenariosResponse,
-      '/smart-fill/parse': smartFillParseResponse,
+      '/weather': weatherResponse,
+      '/crop-cycles': paginatedCyclesResponse,
+      'POST /crop-cycles': cycleResponse,
+      '/crop-cycles/7': cycleResponse,
+      '/crop-cycles/7/advance-stage': cycleResponse,
+      '/planting-units': {
+        'items': [plantingUnitResponse]
+      },
+      'POST /planting-units': plantingUnitResponse,
+      '/planting-units/3': plantingUnitResponse,
+      '/workers': {
+        'items': [workerResponse]
+      },
+      'POST /workers': workerResponse,
+      '/workers/summary': paginatedWorkersResponse,
+      '/workers/4': workerResponse,
+      '/farm-logs/operations/types': {
+        'items': [operationTypeResponse]
+      },
+      '/labor/wages': wageResponse,
+      '/labor/wages/5': wageResponse,
+      '/work-orders': paginatedWorkOrdersResponse,
+      'POST /work-orders': workOrderResponse,
+      '/work-orders/9': workOrderResponse,
+      '/recent-operations': {
+        'items': [recentOperationResponse]
+      },
+      '/labor/unsettled-summary': unsettledLaborSummaryResponse,
+      '/farm-logs': paginatedLogsResponse,
+      'POST /farm-logs': logResponse,
+      '/farm-logs/11': logResponse,
     });
     final dio = Dio(BaseOptions(baseUrl: 'https://api.example.test'));
     dio.httpClientAdapter = adapter;
@@ -105,23 +98,31 @@ void main() {
     await profile.getSettings();
     await profile.updateSettings({'default_city': '寿光'});
     await profile.checkVersion(currentVersionCode: 3);
-    await yaya.sendMessage('今天浇水吗', cycleId: 7, sessionId: 's1');
+    await expectLater(yaya.sendMessage('今天浇水吗', cycleId: 7, sessionId: 's1'),
+        throwsA(isA<UnsupportedApiException>()));
     await yaya.loadConversations(limit: 10);
     await yaya.loadMessages('s1');
-    final skills = await yaya.loadSkills();
+    await expectLater(
+        yaya.loadSkills(), throwsA(isA<UnsupportedApiException>()));
     await dashboard.getDailyAdvice(cycleId: 7);
-    await dashboard.refreshDailyAdvice(cycleId: 7);
-    await dashboard.createReport(cycleId: 7, reportType: 'weekly');
-    await dashboard.listAdviceHistory(cycleId: 7);
-    await dashboard.listReportHistory(cycleId: 7);
-    await dashboard.listReports(page: 2, size: 5);
+    await expectLater(dashboard.refreshDailyAdvice(cycleId: 7),
+        throwsA(isA<UnsupportedApiException>()));
+    await expectLater(dashboard.createReport(cycleId: 7, reportType: 'weekly'),
+        throwsA(isA<UnsupportedApiException>()));
+    await expectLater(dashboard.listAdviceHistory(cycleId: 7),
+        throwsA(isA<UnsupportedApiException>()));
+    await expectLater(dashboard.listReportHistory(cycleId: 7),
+        throwsA(isA<UnsupportedApiException>()));
+    await expectLater(dashboard.listReports(page: 2, size: 5),
+        throwsA(isA<UnsupportedApiException>()));
     await dashboard.getForecast(days: 3, location: '寿光');
     await dashboard.getUnsettledLaborSummary();
     await billing.listCosts(page: 2, size: 10, cycleId: 7);
     await billing.createCost({'record_type': 'cost'});
     await billing.getYearlySummary(2026);
     await billing.getCycleProfit(7);
-    await billing.parseCost('买肥料 200');
+    await expectLater(() => billing.parseCost('买肥料 200'),
+        throwsA(isA<UnsupportedApiException>()));
     await billing.listCategories();
     await billing
         .createCategory({'name': '肥料', 'type': 'cost', 'icon': 'leaf'});
@@ -133,7 +134,8 @@ void main() {
     await workbench.getCycle(7);
     await workbench.updateCycle(7, {'name': '夏茬'});
     await workbench.advanceCycleStage(7);
-    await workbench.parseCycle('春季种番茄');
+    await expectLater(() => workbench.parseCycle('春季种番茄'),
+        throwsA(isA<UnsupportedApiException>()));
     await workbench.listPlantingUnits(cycleId: 7);
     await workbench.createPlantingUnit({'cycle_id': 7, 'name': 'A棚'});
     await workbench.updatePlantingUnit(3, {'name': 'B棚'});
@@ -151,48 +153,32 @@ void main() {
     await workbench.listLogs(cycleId: 7, operationType: '浇水');
     await workbench.createLog({'cycle_id': 7});
     await workbench.updateLog(11, {'note': '已处理'});
-    await workbench.listSmartFillScenarios();
-    await workbench.parseSmartFill(
-      scene: 'ledger.record',
-      text: '买肥料 200',
-      context: {'cycle_id': 7},
-      idempotencyKey: 'req-1',
-    );
+    await expectLater(workbench.listSmartFillScenarios(),
+        throwsA(isA<UnsupportedApiException>()));
+    await expectLater(
+        workbench.parseSmartFill(scene: 'ledger.record', text: '买肥料 200'),
+        throwsA(isA<UnsupportedApiException>()));
 
     expect(
-      adapter.find('GET', '/auth/me').headers['Authorization'],
+      adapter.requests
+          .where((request) =>
+              request.method == 'GET' && request.path == '/users/me')
+          .first
+          .headers['Authorization'],
       'Bearer token-1',
     );
     expect(updatedUser.farm?.location, '邳州市');
-    expect(adapter.find('PUT', '/auth/me/farm-location').data, {
+    expect(adapter.find('PATCH', '/farms/1/location').data, {
       'location': '邳州市',
     });
-    expect(adapter.find('POST', '/agent/chat').data, {
-      'cycle_id': 7,
-      'message': '今天浇水吗',
-      'session_id': 's1',
-    });
-    expect(skills.single.title, '智能记账');
-    expect(skills.single.summary, '一句话记录支出、收入和赊账。');
-    expect(skills.single.details, contains('执行前会让你确认关键信息'));
-    expect(skills.single.examples, contains('买化肥花了200元'));
-    expect(adapter.find('GET', '/agent/skills').query, {});
-    expect(adapter.find('GET', '/weather/forecast').query, {
+    expect(adapter.find('GET', '/weather').query, {
       'days': 3,
       'location': '寿光',
     });
-    expect(adapter.find('GET', '/costs').query, {
+    expect(adapter.find('GET', '/cost-records').query, {
       'cycle_id': 7,
       'page': 2,
-      'size': 10,
-    });
-    expect(
-        adapter.find('POST', '/smart-fill/parse').headers['X-Idempotency-Key'],
-        'req-1');
-    expect(adapter.find('POST', '/smart-fill/parse').data, {
-      'scene': 'ledger.record',
-      'text': '买肥料 200',
-      'context': {'cycle_id': 7},
+      'page_size': 10,
     });
   });
 
@@ -210,11 +196,11 @@ void main() {
     ]);
     expect(events.any((event) => event.done), true);
     expect(events.any((event) => event.skills.contains('weather')), true);
-    expect(adapter.requests.single.path, '/agent/chat/stream');
-    expect(adapter.requests.single.data, {
-      'message': '今天浇水吗',
-      'session_id': 's1',
-    });
+    expect(adapter.requests.single.path, '/chat');
+    expect(adapter.requests.single.data, containsPair('message', '今天浇水吗'));
+    expect(adapter.requests.single.data, containsPair('conversation_id', 's1'));
+    expect((adapter.requests.single.data as Map)['client_request_id'],
+        startsWith('mobile-'));
     expect(adapter.requests.single.headers['Accept'], 'text/event-stream');
   });
 

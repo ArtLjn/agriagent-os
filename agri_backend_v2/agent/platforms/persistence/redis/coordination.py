@@ -139,6 +139,10 @@ class CoordinationError(RuntimeError):
     """协调层不可用或配置无效。"""
 
 
+class TurnLeaseLost(CoordinationError):
+    """租约已失效或无法在有效期内确认，必须停止当前执行。"""
+
+
 class TurnAdmissionError(RuntimeError):
     """Turn 未通过并发准入，携带稳定错误码。"""
 
@@ -315,9 +319,9 @@ async def renew_turn(lease: TurnLease) -> bool:
             [lease.lock_key],
             [lease.token, settings.redis.conversation_lock_ttl_ms],
         )
-    except Exception:  # noqa: BLE001
-        logger.exception("failed to renew turn lease turn_id=%s", lease.turn_id)
-        return False
+    except Exception as exc:  # noqa: BLE001
+        # 超时不能证明 token 已失效；调用方只能在已确认的租期内重试。
+        raise CoordinationError("redis lease renewal unavailable") from exc
     return result == 1
 
 
@@ -371,7 +375,9 @@ async def release_turn(lease: TurnLease) -> bool:
 
 async def wake_conversation(scope: str) -> str | None:
     """取出会话队首，交给 dispatch stream 重新调度。"""
-    client = __import__("agent.platforms.persistence.redis.redis_store", fromlist=["get_client"]).get_client()
+    client = __import__(
+        "agent.platforms.persistence.redis.redis_store", fromlist=["get_client"]
+    ).get_client()
     if client is None:
         return None
     queue_key = key("conversation", f"{scope}:queue")
@@ -393,7 +399,9 @@ async def wake_conversation(scope: str) -> str | None:
 
 async def wake_global_queue() -> str | None:
     """将多个全局候选投递给 Worker，避免用户配额造成队首饥饿。"""
-    client = __import__("agent.platforms.persistence.redis.redis_store", fromlist=["get_client"]).get_client()
+    client = __import__(
+        "agent.platforms.persistence.redis.redis_store", fromlist=["get_client"]
+    ).get_client()
     if client is None:
         return None
     candidates = await client.lrange(
@@ -415,13 +423,44 @@ async def wake_global_queue() -> str | None:
     return candidates[0]
 
 
-async def renew_until_done(lease: TurnLease, stop: asyncio.Event) -> None:
-    """后台续租任务，客户端断开或 turn 完成时由调用方停止。"""
-    interval = max(settings.redis.conversation_lock_renew_ms, 1000) / 1000
+async def renew_until_done(
+    lease: TurnLease, stop: asyncio.Event, *, ready: asyncio.Event | None = None
+) -> None:
+    """在已确认租期内重试通信故障；失租后通知 Worker 停止执行。"""
+    loop = asyncio.get_running_loop()
+    ttl = settings.redis.conversation_lock_ttl_ms / 1000
+    interval = min(settings.redis.conversation_lock_renew_ms / 1000, ttl / 3)
+    retry_delay = min(interval / 5, settings.redis.socket_timeout_ms / 1000)
+    deadline = loop.time() + ttl
+    delay = 0.0
     while not stop.is_set():
         try:
-            await asyncio.wait_for(stop.wait(), timeout=interval)
+            await asyncio.wait_for(stop.wait(), timeout=delay)
+            return
         except asyncio.TimeoutError:
-            if not await renew_turn(lease):
-                logger.error("turn lease lost turn_id=%s", lease.turn_id)
-                return
+            pass
+        if stop.is_set():
+            return
+        attempted_at = loop.time()
+        if attempted_at >= deadline:
+            raise TurnLeaseLost("redis lease confirmation deadline exceeded")
+        try:
+            async with asyncio.timeout_at(deadline):
+                owned = await renew_turn(lease)
+        except (CoordinationError, asyncio.TimeoutError):
+            logger.warning(
+                "租约续期暂不可用，将在有效期内重试",
+                extra={
+                    "code": "redis_lease_renew_unavailable",
+                    "turn_id": lease.turn_id,
+                },
+            )
+            delay = min(retry_delay, max(0.0, deadline - loop.time()))
+            continue
+        if not owned:
+            raise TurnLeaseLost("turn lease no longer owned")
+        if ready is not None:
+            ready.set()
+        # 从请求发出时计算，避免把网络响应耗时误算为可用租期。
+        deadline = attempted_at + ttl
+        delay = min(interval, max(0.0, deadline - loop.time()))

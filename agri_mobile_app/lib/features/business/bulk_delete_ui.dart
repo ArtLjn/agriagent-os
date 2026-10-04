@@ -52,13 +52,27 @@ class _BulkDeleteListSectionState extends State<BulkDeleteListSection> {
     if (widget.items.isEmpty && widget.hasError) {
       return BusinessCard(
         padding: const EdgeInsets.all(18),
-        child: Text(widget.errorMessage),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Icon(LucideIcons.cloudOff, color: AppColors.muted, size: 28),
+          const SizedBox(height: 16),
+          Text(widget.errorMessage, style: AppTextStyles.body),
+          if (widget.onDeleted != null) ...[
+            const SizedBox(height: 16),
+            FilledButton(onPressed: widget.onDeleted, child: const Text('重新加载'))
+          ],
+        ]),
       );
     }
     if (widget.items.isEmpty) {
       return BusinessCard(
         padding: const EdgeInsets.all(18),
-        child: Text(widget.emptyMessage),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Icon(LucideIcons.folderOpen, color: AppColors.blue, size: 28),
+          const SizedBox(height: 16),
+          Text(widget.emptyMessage, style: AppTextStyles.body),
+          const SizedBox(height: 8),
+          const Text('从下方创建第一条资料，后续记录就能关联起来。', style: AppTextStyles.small),
+        ]),
       );
     }
 
@@ -198,7 +212,7 @@ class BulkSelectionBar extends StatelessWidget {
               style: AppTextStyles.sectionTitle.copyWith(
                 color: AppColors.ink,
                 fontSize: 16,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),

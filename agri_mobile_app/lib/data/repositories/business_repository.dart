@@ -46,6 +46,16 @@ class BusinessRepository {
     return PageResult.fromJson(data, ApiRecord.fromJson);
   }
 
+  Future<PageResult<ApiRecord>> listAllCycles() async {
+    return PageResult.fromJson(
+        await client.getAllPages('/crop-cycles'), ApiRecord.fromJson);
+  }
+
+  Future<PageResult<ApiRecord>> listAllCropTemplates() async {
+    return PageResult.fromJson(
+        await client.getAllPages('/crop-templates'), ApiRecord.fromJson);
+  }
+
   Future<ApiRecord> saveCycle(
     Map<String, Object?> data, {
     int? cycleId,

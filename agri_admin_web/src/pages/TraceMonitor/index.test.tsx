@@ -183,6 +183,27 @@ describe('TraceMonitor query 初始化', () => {
     expect(mockedListTraces).not.toHaveBeenCalled();
   });
 
+  it('Trace 行支持键盘展开与收起', async () => {
+    render(
+      <MemoryRouter initialEntries={['/dev/traces']}>
+        <TraceMonitor />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(document.querySelector('.trace-item-header')).not.toBeNull();
+    });
+    const header = document.querySelector('.trace-item-header');
+    expect(header).not.toBeNull();
+    expect(header).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.keyDown(header!, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(header).toHaveAttribute('aria-expanded', 'true');
+    });
+  });
+
   it('context_build trace 渲染 Context、block 与 RAG 摘要', async () => {
     const ragBlock = {
       key: 'rag_knowledge',

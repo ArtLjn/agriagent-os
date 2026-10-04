@@ -171,14 +171,10 @@ class _RecordUnderstandingCard extends StatelessWidget {
     final category =
         _pickField(draft.fields, const ['category', 'operation_type', 'name']);
     return CardPanel(
-      radius: 18,
+      radius: 24,
       padding: const EdgeInsets.all(16),
-      borderColor: Colors.transparent,
-      gradient: const LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [Color(0xFF68A1FF), AppColors.blue],
-      ),
+      borderColor: AppColors.blueSoft,
+      background: AppColors.blueSoft,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -189,7 +185,7 @@ class _RecordUnderstandingCard extends StatelessWidget {
               Text(
                 '我理解为',
                 style: AppTextStyles.body.copyWith(
-                  color: Colors.white.withValues(alpha: 0.82),
+                  color: AppColors.muted,
                   fontSize: 14,
                 ),
               ),
@@ -198,10 +194,10 @@ class _RecordUnderstandingCard extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: AppColors.ink,
                   fontSize: 20,
                   height: 26 / 20,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                   letterSpacing: 0,
                 ),
               ),
@@ -214,10 +210,10 @@ class _RecordUnderstandingCard extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                color: Colors.white,
+                color: AppColors.blue,
                 fontSize: 32,
                 height: 38 / 32,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
                 letterSpacing: 0,
               ),
             ),

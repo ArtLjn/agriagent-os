@@ -3,7 +3,6 @@ import 'package:farm_manager_app/data/api/api_client.dart';
 import 'package:farm_manager_app/data/location/location_service.dart';
 import 'package:farm_manager_app/data/repositories/profile_repository.dart';
 import 'package:farm_manager_app/features/auth/auth_flow.dart';
-import 'package:farm_manager_app/features/auth/auth_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -31,6 +30,57 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('登录注册切换保持品牌位置和各自输入草稿', (tester) async {
+    await pumpAuthFlow(tester);
+    final brand =
+        tester.getRect(find.byKey(const ValueKey('auth-entry-brand')));
+    final hero = tester.getRect(find.byKey(const ValueKey('auth-entry-hero')));
+    await tester.enterText(find.byType(TextField).at(0), '13800138000');
+    await tester.enterText(find.byType(TextField).at(1), 'login-password');
+    await tester.ensureVisible(find.text('去注册'));
+    await tester.tap(find.text('去注册'));
+    await tester.pumpAndSettle();
+    expect(
+        tester.getRect(find.byKey(const ValueKey('auth-entry-brand'))), brand);
+    expect(tester.getRect(find.byKey(const ValueKey('auth-entry-hero'))), hero);
+    expect(
+        tester.widget<TextField>(find.byType(TextField).at(0)).controller?.text,
+        isEmpty);
+    expect(
+        tester.widget<TextField>(find.byType(TextField).at(1)).controller?.text,
+        isEmpty);
+    await tester.enterText(find.byType(TextField).at(2), '小李');
+    await tester.ensureVisible(find.text('去登录'));
+    await tester.tap(find.text('去登录'));
+    await tester.pumpAndSettle();
+    expect(
+        tester.widget<TextField>(find.byType(TextField).at(0)).controller?.text,
+        '13800138000');
+    expect(
+        tester.widget<TextField>(find.byType(TextField).at(1)).controller?.text,
+        'login-password');
+    await tester.tap(find.text('去注册'));
+    await tester.pumpAndSettle();
+    expect(
+        tester.widget<TextField>(find.byType(TextField).at(2)).controller?.text,
+        '小李');
+  });
+
+  testWidgets('注册页系统返回键回到登录且保持输入', (tester) async {
+    await pumpAuthFlow(tester);
+    await tester.tap(find.text('去注册'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).at(2), '小李');
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('欢迎回来'), findsOneWidget);
+    await tester.tap(find.text('去注册'));
+    await tester.pumpAndSettle();
+    expect(
+        tester.widget<TextField>(find.byType(TextField).at(2)).controller?.text,
+        '小李');
+  });
+
   testWidgets('认证流程可从登录进入注册、首次设置和主应用', (tester) async {
     await pumpAuthFlow(tester);
 
@@ -48,22 +98,21 @@ void main() {
     expect(find.text('先建账号，记录可以慢慢补'), findsOneWidget);
     expect(find.text('设置密码'), findsOneWidget);
     expect(find.text('昵称'), findsOneWidget);
-    expect(find.text('MVP功能全部免费'), findsOneWidget);
-    expect(find.text('手动记录'), findsOneWidget);
-    expect(find.text('AI帮填'), findsOneWidget);
-    expect(find.text('账本提醒'), findsOneWidget);
+    expect(find.text('耕耘有记录\n收获心里有数'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).at(0), '13900139000');
+    await tester.enterText(find.byType(TextField).at(1), 'secret1');
 
     await tester.tap(find.text('注册并进入'));
     await tester.pump();
 
-    expect(find.text('完善农场信息'), findsOneWidget);
-    expect(find.text('农场名称'), findsOneWidget);
+    expect(find.text('从你的农场开始'), findsOneWidget);
+    expect(find.text('农场名称'), findsNothing);
     expect(find.text('经营地区'), findsOneWidget);
     expect(find.text('所在城市'), findsNothing);
     expect(find.text('默认天气城市'), findsNothing);
-    expect(find.text('身份'), findsOneWidget);
-    expect(find.text('农场负责人'), findsOneWidget);
-    expect(find.text('可稍后在我的中修改'), findsOneWidget);
+    expect(find.text('身份'), findsNothing);
+    expect(find.text('农场负责人'), findsNothing);
+    expect(find.text('设置经营地区，让天气与农事建议更贴近你。'), findsOneWidget);
 
     await tester.tap(find.text('开始使用'));
     await tester.pumpAndSettle();
@@ -100,32 +149,28 @@ void main() {
   testWidgets('登录和注册页顶部品牌区保持紧凑', (tester) async {
     await pumpAuthFlow(tester);
 
-    expect(tester.getSize(find.byType(AuthBrandHeader)).height,
-        lessThanOrEqualTo(180));
+    expect(
+        tester.getSize(find.byKey(const ValueKey('auth-entry-brand'))).height,
+        lessThanOrEqualTo(48));
 
     await tester.tap(find.text('去注册'));
     await tester.pump();
 
-    expect(tester.getSize(find.byType(AuthBrandHeader)).height,
-        lessThanOrEqualTo(176));
+    expect(
+        tester.getSize(find.byKey(const ValueKey('auth-entry-brand'))).height,
+        lessThanOrEqualTo(48));
   });
 
-  testWidgets('建议详情页底部 Tab 可返回主应用并切到账本', (tester) async {
-    final dependencies = FakeAppDependencies();
-    await pumpAuthFlow(tester, dependencies: dependencies);
-
+  testWidgets('首页没有建议时可进入芽芽咨询并返回账本', (tester) async {
+    await pumpAuthFlow(tester);
     await tester.tap(find.text('登录'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('浇水'));
+    await tester.ensureVisible(find.text('问问芽芽'));
+    await tester.tap(find.text('问问芽芽'));
     await tester.pumpAndSettle();
-
-    expect(find.text('建议详情'), findsOneWidget);
-
+    expect(find.text('从一个话题开始'), findsOneWidget);
     await tester.tap(find.text('账本').last);
     await tester.pumpAndSettle();
-
-    expect(find.text('建议详情'), findsNothing);
-    expect(find.text('账本'), findsWidgets);
     expect(find.text('年度净收益'), findsOneWidget);
   });
 
@@ -174,7 +219,7 @@ void main() {
     expect(dependencies.lastPhone, '13900139000');
     expect(dependencies.lastPassword, 'secret1');
     expect(dependencies.lastNickname, '小李');
-    expect(find.text('完善农场信息'), findsOneWidget);
+    expect(find.text('从你的农场开始'), findsOneWidget);
   });
 
   testWidgets('登录接口失败时停留登录页并展示错误', (tester) async {
@@ -204,8 +249,11 @@ void main() {
 
   testWidgets('启动恢复 profile 失败时清理 session 并回登录页', (tester) async {
     final adapter = RecordingAdapter(
-      {'/settings': settingsResponse, '/api/app/version': versionResponse},
-      statusCodes: {'/auth/me': 500},
+      {
+        '/users/me/settings': settingsResponse,
+        '/api/app/version': versionResponse
+      },
+      statusCodes: {'/users/me': 500},
     );
     final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
     dio.httpClientAdapter = adapter;
@@ -234,7 +282,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(dependencies.loginCalls, 1);
-    expect(find.text('完善农场信息'), findsOneWidget);
+    expect(find.text('从你的农场开始'), findsOneWidget);
     expect(find.text('经营地区'), findsOneWidget);
     expect(find.text('首页'), findsNothing);
   });
@@ -244,7 +292,7 @@ void main() {
       suggestion: const FarmLocationSuggestion(city: '邳州市'),
     );
     final adapter = RecordingAdapter({
-      '/auth/me': {
+      '/users/me': {
         ...userResponse,
         'farm': {
           'id': 1,
@@ -252,15 +300,12 @@ void main() {
           'location': null,
         },
       },
-      'PUT /auth/me/farm-location': {
-        ...userResponse,
-        'farm': {
-          'id': 1,
-          'name': '农友的农场',
-          'location': '邳州市',
-        },
+      'PATCH /farms/1/location': {
+        'id': 1,
+        'name': '农友的农场',
+        'location': '邳州市',
       },
-      '/settings': settingsResponse,
+      '/users/me/settings': settingsResponse,
       '/api/app/version': versionResponse,
     });
     final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
@@ -274,14 +319,14 @@ void main() {
     await tester.tap(find.text('登录'));
     await tester.pumpAndSettle();
 
-    expect(find.text('完善农场信息'), findsOneWidget);
+    expect(find.text('从你的农场开始'), findsOneWidget);
     await tester.pumpAndSettle();
     expect(find.text('邳州市'), findsOneWidget);
     await tester.tap(find.text('开始使用'));
     await tester.pumpAndSettle();
 
     expect(location.requestCalls, 1);
-    expect(adapter.find('PUT', '/auth/me/farm-location').data, {
+    expect(adapter.find('PATCH', '/farms/1/location').data, {
       'location': '邳州市',
     });
     expect(find.text('首页'), findsWidgets);
@@ -290,7 +335,7 @@ void main() {
   testWidgets('首次设置定位失败时保留手动填写和稍后进入', (tester) async {
     final location = FakeLocationService();
     final adapter = RecordingAdapter({
-      '/auth/me': {
+      '/users/me': {
         ...userResponse,
         'farm': {
           'id': 1,
@@ -298,8 +343,8 @@ void main() {
           'location': null,
         },
       },
-      'PUT /auth/me/farm-location': userResponse,
-      '/settings': settingsResponse,
+      'PATCH /farms/1/location': userResponse['farm'],
+      '/users/me/settings': settingsResponse,
       '/api/app/version': versionResponse,
     });
     final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
@@ -318,15 +363,15 @@ void main() {
     await tester.tap(find.text('稍后再说'));
     await tester.pumpAndSettle();
 
-    expect(adapter.requests.where((r) => r.path == '/auth/me/farm-location'),
-        isEmpty);
+    expect(
+        adapter.requests.where((r) => r.path == '/farms/1/location'), isEmpty);
     expect(find.text('首页'), findsWidgets);
   });
 
   testWidgets('首次设置可通过城市选择器保存经营地区', (tester) async {
     final location = FakeLocationService();
     final adapter = RecordingAdapter({
-      '/auth/me': {
+      '/users/me': {
         ...userResponse,
         'farm': {
           'id': 1,
@@ -334,15 +379,12 @@ void main() {
           'location': null,
         },
       },
-      'PUT /auth/me/farm-location': {
-        ...userResponse,
-        'farm': {
-          'id': 1,
-          'name': '农友的农场',
-          'location': '苏州市虎丘区',
-        },
+      'PATCH /farms/1/location': {
+        'id': 1,
+        'name': '农友的农场',
+        'location': '苏州市虎丘区',
       },
-      '/settings': settingsResponse,
+      '/users/me/settings': settingsResponse,
       '/api/app/version': versionResponse,
     });
     final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
@@ -376,7 +418,7 @@ void main() {
     await tester.tap(find.text('开始使用'));
     await tester.pumpAndSettle();
 
-    expect(adapter.find('PUT', '/auth/me/farm-location').data, {
+    expect(adapter.find('PATCH', '/farms/1/location').data, {
       'location': '苏州市虎丘区',
       'lat': 31.3296,
       'lon': 120.4342,
@@ -403,7 +445,7 @@ void main() {
 
 ProfileRepository _profileRepositoryWithLocation(String? location) {
   final adapter = RecordingAdapter({
-    '/auth/me': {
+    '/users/me': {
       ...userResponse,
       'farm': {
         'id': 1,
@@ -411,7 +453,7 @@ ProfileRepository _profileRepositoryWithLocation(String? location) {
         'location': location,
       },
     },
-    '/settings': settingsResponse,
+    '/users/me/settings': settingsResponse,
     '/api/app/version': versionResponse,
   });
   final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));

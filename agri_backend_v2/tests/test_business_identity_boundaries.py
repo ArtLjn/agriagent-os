@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
 import pytest
 from sqlalchemy import create_engine
@@ -16,7 +16,7 @@ from business.models import (
     PlantingUnit,
     Worker,
 )
-from business.services import worker_service, work_order_service
+from business.services import log_service, worker_service, work_order_service
 
 
 @pytest.fixture
@@ -55,6 +55,30 @@ def _add_farm_and_cycle(db: Session, cycle_name: str = "春茬") -> CropCycle:
     db.add(cycle)
     db.flush()
     return cycle
+
+
+def test_log_keeps_selected_operation_time_in_database(
+    session_factory, monkeypatch
+) -> None:
+    with session_factory.begin() as db:
+        cycle_id = _add_farm_and_cycle(db).id
+    monkeypatch.setattr(log_service, "session_scope", session_factory.begin)
+    selected = datetime(2026, 10, 4, 8, 30)
+    result = log_service.create_log(
+        farm_id=1,
+        cycle_id=cycle_id,
+        operation_type="浇水",
+        operation_date="2026-10-04",
+        operation_time=selected,
+    )
+    with session_factory() as db:
+        saved = db.get(FarmLog, result["id"])
+        assert saved.operation_time == selected
+        assert saved.operation_date == date(2026, 10, 4)
+    changed = datetime(2026, 10, 4, 9, 45)
+    log_service.update_log(farm_id=1, log_id=result["id"], operation_time=changed)
+    with session_factory() as db:
+        assert db.get(FarmLog, result["id"]).operation_time == changed
 
 
 def test_worker_same_name_is_allowed_but_phone_is_unique(

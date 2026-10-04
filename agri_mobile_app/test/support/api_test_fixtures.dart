@@ -369,6 +369,22 @@ final weatherResponse = {
   'warnings': [],
 };
 
+final v2WeatherResponse = {
+  'location': '苏州',
+  'provider': 'open-meteo',
+  'current_temp': 20.4,
+  'daily': [
+    {
+      'date': '2026-10-04',
+      'min_c': 17.2,
+      'max_c': 32.1,
+      'code': 2,
+      'desc': '多云'
+    }
+  ],
+  'warnings': [],
+};
+
 final backendWeatherResponse = {
   'location': '睢宁县',
   'provider': 'open-meteo',

@@ -7,6 +7,10 @@ requires-python = ">=3.11"
 [tool.uv.workspace]
 members = ["business", "agent"]
 
+[tool.ruff]
+# 后端仍支持 Python 3.11，不能继承仓库根目录的 Python 3.14 格式化目标。
+target-version = "py311"
+
 # 子项目各自有独立 pyproject.toml，共享此 workspace 依赖解析。
 # 装依赖：在 agri_backend_v2/ 下 `uv sync` 会装齐所有子项目。
 # 单独跑：`uv run --package farm-manager-business python -m business.server`

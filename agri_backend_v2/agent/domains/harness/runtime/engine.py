@@ -341,7 +341,7 @@ async def _run_turn_loop(
         ):
             yield ev
 
-        # 写入成功后清空 tools，下一轮只允许生成最终答复。
+        # 查询完成或写入成功后均停止扩展工具；只有写入才产生提交事件。
         if turn.finalization_pending:
             tools_schema = []
 
@@ -669,7 +669,11 @@ async def _run_single_reasoning_step(
     # ── 流式 LLM 调用 ──
     try:
         llm_result: _LlmResult | None = None
-        async for stream_item in _call_llm_stream(llm_messages, tools_schema):
+        async for stream_item in _call_llm_stream(
+            llm_messages,
+            tools_schema,
+            tool_choice="none" if turn.finalization_pending else None,
+        ):
             if isinstance(stream_item, _LlmResult):
                 llm_result = stream_item
                 continue
@@ -714,6 +718,15 @@ async def _run_single_reasoning_step(
         )
 
     # ── 写入已提交但收尾轮仍请求工具 ──
+    if (
+        turn.finalization_pending
+        and turn.committed_result is None
+        and llm_result.tool_calls
+    ):
+        # 模型违反只回答约束时不能把只读结果包装成写入成功。
+        async for ev in _handle_llm_error(turn, RuntimeError("查询后的答复仍请求工具")):
+            yield ev
+        return
     if turn.finalization_pending and llm_result.tool_calls:
         async for ev in _finalize_committed_with_fallback(
             turn, "写入已成功，但收尾模型仍请求调用工具；已阻止重复写入。"
@@ -1416,6 +1429,10 @@ async def _post_process_skill_result(
             }
         return
     if state.finalize_after_success:
+        if skill.dynamic_risk_level(tc["arguments"]) == "read":
+            # finalize_after_success 是收尾策略，不是数据库已提交的证据。
+            turn.finalization_pending = True
+            return
         _mark_committed(turn, state.result)
         committed_event = sse.operation_committed(turn.committed_result)
         turn.emit(committed_event["type"], committed_event["data"])
@@ -2783,6 +2800,12 @@ def _structured_commit_answer(result: dict) -> str:
     template = result.get("template") or {}
     cycle = result.get("cycle") or {}
     unit = result.get("planting_unit") or {}
+    if not all(
+        isinstance(item, dict) and item.get("id")
+        for item in (template, cycle, unit)
+    ):
+        # 通用写工具也复用此收尾器，缺少计划实体不能声称种植计划已创建。
+        return str(result.get("message") or "业务操作已完成，但详细结果暂未返回。")
     replay_note = (
         "（本次返回的是已提交请求的幂等结果）"
         if result.get("idempotent_replay")

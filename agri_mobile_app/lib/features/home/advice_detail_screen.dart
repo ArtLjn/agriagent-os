@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../data/api/api_models.dart';
-import '../../shared/assets/app_assets.dart';
 import '../../shared/widgets/card_panel.dart';
 import '../../shared/widgets/reference_page.dart';
 import '../../theme/app_colors.dart';
@@ -108,11 +107,7 @@ class _AdviceAppBar extends StatelessWidget {
                   style: AppTextStyles.title,
                 ),
               ),
-              IconButton(
-                onPressed: () {},
-                icon: const Icon(LucideIcons.ellipsis),
-                color: AppColors.ink,
-              ),
+              const SizedBox(width: 48),
             ],
           ),
         ),
@@ -137,176 +132,39 @@ class _AdviceHeroCard extends StatelessWidget {
         const <AdviceHeroBadge>[];
     final metaChips = _heroMeta(badges);
     return CardPanel(
-      radius: 20,
-      padding: EdgeInsets.zero,
-      borderColor: const Color(0xFFDDEBFF),
-      gradient: const LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [Color(0xFFF4FAFF), Color(0xFFEAF4FF)],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 244),
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [Color(0xFFF4FAFF), Color(0xFFEAF4FF)],
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                right: -56,
-                top: 44,
-                bottom: -8,
-                width: 282,
-                child: Opacity(
-                  opacity: 0.5,
-                  child: ShaderMask(
-                    blendMode: BlendMode.dstIn,
-                    shaderCallback: (bounds) {
-                      return const LinearGradient(
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
-                        stops: [0, 0.18, 0.78, 1],
-                        colors: [
-                          Colors.transparent,
-                          Colors.white,
-                          Colors.white,
-                          Colors.transparent,
-                        ],
-                      ).createShader(bounds);
-                    },
-                    child: ShaderMask(
-                      blendMode: BlendMode.dstIn,
-                      shaderCallback: (bounds) {
-                        return const LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          stops: [0, 0.12, 0.84, 1],
-                          colors: [
-                            Colors.transparent,
-                            Colors.white,
-                            Colors.white,
-                            Colors.transparent,
-                          ],
-                        ).createShader(bounds);
-                      },
-                      child: Image.asset(
-                        AppAssets.aiAdviceHarvesterHero,
-                        fit: BoxFit.cover,
-                        alignment: Alignment.centerRight,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                      stops: [0, 0.64, 1],
-                      colors: [
-                        Color(0xFFF4FAFF),
-                        Color(0xF2F4FAFF),
-                        Color(0x99F4FAFF),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        IconBadge(
-                          icon: _adviceIcon(item?.compact.icon),
-                          color: AppColors.blue,
-                          background: AppColors.blueSoft,
-                          size: 48,
-                          iconSize: 25,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                detail?.title.isNotEmpty == true
-                                    ? detail!.title
-                                    : suggestion.title,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTextStyles.title.copyWith(
-                                  fontSize: 21,
-                                  height: 1.28,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              StatusPill(
-                                text: _levelText(item?.level, item?.priority),
-                                color: _levelColor(item?.level, item?.priority),
-                                background: _levelBackground(
-                                    item?.level, item?.priority),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 318),
-                      child: Text(
-                        detail?.description.isNotEmpty == true
-                            ? detail!.description
-                            : suggestion.subtitle,
-                        maxLines: 4,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.body.copyWith(
-                          color: AppColors.ink2.withValues(alpha: 0.72),
-                          fontSize: 15,
-                          height: 1.52,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                    if (metaChips.isNotEmpty) ...[
-                      const SizedBox(height: 22),
-                      Row(
-                        children: [
-                          for (var index = 0;
-                              index < metaChips.length;
-                              index++) ...[
-                            Expanded(child: metaChips[index]),
-                            if (index != metaChips.length - 1)
-                              const SizedBox(width: 10),
-                          ],
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+      radius: 24,
+      padding: const EdgeInsets.all(20),
+      background: AppColors.blueSoft,
+      borderColor: AppColors.blueSoft,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          IconBadge(
+              icon: _adviceIcon(item?.compact.icon),
+              color: AppColors.blue,
+              background: Colors.white,
+              size: 40),
+          const SizedBox(width: 12),
+          StatusPill(
+              text: _levelText(item?.level, item?.priority),
+              color: _levelColor(item?.level, item?.priority),
+              background: _levelBackground(item?.level, item?.priority)),
+        ]),
+        const SizedBox(height: 20),
+        Text(
+            detail?.title.isNotEmpty == true ? detail!.title : suggestion.title,
+            style: AppTextStyles.title),
+        const SizedBox(height: 12),
+        Text(
+            detail?.description.isNotEmpty == true
+                ? detail!.description
+                : suggestion.subtitle,
+            style: AppTextStyles.body
+                .copyWith(color: AppColors.ink2, height: 1.6)),
+        if (metaChips.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          Wrap(spacing: 8, runSpacing: 8, children: metaChips),
+        ],
+      ]),
     );
   }
 }
@@ -325,7 +183,7 @@ class _MetaChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 44,
+      constraints: const BoxConstraints(minHeight: 44),
       padding: const EdgeInsets.symmetric(horizontal: 11),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.92),
@@ -333,20 +191,18 @@ class _MetaChip extends StatelessWidget {
         border: Border.all(color: AppColors.lineSoft),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 17, color: iconColor),
           const SizedBox(width: 5),
-          Flexible(
-            child: Text(
-              text,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.small.copyWith(
-                color: AppColors.ink,
-                fontSize: 13.5,
-                fontWeight: FontWeight.w700,
-              ),
+          Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.small.copyWith(
+              color: AppColors.ink,
+              fontSize: 13.5,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],

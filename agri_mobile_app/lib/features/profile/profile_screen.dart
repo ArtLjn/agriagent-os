@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../data/location/location_service.dart';
 import '../../data/repositories/location_repository.dart';
@@ -9,6 +10,7 @@ import '../../shared/widgets/city_picker_sheet.dart';
 import '../../shared/widgets/card_panel.dart';
 import '../../shared/widgets/reference_page.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_theme.dart';
 import '../../theme/app_text_styles.dart';
 import 'profile_controller.dart';
 
@@ -42,6 +44,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _reloadProfile() {
     setState(() {
       _profileFuture = _controller.load();
+      // 重试先监听异常，随后仍由 FutureBuilder 展示错误和恢复入口。
+      _profileFuture.ignore();
     });
   }
 
@@ -51,39 +55,74 @@ class _ProfileScreenState extends State<ProfileScreen> {
       future: _profileFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
+          return const ReferencePage(title: '我的', subtitle: '账号与偏好', children: [
+            SizedBox(height: 24),
+            CardPanel(
+                child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Center(child: CircularProgressIndicator())))
+          ]);
         }
         if (snapshot.hasError || !snapshot.hasData) {
-          return const Center(child: Text('个人资料加载失败，请稍后重试'));
+          return ReferencePage(title: '我的', subtitle: '账号与偏好', children: [
+            const SizedBox(height: 24),
+            CardPanel(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  const Text('个人资料暂时无法加载', style: AppTextStyles.sectionTitle),
+                  const SizedBox(height: 8),
+                  const Text('请检查连接后重试。', style: AppTextStyles.body),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                      onPressed: _reloadProfile, child: const Text('重新加载'))
+                ]))
+          ]);
         }
         final model = snapshot.data!;
         return ReferencePage(
-          headerTrailing: const HeaderIconButton(icon: LucideIcons.settings),
+          title: '我的',
+          subtitle: '账号与偏好',
+          headerTrailing: IconButton(
+              tooltip: '刷新资料',
+              onPressed: _reloadProfile,
+              icon: const Icon(LucideIcons.refreshCw)),
           children: [
-            const SizedBox(height: 14),
+            const SizedBox(height: 32),
             _ProfileCard(model: model),
-            const SizedBox(height: 14),
-            _LocationWeatherCard(
-              model: model,
-              repository: widget.repository,
-              locations: widget.locations,
-              location: widget.location,
-              onUpdated: _reloadProfile,
-            ),
-            const SizedBox(height: 14),
-            _AiPreferenceCard(
-              model: model,
-              repository: widget.repository,
-              onUpdated: _reloadProfile,
-            ),
-            const SizedBox(height: 14),
-            _SystemSettingsCard(
-              model: model,
-              repository: widget.repository,
-              onLogout: widget.onLogout,
-            ),
-            const SizedBox(height: 28),
-            const _CompleteProfileButton(),
+            const SizedBox(height: 32),
+            const Text('农场与助手', style: AppTextStyles.small),
+            const SizedBox(height: 12),
+            CardPanel(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(children: [
+                  _LocationWeatherCard(
+                      model: model,
+                      repository: widget.repository,
+                      locations: widget.locations,
+                      location: widget.location,
+                      onUpdated: _reloadProfile),
+                  const Divider(height: 1),
+                  _AiPreferenceCard(
+                      model: model,
+                      repository: widget.repository,
+                      onUpdated: _reloadProfile),
+                ])),
+            const SizedBox(height: 24),
+            const Text('应用', style: AppTextStyles.small),
+            const SizedBox(height: 12),
+            const _SystemSettingsCard(),
+            if (widget.onLogout != null) ...[
+              const SizedBox(height: 32),
+              Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                      onPressed: widget.onLogout,
+                      icon: const Icon(LucideIcons.logOut, size: 18),
+                      label: const Text('退出登录'),
+                      style: TextButton.styleFrom(
+                          foregroundColor: AppColors.muted))),
+            ],
           ],
         );
       },
@@ -108,29 +147,11 @@ class _LocationWeatherCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CardPanel(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
-      child: Column(
-        children: [
-          _ProfileOptionRow(
-            icon: LucideIcons.mapPin,
-            color: AppColors.blue,
-            background: AppColors.blueSoft,
-            title: '经营地区',
-            value: model.city,
-            onTap: () => _editLocation(context),
-          ),
-          const Divider(height: 1, color: AppColors.lineSoft),
-          const _ProfileOptionRow(
-            icon: LucideIcons.refreshCw,
-            color: AppColors.greenDark,
-            background: AppColors.greenSoft,
-            title: '数据同步',
-            value: '正常',
-            valueColor: AppColors.greenDark,
-          ),
-        ],
-      ),
+    return _ProfileOptionRow(
+      icon: LucideIcons.mapPin,
+      title: '经营地区',
+      value: model.city,
+      onTap: () => _editLocation(context),
     );
   }
 
@@ -190,45 +211,11 @@ class _AiPreferenceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CardPanel(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(LucideIcons.sparkles, size: 24, color: AppColors.blue),
-              SizedBox(width: 10),
-              Text('AI 偏好设置', style: AppTextStyles.dateTitle),
-            ],
-          ),
-          const SizedBox(height: 10),
-          _ProfileOptionRow(
-            icon: LucideIcons.messagesSquare,
-            color: AppColors.blue,
-            background: AppColors.blueSoft,
-            title: '回答风格',
-            value: model.assistantRoleLabel,
-            onTap: () => _editAssistantRole(context),
-          ),
-          const Divider(height: 1, color: AppColors.lineSoft),
-          const _ProfileOptionRow(
-            icon: LucideIcons.chartNoAxesColumnIncreasing,
-            color: AppColors.greenDark,
-            background: AppColors.greenSoft,
-            title: '分析深度',
-            value: '待开放',
-          ),
-          const Divider(height: 1, color: AppColors.lineSoft),
-          const _ProfileOptionRow(
-            icon: LucideIcons.wandSparkles,
-            color: AppColors.purple,
-            background: AppColors.purpleSoft,
-            title: '自动生成报表',
-            value: '待开放',
-          ),
-        ],
-      ),
+    return _ProfileOptionRow(
+      icon: LucideIcons.messagesSquare,
+      title: '回答风格',
+      value: model.assistantRoleLabel,
+      onTap: () => _editAssistantRole(context),
     );
   }
 

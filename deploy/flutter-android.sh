@@ -7,8 +7,13 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_DIR="$ROOT_DIR/agri_mobile_app"
 DEVICE_ID="${DEVICE_ID:-emulator-5554}"
 EMULATOR_ID="${EMULATOR_ID:-Pixel_9_Pro_XL}"
-BUSINESS_API_URL="${BUSINESS_API_URL:-http://192.168.1.13:9876/api/v2}"
-AGENT_API_URL="${AGENT_API_URL:-http://192.168.1.13:8000/api/v2}"
+# Android 模拟器通过 10.0.2.2 访问电脑回环地址；USB 真机使用 ADB 转发。
+LOCAL_API_HOST="127.0.0.1"
+if [[ "$DEVICE_ID" == emulator-* ]]; then
+  LOCAL_API_HOST="10.0.2.2"
+fi
+BUSINESS_API_URL="${BUSINESS_API_URL:-http://$LOCAL_API_HOST:9876/api/v2}"
+AGENT_API_URL="${AGENT_API_URL:-http://$LOCAL_API_HOST:8000/api/v2}"
 
 cd "$APP_DIR"
 
@@ -35,6 +40,18 @@ if ! adb devices | grep -q "^${DEVICE_ID}[[:space:]]*device"; then
     sleep 2
   done
 fi
+
+for api_url in "$BUSINESS_API_URL" "$AGENT_API_URL"; do
+  # 仅本机地址需要隧道，自定义远程服务器仍直接连接。
+  if [[ "$api_url" =~ ^https?://(127\.0\.0\.1|localhost):([0-9]+)(/|$) ]]; then
+    api_port="${BASH_REMATCH[2]}"
+    if ! adb -s "$DEVICE_ID" reverse "tcp:$api_port" "tcp:$api_port"; then
+      echo "错误 [BACKEND_TUNNEL_FAILED]：设备 $DEVICE_ID 无法转发本机后端端口 $api_port" >&2
+      exit 1
+    fi
+    echo "本机后端转发：$DEVICE_ID tcp:$api_port → 电脑 tcp:$api_port"
+  fi
+done
 
 echo "启动 Flutter App：$DEVICE_ID"
 echo "Business API：$BUSINESS_API_URL"

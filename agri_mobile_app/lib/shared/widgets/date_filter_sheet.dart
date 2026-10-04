@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../theme/app_colors.dart';
+import '../../theme/app_theme.dart';
 import '../../theme/app_text_styles.dart';
 
 enum DateRangePreset {
@@ -42,7 +43,9 @@ class DateFilterSelection {
   final DateTime? customEnd;
 
   bool get hasCustomRange =>
-      preset == DateRangePreset.custom && customStart != null && customEnd != null;
+      preset == DateRangePreset.custom &&
+      customStart != null &&
+      customEnd != null;
 }
 
 Future<DateFilterSelection?> showDateFilterSheet({
@@ -54,6 +57,7 @@ Future<DateFilterSelection?> showDateFilterSheet({
 }) {
   return showModalBottomSheet<DateFilterSelection>(
     context: context,
+    sheetAnimationStyle: AppMotion.sheetStyle(context),
     backgroundColor: Colors.transparent,
     isScrollControlled: true,
     builder: (context) {
@@ -140,13 +144,6 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
         decoration: const BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          boxShadow: [
-            BoxShadow(
-              color: Color(0x1A111827),
-              blurRadius: 24,
-              offset: Offset(0, -8),
-            ),
-          ],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -170,6 +167,7 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
                           child: Text('日期筛选', style: AppTextStyles.title),
                         ),
                         IconButton(
+                          tooltip: '关闭',
                           onPressed: () => Navigator.of(context).pop(),
                           icon: const Icon(LucideIcons.x),
                           color: AppColors.muted,
@@ -290,8 +288,7 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
                           range: range,
                           customStart: _customStart,
                           customEnd: _customEnd,
-                          isCustomMode:
-                              _selected == DateRangePreset.custom,
+                          isCustomMode: _selected == DateRangePreset.custom,
                           onTap: day == null
                               ? null
                               : () {
@@ -332,7 +329,7 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
                       style: TextStyle(
                         color: AppColors.ink,
                         fontSize: 15,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
@@ -362,7 +359,7 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 15,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         letterSpacing: 0.1,
                       ),
                     ),
@@ -456,7 +453,7 @@ class _CustomRangeChip extends StatelessWidget {
             style: TextStyle(
               color: filled ? AppColors.ink : AppColors.subtle,
               fontSize: 14,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               fontFeatures: const [FontFeature.tabularFigures()],
               letterSpacing: -0.2,
             ),
@@ -509,7 +506,7 @@ class _PresetGrid extends StatelessWidget {
               style: TextStyle(
                 color: active ? Colors.white : AppColors.ink,
                 fontSize: 13,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w600,
                 letterSpacing: 0.1,
               ),
             ),
@@ -599,7 +596,7 @@ class _CalendarDayCell extends StatelessWidget {
           style: AppTextStyles.body.copyWith(
             color: isEndpoint ? Colors.white : AppColors.ink,
             fontWeight:
-                (isEndpoint || inMiddle) ? FontWeight.w800 : FontWeight.w500,
+                (isEndpoint || inMiddle) ? FontWeight.w600 : FontWeight.w500,
           ),
         ),
       ),

@@ -197,6 +197,7 @@ def create_log(
     cycle_id: int,
     operation_type: str,
     operation_date: str | None = None,
+    operation_time: datetime | None = None,
     note: str | None = None,
     worker_names: list[str] | None = None,
     worker_ids: list[int] | None = None,
@@ -208,6 +209,7 @@ def create_log(
         cycle_id: 茬口 ID（必填）
         operation_type: 作业类型（必填，如"浇水"、"施肥"）
         operation_date: YYYY-MM-DD（不传默认今天）
+        operation_time: 用户选择的实际作业时刻，未提供时使用当前时间
         note: 备注
         worker_names: 兼容的参与工人姓名列表，必须能唯一匹配已有档案
         worker_ids: 已确认的参与工人 ID 列表
@@ -231,7 +233,7 @@ def create_log(
             cycle_id=int(cycle_id),
             operation_type=operation_type,
             operation_date=op_date,
-            operation_time=datetime.now(),
+            operation_time=operation_time or datetime.now(),
             note=note or "",
         )
         db.add(log)
@@ -258,6 +260,7 @@ def update_log(
     cycle_id: int | None = None,
     operation_type: str | None = None,
     operation_date: str | None = None,
+    operation_time: datetime | None = None,
     note: str | None = None,
     worker_names: list[str] | None = None,
     worker_ids: list[int] | None = None,
@@ -294,6 +297,8 @@ def update_log(
             log.operation_type = operation_type
         if operation_date is not None:
             log.operation_date = _parse_date(operation_date)
+        if operation_time is not None:
+            log.operation_time = operation_time
         if note is not None:
             log.note = note
 

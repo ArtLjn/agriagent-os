@@ -95,8 +95,6 @@ function executionEventFromChunkBase(chunk: StreamChunk): ExecutionEventPayload 
       return { type: 'write_committed_reply_failed', ...chunk.data };
     case 'retrying':
       return { type: 'retrying', ...chunk.data };
-    case 'progress':
-      return { type: 'progress', ...chunk.data };
     case 'step.started':
       return { type: 'step.started', step_index: chunk.data.step_index, status: chunk.data.status };
     case 'step.completed':

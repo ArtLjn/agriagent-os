@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
 import pytest
 from fastapi.testclient import TestClient
@@ -15,6 +15,7 @@ from business.api import (
     farm_logs,
     farms,
     work_orders,
+    workers,
 )
 from business.api.deps import get_current_user
 from business.db import get_db
@@ -205,3 +206,83 @@ def test_unknown_request_field_is_rejected(client: TestClient) -> None:
 
     assert response.status_code == 422
     assert response.json()["detail"]["code"] == "validation_error"
+
+
+@pytest.mark.parametrize(
+    ("path", "service", "method", "payload", "field"),
+    [
+        (
+            "cost-records",
+            costs.cost_service,
+            "create_record",
+            {
+                "record_type": "cost",
+                "category": "肥料",
+                "amount": 100,
+                "record_date": "2026-10-04",
+                "recorded_at": "2026-10-04T08:30:00",
+            },
+            "recorded_at",
+        ),
+        (
+            "farm-logs",
+            farm_logs.log_service,
+            "create_log",
+            {
+                "cycle_id": 2,
+                "operation_type": "浇水",
+                "operation_date": "2026-10-04",
+                "operation_time": "2026-10-04T08:30:00",
+            },
+            "operation_time",
+        ),
+        (
+            "labor/wages",
+            work_orders.labor_service,
+            "save_wage_entry",
+            {
+                "cycle_id": 2,
+                "worker_name": "老王",
+                "operation_type": "浇水",
+                "work_date": "2026-10-04",
+                "recorded_at": "2026-10-04T08:30:00",
+            },
+            "recorded_at",
+        ),
+        (
+            "workers",
+            workers.worker_service,
+            "create_worker",
+            {"name": "老王", "status": "inactive"},
+            "status",
+        ),
+    ],
+)
+def test_mobile_form_fields_reach_business_service(
+    client, monkeypatch, path, service, method, payload, field
+) -> None:
+    captured = {}
+
+    def save(*args, **kwargs):
+        captured.update(args[1] if len(args) > 1 else kwargs)
+        return {"id": 19}
+
+    monkeypatch.setattr(service, method, save)
+    response = client.post(f"/api/v2/{path}", json=payload)
+    assert response.status_code == 201, response.json()
+    expected = "inactive" if field == "status" else datetime(2026, 10, 4, 8, 30)
+    assert captured[field] == expected
+
+
+def test_cost_settlement_status_remains_server_calculated(client) -> None:
+    response = client.post(
+        "/api/v2/cost-records",
+        json={
+            "record_type": "cost",
+            "category": "肥料",
+            "amount": 100,
+            "record_date": "2026-10-04",
+            "settlement_status": "settled",
+        },
+    )
+    assert response.status_code == 422

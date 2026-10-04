@@ -16,29 +16,32 @@ void main() {
   late RecordingAdapter adapter;
   late BusinessRepository repository;
 
-  void setUpRepository(Map<String, Object?> overrides) {
+  void setUpRepository(Map<String, Object?> overrides,
+      {Map<String, int>? statusCodes}) {
     adapter = RecordingAdapter({
-      '/cycles': paginatedCyclesResponse,
-      '/cost-categories': [categoryResponse, customCategoryResponse],
-      '/crops/templates': paginatedCropTemplatesResponse,
-      '/planting/workers/summary': paginatedWorkerSummariesResponse,
-      'POST /costs': costRecordResponse,
+      '/crop-cycles': paginatedCyclesResponse,
+      '/cost-categories': {
+        'items': [categoryResponse, customCategoryResponse]
+      },
+      '/crop-templates': paginatedCropTemplatesResponse,
+      '/workers/summary': paginatedWorkerSummariesResponse,
+      'POST /cost-records': costRecordResponse,
       'POST /cost-categories': customCategoryResponse,
       'DELETE /cost-categories/2': {'message': 'ok'},
-      'POST /logs': logResponse,
-      'POST /cycles': cycleResponse,
-      'PUT /cycles/7': cycleResponse,
-      'POST /planting/units': plantingUnitResponse,
-      'DELETE /cycles/7': {'message': 'ok'},
-      'POST /crops/templates': cropTemplateResponse,
-      'PUT /crops/templates/3': cropTemplateResponse,
-      'DELETE /crops/templates/3': {'message': 'ok'},
-      'POST /planting/workers': workerResponse,
-      'PUT /planting/workers/4': workerResponse,
-      'DELETE /planting/workers/4': {'message': 'ok'},
-      'POST /planting/labor/wages': wageResponse,
+      'POST /farm-logs': logResponse,
+      'POST /crop-cycles': cycleResponse,
+      'PATCH /crop-cycles/7': cycleResponse,
+      'POST /planting-units': plantingUnitResponse,
+      'DELETE /crop-cycles/7': {'message': 'ok'},
+      'POST /crop-templates': cropTemplateResponse,
+      'PATCH /crop-templates/3': cropTemplateResponse,
+      'DELETE /crop-templates/3': {'message': 'ok'},
+      'POST /workers': workerResponse,
+      'PATCH /workers/4': workerResponse,
+      'DELETE /workers/4': {'message': 'ok'},
+      'POST /labor/wages': wageResponse,
       ...overrides,
-    });
+    }, statusCodes: statusCodes ?? {});
     final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
     dio.httpClientAdapter = adapter;
     repository = BusinessRepository(ApiClient(dio: dio));
@@ -75,7 +78,7 @@ void main() {
 
     expect(find.text('记账'), findsWidgets);
     expect(find.text('收入'), findsOneWidget);
-    expect(find.text('支出'), findsOneWidget);
+    expect(find.text('支出'), findsWidgets);
     expect(find.text('金额'), findsOneWidget);
     expect(find.text('日期'), findsOneWidget);
     expect(find.text('备注'), findsOneWidget);
@@ -94,11 +97,11 @@ void main() {
         .tapAt(tester.getTopLeft(categoryOption) + const Offset(24, 24));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.widgetWithText(TextField, '输入金额'), '200');
+    await tester.enterText(find.widgetWithText(TextField, '0.00'), '200');
     await tester.tap(find.text('保存记录'));
     await tester.pumpAndSettle();
 
-    final request = adapter.find('POST', '/costs');
+    final request = adapter.find('POST', '/cost-records');
     final data = request.data! as Map<String, dynamic>;
     expect(data, containsPair('record_type', 'cost'));
     expect(data, containsPair('category', '肥料'));
@@ -106,12 +109,13 @@ void main() {
     expect(data, containsPair('settled_amount', 200));
     expect(data, containsPair('record_date', _todayTextForTest()));
     expect('${data['recorded_at']}', startsWith(_todayTextForTest()));
+    expect(data, isNot(contains('settlement_status')));
     expect(data, isNot(contains('cycle_id')));
     expect(data, isNot(contains('counterparty')));
     expect(data, isNot(contains('source_type')));
     expect(data, isNot(contains('parent_record_id')));
     expect(data, isNot(contains('due_date')));
-    expect(find.widgetWithText(TextField, '输入金额'), findsOneWidget);
+    expect(find.widgetWithText(TextField, '0.00'), findsOneWidget);
     expect(find.text('200'), findsNothing);
     expect(find.text('保存记录成功'), findsOneWidget);
   });
@@ -119,7 +123,7 @@ void main() {
   testWidgets('记账页保存中禁用按钮防止重复提交', (tester) async {
     final completer = Completer<Object?>();
     setUpRepository({
-      'POST /costs': completer.future,
+      'POST /cost-records': completer.future,
     });
     await pump(tester, LedgerManualCreatePage(repository: repository));
 
@@ -129,14 +133,14 @@ void main() {
     await tester
         .tapAt(tester.getTopLeft(categoryOption) + const Offset(24, 24));
     await tester.pumpAndSettle();
-    await tester.enterText(find.widgetWithText(TextField, '输入金额'), '200');
+    await tester.enterText(find.widgetWithText(TextField, '0.00'), '200');
 
     await tester.tap(find.text('保存记录'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 1));
     final requestCountAfterFirstTap = adapter.requests
-        .where(
-            (request) => request.method == 'POST' && request.path == '/costs')
+        .where((request) =>
+            request.method == 'POST' && request.path == '/cost-records')
         .length;
     await tester.tap(find.text('保存中'), warnIfMissed: false);
     await tester.pump();
@@ -145,8 +149,8 @@ void main() {
     expect(requestCountAfterFirstTap, 1);
     expect(
       adapter.requests
-          .where(
-              (request) => request.method == 'POST' && request.path == '/costs')
+          .where((request) =>
+              request.method == 'POST' && request.path == '/cost-records')
           .length,
       1,
     );
@@ -160,6 +164,8 @@ void main() {
   testWidgets('记账页可进入分类管理页', (tester) async {
     await pump(tester, LedgerManualCreatePage(repository: repository));
 
+    await tester.tap(find.byKey(const Key('ledger-category-dropdown-search')));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('管理'));
     await tester.pumpAndSettle();
 
@@ -188,13 +194,21 @@ void main() {
   testWidgets('记账页从分类管理返回后刷新分类下拉', (tester) async {
     setUpRepository({
       '/cost-categories': ListQueue<Object?>.from([
-        [categoryResponse],
-        [categoryResponse],
-        [categoryResponse, waterElectricCategoryResponse],
+        {
+          'items': [categoryResponse]
+        },
+        {
+          'items': [categoryResponse]
+        },
+        {
+          'items': [categoryResponse, waterElectricCategoryResponse]
+        },
       ]),
     });
     await pump(tester, LedgerManualCreatePage(repository: repository));
 
+    await tester.tap(find.byKey(const Key('ledger-category-dropdown-search')));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('管理'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('新增分类').last);
@@ -214,10 +228,9 @@ void main() {
   testWidgets('记账页日期行使用日期时间选择器', (tester) async {
     await pump(tester, LedgerManualCreatePage(repository: repository));
 
-    await tester
-        .ensureVisible(find.byKey(const ValueKey('ledger-datetime-row')));
+    await tester.ensureVisible(find.text('日期'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('ledger-datetime-row')));
+    await tester.tap(find.text('日期'));
     await tester.pumpAndSettle();
 
     expect(find.byType(DatePickerDialog), findsOneWidget);
@@ -242,7 +255,7 @@ void main() {
 
   testWidgets('茬口管理空数据不展示样例茬口', (tester) async {
     setUpRepository({
-      '/cycles': {'items': [], 'total': 0},
+      '/crop-cycles': {'items': [], 'total': 0},
     });
 
     await pump(tester, FarmCycleListPage(repository: repository));
@@ -273,7 +286,7 @@ void main() {
     await tester.tap(find.text('确认删除'));
     await tester.pumpAndSettle();
 
-    expect(adapter.find('DELETE', '/cycles/7').path, '/cycles/7');
+    expect(adapter.find('DELETE', '/crop-cycles/7').path, '/crop-cycles/7');
     expect(find.text('已删除 1 个茬口'), findsOneWidget);
     expect(find.text('删除 1 项'), findsNothing);
   });
@@ -290,6 +303,34 @@ void main() {
     expect(find.text('选择作物模板后显示阶段预览。'), findsOneWidget);
     expect(find.text('播种期'), findsNothing);
     expect(find.text('苗期'), findsNothing);
+  });
+
+  testWidgets('种植区域保存失败重试不重复创建茬口', (tester) async {
+    setUpRepository({}, statusCodes: {'POST /planting-units': 500});
+    await pump(tester, FarmCycleFormPage(repository: repository));
+    await tester.tap(find.byKey(const Key('template-dropdown-search')));
+    await tester.pumpAndSettle();
+    final option = find.byKey(const Key('template-option-番茄 / 粉果 306'));
+    await tester.tapAt(tester.getTopLeft(option) + const Offset(24, 24));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.widgetWithText(TextField, '例：东大棚 1 号、A 区'), '测试区域');
+    await tester.enterText(find.widgetWithText(TextField, '输入亩数'), '2');
+    await tester.tap(find.text('创建茬口'));
+    await tester.pumpAndSettle();
+    expect(find.text('请求失败，请稍后重试'), findsOneWidget);
+    adapter.statusCodes['POST /planting-units'] = 201;
+    await tester.tap(find.text('创建茬口'));
+    await tester.pumpAndSettle();
+    expect(
+        adapter.requests
+            .where((r) => r.method == 'POST' && r.path == '/crop-cycles'),
+        hasLength(1));
+    expect(
+        adapter.requests
+            .where((r) => r.method == 'POST' && r.path == '/planting-units'),
+        hasLength(2));
+    expect(find.text('创建茬口成功'), findsOneWidget);
   });
 
   testWidgets('新建茬口选择模板后创建茬口和种植区域', (tester) async {
@@ -313,30 +354,50 @@ void main() {
     await tester.tap(find.text('创建茬口'));
     await tester.pumpAndSettle();
 
-    final cycleRequest = adapter.find('POST', '/cycles');
+    final cycleRequest = adapter.find('POST', '/crop-cycles');
     expect(cycleRequest.data, containsPair('crop_template_id', 3));
     expect(cycleRequest.data, containsPair('field_name', '东大棚 1 号'));
     expect(cycleRequest.data, containsPair('total_area_mu', 19));
 
-    final unitRequest = adapter.find('POST', '/planting/units');
+    final unitRequest = adapter.find('POST', '/planting-units');
     expect(unitRequest.data, containsPair('cycle_id', 7));
     expect(unitRequest.data, containsPair('name', '东大棚 1 号'));
     expect(unitRequest.data, containsPair('area_mu', 19));
+
+    // 保存按钮再次触发时复用已创建的茬口，不再重复创建种植单元。
+    await tester.tap(find.text('创建茬口'));
+    await tester.pumpAndSettle();
+    expect(
+        adapter.requests
+            .where((r) => r.method == 'POST' && r.path == '/crop-cycles'),
+        hasLength(1));
+    expect(
+        adapter.requests
+            .where((r) => r.method == 'POST' && r.path == '/planting-units'),
+        hasLength(1));
+    expect(
+        adapter.find('PATCH', '/crop-cycles/7').data,
+        containsPair(
+            'name',
+            cycleRequest.data is Map
+                ? (cycleRequest.data as Map)['name']
+                : ''));
   });
 
-  testWidgets('新建茬口页保存草稿有反馈', (tester) async {
-    await pump(tester, FarmCycleFormPage(repository: repository));
-
-    await tester.tap(find.text('保存草稿'));
+  testWidgets('新建茬口取消后返回列表且不提交', (tester) async {
+    await pump(tester, FarmCycleListPage(repository: repository));
+    await tester.tap(find.text('新建茬口'));
     await tester.pumpAndSettle();
-
-    expect(find.text('草稿已保留在当前页面'), findsOneWidget);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(find.text('茬口管理'), findsOneWidget);
+    expect(adapter.requests.where((r) => r.method == 'POST'), isEmpty);
   });
 
   testWidgets('茬口编辑页回填基础字段并保存', (tester) async {
     await pump(tester, FarmCycleListPage(repository: repository));
 
-    final editButton = find.widgetWithText(FilledActionButton, '编辑');
+    final editButton = find.text('编辑').first;
     await tester.ensureVisible(editButton);
     await tester.tap(editButton);
     await tester.pumpAndSettle();
@@ -349,7 +410,7 @@ void main() {
     await tester.tap(find.text('保存茬口'));
     await tester.pumpAndSettle();
 
-    final request = adapter.find('PUT', '/cycles/7');
+    final request = adapter.find('PATCH', '/crop-cycles/7');
     expect(request.data, containsPair('name', '春茬更新'));
     expect(request.data, containsPair('field_name', '一号棚'));
     expect(request.data, containsPair('total_area_mu', 3.5));
@@ -359,18 +420,17 @@ void main() {
     await pump(tester, CropTemplateListPage(repository: repository));
 
     expect(find.text('作物模板'), findsOneWidget);
-    expect(find.text('模板库'), findsOneWidget);
+    expect(find.textContaining('个模板'), findsOneWidget);
     expect(find.text('搜索作物或品种'), findsOneWidget);
     expect(find.text('番茄'), findsWidgets);
     expect(find.text('普罗旺斯番茄'), findsNothing);
-    expect(find.text('新建茬口'), findsWidgets);
-    expect(find.text('编辑'), findsWidgets);
+    expect(find.byIcon(LucideIcons.plus), findsOneWidget);
     _expectBottomTabs();
   });
 
   testWidgets('作物模板空数据不展示样例模板', (tester) async {
     setUpRepository({
-      '/crops/templates': {'items': [], 'total': 0},
+      '/crop-templates': {'items': [], 'total': 0},
     });
 
     await pump(tester, CropTemplateListPage(repository: repository));
@@ -384,7 +444,7 @@ void main() {
 
   testWidgets('作物模板列表支持搜索和分类筛选', (tester) async {
     setUpRepository({
-      '/crops/templates': cropTemplateFilterResponse,
+      '/crop-templates': cropTemplateFilterResponse,
     });
 
     await pump(tester, CropTemplateListPage(repository: repository));
@@ -431,8 +491,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      adapter.find('DELETE', '/crops/templates/3').path,
-      '/crops/templates/3',
+      adapter.find('DELETE', '/crop-templates/3').path,
+      '/crop-templates/3',
     );
     expect(find.text('已删除 1 个作物模板'), findsOneWidget);
     expect(find.text('删除 1 项'), findsNothing);
@@ -442,8 +502,7 @@ void main() {
     await pump(tester, CropTemplateFormPage(repository: repository));
 
     expect(find.text('新建模板'), findsOneWidget);
-    expect(find.text('模板信息'), findsOneWidget);
-    expect(find.text('保存后可复用'), findsOneWidget);
+    expect(find.text('作物信息'), findsOneWidget);
     expect(find.text('输入作物名称，生成阶段'), findsNothing);
     expect(find.text('作物名称'), findsOneWidget);
     expect(find.text('品种'), findsOneWidget);
@@ -481,7 +540,7 @@ void main() {
     await tester.tap(find.text('保存模板'));
     await tester.pumpAndSettle();
 
-    final request = adapter.find('POST', '/crops/templates');
+    final request = adapter.find('POST', '/crop-templates');
     expect(request.data, containsPair('name', '黄瓜'));
     expect(request.data, containsPair('variety', '津优'));
     expect(request.data, contains('stages'));
@@ -501,7 +560,7 @@ void main() {
   testWidgets('作物模板编辑更新当前模板', (tester) async {
     await pump(tester, CropTemplateListPage(repository: repository));
 
-    final editButton = find.widgetWithText(FilledActionButton, '编辑');
+    final editButton = find.text('番茄').first;
     await tester.ensureVisible(editButton);
     await tester.tap(editButton);
     await tester.pumpAndSettle();
@@ -514,18 +573,19 @@ void main() {
     await tester.tap(find.text('保存模板'));
     await tester.pumpAndSettle();
 
-    final request = adapter.find('PUT', '/crops/templates/3');
+    final request = adapter.find('PATCH', '/crop-templates/3');
     expect(request.data, containsPair('name', '樱桃番茄'));
     expect(request.data, containsPair('variety', '粉果 306'));
   });
 
-  testWidgets('作物模板快捷新建茬口预选当前模板', (tester) async {
-    await pump(tester, CropTemplateListPage(repository: repository));
-
-    final createCycleButton = find.widgetWithText(FilledActionButton, '新建茬口');
-    await tester.ensureVisible(createCycleButton);
-    await tester.tap(createCycleButton);
-    await tester.pumpAndSettle();
+  testWidgets('新建茬口支持预选模板并保存关联', (tester) async {
+    await pump(
+        tester,
+        FarmCycleFormPage(
+          repository: repository,
+          initialTemplateId: 3,
+          initialTemplateName: '番茄',
+        ));
 
     expect(find.text('新建茬口'), findsWidgets);
     expect(find.text('番茄'), findsWidgets);
@@ -539,18 +599,13 @@ void main() {
     await tester.tap(find.text('创建茬口'));
     await tester.pumpAndSettle();
 
-    final request = adapter.find('POST', '/cycles');
+    final request = adapter.find('POST', '/crop-cycles');
     expect(request.data, containsPair('name', '番茄春茬'));
     expect(request.data, containsPair('crop_template_id', 3));
   });
 
-  testWidgets('作物模板表单页预览和添加阶段有反馈', (tester) async {
+  testWidgets('作物模板表单可直接添加阶段', (tester) async {
     await pump(tester, CropTemplateFormPage(repository: repository));
-
-    await tester.tap(find.text('预览'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('已生成阶段预览'), findsOneWidget);
 
     await tester.ensureVisible(find.text('添加阶段'));
     await tester.tap(find.text('添加阶段'));
@@ -563,9 +618,8 @@ void main() {
     await pump(tester, WorkerListPage(repository: repository));
 
     expect(find.text('工人管理'), findsOneWidget);
-    expect(find.text('全场人工'), findsOneWidget);
-    expect(find.text('未结'), findsOneWidget);
-    expect(find.text('记一笔工资'), findsOneWidget);
+    expect(find.text('工人总数'), findsOneWidget);
+    expect(find.text('未结工资'), findsOneWidget);
     expect(find.text('新增工人'), findsOneWidget);
     expect(find.text('搜索工人姓名'), findsOneWidget);
     expect(find.text('张三'), findsOneWidget);
@@ -576,7 +630,7 @@ void main() {
 
   testWidgets('工人管理空数据不展示样例工人', (tester) async {
     setUpRepository({
-      '/planting/workers/summary': {'items': [], 'total': 0},
+      '/workers/summary': {'items': [], 'total': 0},
     });
 
     await pump(tester, WorkerListPage(repository: repository));
@@ -590,7 +644,7 @@ void main() {
 
   testWidgets('工人管理默认只展示在职工人并将停用显示为离职', (tester) async {
     setUpRepository({
-      '/planting/workers/summary': workerSummaryFilterResponse,
+      '/workers/summary': workerSummaryFilterResponse,
     });
 
     await pump(tester, WorkerListPage(repository: repository));
@@ -604,7 +658,7 @@ void main() {
 
   testWidgets('工人管理支持姓名搜索和标签筛选', (tester) async {
     setUpRepository({
-      '/planting/workers/summary': workerSummaryFilterResponse,
+      '/workers/summary': workerSummaryFilterResponse,
     });
 
     await pump(tester, WorkerListPage(repository: repository));
@@ -617,7 +671,7 @@ void main() {
 
     await tester.enterText(find.byType(TextField), '');
     await tester.pumpAndSettle();
-    await tester.tap(find.text('有欠款'));
+    await tester.tap(find.text('有欠款').last);
     await tester.pumpAndSettle();
 
     expect(find.text('李四'), findsOneWidget);
@@ -657,8 +711,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      adapter.find('DELETE', '/planting/workers/4').path,
-      '/planting/workers/4',
+      adapter.find('DELETE', '/workers/4').path,
+      '/workers/4',
     );
     expect(find.text('已删除 1 个工人档案'), findsOneWidget);
     expect(find.text('删除 1 项'), findsNothing);
@@ -680,14 +734,14 @@ void main() {
   testWidgets('工人编辑页可设置离职状态并保存', (tester) async {
     await pump(tester, WorkerListPage(repository: repository));
 
-    await tester.tap(find.text('编辑'));
+    await tester.tap(find.text('张三'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('离职'));
     await tester.enterText(find.widgetWithText(TextField, '张三'), '张三丰');
     await tester.tap(find.text('保存工人'));
     await tester.pumpAndSettle();
 
-    final request = adapter.find('PUT', '/planting/workers/4');
+    final request = adapter.find('PATCH', '/workers/4');
     expect(request.data, containsPair('name', '张三丰'));
     expect(request.data, containsPair('status', 'inactive'));
   });
@@ -762,7 +816,7 @@ void main() {
     await tester.tap(find.text('保存农事'));
     await tester.pumpAndSettle();
 
-    expect(adapter.find('POST', '/logs').data, {
+    expect(adapter.find('POST', '/farm-logs').data, {
       'cycle_id': 7,
       'operation_type': '浇水',
       'operation_date': dateText,
@@ -816,6 +870,24 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  testWidgets('工资金额与计薪公式随数量、单价及已付金额实时更新', (tester) async {
+    await pump(tester, WageCreatePage(repository: repository));
+    await tester.enterText(find.byType(TextField).at(1), '2');
+    await tester.enterText(find.byType(TextField).at(2), '150.5');
+    await tester.enterText(find.byType(TextField).at(3), '100');
+    await tester.pumpAndSettle();
+    expect(find.text('¥301'), findsOneWidget);
+    expect(find.text('2 天 × ¥150.5'), findsOneWidget);
+    expect(find.text('已付 ¥100'), findsOneWidget);
+    expect(find.text('未付 ¥201'), findsOneWidget);
+    await tester.ensureVisible(find.text('计件'));
+    await tester.tap(find.text('计件'));
+    await tester.pumpAndSettle();
+    expect(find.text('2 件 × ¥150.5'), findsOneWidget);
+    expect(
+        adapter.requests.where((request) => request.method == 'POST'), isEmpty);
+  });
+
   testWidgets('工资记录页保存到后端', (tester) async {
     await pump(tester, WageCreatePage(repository: repository));
 
@@ -847,7 +919,7 @@ void main() {
     await tester.tap(find.text('保存工资'));
     await tester.pumpAndSettle();
 
-    final request = adapter.find('POST', '/planting/labor/wages');
+    final request = adapter.find('POST', '/labor/wages');
     expect(request.data, containsPair('cycle_id', 7));
     expect(request.data, containsPair('worker_name', '张三'));
     expect(request.data, containsPair('operation_type', '浇水'));
@@ -864,14 +936,12 @@ void main() {
     expect(find.text('保存工资成功'), findsOneWidget);
   });
 
-  testWidgets('工人管理页记工资入口进入工资记录页', (tester) async {
+  testWidgets('工人卡片进入对应档案编辑页', (tester) async {
     await pump(tester, WorkerListPage(repository: repository));
-
-    await tester.tap(find.text('记一笔工资'));
+    await tester.tap(find.text('张三'));
     await tester.pumpAndSettle();
-
-    expect(find.text('保存工资'), findsOneWidget);
-    expect(find.text('工人姓名'), findsOneWidget);
+    expect(find.text('编辑工人'), findsOneWidget);
+    expect(find.widgetWithText(TextField, '张三'), findsOneWidget);
   });
 
   testWidgets('表单取消按钮可返回上一页', (tester) async {
@@ -906,8 +976,8 @@ void main() {
 
     await tester.tap(find.byType(HeaderIconButton).first);
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('查看账本').first);
-    await tester.tap(find.text('查看账本').first);
+    await tester.ensureVisible(find.text('账本').first);
+    await tester.tap(find.text('账本').first);
 
     expect(selectedIndex, 3);
   });
@@ -945,7 +1015,7 @@ void _expectBottomTabs() {
   expect(find.text('首页'), findsOneWidget);
   expect(find.text('记录'), findsOneWidget);
   expect(find.text('芽芽'), findsOneWidget);
-  expect(find.text('账本'), findsOneWidget);
+  expect(find.text('账本'), findsWidgets);
   expect(find.text('我的'), findsOneWidget);
 }
 

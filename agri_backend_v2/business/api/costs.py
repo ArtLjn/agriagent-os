@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -30,6 +30,7 @@ class CreateRecordRequest(StrictRequest):
     category: str = Field(min_length=1, max_length=50)
     amount: Decimal = Field(gt=0)
     record_date: date
+    recorded_at: datetime | None = None
     cycle_id: int | None = Field(default=None, gt=0)
     settled_amount: Decimal | None = Field(default=None, ge=0)
     note: str | None = Field(default=None, max_length=500)

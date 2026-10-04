@@ -1,171 +1,146 @@
 part of 'home_screen.dart';
 
 class _AiSuggestionsCard extends StatelessWidget {
-  const _AiSuggestionsCard({
-    required this.suggestions,
-    this.onBottomTabChanged,
-  });
+  const _AiSuggestionsCard(
+      {required this.suggestions,
+      required this.score,
+      this.onBottomTabChanged});
 
   final List<HomeSuggestionViewModel> suggestions;
+  final String score;
   final ValueChanged<int>? onBottomTabChanged;
 
   @override
   Widget build(BuildContext context) {
-    final visible = suggestions.isEmpty
-        ? const [HomeSuggestionViewModel(title: '暂无建议', subtitle: '稍后再来看看')]
-        : suggestions;
+    // 概览占位文案不是 AI 建议；只有实际建议才开放详情入口。
+    final visible =
+        suggestions.where((suggestion) => suggestion.item != null).toList();
     return CardPanel(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+      padding: const EdgeInsets.all(20),
+      shadow: false,
+      radius: 20,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(LucideIcons.sparkles, size: 24, color: AppColors.blue),
-              SizedBox(width: 10),
-              Text('AI 今日建议', style: AppTextStyles.dateTitle),
+              const Icon(LucideIcons.sparkles, size: 20, color: AppColors.blue),
+              const SizedBox(width: 8),
+              Expanded(
+                  child: Text('芽芽建议',
+                      style: AppTextStyles.sectionTitle
+                          .copyWith(fontWeight: FontWeight.w600))),
+              if (score != '暂无评分')
+                StatusPill(
+                    text: score,
+                    color: AppColors.blue,
+                    background: AppColors.blueSoft),
             ],
           ),
-          const SizedBox(height: 12),
-          for (var index = 0; index < visible.length; index++) ...[
-            _SuggestionRow(
-              icon: _suggestionIcon(visible[index], index),
-              color: _suggestionColor(visible[index], index),
-              background: _suggestionBackground(visible[index], index),
-              title: visible[index].title,
-              subtitle: visible[index].subtitle,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => AdviceDetailScreen(
-                      suggestion: visible[index],
-                      onBottomTabChanged: onBottomTabChanged,
-                    ),
-                  ),
-                );
-              },
+          const SizedBox(height: 16),
+          if (visible.isEmpty) ...[
+            Text('把问题交给芽芽，把时间留给田间。',
+                style:
+                    AppTextStyles.body.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            Text('今天还没有经营建议。农场里的疑问，可以和芽芽聊聊。',
+                style: AppTextStyles.body.copyWith(color: AppColors.muted)),
+            const SizedBox(height: 16),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: onBottomTabChanged == null
+                    ? null
+                    : () => onBottomTabChanged!(2),
+                style: TextButton.styleFrom(
+                    foregroundColor: AppColors.blue,
+                    backgroundColor: AppColors.blueSoft,
+                    minimumSize: const Size(140, 48)),
+                icon: const Icon(LucideIcons.bot, size: 18),
+                label: const Text('问问芽芽'),
+              ),
             ),
-            if (index != visible.length - 1) const _SoftDivider(),
-          ],
+          ] else
+            for (var index = 0; index < visible.length; index++) ...[
+              _SuggestionRow(
+                suggestion: visible[index],
+                onTap: () {
+                  Navigator.of(context).push(MaterialPageRoute<void>(
+                    builder: (_) => AdviceDetailScreen(
+                        suggestion: visible[index],
+                        onBottomTabChanged: onBottomTabChanged),
+                  ));
+                },
+              ),
+              if (index != visible.length - 1)
+                const Divider(height: 24, color: AppColors.lineSoft),
+            ],
         ],
       ),
     );
   }
-
-  IconData _suggestionIcon(HomeSuggestionViewModel suggestion, int index) {
-    final icon = suggestion.item?.compact.icon;
-    if (icon == 'CloudSun') return LucideIcons.cloudSun;
-    if (icon == 'ClipboardList') return LucideIcons.clipboardList;
-    if (icon == 'CircleDollarSign') return LucideIcons.circleDollarSign;
-    if (icon == 'Sprout') return LucideIcons.sprout;
-    if (icon == 'NotebookPen') return LucideIcons.notebookPen;
-    return const [
-      LucideIcons.cloudRain,
-      LucideIcons.droplets,
-      LucideIcons.circleDollarSign,
-    ][index % 3];
-  }
-
-  Color _suggestionColor(HomeSuggestionViewModel suggestion, int index) {
-    final color = suggestion.item?.compact.iconColor;
-    if (color == 'green' || color == 'emerald') return AppColors.greenDark;
-    if (color == 'amber') return AppColors.amber;
-    if (color == 'blue') return AppColors.blue;
-    return const [
-      AppColors.blue,
-      AppColors.greenDark,
-      AppColors.amber
-    ][index % 3];
-  }
-
-  Color _suggestionBackground(HomeSuggestionViewModel suggestion, int index) {
-    final color = suggestion.item?.compact.iconColor;
-    if (color == 'green' || color == 'emerald') return AppColors.greenSoft;
-    if (color == 'amber') return AppColors.amberSoft;
-    if (color == 'blue') return AppColors.blueSoft;
-    return const [
-      AppColors.blueSoft,
-      AppColors.greenSoft,
-      AppColors.amberSoft,
-    ][index % 3];
-  }
 }
 
 class _SuggestionRow extends StatelessWidget {
-  const _SuggestionRow({
-    required this.icon,
-    required this.color,
-    required this.background,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
+  const _SuggestionRow({required this.suggestion, required this.onTap});
 
-  final IconData icon;
-  final Color color;
-  final Color background;
-  final String title;
-  final String subtitle;
+  final HomeSuggestionViewModel suggestion;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final icon = switch (suggestion.item?.compact.icon) {
+      'CloudSun' => LucideIcons.cloudSun,
+      'ClipboardList' => LucideIcons.clipboardList,
+      'CircleDollarSign' => LucideIcons.circleDollarSign,
+      'Sprout' => LucideIcons.sprout,
+      'NotebookPen' => LucideIcons.notebookPen,
+      _ => LucideIcons.sparkles,
+    };
+    final color = switch (suggestion.item?.compact.iconColor) {
+      'green' || 'emerald' => AppColors.greenDark,
+      'amber' => AppColors.amber,
+      _ => AppColors.blue,
+    };
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        child: SizedBox(
-          height: 72,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
           child: Row(
             children: [
               IconBadge(
-                icon: icon,
-                color: color,
-                background: background,
-                size: 48,
-                iconSize: 25,
-              ),
-              const SizedBox(width: 14),
+                  icon: icon,
+                  color: color,
+                  background: color.withValues(alpha: 0.08),
+                  size: 40,
+                  iconSize: 20),
+              const SizedBox(width: 12),
               Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
+                  child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(suggestion.title,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.listTitle,
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
+                      style: AppTextStyles.body
+                          .copyWith(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  Text(suggestion.subtitle,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.small.copyWith(fontSize: 13),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(
-                LucideIcons.chevronRight,
-                size: 22,
-                color: AppColors.subtle,
-              ),
+                      style: AppTextStyles.small.copyWith(height: 1.5)),
+                ],
+              )),
+              const SizedBox(width: 8),
+              const Icon(LucideIcons.chevronRight,
+                  size: 18, color: AppColors.subtle),
             ],
           ),
         ),
       ),
     );
-  }
-}
-
-class _SoftDivider extends StatelessWidget {
-  const _SoftDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Divider(height: 1, color: AppColors.lineSoft);
   }
 }

@@ -17,7 +17,6 @@ import 'api_test_fixtures.dart'
         conversationResponse,
         costRecordResponse,
         categoryResponse,
-        dailyAdviceResponse,
         debtsResponse,
         logResponse,
         messageResponse,
@@ -34,7 +33,7 @@ import 'api_test_fixtures.dart'
         userResponse,
         versionResponse,
         wageResponse,
-        weatherResponse,
+        v2WeatherResponse,
         cropTemplateResponse,
         cycleResponse,
         workerResponse,
@@ -159,16 +158,16 @@ class FakeLocationService implements LocationService {
 
 BusinessRepository _fakeBusinessRepository() {
   final adapter = RecordingAdapter({
-    '/cycles': paginatedCyclesResponse,
-    'POST /cycles': cycleResponse,
-    '/crops/templates': paginatedCropTemplatesResponse,
-    'POST /crops/templates': cropTemplateResponse,
-    '/planting/workers/summary': paginatedWorkerSummariesResponse,
-    'POST /planting/workers': workerResponse,
-    'POST /planting/labor/wages': wageResponse,
-    'POST /planting/work-orders': workOrderResponse,
-    'POST /costs': costRecordResponse,
-    '/cost-categories': [categoryResponse],
+    '/crop-cycles': paginatedCyclesResponse,
+    'POST /crop-cycles': cycleResponse,
+    '/crop-templates': paginatedCropTemplatesResponse,
+    'POST /crop-templates': cropTemplateResponse,
+    '/workers/summary': paginatedWorkerSummariesResponse,
+    'POST /workers': workerResponse,
+    'POST /labor/wages': wageResponse,
+    'POST /work-orders': workOrderResponse,
+    'POST /cost-records': costRecordResponse,
+    '/cost-categories': {'items': [categoryResponse]},
     '/smart-fill/parse': smartFillParseResponse,
   });
   final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
@@ -178,8 +177,8 @@ BusinessRepository _fakeBusinessRepository() {
 
 ProfileRepository _fakeProfileRepository() {
   final adapter = RecordingAdapter({
-    '/auth/me': userResponse,
-    '/settings': settingsResponse,
+    '/users/me': userResponse,
+    '/users/me/settings': settingsResponse,
     '/api/app/version': versionResponse,
   });
   final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
@@ -189,8 +188,8 @@ ProfileRepository _fakeProfileRepository() {
 
 YayaRepository _fakeYayaRepository() {
   final adapter = RecordingAdapter({
-    '/agent/conversations': [conversationResponse],
-    '/agent/conversations/s1/messages': [messageResponse],
+    '/conversations': [conversationResponse],
+    '/conversations/s1': [messageResponse],
   });
   final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
   dio.httpClientAdapter = adapter;
@@ -216,11 +215,11 @@ LocationRepository _fakeLocationRepository() {
 
 DashboardRepository _fakeDashboardRepository() {
   final adapter = RecordingAdapter({
-    '/agent/daily': dailyAdviceResponse,
-    '/settings': settingsResponse,
-    '/weather/forecast': weatherResponse,
-    '/planting/work-orders': paginatedWorkOrdersResponse,
-    '/planting/labor/unsettled-summary': unsettledLaborSummaryResponse,
+    '/dashboard': {'pending_work_orders': 1},
+    '/users/me/settings': settingsResponse,
+    '/weather': v2WeatherResponse,
+    '/work-orders': paginatedWorkOrdersResponse,
+    '/labor/unsettled-summary': unsettledLaborSummaryResponse,
   });
   final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
   dio.httpClientAdapter = adapter;
@@ -229,9 +228,9 @@ DashboardRepository _fakeDashboardRepository() {
 
 BillingRepository _fakeBillingRepository() {
   final adapter = RecordingAdapter({
-    '/costs': paginatedCostsResponse,
-    'POST /costs': costRecordResponse,
-    '/costs/summary/2026': yearlySummaryResponse,
+    '/cost-records': paginatedCostsResponse,
+    'POST /cost-records': costRecordResponse,
+    '/cost-records/summary/yearly': yearlySummaryResponse,
     '/debts': debtsResponse,
     'POST /debts': costRecordResponse,
   });
@@ -242,15 +241,15 @@ BillingRepository _fakeBillingRepository() {
 
 WorkbenchRepository _fakeWorkbenchRepository() {
   final adapter = RecordingAdapter({
-    '/cycles': {'items': [], 'total': 0},
-    '/planting/units': [],
-    '/planting/workers': [],
-    '/planting/operation-types': [],
-    '/planting/work-orders': paginatedWorkOrdersResponse,
-    'POST /planting/work-orders': workOrderResponse,
-    '/logs': paginatedLogsResponse,
-    'POST /logs': logResponse,
-    'POST /planting/labor/wages': wageResponse,
+    '/crop-cycles': {'items': [], 'total': 0},
+    '/planting-units': {'items': []},
+    '/workers': {'items': []},
+    '/farm-logs/operations/types': {'items': []},
+    '/work-orders': paginatedWorkOrdersResponse,
+    'POST /work-orders': workOrderResponse,
+    '/farm-logs': paginatedLogsResponse,
+    'POST /farm-logs': logResponse,
+    'POST /labor/wages': wageResponse,
     '/smart-fill/scenarios': smartFillScenariosResponse,
     '/smart-fill/parse': smartFillParseResponse,
   });
