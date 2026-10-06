@@ -4,7 +4,6 @@ import 'package:farm_manager_app/data/api/api_models.dart';
 import 'package:farm_manager_app/data/repositories/profile_repository.dart';
 import 'package:farm_manager_app/data/repositories/yaya_repository.dart';
 import 'package:farm_manager_app/features/yaya/yaya_screen.dart';
-import 'package:farm_manager_app/shared/assets/app_assets.dart';
 import 'package:farm_manager_app/theme/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -26,7 +25,7 @@ void main() {
 
     expect(find.textContaining('芽芽'), findsWidgets);
     expect(find.textContaining('AI 会'), findsNothing);
-    expect(find.textContaining('我是芽芽'), findsOneWidget);
+    expect(find.textContaining('想先理清'), findsOneWidget);
     expect(find.textContaining('/agent/chat'), findsNothing);
   });
 
@@ -34,7 +33,7 @@ void main() {
     await tester.pumpWidget(yayaScreen());
 
     expect(find.byIcon(LucideIcons.menu), findsOneWidget);
-    expect(find.byIcon(LucideIcons.volume2), findsOneWidget);
+    expect(find.byIcon(LucideIcons.volume2), findsNothing);
     expect(find.byIcon(LucideIcons.plus), findsWidgets);
     expect(find.text('今日简报'), findsNothing);
     expect(find.text('待确认'), findsNothing);
@@ -48,7 +47,7 @@ void main() {
     expect(find.text('经营分析'), findsNothing);
     expect(find.text('生成报告'), findsNothing);
     expect(find.text('全部技能'), findsNothing);
-    expect(find.text('发消息或按住说话...'), findsOneWidget);
+    expect(find.text('说说你的农场问题…'), findsOneWidget);
   });
 
   testWidgets('底部输入框在真机宽度下接近占满可用宽度', (tester) async {
@@ -59,7 +58,7 @@ void main() {
 
     final inputBar = find.byType(AssistantInputBar);
     expect(inputBar, findsOneWidget);
-    expect(tester.getSize(inputBar).width, greaterThanOrEqualTo(355));
+    expect(tester.getSize(inputBar).width, greaterThanOrEqualTo(343));
   });
 
   testWidgets('点击快捷提示词会直接发送问题', (tester) async {
@@ -69,6 +68,7 @@ void main() {
     );
     await tester.pump();
 
+    await tester.ensureVisible(find.text('今天适合干什么'));
     await tester.tap(find.text('今天适合干什么'));
     await tester.pumpAndSettle();
 
@@ -99,10 +99,10 @@ void main() {
     await tester.pump();
 
     expect(find.text('芽芽'), findsWidgets);
-    expect(find.textContaining('在线'), findsOneWidget);
-    expect(find.textContaining('我是芽芽，你的农场助手'), findsOneWidget);
-    expect(find.textContaining('整理成可确认的记录'), findsOneWidget);
-    expect(find.text('常用问题'), findsOneWidget);
+    expect(find.textContaining('在线'), findsNothing);
+    expect(find.textContaining('想先理清'), findsOneWidget);
+    expect(find.textContaining('农事安排、账目分析'), findsOneWidget);
+    expect(find.text('从一个话题开始'), findsOneWidget);
     expect(find.text('记录今天农活'), findsOneWidget);
     expect(find.text('今天适合干什么'), findsWidgets);
     expect(find.text('田间问答'), findsNothing);
@@ -132,6 +132,7 @@ void main() {
     );
     await tester.pump();
 
+    await tester.ensureVisible(find.text('生成周报'));
     await tester.tap(find.text('生成周报'));
     await tester.pumpAndSettle();
 
@@ -172,31 +173,19 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('新对话入口使用低饱和农场色', (tester) async {
+  testWidgets('新对话入口使用统一品牌浅蓝且有真实动作', (tester) async {
     await tester.pumpWidget(yayaScreen());
     await tester.pump();
-
     await tester.tap(find.byIcon(LucideIcons.menu));
     await tester.pumpAndSettle();
-
-    final newChatCard = tester
-        .widgetList<Container>(find.byType(Container))
-        .map((container) => container.decoration)
-        .whereType<BoxDecoration>()
-        .where((decoration) => decoration.gradient is LinearGradient)
-        .cast<BoxDecoration>()
-        .singleWhere(
-          (decoration) => (decoration.gradient! as LinearGradient)
-              .colors
-              .contains(const Color(0xFFF5FBF2)),
-        );
-    final gradient = newChatCard.gradient! as LinearGradient;
-
-    expect(gradient.colors, contains(const Color(0xFFEAF6EF)));
-    expect(gradient.colors, contains(const Color(0xFFFFFBF0)));
-    expect(gradient.colors, isNot(contains(const Color(0xFF1677FF))));
-    expect(gradient.colors, isNot(contains(const Color(0xFF06B6D4))));
-    expect(gradient.colors, isNot(contains(const Color(0xFF10B981))));
+    expect(find.text('新对话'), findsOneWidget);
+    expect(
+        tester
+            .widgetList<Container>(find.byType(Container))
+            .map((c) => c.decoration)
+            .whereType<BoxDecoration>()
+            .any((d) => d.color == AppColors.blueSoft),
+        isTrue);
   });
 
   testWidgets('历史聊天抽屉关闭和卸载不会触发生命周期断言', (tester) async {
@@ -215,7 +204,7 @@ void main() {
 
   testWidgets('历史聊天抽屉底部展示用户昵称', (tester) async {
     final adapter = RecordingAdapter({
-      '/auth/me': {...userResponse, 'nickname': '李伟刚'},
+      '/users/me': {...userResponse, 'nickname': '李伟刚'},
     });
     final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
     dio.httpClientAdapter = adapter;
@@ -251,7 +240,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('建议傍晚浇水'), findsNothing);
-    expect(find.textContaining('我是芽芽'), findsOneWidget);
+    expect(find.textContaining('想先理清'), findsOneWidget);
   });
 
   testWidgets('芽芽回复支持 Markdown 渲染', (tester) async {
@@ -297,7 +286,7 @@ void main() {
     expect(find.text('已执行'), findsOneWidget);
   });
 
-  testWidgets('全部技能页使用独立 banner 图片资产并展示接口技能', (tester) async {
+  testWidgets('全部技能页将接口技能直接展示为场景列表', (tester) async {
     final repository = _SkillsYayaRepository();
     await tester.pumpWidget(
       MaterialApp(home: YayaSkillsPage(repository: repository)),
@@ -306,14 +295,7 @@ void main() {
 
     expect(find.text('全部技能'), findsOneWidget);
     expect(find.text('搜索技能'), findsOneWidget);
-    expect(find.byKey(const ValueKey('yaya-skills-banner')), findsOneWidget);
-    expect(find.byType(GridView), findsNothing);
-    expect(find.byType(SliverGrid), findsNothing);
-    final banner = tester.widget<Image>(
-      find.byKey(const ValueKey('yaya-skills-banner')),
-    );
-    expect((banner.image as AssetImage).assetName, AppAssets.yayaSkillsBanner);
-    expect(banner.fit, BoxFit.contain);
+    expect(find.text('常用场景与提问方式'), findsOneWidget);
     expect(repository.loadSkillsCalls, 1);
     expect(find.text('今日简报'), findsOneWidget);
     expect(find.text('汇总待办、近期农事、花费和天气。'), findsOneWidget);
@@ -348,7 +330,7 @@ void main() {
     final summary = tester.widget<Text>(
       find.text('汇总待办、近期农事、花费和天气。'),
     );
-    expect(summary.maxLines, 1);
+    expect(summary.maxLines, 3);
 
     await tester.tap(find.byTooltip('查看今日简报详情'));
     await tester.pumpAndSettle();
@@ -356,6 +338,24 @@ void main() {
     expect(find.text('获取当前农场综合状态，汇总今日待办、天气风险和近期经营提醒'), findsOneWidget);
     expect(find.text('可以这样问'), findsOneWidget);
     expect(find.text('今天农场怎么样'), findsOneWidget);
+  });
+
+  testWidgets('技能整行可打开详情并把提问例子发送回真实聊天', (tester) async {
+    final repository = _TrackingYayaRepository();
+    await tester
+        .pumpWidget(MaterialApp(home: YayaScreen(repository: repository)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('技能'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('今日简报'));
+    await tester.pumpAndSettle();
+    expect(find.text('可以这样问'), findsOneWidget);
+    await tester.tap(find.text('今天农场怎么样'));
+    await tester.pumpAndSettle();
+    expect(find.byType(YayaSkillsPage), findsNothing);
+    expect(repository.sentMessages, ['今天农场怎么样']);
+    expect(find.text('收到'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   test('芽芽主色不是紫色', () {

@@ -1,231 +1,103 @@
-import 'package:dio/dio.dart';
-import 'package:farm_manager_app/data/api/api_client.dart';
-import 'package:farm_manager_app/data/repositories/billing_repository.dart';
-import 'package:farm_manager_app/data/repositories/business_repository.dart';
-import 'package:farm_manager_app/data/repositories/workbench_repository.dart';
-import 'package:farm_manager_app/features/record_flow/record_flow_controller.dart';
 import 'package:farm_manager_app/features/workbench/workbench_screen.dart';
+import 'package:farm_manager_app/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../support/api_test_fixtures.dart';
+import '../../support/fake_app_dependencies.dart';
 
 void main() {
-  WorkbenchScreen screen() {
-    final adapter = RecordingAdapter({
-      '/smart-fill/parse': smartFillParseResponse,
-      'POST /costs': costRecordResponse,
-      '/cost-categories': [categoryResponse],
-      '/cycles': paginatedCyclesResponse,
-      'POST /cycles': cycleResponse,
-      '/crops/templates': paginatedCropTemplatesResponse,
-      'POST /crops/templates': cropTemplateResponse,
-      '/planting/workers/summary': paginatedWorkerSummariesResponse,
-      'POST /planting/workers': workerResponse,
-    });
-    final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
-    dio.httpClientAdapter = adapter;
-    final client = ApiClient(dio: dio);
-    return WorkbenchScreen(
-      businessRepository: BusinessRepository(client),
-      recordFlowController: RecordFlowController(
-        workbench: WorkbenchRepository(client),
-        billing: BillingRepository(client),
-      ),
-    );
-  }
+  late FakeAppDependencies dependencies;
+  setUp(() => dependencies = FakeAppDependencies());
 
-  WorkbenchScreen screenWithAdapter(RecordingAdapter adapter) {
-    final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
-    dio.httpClientAdapter = adapter;
-    final client = ApiClient(dio: dio);
-    return WorkbenchScreen(
-      businessRepository: BusinessRepository(client),
-      recordFlowController: RecordFlowController(
-        workbench: WorkbenchRepository(client),
-        billing: BillingRepository(client),
-      ),
-    );
-  }
-
-  WorkbenchScreen screenWithNavigation({
-    VoidCallback? onGoHome,
-    VoidCallback? onGoLedger,
-    VoidCallback? onGoYaya,
-    VoidCallback? onGoProfile,
-    VoidCallback? onRecordAgain,
-    VoidCallback? onLedgerSaved,
-  }) {
-    final adapter = RecordingAdapter({
-      '/smart-fill/parse': smartFillParseResponse,
-      'POST /costs': costRecordResponse,
-      '/cost-categories': [categoryResponse],
-      '/cycles': paginatedCyclesResponse,
-      'POST /cycles': cycleResponse,
-      '/crops/templates': paginatedCropTemplatesResponse,
-      'POST /crops/templates': cropTemplateResponse,
-      '/planting/workers/summary': paginatedWorkerSummariesResponse,
-      'POST /planting/workers': workerResponse,
-    });
-    final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
-    dio.httpClientAdapter = adapter;
-    final client = ApiClient(dio: dio);
-    return WorkbenchScreen(
-      businessRepository: BusinessRepository(client),
-      recordFlowController: RecordFlowController(
-        workbench: WorkbenchRepository(client),
-        billing: BillingRepository(client),
-      ),
-      onGoHome: onGoHome,
-      onGoLedger: onGoLedger,
-      onGoYaya: onGoYaya,
-      onGoProfile: onGoProfile,
-      onRecordAgain: onRecordAgain,
-      onLedgerSaved: onLedgerSaved,
-    );
-  }
-
-  Future<void> pumpAtWidth(
-    WidgetTester tester,
-    Widget child, {
-    required double width,
-  }) async {
-    tester.view.physicalSize = Size(width, 812);
+  Future<void> pump(WidgetTester tester,
+      {VoidCallback? onGoLedger,
+      VoidCallback? onGoYaya,
+      VoidCallback? onLedgerSaved,
+      double width = 390}) async {
+    tester.view.physicalSize = Size(width, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-
-    await tester.pumpWidget(MaterialApp(home: child));
+    await tester.pumpWidget(MaterialApp(
+        theme: AppTheme.light(),
+        home: WorkbenchScreen(
+          businessRepository: dependencies.business,
+          onGoLedger: onGoLedger,
+          onGoYaya: onGoYaya,
+          onLedgerSaved: onLedgerSaved,
+        )));
     await tester.pumpAndSettle();
   }
 
-  testWidgets('记录页展示当前工作台入口且不展示语音和样例确认卡', (tester) async {
-    await tester.pumpWidget(MaterialApp(home: screen()));
-
-    expect(find.bySemanticsLabel('田掌柜'), findsOneWidget);
-    expect(find.text('芽芽智能填写'), findsOneWidget);
-    expect(find.text('今天要记什么？'), findsOneWidget);
-    expect(find.text('账目、农事或工资，一句话自动识别'), findsOneWidget);
-    expect(find.text('识别'), findsOneWidget);
-    expect(find.text('手动记一笔'), findsOneWidget);
-    expect(find.text('AI帮我填'), findsNothing);
-    expect(find.text('自己填'), findsNothing);
-    expect(find.text('经营报告'), findsOneWidget);
-    expect(find.text('生成周报'), findsOneWidget);
-    expect(find.text('生成月报'), findsOneWidget);
-    expect(find.text('今日概览'), findsOneWidget);
-    expect(find.text('开始说话'), findsNothing);
-    expect(find.text('例如：今天买饲料 3680 元'), findsNothing);
-    expect(find.text('常用动作'), findsOneWidget);
-    expect(find.text('基础资料'), findsOneWidget);
-    expect(find.text('建批次'), findsOneWidget);
-    expect(find.text('最近记录'), findsOneWidget);
-    expect(find.text('补记录'), findsOneWidget);
-    expect(find.text('建模板'), findsOneWidget);
-    expect(find.text('AI待确认'), findsNothing);
-    expect(find.text('改一下'), findsNothing);
-    expect(find.text('保存'), findsNothing);
-    expect(find.text('XX饲料厂'), findsNothing);
+  testWidgets('记录页展示真实经营入口与日期，不使用样例指标', (tester) async {
+    await pump(tester);
+    for (final label in ['手动记一笔', '记农事', '记工资', '农场资料', '建批次', '新增工人', '建模板']) {
+      expect(find.text(label), findsOneWidget);
+    }
+    final today = DateTime.now();
+    expect(find.textContaining('${today.month}月${today.day}日'), findsOneWidget);
+    expect(find.text('今日概览'), findsNothing);
+    expect(find.text('生成月报'), findsNothing);
+    expect(find.text('识别'), findsNothing);
+    expect(find.textContaining('/api/'), findsNothing);
   });
 
-  testWidgets('记录页窄屏输入框使用单行短提示', (tester) async {
-    await pumpAtWidth(tester, screen(), width: 320);
-
-    expect(find.text('例：买肥料 300，老王工资 200'), findsOneWidget);
-    final field = tester.widget<TextField>(find.byType(TextField).first);
-    expect(field.minLines, 1);
-    expect(field.maxLines, 1);
+  testWidgets('记录页窄屏布局不溢出', (tester) async {
+    await pump(tester, width: 320);
+    expect(tester.takeException(), isNull);
   });
 
-  testWidgets('AI 帮填使用用户输入文本解析而不是固定样例', (tester) async {
-    final adapter = RecordingAdapter({
-      '/smart-fill/parse': smartFillParseResponse,
-      'POST /costs': costRecordResponse,
+  testWidgets('芽芽整理入口进入聊天', (tester) async {
+    var opened = false;
+    await pump(tester, onGoYaya: () => opened = true);
+    await tester.tap(find.text('让芽芽帮你整理'));
+    await tester.pumpAndSettle();
+    expect(opened, isTrue);
+  });
+
+  for (final entry in {
+    '手动记一笔': '保存记录',
+    '记农事': '保存农事',
+    '记工资': '保存工资',
+    '建批次': '茬口管理',
+    '新增工人': '工人管理',
+    '建模板': '作物模板'
+  }.entries) {
+    testWidgets('${entry.key}可进入实际业务页面并返回', (tester) async {
+      await pump(tester);
+      await tester.ensureVisible(find.text(entry.key));
+      await tester.tap(find.text(entry.key));
+      await tester.pumpAndSettle();
+      expect(find.text(entry.value), findsWidgets);
+      final context = tester.element(find.text(entry.value).first);
+      Navigator.of(context).pop();
+      await tester.pumpAndSettle();
+      expect(find.text('农场资料'), findsOneWidget);
     });
-    await tester.pumpWidget(MaterialApp(home: screenWithAdapter(adapter)));
+  }
 
-    await tester.enterText(find.byType(TextField), '今天买种子 120 元');
-    await tester.tap(find.text('识别'));
+  testWidgets('最近记录入口切换到账本', (tester) async {
+    var opened = false;
+    await pump(tester, onGoLedger: () => opened = true);
+    await tester.ensureVisible(find.text('查看最近记录'));
+    await tester.tap(find.text('查看最近记录'));
     await tester.pumpAndSettle();
-
-    final request = adapter.find('POST', '/smart-fill/parse');
-    expect(request.data, containsPair('text', '今天买种子 120 元'));
-    expect(request.data, isNot(containsPair('text', '今天买饲料 3680 元')));
+    expect(opened, isTrue);
   });
 
-  testWidgets('工作台不展示 API 路径', (tester) async {
-    await tester.pumpWidget(MaterialApp(home: screen()));
-    expect(find.textContaining('/'), findsNothing);
-  });
-
-  testWidgets('手动记一笔入口进入手动记账页', (tester) async {
-    await tester.pumpWidget(MaterialApp(home: screen()));
-
+  testWidgets('手动记账保存后通知账本刷新', (tester) async {
+    var notifications = 0;
+    await pump(tester, onLedgerSaved: () => notifications += 1);
     await tester.tap(find.text('手动记一笔'));
     await tester.pumpAndSettle();
-
-    expect(find.text('保存记录'), findsOneWidget);
-    expect(find.text('金额'), findsOneWidget);
-  });
-
-  testWidgets('记农事入口进入农事记录页', (tester) async {
-    await tester.pumpWidget(MaterialApp(home: screen()));
-
-    await tester.tap(find.text('记农事').first);
+    await tester.tap(find.byKey(const Key('ledger-category-dropdown-search')));
     await tester.pumpAndSettle();
-
-    expect(find.text('记农事'), findsWidgets);
-    expect(find.text('作业类型'), findsOneWidget);
-    expect(find.text('保存农事'), findsOneWidget);
-  });
-
-  testWidgets('记工资入口进入工资记录页', (tester) async {
-    await tester.pumpWidget(MaterialApp(home: screen()));
-
-    await tester.tap(find.text('记工资').first);
-    await tester.pumpAndSettle();
-
-    expect(find.text('记工资'), findsWidgets);
-    expect(find.text('工人姓名'), findsOneWidget);
-    expect(find.text('保存工资'), findsOneWidget);
-  });
-
-  testWidgets('业务页底部 Tab 可回到主导航', (tester) async {
-    var selectedIndex = -1;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: screenWithNavigation(
-          onGoLedger: () => selectedIndex = 3,
-        ),
-      ),
-    );
-
-    final recentEntry = find.text('最近记录');
-    await tester.ensureVisible(recentEntry);
-    await tester.tap(recentEntry);
-    await tester.pumpAndSettle();
-
-    expect(selectedIndex, 3);
-    expect(find.text('保存记录'), findsNothing);
-  });
-
-  testWidgets('手动记账保存成功后通知账本刷新', (tester) async {
-    var saveNotifications = 0;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: screenWithNavigation(
-          onLedgerSaved: () => saveNotifications += 1,
-        ),
-      ),
-    );
-
-    await tester.tap(find.text('手动记一笔'));
+    await tester.tap(find.byKey(const Key('ledger-category-option-肥料')));
     await tester.pumpAndSettle();
     await tester.enterText(find.widgetWithText(TextField, '0.00'), '200');
     await tester.tap(find.text('保存记录'));
     await tester.pumpAndSettle();
-
     expect(find.text('保存记录成功'), findsOneWidget);
-    expect(saveNotifications, 1);
+    expect(notifications, 1);
   });
 }

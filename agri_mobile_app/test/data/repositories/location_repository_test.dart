@@ -26,7 +26,7 @@ void main() {
     final result = await repository.searchLocations('虎丘');
 
     expect(adapter.find('GET', '/locations/search').query, {
-      'q': '虎丘',
+      'keyword': '虎丘',
       'limit': 20,
     });
     expect(result.single.name, '苏州市虎丘区');

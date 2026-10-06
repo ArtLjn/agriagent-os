@@ -45,8 +45,10 @@ void main() {
 
   testWidgets('AI 确认页展示后端解析字段并保存到成功页', (tester) async {
     final adapter = RecordingAdapter({
-      'POST /costs': costRecordResponse,
-      '/cost-categories': [categoryResponse],
+      'POST /cost-records': costRecordResponse,
+      '/cost-categories': {
+        'items': [categoryResponse]
+      },
     });
     await pumpFlow(
       tester,
@@ -67,13 +69,15 @@ void main() {
 
     expect(find.text('记录已保存'), findsOneWidget);
     expect(find.text('已同步到账本'), findsOneWidget);
-    expect(adapter.find('POST', '/costs').data, draft.fields);
+    expect(adapter.find('POST', '/cost-records').data, draft.fields);
   });
 
   testWidgets('缺字段确认页保留在当前页提示补充', (tester) async {
     final adapter = RecordingAdapter({
-      'POST /costs': costRecordResponse,
-      '/cost-categories': [categoryResponse],
+      'POST /cost-records': costRecordResponse,
+      '/cost-categories': {
+        'items': [categoryResponse]
+      },
     });
     await pumpFlow(
       tester,
@@ -99,8 +103,10 @@ void main() {
 
   testWidgets('手动校正页补齐字段后可保存', (tester) async {
     final adapter = RecordingAdapter({
-      'POST /costs': costRecordResponse,
-      '/cost-categories': [categoryResponse],
+      'POST /cost-records': costRecordResponse,
+      '/cost-categories': {
+        'items': [categoryResponse]
+      },
     });
     await pumpFlow(
       tester,
@@ -123,7 +129,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('记录已保存'), findsOneWidget);
-    expect(adapter.find('POST', '/costs').data, {
+    expect(adapter.find('POST', '/cost-records').data, {
       'category': '肥料',
       'amount': '200',
     });
@@ -153,32 +159,21 @@ void main() {
     expect(find.text('完成'), findsOneWidget);
   });
 
-  testWidgets('记录页入口解析后进入确认页并能从成功页切到账本', (tester) async {
+  testWidgets('记录页自然语言入口使用芽芽对话', (tester) async {
     await pumpFlow(
-      tester,
-      AppShell(dependencies: FakeAppDependencies(), initialIndex: 1),
-    );
-
-    await tester.enterText(find.byType(TextField).first, '今天买肥料 200');
-    await tester.tap(find.text('立即识别'));
+        tester, AppShell(dependencies: FakeAppDependencies(), initialIndex: 1));
+    await tester.tap(find.text('让芽芽帮你整理'));
     await tester.pumpAndSettle();
-    expect(find.text('智能确认'), findsOneWidget);
-    expect(find.text('首页'), findsNothing);
-
-    await tester.tap(find.text('确认保存').last);
-    await tester.pumpAndSettle();
-    expect(find.text('记录已保存'), findsOneWidget);
-
-    await tester.tap(find.text('查看账本'));
-    await tester.pumpAndSettle();
-    expect(find.text('资金概览'), findsOneWidget);
-    expect(find.text('账本'), findsWidgets);
+    expect(find.byType(TextField), findsWidgets);
+    expect(find.text('让芽芽帮你整理'), findsNothing);
   });
 
   testWidgets('自己填手动记账可保存', (tester) async {
     final adapter = RecordingAdapter({
-      'POST /costs': costRecordResponse,
-      '/cost-categories': [categoryResponse],
+      'POST /cost-records': costRecordResponse,
+      '/cost-categories': {
+        'items': [categoryResponse]
+      },
     });
     final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
     dio.httpClientAdapter = adapter;

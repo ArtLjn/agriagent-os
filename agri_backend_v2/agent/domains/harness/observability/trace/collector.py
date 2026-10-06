@@ -525,18 +525,56 @@ def trace_tool_call(
     duration_ms: int | None = None,
     error: str | None = None,
     attempt: int = 1,
+    *,
+    agent_tool_name: str = "",
+    business_tool_name: str = "",
+    operation: str = "",
+    capability_group: str = "",
+    data_scope: str = "",
+    freshness_requirement: str = "",
+    tool_call_id: str = "",
+    progress: str = "",
+    progress_reason: str = "",
+    observation_fingerprint: str = "",
+    semantic_progress: str = "",
+    semantic_progress_reason: str = "",
+    parallel_batch_id: str = "",
+    status: str = "",
+    step_index: int | None = None,
 ) -> None:
-    """便捷方法：记录工具调用。"""
+    """记录 Agent 工具到 Business MCP 的真实映射和观察进度。"""
+    resolved_agent_name = agent_tool_name or tool_name
+    attributes = {
+        "tool_name": resolved_agent_name,
+        "agent_tool_name": resolved_agent_name,
+        "business_tool_name": business_tool_name,
+        "operation": operation,
+        "capability_group": capability_group,
+        "data_scope": data_scope,
+        "freshness_requirement": freshness_requirement,
+        "tool_call_id": tool_call_id,
+        "progress": progress,
+        "progress_reason": progress_reason,
+        "observation_fingerprint": observation_fingerprint,
+        "semantic_progress": semantic_progress,
+        "semantic_progress_reason": semantic_progress_reason,
+        "parallel_batch_id": parallel_batch_id,
+    }
+    attributes = {
+        key: value for key, value in attributes.items() if value not in ("", None)
+    }
     record(
         node_type="tool_call",
-        node_name=tool_name,
+        node_name=resolved_agent_name,
         input_data=arguments,
         output_data=result,
         duration_ms=duration_ms,
         error_message=error,
         phase="tool_executing",
         attempt=attempt,
-        attributes={"tool_name": tool_name},
+        attributes=attributes,
+        step_index=step_index,
+        status=status or None,
     )
 
 
@@ -607,6 +645,7 @@ def trace_catalog_recall(
     candidate_tools: list[str],
     duration_ms: int | None = None,
     router_mode: str = "llm_tool_binding",
+    step_budget: dict[str, Any] | None = None,
 ) -> None:
     """记录 LLM 决策前的 Skill 候选目录快照。"""
     record(
@@ -622,6 +661,7 @@ def trace_catalog_recall(
             "candidate_count": len(candidate_tools),
             "selection_status": "pending",
             "decision_source": "skill_registry",
+            "step_budget": step_budget or {},
         },
         duration_ms=duration_ms,
         phase="setup",
@@ -630,6 +670,10 @@ def trace_catalog_recall(
             "exposed_tool_count": exposed_tool_count,
             "candidate_count": len(candidate_tools),
             "router_mode": router_mode,
+            "step_budget_source": (step_budget or {}).get("source", ""),
+            "step_budget_limit": (step_budget or {}).get("resolved_steps"),
+            "step_budget_confidence": (step_budget or {}).get("confidence"),
+            "step_budget_reason": (step_budget or {}).get("reason", ""),
         },
     )
 

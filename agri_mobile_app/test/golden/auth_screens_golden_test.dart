@@ -1,3 +1,4 @@
+import 'package:farm_manager_app/theme/app_theme.dart';
 import 'package:farm_manager_app/features/auth/login_screen.dart';
 import 'package:farm_manager_app/features/auth/onboarding_setup_screen.dart';
 import 'package:farm_manager_app/features/auth/register_screen.dart';
@@ -42,7 +43,8 @@ void main() {
         name: 'setup',
       );
 
-    await tester.pumpDeviceBuilder(builder);
+    await tester.pumpDeviceBuilder(builder,
+        wrapper: materialAppWrapper(theme: AppTheme.light()));
     await screenMatchesGolden(tester, 'auth_mobile_screens');
   });
 }

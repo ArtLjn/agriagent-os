@@ -83,30 +83,52 @@ class _AuthFlowState extends State<AuthFlow> {
       AuthStep.restoring => const Scaffold(
           body: Center(child: CircularProgressIndicator()),
         ),
-      AuthStep.login => LoginScreen(
-          onLogin: ({
-            required String phone,
-            required String password,
-          }) async {
-            await widget.dependencies.login(phone: phone, password: password);
-            await _enterAfterAuth();
+      // 保留两页的表单草稿；认证成功后整个账号入口离开组件树并释放密码。
+      AuthStep.login || AuthStep.register => PopScope(
+          canPop: step != AuthStep.register,
+          onPopInvokedWithResult: (didPop, result) {
+            if (!didPop && step == AuthStep.register) {
+              FocusScope.of(context).unfocus();
+              setState(() => step = AuthStep.login);
+            }
           },
-          onRegister: () => setState(() => step = AuthStep.register),
-        ),
-      AuthStep.register => RegisterScreen(
-          onRegister: ({
-            required String phone,
-            required String password,
-            required String nickname,
-          }) async {
-            await widget.dependencies.register(
-              phone: phone,
-              password: password,
-              nickname: nickname,
-            );
-            if (mounted) setState(() => step = AuthStep.setup);
-          },
-          onLogin: () => setState(() => step = AuthStep.login),
+          child: IndexedStack(
+            index: step == AuthStep.login ? 0 : 1,
+            children: [
+              LoginScreen(
+                onLogin: ({
+                  required String phone,
+                  required String password,
+                }) async {
+                  await widget.dependencies
+                      .login(phone: phone, password: password);
+                  await _enterAfterAuth();
+                },
+                onRegister: () {
+                  FocusScope.of(context).unfocus();
+                  setState(() => step = AuthStep.register);
+                },
+              ),
+              RegisterScreen(
+                onRegister: ({
+                  required String phone,
+                  required String password,
+                  required String nickname,
+                }) async {
+                  await widget.dependencies.register(
+                    phone: phone,
+                    password: password,
+                    nickname: nickname,
+                  );
+                  if (mounted) setState(() => step = AuthStep.setup);
+                },
+                onLogin: () {
+                  FocusScope.of(context).unfocus();
+                  setState(() => step = AuthStep.login);
+                },
+              ),
+            ],
+          ),
         ),
       AuthStep.setup => OnboardingSetupScreen(
           profile: widget.dependencies.profile,

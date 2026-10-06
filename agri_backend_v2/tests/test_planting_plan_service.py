@@ -18,6 +18,7 @@ from business.models import (
     PlantingUnit,
 )
 from business.services import cycle_service, planting_plan_service
+from business.services.crop_service import normalize_crop_name
 
 
 @pytest.fixture
@@ -63,6 +64,45 @@ def _add_template(
     db.flush()
     db.refresh(template, attribute_names=["growth_stages"])
     return template
+
+
+def test_normalize_crop_name_keeps_base_crop_and_strips_context_suffix() -> None:
+    assert normalize_crop_name("水稻（苏州虎丘）") == normalize_crop_name("水稻")
+    assert normalize_crop_name("水稻(苏州虎丘)") == normalize_crop_name("水稻")
+    assert normalize_crop_name("水稻（苏州）二号") != normalize_crop_name("水稻")
+
+
+def test_prepare_and_commit_accept_contextual_template_name(
+    session_factory: sessionmaker[Session],
+) -> None:
+    with session_factory.begin() as db:
+        prepared = planting_plan_service.prepare_planting_plan(
+            db,
+            farm_id=1,
+            crop_name="水稻",
+            total_area_mu=20,
+            field_name="虎丘",
+            start_date="2026-08-27",
+            template_strategy="create_custom",
+            custom_template={
+                "name": "水稻（苏州虎丘）",
+                "variety": "常规水稻",
+                "category": "粮食作物",
+                "stages": [{"name": "育苗期", "duration_days": 25}],
+            },
+        )
+
+    with session_factory.begin() as db:
+        committed = planting_plan_service.commit_planting_plan(
+            db,
+            farm_id=1,
+            client_request_id=prepared["client_request_id"],
+            approval_fingerprint=prepared["approval_fingerprint"],
+            plan=prepared["plan"],
+        )
+
+    assert committed["status"] == "committed"
+    assert committed["template"]["name"] == "水稻（苏州虎丘）"
 
 
 def test_prepare_and_commit_use_matching_template_atomically(

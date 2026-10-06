@@ -23,6 +23,7 @@ class CreateWorkerRequest(StrictRequest):
         default="daily", pattern="^(daily|hourly|monthly|piece)$"
     )
     default_unit_price: Decimal | None = Field(default=None, ge=0)
+    status: str = Field(default="active", pattern="^(active|inactive)$")
     note: str | None = Field(default=None, max_length=500)
 
 

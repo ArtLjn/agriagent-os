@@ -8,7 +8,7 @@ class AppTextStyles {
   static const title = TextStyle(
     fontSize: 22,
     height: 28 / 22,
-    fontWeight: FontWeight.w800,
+    fontWeight: FontWeight.w600,
     color: AppColors.ink,
     letterSpacing: 0,
   );
@@ -16,7 +16,7 @@ class AppTextStyles {
   static const dateTitle = TextStyle(
     fontSize: 18,
     height: 26 / 18,
-    fontWeight: FontWeight.w800,
+    fontWeight: FontWeight.w600,
     color: AppColors.ink,
     letterSpacing: 0,
   );
@@ -24,7 +24,7 @@ class AppTextStyles {
   static const sectionTitle = TextStyle(
     fontSize: 16,
     height: 22 / 16,
-    fontWeight: FontWeight.w800,
+    fontWeight: FontWeight.w600,
     color: AppColors.ink,
     letterSpacing: 0,
   );
@@ -63,7 +63,7 @@ class AppTextStyles {
   static const metric = TextStyle(
     fontSize: 30,
     height: 36 / 30,
-    fontWeight: FontWeight.w800,
+    fontWeight: FontWeight.w600,
     color: AppColors.ink,
     letterSpacing: 0,
   );

@@ -87,6 +87,7 @@ def _public_event(
         "tool_started",
         "tool_finished",
         "observation",
+        "progress",
     }:
         return "progress", {"message": "正在处理请求"}
     if event_type in {"step.started", "step.completed"}:

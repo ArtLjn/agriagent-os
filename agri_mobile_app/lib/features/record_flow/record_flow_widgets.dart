@@ -41,7 +41,7 @@ class FlowScaffold extends StatelessWidget {
           child: Stack(
             children: [
               SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(20, 8, 20, bottomPadding),
+                padding: EdgeInsets.fromLTRB(24, 16, 24, bottomPadding),
                 child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 430),
@@ -172,7 +172,7 @@ class StepIndicator extends StatelessWidget {
             '识别完成',
             style: AppTextStyles.body.copyWith(
               color: AppColors.blue,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(width: 10),
@@ -187,7 +187,7 @@ class StepIndicator extends StatelessWidget {
             '确认保存',
             style: AppTextStyles.body.copyWith(
               color: AppColors.subtle,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -225,7 +225,7 @@ class _StepCircle extends StatelessWidget {
           number,
           style: AppTextStyles.body.copyWith(
             color: Colors.white,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
@@ -264,7 +264,7 @@ class FlowChip extends StatelessWidget {
             label,
             style: AppTextStyles.body.copyWith(
               color: color,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -362,7 +362,7 @@ class FieldValueRow extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: AppTextStyles.body.copyWith(
                 fontSize: 14,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -385,7 +385,7 @@ class FlowHintCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: AppColors.blueSoft,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         children: [
@@ -453,22 +453,13 @@ class FlowButton extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(
-        height: 46,
+        height: 56,
         decoration: BoxDecoration(
           color: primary ? AppColors.blue : AppColors.surface,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: primary ? AppColors.blue : AppColors.blue,
           ),
-          boxShadow: primary
-              ? [
-                  BoxShadow(
-                    color: AppColors.blue.withValues(alpha: 0.18),
-                    blurRadius: 18,
-                    offset: const Offset(0, 8),
-                  ),
-                ]
-              : null,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -518,7 +509,7 @@ class ContextPill extends StatelessWidget {
               height: 28,
               decoration: BoxDecoration(
                 color: AppColors.blue,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(16),
               ),
               child: const Icon(LucideIcons.bot, color: Colors.white, size: 16),
             ),
@@ -527,7 +518,7 @@ class ContextPill extends StatelessWidget {
               'AI已帮你填好大部分',
               style: AppTextStyles.body.copyWith(
                 color: AppColors.blue,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
@@ -552,10 +543,10 @@ class SegmentItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 46,
+      height: 56,
       decoration: BoxDecoration(
         color: selected ? AppColors.blueSoft : Colors.transparent,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: selected
               ? AppColors.blue.withValues(alpha: 0.38)
@@ -665,55 +656,18 @@ class SuccessEmblem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 132,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Container(
-            width: 96,
-            height: 96,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(
-                colors: [
-                  AppColors.green.withValues(alpha: 0.22),
-                  AppColors.blue.withValues(alpha: 0.16),
-                  Colors.transparent,
-                ],
-              ),
-            ),
-          ),
-          Container(
-            width: 76,
-            height: 76,
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              shape: BoxShape.circle,
-              border: Border.all(color: AppColors.green, width: 4),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.green.withValues(alpha: 0.2),
-                  blurRadius: 24,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child:
-                const Icon(LucideIcons.check, color: AppColors.green, size: 40),
-          ),
-          const Positioned(
-            left: 86,
-            top: 34,
-            child: Icon(LucideIcons.sparkles, color: AppColors.green, size: 18),
-          ),
-          const Positioned(
-            right: 90,
-            bottom: 32,
-            child: Icon(LucideIcons.sparkles, color: AppColors.amber, size: 16),
-          ),
-        ],
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 32),
+      child: Center(
+          child: Container(
+        width: 80,
+        height: 80,
+        decoration: BoxDecoration(
+            color: AppColors.greenSoft,
+            borderRadius: BorderRadius.circular(28)),
+        child:
+            const Icon(LucideIcons.check, color: AppColors.greenDark, size: 40),
+      )),
     );
   }
 }
@@ -752,7 +706,7 @@ class SummaryMetaItem extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: AppTextStyles.body.copyWith(
               color: AppColors.muted,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),
@@ -832,7 +786,7 @@ class SuccessActionRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
           color: AppColors.surface,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(color: AppColors.line),
         ),
         child: Row(
@@ -852,7 +806,7 @@ class SuccessActionRow extends StatelessWidget {
                 label,
                 style: AppTextStyles.body.copyWith(
                   fontSize: 15,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -863,55 +817,6 @@ class SuccessActionRow extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class ManagerTipCard extends StatelessWidget {
-  const ManagerTipCard({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.blueSoft,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.blue.withValues(alpha: 0.08)),
-      ),
-      child: Row(
-        children: [
-          const SoftIconTile(
-            icon: LucideIcons.bot,
-            color: AppColors.blue,
-            background: AppColors.surface,
-            size: 48,
-            iconSize: 24,
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Text.rich(
-              TextSpan(
-                text: '小管家提示\n',
-                style: AppTextStyles.sectionTitle.copyWith(
-                  color: AppColors.blue,
-                  fontSize: 15,
-                ),
-                children: [
-                  TextSpan(
-                    text: '下次可以直接说 买饲料花了多少钱',
-                    style: AppTextStyles.body.copyWith(
-                      color: AppColors.ink,
-                      fontSize: 15,
-                      height: 1.45,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

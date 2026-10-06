@@ -99,9 +99,7 @@ async def test_duplicate_dispatch_skips_turn_owned_by_another_worker(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     recover = AsyncMock()
-    monkeypatch.setattr(
-        worker, "inspect_turn_lease", AsyncMock(return_value="held")
-    )
+    monkeypatch.setattr(worker, "inspect_turn_lease", AsyncMock(return_value="held"))
     monkeypatch.setattr(worker, "_recover_interrupted_turn", recover)
 
     should_run = await worker._prepare_execution_lease(
@@ -117,9 +115,7 @@ async def test_accepted_turn_reclaims_missing_lease_without_replaying_tools(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     claim = AsyncMock(return_value=True)
-    monkeypatch.setattr(
-        worker, "inspect_turn_lease", AsyncMock(return_value="missing")
-    )
+    monkeypatch.setattr(worker, "inspect_turn_lease", AsyncMock(return_value="missing"))
     monkeypatch.setattr(worker, "claim_recovered_lease", claim)
 
     should_run = await worker._prepare_execution_lease(
@@ -135,9 +131,7 @@ async def test_running_turn_with_missing_lease_is_finalized_without_rerun(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     recover = AsyncMock()
-    monkeypatch.setattr(
-        worker, "inspect_turn_lease", AsyncMock(return_value="missing")
-    )
+    monkeypatch.setattr(worker, "inspect_turn_lease", AsyncMock(return_value="missing"))
     monkeypatch.setattr(worker, "_recover_interrupted_turn", recover)
     turn = Turn(turn_id="turn-1")
     state = {"status": "running"}
@@ -197,6 +191,8 @@ async def test_pending_finalization_recovery_does_not_enter_runtime(
     monkeypatch.setattr(worker, "_finish_assistant_persistence", finish)
     update_turn = AsyncMock()
     monkeypatch.setattr(worker, "update_turn", update_turn)
+    publish = AsyncMock()
+    monkeypatch.setattr(worker, "publish_event", publish)
 
     await worker._process_messages(
         client,
@@ -208,6 +204,7 @@ async def test_pending_finalization_recovery_does_not_enter_runtime(
     run_turn.assert_not_awaited()
     finish.assert_awaited_once()
     client.xack.assert_awaited_once()
+    assert publish.await_args.args[1]["type"] == "done"
 
 
 @pytest.mark.asyncio

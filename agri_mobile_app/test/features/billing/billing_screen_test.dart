@@ -14,9 +14,9 @@ void main() {
         MaterialApp(home: BillingScreen(repository: _repository())));
     await tester.pumpAndSettle();
 
-    expect(find.bySemanticsLabel('田掌柜'), findsOneWidget);
-    expect(find.text('资金概览'), findsOneWidget);
-    expect(find.text('AI财务洞察'), findsOneWidget);
+    expect(find.text('账本'), findsOneWidget);
+    expect(find.text('年度净收益'), findsOneWidget);
+    expect(find.text('经营提示'), findsOneWidget);
     expect(find.text('收入'), findsWidgets);
     expect(find.text('支出'), findsWidgets);
     expect(find.text('欠款'), findsWidgets);
@@ -25,10 +25,42 @@ void main() {
     expect(find.text('-¥200'), findsWidgets);
     expect(find.text('最近交易'), findsOneWidget);
     expect(find.text('肥料'), findsOneWidget);
-    expect(find.textContaining('老王'), findsWidgets);
     expect(find.text('AI帮我填'), findsNothing);
     expect(find.text('AI待确认'), findsNothing);
     expect(find.text('智能记账'), findsNothing);
+  });
+
+  testWidgets('账本首页按日期整理流水，点击可查看真实金额和备注', (tester) async {
+    await tester.pumpWidget(MaterialApp(
+        home: BillingScreen(
+            repository: _repository(costs: _manyCostsResponse()))));
+    await tester.pumpAndSettle();
+    final first = find.text('交易1');
+    final second = find.text('交易2');
+    expect(tester.getTopLeft(first).dy, lessThan(tester.getTopLeft(second).dy));
+    await tester.ensureVisible(first);
+    await tester.tap(first);
+    await tester.pumpAndSettle();
+    expect(find.text('复制金额'), findsOneWidget);
+    expect(find.text('备注'), findsOneWidget);
+    expect(find.text('关闭'), findsOneWidget);
+    await tester.tap(find.text('关闭'));
+    await tester.pumpAndSettle();
+    expect(find.text('复制金额'), findsNothing);
+  });
+
+  testWidgets('没有交易时显示记账引导，不显示装饰曲线与 AI 分析', (tester) async {
+    await tester.pumpWidget(MaterialApp(
+        home: BillingScreen(
+            repository: _repository(costs: {'items': [], 'total': 0}))));
+    await tester.pumpAndSettle();
+    expect(find.text('暂无交易'), findsOneWidget);
+    expect(find.textContaining('从第一笔收支开始'), findsOneWidget);
+    expect(find.text('AI 财务洞察'), findsNothing);
+    expect(find.text('经营提示'), findsOneWidget);
+    await tester.tap(find.text('查看全部'));
+    await tester.pumpAndSettle();
+    expect(find.text('账单'), findsOneWidget);
   });
 
   testWidgets('账本不展示 API 路径', (tester) async {
@@ -112,7 +144,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('-¥1234567890'), findsOneWidget);
+    expect(find.text('-¥1,234,567,890'), findsOneWidget);
   });
 
   testWidgets('账本年度净收益大金额紧凑展示', (tester) async {
@@ -154,7 +186,7 @@ void main() {
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
-          body: AiFinanceInsightCard(
+          body: FinanceNoteCard(
             model: BillingViewModel(
               incomeText: '¥0',
               expenseText: '¥0',
@@ -168,8 +200,8 @@ void main() {
       ),
     );
 
-    expect(find.text('AI财务洞察'), findsOneWidget);
-    expect(find.textContaining('已读取本年收支数据'), findsOneWidget);
+    expect(find.text('经营提示'), findsOneWidget);
+    expect(find.textContaining('让经营复盘有据可依'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -191,7 +223,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('账单'), findsOneWidget);
-    expect(find.text('2026年6月'), findsOneWidget);
+    expect(find.textContaining(_monthTitle(0)), findsWidgets);
     expect(find.text('全部'), findsOneWidget);
     expect(find.text('交易6'), findsOneWidget);
   });
@@ -210,7 +242,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('账单'), findsOneWidget);
-    expect(find.text('新增记录'), findsOneWidget);
+    expect(find.text('新增记录'), findsNothing);
     expect(find.text('交易12'), findsOneWidget);
 
     for (var i = 0; i < 4; i++) {
@@ -239,19 +271,14 @@ void main() {
     expect(find.text('收入交易'), findsOneWidget);
     expect(find.text('欠款交易'), findsOneWidget);
 
-    await tester.tap(find.byKey(const Key('transaction-filter-income')));
+    await tester.tap(find.text('收入').last);
     await tester.pumpAndSettle();
 
     expect(find.text('收入交易'), findsOneWidget);
     expect(find.text('支出交易'), findsNothing);
     expect(find.text('欠款交易'), findsNothing);
 
-    await tester.drag(
-      find.byType(ListView),
-      const Offset(-320, 0),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('transaction-filter-debt')));
+    await tester.tap(find.text('欠款').last);
     await tester.pumpAndSettle();
 
     expect(find.text('欠款交易'), findsOneWidget);
@@ -277,10 +304,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('上月'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('确认'));
+    await tester.tap(find.text('应用筛选'));
     await tester.pumpAndSettle();
 
-    expect(find.text('2026年5月'), findsOneWidget);
+    expect(find.textContaining(_monthTitle(-1)), findsWidgets);
     expect(find.text('上月交易'), findsOneWidget);
     expect(find.text('支出交易'), findsNothing);
 
@@ -288,10 +315,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('全部时间'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('确认'));
+    await tester.tap(find.text('应用筛选'));
     await tester.pumpAndSettle();
 
-    expect(find.text('全部时间'), findsWidgets);
+    expect(find.textContaining('全部时间'), findsWidgets);
     expect(find.text('支出交易'), findsOneWidget);
     expect(find.text('上月交易'), findsOneWidget);
   });
@@ -316,7 +343,7 @@ void main() {
     await tester.tap(find.byKey(const Key('date-filter-confirm')));
     await tester.pumpAndSettle();
 
-    expect(find.text('2026年5月'), findsOneWidget);
+    expect(find.textContaining(_monthTitle(-1)), findsWidgets);
     expect(find.text('上月交易'), findsOneWidget);
     expect(find.text('支出交易'), findsNothing);
   });
@@ -337,14 +364,14 @@ class _FakeBillingApi {
     Map<String, dynamic>? summary,
     Map<String, dynamic>? costs,
   }) : adapter = RecordingAdapter({
-          '/costs': costs ??
+          '/cost-records': costs ??
               {
                 'items': [
                   {...costRecordResponse, 'amount': amount}
                 ],
                 'total': 1,
               },
-          '/costs/summary/2026': summary ?? yearlySummaryResponse,
+          '/cost-records/summary/yearly': summary ?? yearlySummaryResponse,
           '/debts': debtsResponse,
         }) {
     final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
@@ -366,7 +393,7 @@ Map<String, dynamic> _manyCostsResponse({int count = 6}) {
         'id': number,
         'category': '交易$number',
         'amount': '${number * 100}',
-        'record_date': '2026-06-$day',
+        'record_date': _recordDate(0, day),
         'counterparty': null,
       };
     }),
@@ -383,7 +410,7 @@ Map<String, dynamic> _mixedCostsResponse() {
         'record_type': 'cost',
         'category': '支出交易',
         'amount': '100',
-        'record_date': '2026-06-09',
+        'record_date': _recordDate(0, 9),
         'counterparty': null,
       },
       {
@@ -392,7 +419,7 @@ Map<String, dynamic> _mixedCostsResponse() {
         'record_type': 'income',
         'category': '收入交易',
         'amount': '500',
-        'record_date': '2026-06-08',
+        'record_date': _recordDate(0, 8),
         'counterparty': null,
       },
       {
@@ -401,7 +428,7 @@ Map<String, dynamic> _mixedCostsResponse() {
         'record_type': 'debt',
         'category': '欠款交易',
         'amount': '300',
-        'record_date': '2026-06-07',
+        'record_date': _recordDate(0, 7),
         'counterparty': '张三',
       },
       {
@@ -410,7 +437,7 @@ Map<String, dynamic> _mixedCostsResponse() {
         'record_type': 'cost',
         'category': '上月交易',
         'amount': '200',
-        'record_date': '2026-05-20',
+        'record_date': _recordDate(-1, 20),
         'counterparty': null,
       },
       {
@@ -419,7 +446,7 @@ Map<String, dynamic> _mixedCostsResponse() {
         'record_type': 'cost',
         'category': '交易5',
         'amount': '100',
-        'record_date': '2026-06-06',
+        'record_date': _recordDate(0, 6),
         'counterparty': null,
       },
       {
@@ -428,10 +455,24 @@ Map<String, dynamic> _mixedCostsResponse() {
         'record_type': 'cost',
         'category': '交易6',
         'amount': '100',
-        'record_date': '2026-06-05',
+        'record_date': _recordDate(0, 5),
         'counterparty': null,
       },
     ],
     'total': 6,
   };
+}
+
+String _monthTitle(int offset) {
+  final now = DateTime.now();
+  final month = DateTime(now.year, now.month + offset);
+  return '${month.year}年${month.month}月';
+}
+
+String _recordDate(int offset, int day) {
+  final now = DateTime.now();
+  return DateTime(now.year, now.month + offset, day)
+      .toIso8601String()
+      .split('T')
+      .first;
 }

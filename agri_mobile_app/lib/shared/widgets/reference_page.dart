@@ -11,8 +11,10 @@ class ReferencePage extends StatelessWidget {
     required this.children,
     this.headerTrailing,
     this.showHeaderLogo = true,
-    this.bottomPadding = 112,
+    this.bottomPadding = 32,
     this.overlay,
+    this.title,
+    this.subtitle,
   });
 
   final List<Widget> children;
@@ -20,68 +22,84 @@ class ReferencePage extends StatelessWidget {
   final bool showHeaderLogo;
   final double bottomPadding;
   final Widget? overlay;
+  final String? title;
+  final String? subtitle;
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Stack(
-        children: [
-          SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(20, 14, 20, bottomPadding),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 430),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    ReferenceHeader(
-                      trailing: headerTrailing,
-                      showLogo: showHeaderLogo,
-                    ),
-                    ...children,
-                  ],
+    return Material(
+      color: Colors.transparent,
+      child: SafeArea(
+        child: Stack(
+          children: [
+            SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(24, 16, 24, bottomPadding),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 430),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      ReferenceHeader(
+                        trailing: headerTrailing,
+                        showLogo: showHeaderLogo,
+                        title: title,
+                        subtitle: subtitle,
+                      ),
+                      ...children,
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-          if (overlay != null)
-            Positioned(
-              left: 20,
-              right: 20,
-              bottom: 92,
-              child: overlay!,
-            ),
-        ],
+            if (overlay != null)
+              Positioned(
+                left: 20,
+                right: 20,
+                bottom: 92,
+                child: overlay!,
+              ),
+          ],
+        ),
       ),
     );
   }
 }
 
 class ReferenceHeader extends StatelessWidget {
-  const ReferenceHeader({super.key, this.trailing, this.showLogo = true});
+  const ReferenceHeader(
+      {super.key,
+      this.trailing,
+      this.showLogo = true,
+      this.title,
+      this.subtitle});
 
   final Widget? trailing;
   final bool showLogo;
+  final String? title;
+  final String? subtitle;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 52,
-      child: Row(
-        children: [
-          Expanded(
-            child: showLogo
-                ? const FarmBrandLockup(height: 42)
-                : const Text(
-                    AppIdentity.displayName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.title,
-                  ),
-          ),
-          if (trailing != null) trailing!,
+    return Row(
+      children: [
+        if (showLogo) ...[
+          const FarmBrandMark(size: 40),
+          const SizedBox(width: 12),
         ],
-      ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title ?? AppIdentity.displayName,
+                  style: AppTextStyles.title),
+              const SizedBox(height: 4),
+              Text(subtitle ?? '你的农场经营助手', style: AppTextStyles.small),
+            ],
+          ),
+        ),
+        if (trailing != null) trailing!,
+      ],
     );
   }
 }
@@ -139,58 +157,6 @@ class FarmBrandMark extends StatelessWidget {
         AppAssets.brandLogo,
         fit: BoxFit.contain,
         errorBuilder: (_, __, ___) => CustomPaint(painter: _FarmBrandPainter()),
-      ),
-    );
-  }
-}
-
-class HeaderIconButton extends StatelessWidget {
-  const HeaderIconButton({
-    super.key,
-    required this.icon,
-    this.badge,
-  });
-
-  final IconData icon;
-  final String? badge;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 44,
-      height: 44,
-      child: Stack(
-        clipBehavior: Clip.none,
-        alignment: Alignment.center,
-        children: [
-          Icon(icon, size: 24, color: AppColors.ink),
-          if (badge != null)
-            Positioned(
-              right: 4,
-              top: 3,
-              child: Container(
-                constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.red,
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: AppColors.surface, width: 1.5),
-                ),
-                child: Center(
-                  child: Text(
-                    badge!,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      height: 1,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
       ),
     );
   }
@@ -298,7 +264,7 @@ class StatusPill extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: AppTextStyles.small.copyWith(
           color: color,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );

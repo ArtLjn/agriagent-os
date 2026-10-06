@@ -10,7 +10,7 @@ class BillingController {
 
   Future<BillingViewModel> load() async {
     final results = await Future.wait<Object>([
-      repository.listCosts(size: 10),
+      repository.listAllCosts(),
       repository.getYearlySummary(year),
       repository.listDebts(size: 10),
     ]);
@@ -31,21 +31,7 @@ class BillingController {
       ),
       transactions: costs.items.map(_transaction).toList(),
       receivables: receivables,
-      monthlyTrend: _monthlyTrend(costs.items),
     );
-  }
-
-  List<double> _monthlyTrend(List<ApiRecord> items) {
-    final monthly = List<double>.filled(12, 0);
-    for (final item in items) {
-      final json = item.json;
-      final date = _parseDate(_firstNonEmpty([json['record_date'], json['created_at']]));
-      if (date == null || date.year != year) continue;
-      final amount = _number(json['amount']);
-      final isIncome = '${json['record_type']}' == 'income';
-      monthly[date.month - 1] += isIncome ? amount.abs() : -amount.abs();
-    }
-    return monthly;
   }
 
   BillingTransactionViewModel _transaction(ApiRecord record) {
@@ -138,7 +124,6 @@ class BillingViewModel {
     required this.transactions,
     required this.receivables,
     this.insightText,
-    this.monthlyTrend = const [],
   });
 
   final String incomeText;
@@ -148,9 +133,6 @@ class BillingViewModel {
   final String? insightText;
   final List<BillingTransactionViewModel> transactions;
   final List<BillingReceivableViewModel> receivables;
-
-  /// 12 个月净收益曲线（index 0 = 1 月），数据源来自已加载交易按月聚合。
-  final List<double> monthlyTrend;
 
   bool get isDeficit => netProfitText.startsWith('-');
 }

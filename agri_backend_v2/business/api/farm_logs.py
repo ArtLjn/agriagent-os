@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import Field
@@ -20,6 +20,7 @@ class CreateLogRequest(StrictRequest):
     cycle_id: int = Field(gt=0)
     operation_type: str = Field(min_length=1, max_length=50)
     operation_date: date | None = None
+    operation_time: datetime | None = None
     note: str | None = Field(default=None, max_length=500)
     worker_ids: list[int] | None = Field(default=None, max_length=100)
     worker_names: list[str] | None = Field(default=None, max_length=100)
@@ -29,6 +30,7 @@ class UpdateLogRequest(StrictRequest):
     cycle_id: int | None = Field(default=None, gt=0)
     operation_type: str | None = Field(default=None, min_length=1, max_length=50)
     operation_date: date | None = None
+    operation_time: datetime | None = None
     note: str | None = Field(default=None, max_length=500)
     worker_ids: list[int] | None = Field(default=None, max_length=100)
     worker_names: list[str] | None = Field(default=None, max_length=100)
@@ -84,6 +86,7 @@ def create_log(
             operation_date=(
                 request.operation_date.isoformat() if request.operation_date else None
             ),
+            operation_time=request.operation_time,
             note=request.note,
             worker_ids=request.worker_ids,
             worker_names=request.worker_names,

@@ -1,3 +1,4 @@
+import 'package:farm_manager_app/theme/app_theme.dart';
 import 'package:farm_manager_app/features/shell/app_shell.dart';
 import 'package:flutter/material.dart';
 import 'package:golden_toolkit/golden_toolkit.dart';
@@ -32,7 +33,8 @@ void main() {
         name: 'profile',
       );
 
-    await tester.pumpDeviceBuilder(builder);
+    await tester.pumpDeviceBuilder(builder,
+        wrapper: materialAppWrapper(theme: AppTheme.light()));
     await screenMatchesGolden(tester, 'farm_manager_mobile_screens');
   });
 }

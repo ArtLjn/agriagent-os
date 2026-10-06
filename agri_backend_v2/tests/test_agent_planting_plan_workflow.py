@@ -135,6 +135,11 @@ def _patch_react_runtime(
     commit = commit_skill or _CommitSkill()
     monkeypatch.setattr(react, "BusinessClient", _BusinessClient)
     monkeypatch.setattr(react, "chat_stream", fake_chat_stream)
+
+    async def no_budget_estimate(_turn):
+        return None, None
+
+    monkeypatch.setattr(react, "_estimate_turn_budget", no_budget_estimate)
     monkeypatch.setattr(react.skill_loader, "load_all", lambda: [prepare, commit])
     # 不再 patch to_openai_tools，让真实实现按 exposed 过滤（commit 不暴露给模型）
     monkeypatch.setattr(

@@ -15,7 +15,12 @@ from agent.domains.harness.router import SkillRoute
 from agent.domains.harness.runtime.turn import StopReason, Turn, TurnPhase
 from agent.platforms.persistence.redis import sse, turn_store
 from agent.domains.harness.observability import trace as trace_infra
-from agent.domains.harness.tools.base import McpSkill, OperationSkill, Skill, SkillResult
+from agent.domains.harness.tools.base import (
+    McpSkill,
+    OperationSkill,
+    Skill,
+    SkillResult,
+)
 from agent.domains.harness.tools.registry import SkillRegistry, SkillRegistryError
 
 
@@ -36,6 +41,145 @@ class _ReadSkill(Skill):
         if self.error:
             return SkillResult(error=self.error)
         return SkillResult(data={"skill": self.name})
+
+
+@pytest.mark.asyncio
+async def test_read_finalization_never_claims_business_commit() -> None:
+    skill = _ReadSkill("get_farm_status")
+    turn = Turn(user_input="今天适合干什么")
+    state = react._SkillExecState()
+    state.result = {"cycles": [], "message": "农场概览"}
+    state.finalize_after_success = True
+    events = [
+        event
+        async for event in react._post_process_skill_result(
+            tc={"id": "read-1", "name": skill.name, "arguments": {}},
+            turn=turn,
+            skill=skill,
+            tracker=react.verify.CallTracker(),
+            state=state,
+            skill_index={skill.name: skill},
+            skill_ctx=SimpleNamespace(),
+            approval_waiter=_approve,
+            rationale="查看农场",
+        )
+    ]
+    assert turn.finalization_pending is True
+    assert turn.committed_result is None
+    assert not any(event["type"] == "operation_committed" for event in events)
+
+
+@pytest.mark.asyncio
+async def test_read_finalization_disables_tools_and_returns_model_answer(
+    monkeypatch,
+) -> None:
+    choices = []
+
+    async def answer(messages, tools, **kwargs):
+        choices.append(kwargs.get("tool_choice"))
+        yield react._LlmResult(full_content="今天建议检查土壤湿度")
+
+    monkeypatch.setattr(react, "_call_llm_stream", answer)
+    turn = Turn(user_input="今天适合干什么")
+    turn.finalization_pending = True
+    events = [
+        event
+        async for event in react._run_single_reasoning_step(
+            turn=turn,
+            tools_schema=[],
+            tracker=react.verify.CallTracker(),
+            plan_box={"plan": None},
+            skill_index={},
+            skill_ctx=SimpleNamespace(),
+            approval_waiter=_approve,
+        )
+    ]
+    assert choices == ["none"]
+    assert turn.final_answer == "今天建议检查土壤湿度"
+    assert turn.committed_result is None
+    assert any(event["type"] == "final_answer" for event in events)
+
+
+def test_commit_fallback_requires_real_planting_entities() -> None:
+    assert "种植计划" not in react._structured_commit_answer({"message": "农场概览"})
+    assert "种植计划" not in react._structured_commit_answer({"id": 12})
+    assert "种植计划已提交成功" in react._structured_commit_answer(
+        {
+            "template": {"id": 1},
+            "cycle": {"id": 2},
+            "planting_unit": {"id": 3},
+        }
+    )
+
+
+@pytest.mark.asyncio
+async def test_read_finalization_tool_request_fails_without_write_success(
+    monkeypatch,
+) -> None:
+    async def answer(messages, tools, **kwargs):
+        yield react._LlmResult(
+            tool_calls=[{"id": "unexpected", "name": "get_weather", "arguments": {}}]
+        )
+
+    monkeypatch.setattr(react, "_call_llm_stream", answer)
+    turn = Turn(user_input="今天适合干什么")
+    turn.finalization_pending = True
+    events = [
+        event
+        async for event in react._run_single_reasoning_step(
+            turn=turn,
+            tools_schema=[],
+            tracker=react.verify.CallTracker(),
+            plan_box={"plan": None},
+            skill_index={},
+            skill_ctx=SimpleNamespace(),
+            approval_waiter=_approve,
+        )
+    ]
+    assert turn.status == "failed"
+    assert "提交成功" not in turn.final_answer
+    assert not any(event["type"] == "operation_committed" for event in events)
+
+
+class _UnknownBusinessSkill(_ReadSkill):
+    mcp_tool = "manage_crop_cycle"
+
+    async def execute(self, params: dict, ctx) -> SkillResult:
+        return SkillResult(
+            data={
+                "error": "unknown tool",
+                "code": "unknown_tool",
+                "message": "Business MCP 未找到工具",
+            },
+            error="Business MCP 未找到工具",
+        )
+
+
+class _NeedsInformationSkill(_ReadSkill):
+    async def execute(self, params: dict, ctx) -> SkillResult:
+        result = {
+            "status": "needs_information",
+            "code": "custom_template_required",
+            "message": "需要提供自定义模板阶段",
+            "missing": ["custom_template.stages"],
+        }
+        return SkillResult(data=result, error=result["message"])
+
+
+class _SystemTemplatesSkill(_ReadSkill):
+    def __init__(self) -> None:
+        super().__init__("list_system_crop_templates")
+        self.operation = "system_templates"
+        self._meta.update(
+            {
+                "capability_group": "crop_template_catalog",
+                "data_scope": "system_templates",
+                "freshness_requirement": "system_catalog",
+            }
+        )
+
+    async def execute(self, params: dict, ctx) -> SkillResult:
+        return SkillResult(data={"count": 0, "templates": []})
 
 
 def test_build_identity_headers_declares_turn_identity(monkeypatch) -> None:
@@ -354,6 +498,18 @@ class _EnvelopeRedis:
         self.sequence += 1
         return self.sequence
 
+    async def eval(self, _script: str, _key_count: int, *args):
+        if "terminal_event" in self.state:
+            return [0, self.sequence]
+        self.sequence += 1
+        fields = json.loads(args[4])
+        fields["seq"] = str(self.sequence)
+        await self.xadd(args[1], fields)
+        self.state["last_event_seq"] = str(self.sequence)
+        if fields["terminal"] == "1":
+            self.state["terminal_event"] = fields["type"]
+        return [1, self.sequence]
+
     async def xadd(self, _key: str, fields: dict[str, str], **_kwargs) -> str:
         stream_id = f"{fields['seq']}-0"
         self.rows.append((stream_id, dict(fields)))
@@ -538,6 +694,131 @@ async def test_long_running_skill_emits_heartbeat(monkeypatch) -> None:
     heartbeats = [event for event in events if event["type"] == "heartbeat"]
     assert heartbeats
     assert heartbeats[0]["data"]["stage"] == "skill:slow-heartbeat"
+
+
+@pytest.mark.asyncio
+async def test_unknown_agent_tool_has_agent_registration_error_code() -> None:
+    turn = Turn(user_input="调用不存在能力")
+
+    events = [
+        event
+        async for event in react._emit_unknown_tool(
+            turn, "unknown-call", "list_system_crop_templates"
+        )
+    ]
+
+    assert events[0]["data"]["error_info"]["code"] == "agent_tool_not_registered"
+    assert (
+        json.loads(turn.messages[-1]["content"])["code"] == "agent_tool_not_registered"
+    )
+    assert turn.finalization_request == {
+        "code": "agent_tool_not_registered",
+        "message": "未知工具: list_system_crop_templates",
+        "tool_name": "list_system_crop_templates",
+        "result": {
+            "error": "未知工具: list_system_crop_templates",
+            "code": "agent_tool_not_registered",
+            "agent_tool_name": "list_system_crop_templates",
+        },
+    }
+
+
+@pytest.mark.asyncio
+async def test_unknown_agent_tool_finishes_without_another_llm_step() -> None:
+    skill = _ReadSkill("known-tool")
+    turn = Turn(user_input="调用不存在能力")
+
+    events = [
+        event
+        async for event in react._dispatch_tool_calls(
+            tool_calls=[
+                {"id": "unknown-call", "name": "missing-tool", "arguments": {}}
+            ],
+            rationale="调用工具",
+            skill_index={skill.name: skill},
+            skill_ctx=SimpleNamespace(),
+            approval_waiter=_approve,
+            turn=turn,
+            tracker=react.verify.ProgressLedger(),
+            plan_box={"plan": None},
+        )
+    ]
+
+    assert turn.finalization_request is None
+    assert turn.status == "failed"
+    assert turn.stop_reason == StopReason.TOOL_FAILED
+    assert events[-1]["type"] == "turn.failed"
+    assert not any(event["type"] == "tool_started" for event in events)
+
+
+@pytest.mark.asyncio
+async def test_unknown_business_tool_is_normalized_at_skill_boundary() -> None:
+    skill = _UnknownBusinessSkill("list_system_crop_templates")
+    turn = Turn(user_input="查询系统模板")
+    state = react._SkillExecState()
+
+    _ = [
+        event
+        async for event in react._run_skill_call(
+            turn=turn,
+            skill=skill,
+            args={},
+            skill_ctx=SimpleNamespace(),
+            rationale="查询模板",
+            state=state,
+            tool_call_id="business-unknown-call",
+        )
+    ]
+
+    assert state.result["code"] == "business_tool_not_registered"
+    assert state.result["business_tool_name"] == "manage_crop_cycle"
+
+
+@pytest.mark.asyncio
+async def test_needs_information_is_not_reported_as_tool_failure() -> None:
+    skill = _NeedsInformationSkill("prepare_planting_plan")
+    turn = Turn(user_input="规划水稻")
+    tracker = react.verify.ProgressLedger()
+    tc = {"id": "needs-info-call", "name": skill.name, "arguments": {}}
+    tracker.record(skill.name, {})
+    state = react._SkillExecState()
+
+    events = [
+        event
+        async for event in react._run_skill_call(
+            turn=turn,
+            skill=skill,
+            args={},
+            skill_ctx=SimpleNamespace(),
+            rationale="准备种植计划",
+            state=state,
+            tool_call_id=tc["id"],
+        )
+    ]
+    post_events = [
+        event
+        async for event in react._post_process_skill_result(
+            tc=tc,
+            turn=turn,
+            skill=skill,
+            tracker=tracker,
+            state=state,
+            skill_index={skill.name: skill},
+            skill_ctx=SimpleNamespace(),
+            approval_waiter=_approve,
+            rationale="准备种植计划",
+        )
+    ]
+    assert any(event["type"] == "tool_finished" for event in events)
+    assert not any(event["type"] in {"tool.failed", "tool_failed"} for event in events)
+    assert post_events[-1]["type"] == "progress"
+    assert turn.finalization_request["code"] == "custom_template_required"
+    assert turn.finalization_request["status"] == "needs_information"
+
+    final_events = [event async for event in react._finalize_requested_error(turn)]
+    assert turn.stop_reason == StopReason.USER_INPUT_REQUIRED
+    assert "custom_template.stages" in turn.final_answer
+    assert final_events[-1]["type"] == "turn.terminated"
 
 
 @pytest.mark.asyncio
@@ -794,6 +1075,603 @@ def test_changed_observation_does_not_trigger_doom_loop() -> None:
     assert react.verify.detect_doom_loop(tracker.calls) is None
 
 
+def test_progress_ledger_classifies_observation_changes() -> None:
+    ledger = react.verify.ProgressLedger()
+    ledger.record("query", {"crop": "水稻"})
+    first = ledger.record_observation("query", {"crop": "水稻"}, {"count": 1})
+    ledger.record("query", {"crop": "水稻"})
+    same = ledger.record_observation("query", {"crop": "水稻"}, {"count": 1})
+    ledger.record("query", {"crop": "水稻"})
+    changed = ledger.record_observation("query", {"crop": "水稻"}, {"count": 2})
+
+    assert first["status"] == "advanced"
+    assert same["status"] == "unchanged"
+    assert changed["status"] == "advanced"
+    assert ledger.last_action()["skill"] == "query"
+
+
+@pytest.mark.asyncio
+async def test_second_valid_duplicate_emits_one_warning_without_stopping() -> None:
+    skill = _ReadSkill("query_workers")
+    turn = Turn(user_input="查询工人")
+    tracker = react.verify.ProgressLedger()
+
+    first = react._PreparedCall()
+    first_events = [
+        event
+        async for event in react._prepare_skill_call(
+            {"id": "call-1", "name": skill.name, "arguments": {}},
+            skill,
+            SimpleNamespace(),
+            turn,
+            tracker,
+            first,
+        )
+    ]
+    second = react._PreparedCall()
+    second_events = [
+        event
+        async for event in react._prepare_skill_call(
+            {"id": "call-2", "name": skill.name, "arguments": {}},
+            skill,
+            SimpleNamespace(),
+            turn,
+            tracker,
+            second,
+        )
+    ]
+
+    assert first_events == []
+    assert [event["type"] for event in second_events] == ["verification_warning"]
+    assert second.proceed is True
+    assert turn.status == "running"
+
+
+@pytest.mark.asyncio
+async def test_empty_system_template_catalog_guides_custom_prepare() -> None:
+    skill = _SystemTemplatesSkill()
+    turn = Turn(user_input="查系统模板")
+    tracker = react.verify.ProgressLedger()
+    tracker.record(
+        skill.name,
+        {},
+        agent_tool_name=skill.name,
+        operation=skill.operation,
+        capability_group=skill.capability_group,
+        data_scope=skill.data_scope,
+        freshness_requirement=skill.freshness_requirement,
+    )
+    first_delta = tracker.record_observation(
+        skill.name, {}, {"count": 0, "templates": []}
+    )
+
+    prepared = react._PreparedCall()
+    events = [
+        event
+        async for event in react._prepare_skill_call(
+            {"id": "call-2", "name": skill.name, "arguments": {}},
+            skill,
+            SimpleNamespace(),
+            turn,
+            tracker,
+            prepared,
+        )
+    ]
+
+    assert prepared.proceed is False
+    assert first_delta["status"] == "advanced"
+    assert first_delta["reason"] == "new_observation"
+    assert turn.status == "running"
+    assert turn.stop_reason is None
+    assert events[0]["data"]["error"] is None
+    assert events[0]["data"]["result"]["status"] == "needs_information"
+    assert events[0]["data"]["result"]["next_action"] == {
+        "agent_tool_name": "prepare_planting_plan",
+        "arguments": None,
+    }
+    assert [event["type"] for event in events] == ["observation"]
+    assert not any(event["type"] == "tool_started" for event in events)
+    assert turn.task_state == {
+        "status": "blocked",
+        "reason": "empty_system_template_catalog",
+        "resume_policy": "ask_user",
+        "blocked_action": {
+            "agent_tool_name": "list_system_crop_templates",
+            "arguments": {},
+            "business_tool_name": "",
+            "operation": "system_templates",
+            "capability_group": "crop_template_catalog",
+            "data_scope": "system_templates",
+            "freshness_requirement": "system_catalog",
+        },
+        "next_allowed_action": {
+            "agent_tool_name": "prepare_planting_plan",
+            "arguments": None,
+        },
+    }
+
+
+def test_dynamic_prepare_arguments_are_allowed_after_empty_catalog() -> None:
+    task_state = {
+        "status": "blocked",
+        "resume_policy": "ask_user",
+        "next_allowed_action": {
+            "agent_tool_name": "prepare_planting_plan",
+            "arguments": None,
+        },
+    }
+
+    assert react.verify.is_allowed_resume_action(
+        task_state,
+        "prepare_planting_plan",
+        {
+            "crop_name": "水稻",
+            "total_area_mu": 20,
+            "field_name": "虎丘",
+            "start_date": "2026-08-27",
+            "template_strategy": "create_custom",
+            "custom_template": {"stages": [{"name": "育苗期"}]},
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_empty_system_catalog_transitions_to_custom_prepare() -> None:
+    system_skill = _SystemTemplatesSkill()
+    prepare_calls: list[dict] = []
+
+    class _PrepareSkill(_ReadSkill):
+        async def execute(self, params: dict, ctx) -> SkillResult:
+            prepare_calls.append(params)
+            return SkillResult(data={"status": "ready"})
+
+    prepare_skill = _PrepareSkill("prepare_planting_plan")
+    turn = Turn(user_input="帮我规划水稻", max_steps=4)
+    tracker = react.verify.ProgressLedger()
+    skills = {
+        system_skill.name: system_skill,
+        prepare_skill.name: prepare_skill,
+    }
+
+    async for _ in react._dispatch_tool_calls(
+        tool_calls=[{"id": "system-1", "name": system_skill.name, "arguments": {}}],
+        rationale="查询系统模板",
+        skill_index=skills,
+        skill_ctx=SimpleNamespace(),
+        approval_waiter=_approve,
+        turn=turn,
+        tracker=tracker,
+        plan_box={"plan": None},
+    ):
+        pass
+    assert turn.status == "running"
+
+    async for _ in react._dispatch_tool_calls(
+        tool_calls=[{"id": "system-2", "name": system_skill.name, "arguments": {}}],
+        rationale="确认系统模板目录",
+        skill_index=skills,
+        skill_ctx=SimpleNamespace(),
+        approval_waiter=_approve,
+        turn=turn,
+        tracker=tracker,
+        plan_box={"plan": None},
+    ):
+        pass
+    assert turn.status == "running"
+    assert turn.task_state["next_allowed_action"] == {
+        "agent_tool_name": "prepare_planting_plan",
+        "arguments": None,
+    }
+
+    custom_args = {
+        "crop_name": "水稻",
+        "total_area_mu": 20,
+        "field_name": "虎丘",
+        "start_date": "2026-08-27",
+        "template_strategy": "create_custom",
+        "custom_template": {
+            "name": "水稻",
+            "stages": [{"name": "育苗期", "duration_days": 25}],
+        },
+    }
+    events = [
+        event
+        async for event in react._dispatch_tool_calls(
+            tool_calls=[
+                {
+                    "id": "prepare-1",
+                    "name": prepare_skill.name,
+                    "arguments": custom_args,
+                }
+            ],
+            rationale="使用常规水稻阶段生成自定义模板并准备计划",
+            skill_index=skills,
+            skill_ctx=SimpleNamespace(),
+            approval_waiter=_approve,
+            turn=turn,
+            tracker=tracker,
+            plan_box={"plan": None},
+        )
+    ]
+
+    assert turn.status == "running"
+    assert turn.task_state is None
+    assert prepare_calls == [custom_args]
+    assert any(event["type"] == "tool_started" for event in events)
+
+
+def test_read_only_query_observing_new_fact_is_advanced() -> None:
+    ledger = react.verify.ProgressLedger()
+    args = {"crop": "水稻"}
+
+    ledger.record("list_crop_templates", args)
+    delta = ledger.record_observation(
+        "list_crop_templates", args, {"templates": [{"id": 3, "name": "水稻"}]}
+    )
+
+    assert delta["status"] == "advanced"
+    assert delta["reason"] == "new_observation"
+
+
+@pytest.mark.asyncio
+async def test_different_action_is_explicit_resume_next_step() -> None:
+    skill = _ReadSkill("query_templates")
+    turn = Turn(
+        user_input="继续查询模板",
+        task_state={
+            "status": "blocked",
+            "resume_policy": "ask_user",
+            "blocked_action": {
+                "agent_tool_name": "query_workers",
+                "arguments": {},
+            },
+        },
+    )
+
+    events = [
+        event
+        async for event in react._dispatch_tool_calls(
+            tool_calls=[{"id": "next-call", "name": skill.name, "arguments": {}}],
+            rationale="下一步查询模板",
+            skill_index={skill.name: skill},
+            skill_ctx=SimpleNamespace(),
+            approval_waiter=_approve,
+            turn=turn,
+            tracker=react.verify.ProgressLedger(),
+            plan_box={"plan": None},
+        )
+    ]
+
+    assert turn.task_state is None
+    assert any(event["type"] == "tool_started" for event in events)
+
+
+@pytest.mark.asyncio
+async def test_declared_next_action_can_resume_blocked_task() -> None:
+    skill = _ReadSkill("query_templates")
+    turn = Turn(
+        user_input="继续执行下一步",
+        task_state={
+            "status": "blocked",
+            "resume_policy": "ask_user",
+            "blocked_action": {"agent_tool_name": "query_workers", "arguments": {}},
+            "next_allowed_action": {"agent_tool_name": skill.name, "arguments": {}},
+        },
+    )
+
+    events = [
+        event
+        async for event in react._dispatch_tool_calls(
+            tool_calls=[{"id": "next-call", "name": skill.name, "arguments": {}}],
+            rationale="执行已声明的下一步",
+            skill_index={skill.name: skill},
+            skill_ctx=SimpleNamespace(),
+            approval_waiter=_approve,
+            turn=turn,
+            tracker=react.verify.ProgressLedger(),
+            plan_box={"plan": None},
+        )
+    ]
+
+    assert turn.task_state is None
+    assert any(event["type"] == "tool_started" for event in events)
+
+
+def test_progress_ledger_counts_only_consecutive_unchanged_observations() -> None:
+    ledger = react.verify.ProgressLedger()
+    args = {"crop": "水稻"}
+
+    ledger.record("query", args)
+    ledger.record_observation("query", args, {"count": 1})
+    assert ledger.unchanged_count("query", args) == 0
+
+    ledger.record("query", args)
+    ledger.record_observation("query", args, {"count": 1})
+    assert ledger.unchanged_count("query", args) == 1
+
+    ledger.record("query", args)
+    ledger.record_observation("query", args, {"count": 1})
+    assert ledger.unchanged_count("query", args) == 2
+
+    ledger.record("query", args)
+    ledger.record_observation("query", args, {"count": 2})
+    assert ledger.unchanged_count("query", args) == 0
+
+
+def test_progress_ledger_tracks_semantic_scope_without_merging_data_ranges() -> None:
+    ledger = react.verify.ProgressLedger()
+    first_args = {"crop": "水稻"}
+    second_args = {"crop": "小麦"}
+
+    for skill, args in (
+        ("list_templates", first_args),
+        ("query_templates", second_args),
+    ):
+        ledger.record(
+            skill,
+            args,
+            capability_group="crop_template_catalog",
+            data_scope="farm_imported_templates",
+        )
+        delta = ledger.record_observation(skill, args, {"templates": []})
+
+    assert delta["status"] == "advanced"
+    assert delta["semantic_status"] == "unchanged"
+    assert (
+        ledger.semantic_unchanged_count(
+            "crop_template_catalog", "farm_imported_templates"
+        )
+        == 1
+    )
+    assert (
+        ledger.semantic_unchanged_count("crop_template_catalog", "system_templates")
+        == 0
+    )
+
+
+@pytest.mark.asyncio
+async def test_repeated_unchanged_observation_requests_controlled_finalization() -> (
+    None
+):
+    skill = _ReadSkill("query_workers")
+    turn = Turn(user_input="查询工人")
+    tracker = react.verify.ProgressLedger()
+
+    for index in range(3):
+        args = {}
+        tracker.record(skill.name, args)
+        events = [
+            event
+            async for event in react._post_process_skill_result(
+                tc={"id": f"call-{index}", "name": skill.name, "arguments": args},
+                turn=turn,
+                skill=skill,
+                tracker=tracker,
+                state=react._SkillExecState(result={"workers": []}),
+                skill_index={skill.name: skill},
+                skill_ctx=SimpleNamespace(),
+                approval_waiter=_approve,
+                rationale="查询工人",
+            )
+        ]
+
+    assert events[-1]["type"] == "progress"
+    assert turn.finalization_request == {
+        "code": "no_progress_detected",
+        "message": "相同工具连续返回相同结果，任务没有继续推进。",
+        "tool_name": "query_workers",
+        "result": {
+            "progress": "unchanged",
+            "progress_reason": "same_observation",
+        },
+    }
+    assert turn.task_state == {
+        "status": "blocked",
+        "reason": "unchanged_observation",
+        "resume_policy": "ask_user",
+        "blocked_action": {
+            "agent_tool_name": "query_workers",
+            "arguments": {},
+            "observation_fingerprint": react.verify.observation_fingerprint(
+                {"workers": []}
+            ),
+        },
+    }
+
+
+def test_step_budget_keeps_fallback_and_clamps_controlled_estimate() -> None:
+    fallback_budget = react.verify.resolve_step_budget()
+    estimated_budget = react.verify.resolve_step_budget(estimated_steps=3)
+    capped_budget = react.verify.resolve_step_budget(estimated_steps=100)
+
+    assert fallback_budget.to_dict() == {
+        "fallback_steps": 20,
+        "estimated_steps": None,
+        "confidence": None,
+        "safety_factor": 1.5,
+        "minimum_steps": 1,
+        "maximum_steps": 20,
+        "resolved_steps": 20,
+        "source": "runtime_default",
+        "reason": "fallback_steps(20): no estimated_steps",
+    }
+    assert estimated_budget.resolved_steps == 5
+    assert estimated_budget.source == "controlled_estimate"
+    assert estimated_budget.reason == "estimated_steps(3)*safety_factor(1.5)"
+    assert capped_budget.resolved_steps == 20
+
+
+def test_step_budget_rejects_invalid_or_unsafe_bounds() -> None:
+    with pytest.raises(ValueError, match="硬上限"):
+        react.verify.resolve_step_budget(maximum_steps=21)
+    with pytest.raises(ValueError, match="大于 0"):
+        react.verify.resolve_step_budget(estimated_steps=0)
+    with pytest.raises(ValueError, match="1.0 到 3.0"):
+        react.verify.resolve_step_budget(safety_factor=0.9)
+    with pytest.raises(ValueError, match="1.0 到 3.0"):
+        react.verify.resolve_step_budget(safety_factor=3.1)
+    with pytest.raises(ValueError, match="必须是数字"):
+        react.verify.resolve_step_budget(safety_factor="1.5")
+    with pytest.raises(ValueError, match="0 到 1"):
+        react.verify.resolve_step_budget(confidence=1.1)
+
+
+def test_step_budget_increases_factor_for_low_confidence() -> None:
+    budget = react.verify.resolve_step_budget(
+        estimated_steps=8,
+        confidence=0.4,
+        safety_factor=1.5,
+    )
+
+    assert budget.resolved_steps == 16
+    assert budget.safety_factor == 2.0
+    assert budget.reason == (
+        "estimated_steps(8)*safety_factor(2);confidence(0.4)<0.5"
+        " -> safety_factor=max(1.5,2)"
+    )
+
+
+def test_budget_estimate_parser_accepts_only_structured_model_output() -> None:
+    assert react.planner.parse_budget_estimate(
+        [
+            {
+                "name": "estimate_step_budget",
+                "arguments": {"estimated_steps": 8, "confidence": 0.8},
+            }
+        ]
+    ) == (8, 0.8)
+    assert react.planner.parse_budget_estimate(
+        [], '{"estimated_steps": 4, "confidence": 0.4}'
+    ) == (4, 0.4)
+    assert (
+        react.planner.parse_budget_estimate(
+            [{"name": "estimate_step_budget", "arguments": {"estimated_steps": 4}}]
+        )
+        is None
+    )
+
+
+@pytest.mark.asyncio
+async def test_estimate_turn_budget_reads_model_prediction(monkeypatch) -> None:
+    captured: dict = {}
+
+    async def fake_call(messages, tools, **kwargs):
+        captured["messages"] = messages
+        captured["tools"] = tools
+        captured.update(kwargs)
+        yield react._LlmResult(
+            tool_calls=[
+                {
+                    "name": "estimate_step_budget",
+                    "arguments": {"estimated_steps": 8, "confidence": 0.8},
+                }
+            ]
+        )
+
+    monkeypatch.setattr(react, "_call_llm_stream", fake_call)
+    estimate = await react._estimate_turn_budget(Turn(user_input="规划水稻种植"))
+
+    assert estimate == (8, 0.8)
+    assert captured["messages"][0]["role"] == "system"
+    assert captured["tools"] == [react.planner.BUDGET_ESTIMATE_TOOL_SCHEMA]
+    assert captured["tool_choice"] == {
+        "type": "function",
+        "function": {"name": "estimate_step_budget"},
+    }
+
+
+def test_setup_applies_resolved_budget_to_react_loop(monkeypatch) -> None:
+    monkeypatch.setattr(react.skill_loader, "load_all", lambda: [])
+    turn = Turn(user_input="预算测试", max_steps=20)
+
+    react._setup_turn_runtime(
+        turn,
+        estimated_steps=8,
+        confidence=0.8,
+    )
+
+    assert turn.step_budget["estimated_steps"] == 8
+    assert turn.step_budget["confidence"] == 0.8
+    assert turn.step_budget["resolved_steps"] == 12
+    assert turn.max_steps == 12
+
+
+@pytest.mark.asyncio
+async def test_cross_turn_blocked_action_is_stopped_before_skill_execution() -> None:
+    skill = _ReadSkill("query_workers")
+    turn = Turn(
+        user_input="继续",
+        task_state={
+            "status": "blocked",
+            "resume_policy": "ask_user",
+            "blocked_action": {
+                "agent_tool_name": "query_workers",
+                "arguments": {},
+            },
+        },
+    )
+
+    events = [
+        event
+        async for event in react._dispatch_tool_calls(
+            tool_calls=[{"id": "resume-call", "name": skill.name, "arguments": {}}],
+            rationale="继续",
+            skill_index={skill.name: skill},
+            skill_ctx=SimpleNamespace(),
+            approval_waiter=_approve,
+            turn=turn,
+            tracker=react.verify.ProgressLedger(),
+            plan_box={"plan": None},
+        )
+    ]
+
+    assert turn.stop_reason == StopReason.RESUME_REQUIRES_NEW_ACTION
+    assert any(event["type"] == "observation" for event in events)
+    assert not any(event["type"] == "tool_started" for event in events)
+    assert any(
+        event.get("data", {}).get("text")
+        == ("上一次执行已因相同动作无进展而停止，请补充条件或明确下一步动作。")
+        for event in events
+    )
+
+
+@pytest.mark.asyncio
+async def test_resume_block_does_not_change_hitl_authorization_state() -> None:
+    skill = _ReadSkill("query_workers")
+    pending_approval = {
+        "tool_name": "create_work_order",
+        "arguments": {"value": "待审批"},
+        "risk_level": "write_confirm",
+    }
+    turn = Turn(
+        user_input="继续",
+        approved=False,
+        pending_approval=pending_approval,
+        task_state={
+            "status": "blocked",
+            "resume_policy": "ask_user",
+            "blocked_action": {"agent_tool_name": skill.name, "arguments": {}},
+        },
+    )
+
+    _ = [
+        event
+        async for event in react._dispatch_tool_calls(
+            tool_calls=[{"id": "resume-call", "name": skill.name, "arguments": {}}],
+            rationale="继续",
+            skill_index={skill.name: skill},
+            skill_ctx=SimpleNamespace(),
+            approval_waiter=_approve,
+            turn=turn,
+            tracker=react.verify.ProgressLedger(),
+            plan_box={"plan": None},
+        )
+    ]
+
+    assert turn.approved is False
+    assert turn.pending_approval == pending_approval
+
+
 @pytest.mark.asyncio
 async def test_approval_rejection_records_structured_stop_reason() -> None:
     skill = _ReadSkill("write-operation")
@@ -916,6 +1794,10 @@ async def test_final_answer_emits_incremental_and_complete_events() -> None:
 
 @pytest.mark.asyncio
 async def test_setup_failure_still_emits_terminal_events(monkeypatch) -> None:
+    async def no_budget_estimate(_turn):
+        return None, None
+
+    monkeypatch.setattr(react, "_estimate_turn_budget", no_budget_estimate)
     monkeypatch.setattr(
         react,
         "_setup_turn_runtime",

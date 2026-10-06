@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../data/api/api_models.dart';
+import '../../data/api/api_client.dart';
 import '../../data/repositories/yaya_repository.dart';
 
 class YayaController extends ChangeNotifier {
@@ -16,6 +17,7 @@ class YayaController extends ChangeNotifier {
   Map<String, dynamic>? pendingAction;
   String? activeTurnId;
   bool _disposed = false;
+  bool _approving = false;
 
   Future<void> loadConversations() async {
     final loaded = await repository.loadConversations();
@@ -32,9 +34,12 @@ class YayaController extends ChangeNotifier {
       _safeNotify();
       return;
     }
-    activeSessionId = sessionId;
     final loaded = await repository.loadMessages(sessionId);
     if (_disposed) return;
+    activeSessionId = sessionId;
+    activeTurnId = null;
+    pendingAction = null;
+    errorMessage = null;
     messages
       ..clear()
       ..addAll(loaded.map(YayaMessageViewModel.fromConversation));
@@ -75,7 +80,12 @@ class YayaController extends ChangeNotifier {
         sessionId: sessionId,
       )) {
         if (_disposed) break;
-        if (event.done) break;
+        if (event.done) {
+          if ({"failed", "timeout", "terminated"}.contains(event.status)) {
+            errorMessage ??= "本轮任务未完成，请检查回复后重试";
+          }
+          break;
+        }
         if (event.conversationId != null && event.conversationId!.isNotEmpty) {
           activeSessionId = event.conversationId;
         }
@@ -84,15 +94,20 @@ class YayaController extends ChangeNotifier {
         }
         if (event.error != null && event.error!.isNotEmpty) {
           errorMessage = event.error;
-          _removeEmptyAssistant(assistantIndex);
           _safeNotify();
-          break;
+        }
+        if (event.eventType == "approval_result") _clearPendingAction();
+        if (event.eventType == "final_answer_start") {
+          messages[assistantIndex] =
+              messages[assistantIndex].copyWith(content: "");
         }
         final content = event.content;
         if (content != null && content.isNotEmpty) {
           final current = messages[assistantIndex];
           messages[assistantIndex] = current.copyWith(
-            content: current.content + content,
+            content: event.eventType == "final_answer"
+                ? content
+                : current.content + content,
           );
         }
         if (event.skills.isNotEmpty) lastSkills = event.skills;
@@ -107,12 +122,13 @@ class YayaController extends ChangeNotifier {
         }
         _safeNotify();
       }
-    } catch (_) {
+    } catch (error) {
       if (_disposed) return;
-      errorMessage = '芽芽暂时没有回应，请稍后再试';
+      errorMessage = ApiClient.userMessageFor(error);
       _removeEmptyAssistant(assistantIndex);
     } finally {
       if (!_disposed) {
+        _removeEmptyAssistant(assistantIndex);
         sending = false;
         await _refreshConversationsSilently();
         _safeNotify();
@@ -121,33 +137,42 @@ class YayaController extends ChangeNotifier {
   }
 
   Future<void> respondToPendingAction(String text) async {
-    if (pendingAction == null) return;
+    if (pendingAction == null || _approving) return;
     final decision = text.trim() == '确认';
     final turnId = activeTurnId?.trim() ?? '';
-    pendingAction = null;
-    for (var index = 0; index < messages.length; index++) {
-      final message = messages[index];
-      if (message.pendingAction != null) {
-        messages[index] = message.copyWith(clearPendingAction: true);
-      }
-    }
-    _safeNotify();
-    if (turnId.isNotEmpty) {
-      try {
-        await repository.approve(turnId: turnId, decision: decision);
-      } catch (_) {
-        if (!_disposed) errorMessage = '审批请求失败，请稍后重试';
-        _safeNotify();
-      }
+    if (turnId.isEmpty) {
+      _clearPendingAction();
+      await send(text);
       return;
     }
-    // 兼容只实现旧 pending_action 的测试仓库；v2 approval_required 不会走这里。
-    await send(text);
+    _approving = true;
+    errorMessage = null;
+    _safeNotify();
+    try {
+      await repository.approve(turnId: turnId, decision: decision);
+      if (!_disposed) _clearPendingAction();
+    } catch (error) {
+      // 失败时保留确认卡，用户可以重试同一个 Turn，而不是重新提交业务。
+      if (!_disposed) errorMessage = ApiClient.userMessageFor(error);
+    } finally {
+      _approving = false;
+      _safeNotify();
+    }
+  }
+
+  void _clearPendingAction() {
+    pendingAction = null;
+    for (var index = 0; index < messages.length; index++) {
+      if (messages[index].pendingAction != null) {
+        messages[index] = messages[index].copyWith(clearPendingAction: true);
+      }
+    }
   }
 
   void _removeEmptyAssistant(int assistantIndex) {
     if (assistantIndex < messages.length &&
-        messages[assistantIndex].content.isEmpty) {
+        messages[assistantIndex].content.isEmpty &&
+        messages[assistantIndex].pendingAction == null) {
       messages.removeAt(assistantIndex);
     }
   }

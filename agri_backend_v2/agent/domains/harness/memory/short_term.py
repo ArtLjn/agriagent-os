@@ -269,8 +269,13 @@ async def persist_session_turn(
         "pending_action": prepare_pending_action(pending_action, turn_id=turn_id),
         "idempotency_key": f"turn:{turn_id}:session-state",
     }
-    if task_state is not None:
-        fields["task_state"] = prepare_task_state(task_state, turn_id=turn_id)
+    # None 具有“清除旧恢复门”的明确语义；否则不同动作恢复后 Mongo 会保留
+    # 上一轮的 blocked_action，导致后续 Turn 继续被错误拦截。
+    fields["task_state"] = (
+        prepare_task_state(task_state, turn_id=turn_id)
+        if task_state is not None
+        else None
+    )
     return await chat_store.save_conversation_state(**fields)
 
 

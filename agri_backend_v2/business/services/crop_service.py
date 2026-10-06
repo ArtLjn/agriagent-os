@@ -150,11 +150,12 @@ def find_template_by_name(
 def normalize_crop_name(value: str | None) -> str:
     """规范化作物名称，供模板绑定校验使用。
 
-    这里只处理 Unicode 兼容字符和空白，不做同义词猜测；避免把橘子等近似
-    作物当成用户指定作物。
+    模板允许用末尾括号补充地区、季节等说明，但括号说明不改变基础作物
+    身份；除此之外不做同义词猜测，避免把橘子等近似作物错误绑定。
     """
     text = unicodedata.normalize("NFKC", str(value or ""))
-    return re.sub(r"\s+", "", text).strip().lower()
+    normalized = re.sub(r"\s+", "", text).strip().lower()
+    return re.sub(r"(?:\([^()]*\)|（[^（）]*）)$", "", normalized)
 
 
 def find_local_template_match(

@@ -195,7 +195,7 @@ export type StreamChunk =
   | { type: 'verification_warning'; data: { issues: string[] } }
   | { type: 'write_committed_reply_failed'; data: { code: string; message: string } }
   | { type: 'retrying'; data: { code: string; category?: string; attempt: number; delay_ms: number } }
-  | { type: 'progress'; data: { message: string; phase?: string } }
+  | { type: 'progress'; data: { message?: string; phase?: string; tool_name?: string; tool_call_id?: string; step?: number; status?: string; reason?: string; observation_fingerprint?: string; semantic_status?: string; semantic_reason?: string } }
   | { type: 'step.started'; data: { turn_id: string; step_index: number; status: string } }
   | { type: 'step.completed'; data: { turn_id: string; step_index: number; status: string; tool_count: number; error?: Record<string, unknown> } }
   | { type: 'tool.failed'; data: { turn_id: string; tool_call_id: string; tool_name: string; step: number; duration_ms: number; error: Record<string, unknown> } }
@@ -365,6 +365,20 @@ function mapSsePayloadToChunk(event: SseEvent): StreamChunk | null {
           error: typeof data.error === 'string' ? data.error : null,
         },
       };
+    case 'progress':
+      return {
+        type: 'progress',
+        data: {
+          tool_name: String(data.tool_name ?? ''),
+          tool_call_id: typeof data.tool_call_id === 'string' ? data.tool_call_id : undefined,
+          step: Number(data.step ?? 0),
+          status: String(data.status ?? 'unknown'),
+          reason: String(data.reason ?? ''),
+          observation_fingerprint: String(data.observation_fingerprint ?? ''),
+          semantic_status: String(data.semantic_status ?? ''),
+          semantic_reason: String(data.semantic_reason ?? ''),
+        },
+      };
     case 'approval_required':
       return {
         type: 'pending_action',
@@ -443,14 +457,6 @@ function mapSsePayloadToChunk(event: SseEvent): StreamChunk | null {
           category: typeof data.category === 'string' ? data.category : undefined,
           attempt: Number(data.attempt ?? 0),
           delay_ms: Number(data.delay_ms ?? 0),
-        },
-      };
-    case 'progress':
-      return {
-        type: 'progress',
-        data: {
-          message: String(data.message ?? '正在处理请求'),
-          phase: typeof data.phase === 'string' ? data.phase : undefined,
         },
       };
     case 'step.started':

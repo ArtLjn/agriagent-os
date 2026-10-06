@@ -78,8 +78,6 @@ class RecordSaveSuccessScreen extends StatelessWidget {
             onLedger: () => _goLedger(context),
             onHome: () => _goHome(context),
           ),
-          const SizedBox(height: 12),
-          const ManagerTipCard(),
         ],
       ),
     );

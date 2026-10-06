@@ -131,7 +131,7 @@ export interface TraceRound {
   nodes: TraceNode[];
 }
 
-/** 前端统一 timeline 结构：agri_backend_v2 返回的是 flat nodes，这里包成单 round 以兼容 GanttTimeline */
+/** 前端统一 timeline 结构：按 Runtime step_index 分组，round_index 仅作为旧组件兼容键。 */
 export interface TraceTimeline {
   request_id: string;
   trace_id?: string;
@@ -254,8 +254,21 @@ export async function getTimeline(
     evidence_status: data.evidence_status,
     evidence: data.evidence,
     summary: summaryResp?.data ?? null,
-    rounds: [{ round_index: 0, nodes }],
+    rounds: groupNodesByExecutionStep(nodes),
   };
+}
+
+function groupNodesByExecutionStep(nodes: TraceNode[]): TraceRound[] {
+  const groups = new Map<number, TraceNode[]>();
+  nodes.forEach((node) => {
+    const step = typeof node.step_index === 'number' ? node.step_index : 0;
+    const group = groups.get(step) ?? [];
+    group.push(node);
+    groups.set(step, group);
+  });
+  return [...groups.entries()]
+    .sort(([left], [right]) => left - right)
+    .map(([step, stepNodes]) => ({ round_index: step, nodes: stepNodes }));
 }
 
 export async function getTraceSummary(traceId: string): Promise<TraceRequestSummary | null> {

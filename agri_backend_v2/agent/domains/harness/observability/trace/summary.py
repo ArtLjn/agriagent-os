@@ -148,6 +148,11 @@ def _metrics(nodes: list[dict[str, Any]]) -> dict[str, Any]:
         "router_calls": 0,
         "context_builds": 0,
         "catalog_recalls": 0,
+        "decision_steps": 0,
+        "parallel_batches": 0,
+        "parallel_tool_calls": 0,
+        "step_budget_limit": 0,
+        "step_budget_source": "",
         "context_message_tokens": 0,
         "context_tool_schema_tokens": 0,
         "context_response_reserve_tokens": 0,
@@ -164,6 +169,8 @@ def _metrics(nodes: list[dict[str, Any]]) -> dict[str, Any]:
         "fallback_count": 0,
     }
     root_duration_ms = 0
+    decision_step_indexes: set[int] = set()
+    parallel_batch_ids: set[str] = set()
     for node in nodes:
         duration = int(node.get("duration_ms") or 0)
         node_type = str(node.get("node_type") or "")
@@ -178,10 +185,22 @@ def _metrics(nodes: list[dict[str, Any]]) -> dict[str, Any]:
         if node_type in {"llm", "llm_call"}:
             metrics["llm_calls"] += 1
             metrics["llm_duration_ms"] += duration
+            step_index = node.get("step_index")
+            if isinstance(step_index, int):
+                decision_step_indexes.add(step_index)
         elif node_type in {"tool", "tool_call", "skill_call"}:
             metrics["tool_calls"] += 1
             metrics["skill_calls"] += 1
             metrics["tool_duration_ms"] += duration
+            attributes = node.get("attributes")
+            batch_id = (
+                attributes.get("parallel_batch_id")
+                if isinstance(attributes, dict)
+                else None
+            )
+            if isinstance(batch_id, str) and batch_id:
+                parallel_batch_ids.add(batch_id)
+                metrics["parallel_tool_calls"] += 1
         elif node_type in {"rag", "context_build"}:
             metrics["rag_duration_ms"] += duration
             if node_type == "context_build":
@@ -194,6 +213,14 @@ def _metrics(nodes: list[dict[str, Any]]) -> dict[str, Any]:
             metrics["router_calls"] += 1
         elif node_type == "catalog_recall":
             metrics["catalog_recalls"] += 1
+            attributes = node.get("attributes")
+            if isinstance(attributes, dict):
+                metrics["step_budget_limit"] = _int_value(
+                    attributes.get("step_budget_limit")
+                )
+                metrics["step_budget_source"] = str(
+                    attributes.get("step_budget_source") or ""
+                )
         elif node_type == "summary_compaction":
             metrics["summary_compaction_count"] += 1
         elif node_type == "memory_read":
@@ -253,6 +280,8 @@ def _metrics(nodes: list[dict[str, Any]]) -> dict[str, Any]:
             metrics["total_tokens"] += _int_value(usage.get("total_tokens"))
     if root_duration_ms:
         metrics["total_duration_ms"] = root_duration_ms
+    metrics["decision_steps"] = len(decision_step_indexes)
+    metrics["parallel_batches"] = len(parallel_batch_ids)
     return metrics
 
 

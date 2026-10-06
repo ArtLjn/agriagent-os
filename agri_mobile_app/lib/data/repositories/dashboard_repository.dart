@@ -50,7 +50,8 @@ class DashboardRepository {
   }
 
   Future<Map<String, dynamic>> getUnsettledLaborSummary() {
-    return client.getMap('/work-orders/labor/unsettled-summary');
+    // v2 将工资摘要注册在独立劳动路由，不能拼接作业单前缀。
+    return client.getMap('/labor/unsettled-summary');
   }
 
   Future<PageResult<ApiRecord>> getWorkOrders(
@@ -67,7 +68,7 @@ class DashboardRepository {
       client.get('/dashboard'),
       getForecast(),
       client.get('/work-orders'),
-      client.get('/work-orders/labor/unsettled-summary'),
+      getUnsettledLaborSummary(),
     ]);
   }
 }

@@ -51,6 +51,8 @@ class StopReason(str, Enum):
     STEP_BUDGET_EXHAUSTED = "step_budget_exhausted"
     TOKEN_BUDGET_EXHAUSTED = "token_budget_exhausted"
     DOOM_LOOP_DETECTED = "doom_loop_detected"
+    RESUME_REQUIRES_NEW_ACTION = "resume_requires_new_action"
+    USER_INPUT_REQUIRED = "user_input_required"
     LLM_FAILED = "llm_failed"
     TOOL_FAILED = "tool_failed"
     APPROVAL_REJECTED = "approval_rejected"
@@ -93,6 +95,7 @@ class Turn:
     # Loop state.
     step_count: int = 0
     max_steps: int = 20
+    step_budget: dict[str, Any] = field(default_factory=dict)
     status: TurnStatus = "running"
     phase: TurnPhase = TurnPhase.SETUP
     stop_reason: StopReason | None = None
@@ -232,6 +235,7 @@ class Turn:
             "phase": self.phase.value,
             "stop_reason": self.stop_reason.value if self.stop_reason else None,
             "step_count": self.step_count,
+            "step_budget": self.step_budget,
             "pending_approval": self.pending_approval,
             "task_state": self.task_state,
             "final_answer": self.final_answer,

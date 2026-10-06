@@ -8,6 +8,7 @@ import '../../shared/widgets/city_picker_sheet.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import 'auth_widgets.dart';
+import 'auth_entry_page.dart';
 
 class OnboardingSetupScreen extends StatefulWidget {
   const OnboardingSetupScreen({
@@ -30,7 +31,6 @@ class OnboardingSetupScreen extends StatefulWidget {
 }
 
 class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> {
-  final TextEditingController _farmController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
   FarmLocationSuggestion? _locationSuggestion;
   CityPickerResult? _selectedLocation;
@@ -46,7 +46,6 @@ class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> {
 
   @override
   void dispose() {
-    _farmController.dispose();
     _locationController.dispose();
     super.dispose();
   }
@@ -73,6 +72,7 @@ class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> {
   }
 
   Future<void> _start() async {
+    if (_saving) return;
     final location = _locationController.text.trim();
     if (location.isEmpty) {
       widget.onStart();
@@ -125,95 +125,46 @@ class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return AuthPage(
-      bottomPadding: 22,
+    return AuthEntryPage(
+      title: '从你的农场开始',
+      subtitle: '设置经营地区，让天气与农事建议更贴近你。',
       children: [
-        const SetupHero(),
-        AuthSurfaceCard(
-          padding: const EdgeInsets.all(18),
-          children: [
-            AuthInputField(
-              label: '农场名称',
-              placeholder: '请输入农场名称',
-              icon: LucideIcons.building2,
-              controller: _farmController,
-              height: 48,
-              labelGap: 8,
-              labelFontSize: 14,
-            ),
-            const SizedBox(height: 14),
-            AuthInputField(
-              label: '经营地区',
-              placeholder: '请选择经营地区',
-              icon: LucideIcons.mapPin,
-              controller: _locationController,
-              readOnly: true,
-              onTap: _selectLocation,
-              height: 48,
-              labelGap: 8,
-              labelFontSize: 14,
-              trailing: IconButton(
-                tooltip: '选择经营地区',
-                onPressed: _selectLocation,
-                icon: Icon(
-                  LucideIcons.chevronDown,
-                  size: 21,
-                  color: AppColors.subtle,
-                ),
-              ),
-            ),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: _locating ? null : _useCurrentLocation,
-                icon: const Icon(LucideIcons.locateFixed, size: 16),
-                label: Text(_locating ? '定位中...' : '使用当前位置'),
-              ),
-            ),
-            const SizedBox(height: 14),
-            const AuthInputField(
-              label: '身份',
-              placeholder: '农场负责人',
-              icon: LucideIcons.circleUserRound,
-              height: 48,
-              labelGap: 8,
-              labelFontSize: 14,
-              trailing: Icon(
-                LucideIcons.chevronDown,
-                size: 22,
-                color: AppColors.subtle,
-              ),
-            ),
-            if (_message != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                _message!,
-                style: AppTextStyles.small.copyWith(color: AppColors.red),
-              ),
-            ],
-            const SizedBox(height: 18),
-            AuthPrimaryButton(
-                label: _saving ? '保存中...' : '开始使用', onTap: _start),
-            const SizedBox(height: 10),
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: widget.onSkip,
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Text(
-                    '稍后再说',
-                    style: AppTextStyles.body.copyWith(
-                      color: AppColors.subtle,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
+        AuthInputField(
+          label: '经营地区',
+          placeholder: '请选择经营地区',
+          icon: LucideIcons.mapPin,
+          controller: _locationController,
+          readOnly: true,
+          onTap: _saving ? null : _selectLocation,
+          trailing: IconButton(
+              tooltip: '选择经营地区',
+              onPressed: _saving ? null : _selectLocation,
+              icon: const Icon(LucideIcons.chevronDown, size: 20)),
         ),
-        const DataNotice(text: '可稍后在我的中修改', topPadding: 14),
+        Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: _locating || _saving ? null : _useCurrentLocation,
+              icon: const Icon(LucideIcons.locateFixed, size: 16),
+              label: Text(_locating ? '定位中…' : '使用当前位置'),
+            )),
+        const SizedBox(height: 8),
+        Text('可稍后在“我的”中修改经营地区。',
+            style: AppTextStyles.small.copyWith(color: AppColors.muted)),
+        if (_message != null) ...[
+          const SizedBox(height: 16),
+          AuthErrorBanner(message: _message!)
+        ],
+        const SizedBox(height: 24),
+        AuthEntrySubmitButton(
+            label: '开始使用',
+            loadingLabel: '保存中',
+            isLoading: _saving,
+            onTap: _start),
+        const SizedBox(height: 8),
+        TextButton(
+            onPressed: _saving ? null : widget.onSkip,
+            child: const Text('稍后再说')),
       ],
     );
   }

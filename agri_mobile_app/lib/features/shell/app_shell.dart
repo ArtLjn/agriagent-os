@@ -5,10 +5,10 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../app/app_dependencies.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_theme.dart';
 import '../billing/billing_screen.dart';
 import '../business/business_pages.dart';
 import '../home/home_screen.dart';
-import '../record_flow/record_flow_controller.dart';
 import '../profile/profile_screen.dart';
 import '../workbench/workbench_screen.dart';
 import '../yaya/yaya_screen.dart';
@@ -30,21 +30,40 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends State<AppShell>
+    with SingleTickerProviderStateMixin {
   late int selectedIndex = widget.initialIndex;
   int billingRefreshKey = 0;
-  late final recordFlowController = RecordFlowController(
-    workbench: widget.dependencies.workbench,
-    billing: widget.dependencies.billing,
-  );
-
+  double _tabDirection = 1;
+  late final _tabController = AnimationController(
+      vsync: this, duration: AppMotion.tabDuration, value: 1);
+  late final _tabProgress =
+      _tabController.drive(CurveTween(curve: AppMotion.curve));
   @override
   void initState() {
     super.initState();
     unawaited(widget.dependencies.loadAppOverview().catchError((Object _) {}));
   }
 
-  void _selectTab(int index) => setState(() => selectedIndex = index);
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  void _selectTab(int index) {
+    if (index == selectedIndex) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() {
+      _tabDirection = index > selectedIndex ? 1 : -1;
+      selectedIndex = index;
+    });
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _tabController.value = 1;
+    } else {
+      _tabController.forward(from: 0);
+    }
+  }
 
   void _refreshBilling() {
     setState(() => billingRefreshKey += 1);
@@ -67,14 +86,16 @@ class _AppShellState extends State<AppShell> {
     return Scaffold(
       backgroundColor: AppColors.background,
       floatingActionButton: showLedgerFab
-          ? FloatingActionButton(
+          ? FloatingActionButton.extended(
               heroTag: 'ledger-manual-create',
               onPressed: () => _openLedgerCreate(context),
               backgroundColor: AppColors.blue,
               foregroundColor: Colors.white,
-              elevation: 4,
-              shape: const CircleBorder(),
-              child: const Icon(LucideIcons.plus, size: 26),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              icon: const Icon(LucideIcons.plus, size: 20),
+              label: const Text('记一笔'),
             )
           : null,
       bottomNavigationBar: AppBottomTabBar(
@@ -89,39 +110,48 @@ class _AppShellState extends State<AppShell> {
             colors: [AppColors.backgroundTop, AppColors.background],
           ),
         ),
-        child: IndexedStack(
-          index: selectedIndex,
-          children: [
-            HomeScreen(
-              repository: widget.dependencies.dashboard,
-              onBottomTabChanged: _selectTab,
+        child: FadeTransition(
+          key: const ValueKey('main-tab-fade'),
+          opacity: _tabProgress.drive(Tween(begin: 0.72, end: 1.0)),
+          child: SlideTransition(
+            key: const ValueKey('main-tab-slide'),
+            position: _tabProgress.drive(Tween(
+                begin: Offset(0.018 * _tabDirection, 0), end: Offset.zero)),
+            // 稳定的 IndexedStack 保留聊天、输入与滚动位置，切换只改变绘制动效。
+            child: IndexedStack(
+              index: selectedIndex,
+              children: [
+                HomeScreen(
+                  repository: widget.dependencies.dashboard,
+                  onBottomTabChanged: _selectTab,
+                ),
+                WorkbenchScreen(
+                  businessRepository: widget.dependencies.business,
+                  onGoHome: () => _selectTab(0),
+                  onGoLedger: () => _selectTab(3),
+                  onGoYaya: () => _selectTab(2),
+                  onGoProfile: () => _selectTab(4),
+                  onRecordAgain: () => _selectTab(1),
+                  onLedgerSaved: _refreshBilling,
+                ),
+                YayaScreen(
+                  repository: widget.dependencies.yaya,
+                  profileRepository: widget.dependencies.profile,
+                ),
+                BillingScreen(
+                  repository: widget.dependencies.billing,
+                  refreshKey: billingRefreshKey,
+                  onCreateRecord: () => _openLedgerCreate(context),
+                ),
+                ProfileScreen(
+                  repository: widget.dependencies.profile,
+                  locations: widget.dependencies.locations,
+                  location: widget.dependencies.location,
+                  onLogout: widget.onLogout,
+                ),
+              ],
             ),
-            WorkbenchScreen(
-              businessRepository: widget.dependencies.business,
-              recordFlowController: recordFlowController,
-              onGoHome: () => _selectTab(0),
-              onGoLedger: () => _selectTab(3),
-              onGoYaya: () => _selectTab(2),
-              onGoProfile: () => _selectTab(4),
-              onRecordAgain: () => _selectTab(1),
-              onLedgerSaved: _refreshBilling,
-            ),
-            YayaScreen(
-              repository: widget.dependencies.yaya,
-              profileRepository: widget.dependencies.profile,
-            ),
-            BillingScreen(
-              repository: widget.dependencies.billing,
-              refreshKey: billingRefreshKey,
-              onCreateRecord: () => _openLedgerCreate(context),
-            ),
-            ProfileScreen(
-              repository: widget.dependencies.profile,
-              locations: widget.dependencies.locations,
-              location: widget.dependencies.location,
-              onLogout: widget.onLogout,
-            ),
-          ],
+          ),
         ),
       ),
     );

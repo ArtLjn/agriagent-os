@@ -1186,6 +1186,7 @@ async def list_conversations(
         match["userId"] = user_id
     pipeline: list[dict[str, Any]] = [
         {"$match": match},
+        {"$sort": {"createdAt": 1, "_id": 1}},
         {
             "$group": {
                 "_id": "$conversationId",
@@ -1195,16 +1196,23 @@ async def list_conversations(
                 "message_count": {"$sum": 1},
             }
         },
-        {"$sort": {"last_at": -1}},
+        {"$sort": {"last_at": -1, "_id": -1}},
     ]
 
-    if cursor:
-        # Skip conversations already seen (cursor-based)
-        pipeline.append({"$match": {"_id": {"$ne": cursor}}})
-
-    pipeline.append({"$limit": limit + 1})
-
     try:
+        if cursor:
+            # 游标代表排序边界，单纯排除该 ID 会把之前的会话反复返回。
+            anchor = await coll.find_one(
+                {**match, "conversationId": cursor},
+                sort=[("createdAt", -1), ("_id", -1)],
+            )
+            if anchor is None:
+                return {"items": [], "next_cursor": None, "has_more": False}
+            pipeline.append({"$match": {"$or": [
+                {"last_at": {"$lt": anchor["createdAt"]}},
+                {"last_at": anchor["createdAt"], "_id": {"$lt": cursor}},
+            ]}})
+        pipeline.append({"$limit": limit + 1})
         results = await coll.aggregate(pipeline).to_list(length=limit + 1)
     except Exception as exc:  # noqa: BLE001
         logger.warning("list_conversations aggregation failed: %s", exc)

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, KeyboardEvent } from 'react';
 import {
   Input,
   Button,
@@ -2053,8 +2053,14 @@ export default function TraceMonitor() {
     });
   };
 
+  const handleTraceHeaderKeyDown = (event: KeyboardEvent<HTMLDivElement>, traceId: string) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    toggleCard(traceId);
+  };
+
   return (
-    <div>
+    <div className="trace-monitor">
       <Typography.Title level={4} style={{ color: TEXT, marginBottom: 16 }}>
         链路追踪
       </Typography.Title>
@@ -2141,23 +2147,17 @@ export default function TraceMonitor() {
               >
                 {/* Trace 头部信息 - 可点击折叠/展开 */}
                 <div
+                  className="trace-item-header"
                   onClick={() => toggleCard(item.trace_id)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    padding: '12px 16px',
-                    borderBottom: expandedCards.has(item.trace_id)
-                      ? `1px solid ${BORDER}`
-                      : 'none',
-                    gap: 24,
-                    fontSize: 13,
-                    cursor: 'pointer',
-                    transition: 'background 0.2s',
-                  }}
+                  onKeyDown={(event) => handleTraceHeaderKeyDown(event, item.trace_id)}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${expandedCards.has(item.trace_id) ? '收起' : '展开'} Trace ${item.trace_id}`}
+                  aria-expanded={expandedCards.has(item.trace_id)}
                 >
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                    <span style={{ color: TEXT_DIM }}>Trace ID:</span>
-                    <span style={{ fontFamily: 'monospace', color: ACCENT }}>
+                  <span className="trace-field trace-field--trace" title={item.trace_id}>
+                    <span className="trace-field__label">Trace</span>
+                    <span className="trace-field__value trace-field__value--accent">
                       {item.trace_id}
                     </span>
                     <Tooltip title="复制 Trace ID">
@@ -2170,46 +2170,46 @@ export default function TraceMonitor() {
                             message.error('复制失败');
                           });
                         }}
-                        style={{ color: TEXT_DIM, fontSize: 12, cursor: 'pointer' }}
+                        className="trace-copy-icon"
                       />
                     </Tooltip>
                   </span>
                   {item.session_id && (
-                    <span>
-                      <span style={{ color: TEXT_DIM }}>Conversation: </span>
-                      <span style={{ fontFamily: 'monospace', color: TEXT_DIM }}>
+                    <span className="trace-field" title={item.session_id}>
+                      <span className="trace-field__label">Conversation</span>
+                      <span className="trace-field__value trace-field__value--mono">
                         {item.session_id.slice(0, 16)}...
                       </span>
                     </span>
                   )}
-                  <span>
-                    <span style={{ color: TEXT_DIM }}>Run ID: </span>
-                    <span style={{ fontFamily: 'monospace', color: TEXT_DIM }}>
+                  <span className="trace-field" title={item.request_id}>
+                    <span className="trace-field__label">Run ID</span>
+                    <span className="trace-field__value trace-field__value--mono">
                       {item.request_id}
                     </span>
                   </span>
-                  <span>
-                    <span style={{ color: TEXT_DIM }}>Farm UID: </span>
-                    <span style={{ color: TEXT }}>{item.farm_uid || '-'}</span>
+                  <span className="trace-field" title={item.farm_uid || '-'}>
+                    <span className="trace-field__label">Farm UID</span>
+                    <span className="trace-field__value">{item.farm_uid || '-'}</span>
                   </span>
-                  <span>
-                    <span style={{ color: TEXT_DIM }}>节点: </span>
-                    <span style={{ color: TEXT }}>{item.node_count}</span>
+                  <span className="trace-field trace-field--metric">
+                    <span className="trace-field__label">节点</span>
+                    <span className="trace-field__value">{item.node_count}</span>
                   </span>
-                  <span>
-                    <span style={{ color: TEXT_DIM }}>耗时: </span>
-                    <span style={{ color: TEXT }}>{item.total_duration_ms}ms</span>
+                  <span className="trace-field trace-field--metric">
+                    <span className="trace-field__label">耗时</span>
+                    <span className="trace-field__value">{item.total_duration_ms}ms</span>
                   </span>
                   <Tag color={statusTagColor(item.summary.status)} style={{ marginInlineEnd: 0 }}>
                     {item.summary.status ?? 'success'}
                   </Tag>
                   {item.summary.status_reason && (
-                    <span style={{ color: TEXT_DIM, maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span className="trace-status-reason" title={item.summary.status_reason}>
                       {item.summary.status_reason}
                     </span>
                   )}
-                  <span style={{ marginLeft: 'auto', color: TEXT_DIM, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {expandedCards.has(item.trace_id) && item.timeline && (
+                  <span className="trace-header-actions">
+                    {expandedCards.has(item.trace_id) && item.timeline && (
                       <>
                         <Button
                           size="small"
@@ -2229,11 +2229,12 @@ export default function TraceMonitor() {
                         </Button>
                       </>
                     )}
-                    <span style={{ minWidth: 150, textAlign: 'right' }}>
+                    <span className="trace-header-time">
                       {formatTraceTime(item.created_at)}
                     </span>
-                    <span style={{ color: ACCENT }}>
-                      {expandedCards.has(item.trace_id) ? '收起 ▲' : '展开 ▼'}
+                    <span className="trace-expand-label">
+                      {expandedCards.has(item.trace_id) ? '收起' : '展开'}
+                      <span aria-hidden="true">{expandedCards.has(item.trace_id) ? '▲' : '▼'}</span>
                     </span>
                   </span>
                 </div>

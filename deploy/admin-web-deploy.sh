@@ -10,6 +10,7 @@
 #   SERVER_HOST=43.155.217.74                 SSH 主机
 #   SERVER_USER=root                          SSH 用户
 #   REMOTE_DIR=/root/workspace/static/farm-admin-web  远程静态目录
+#   BUILD_COMMAND="pnpm exec vite build"      构建命令，可覆盖
 
 set -euo pipefail
 
@@ -22,6 +23,7 @@ SERVER_HOST="${SERVER_HOST:-43.155.217.74}"
 SERVER_USER="${SERVER_USER:-root}"
 REMOTE_DIR="${REMOTE_DIR:-/root/workspace/static/farm-admin-web}"
 API_URL="${API_URL:-/api}"
+BUILD_COMMAND="${BUILD_COMMAND:-pnpm exec vite build}"
 
 # === 参数 ===
 SKIP_BUILD=0
@@ -48,6 +50,7 @@ printf '=========================================\n'
 printf ' 服务器:  %s@%s\n' "$SERVER_USER" "$SERVER_HOST"
 printf ' 远程目录: %s\n' "$REMOTE_DIR"
 printf ' API:     %s\n' "$API_URL"
+printf ' 构建:    %s\n' "$BUILD_COMMAND"
 [ "$SKIP_BUILD" = 1 ] && printf ' ⚠ 跳过构建\n'
 printf '=========================================\n'
 
@@ -63,13 +66,8 @@ ok "API_URL = ${API_URL}"
 # === Step 2: 打包 ===
 if [ "$SKIP_BUILD" = 0 ]; then
   log "打包 agri_admin_web"
-  if command -v pnpm >/dev/null 2>&1; then
-    pnpm build
-  elif command -v npm >/dev/null 2>&1; then
-    npm run build
-  else
-    die "未找到 pnpm 或 npm"
-  fi
+  command -v pnpm >/dev/null 2>&1 || die "未找到 pnpm，请安装 pnpm 或通过 --no-build 使用现有 dist"
+  eval "$BUILD_COMMAND"
   ok "构建完成"
 fi
 

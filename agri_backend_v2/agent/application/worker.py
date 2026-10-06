@@ -7,6 +7,7 @@ import json
 import logging
 import time
 import uuid
+from contextlib import suppress
 
 from agent.config import settings
 from agent.domains.harness.memory import service as memory
@@ -15,6 +16,7 @@ from agent.domains.harness.runtime.turn import StopReason, Turn, TurnPhase
 from agent.platforms.persistence.mongo.chat_store import append_message
 from agent.platforms.persistence.redis.coordination import (
     TurnLease,
+    TurnLeaseLost,
     claim_recovered_lease,
     inspect_turn_lease,
     promote_turn,
@@ -37,6 +39,7 @@ from agent.domains.harness.observability.trace import (
 )
 from agent.domains.harness.observability.trace.context import trace_id_for_turn
 from agent.platforms.persistence.redis.turn_store import (
+    TERMINAL_STATUSES,
     create_approval,
     dispatch_key,
     get_turn,
@@ -75,8 +78,8 @@ async def _publish_worker_finalization(
     )
 
 
-async def _finalize_cancelled_before_runtime(turn: Turn, trace_id: str) -> None:
-    """取消发生在上下文预加载期间时直接收口，避免进入新的 Tool 调用。"""
+async def _finalize_cancelled_turn(turn: Turn, trace_id: str) -> None:
+    """取消后统一落终态与答复，避免进入新的 Tool 调用。"""
     error_info = turn.record_error(
         "turn_cancelled",
         "本轮任务已取消",
@@ -85,18 +88,22 @@ async def _finalize_cancelled_before_runtime(turn: Turn, trace_id: str) -> None:
         status="cancelled",
     )
     answer = "本轮任务已取消，系统未确认业务操作是否完成。"
-    await update_turn(
-        turn.turn_id,
-        status="cancelled",
-        phase=turn.phase.value,
-        stop_reason=turn.stop_reason.value,
-        error_code=error_info["code"],
-        error_message=error_info["message"],
-        error_details=error_info,
-        final_answer=answer,
-        finalization_pending=True,
-        pending_approval=None,
-    )
+    if (
+        await update_turn(
+            turn.turn_id,
+            status="cancelled",
+            phase=turn.phase.value,
+            stop_reason=turn.stop_reason.value,
+            error_code=error_info["code"],
+            error_message=error_info["message"],
+            error_details=error_info,
+            final_answer=answer,
+            finalization_pending=True,
+            pending_approval=None,
+        )
+        is False
+    ):
+        return
     await _publish_worker_finalization(
         turn.turn_id,
         status="cancelled",
@@ -126,6 +133,24 @@ def _state_int(value: object, fallback: int = 0) -> int:
 
 def _state_bool(value: object) -> bool:
     return value is True or str(value).lower() in {"1", "true", "yes"}
+
+
+async def _cleanup_runtime_resources(
+    turn: Turn,
+    lease: TurnLease,
+    renew_stop: asyncio.Event,
+    renew_task: asyncio.Task,
+    scope: str,
+) -> None:
+    """释放 Worker 运行资源，避免上下文冲突提前返回时遗留 lease。"""
+    renew_stop.set()
+    await asyncio.gather(renew_task, return_exceptions=True)
+    await release_turn(lease)
+    await wake_conversation(scope)
+    await wake_global_queue()
+    trace_turn_outcome(turn.status, turn.error)
+    await flush_now()
+    clear_trace()
 
 
 async def _persist_session_state(turn: Turn) -> dict:
@@ -228,11 +253,16 @@ async def _persist_visible_assistant_message(
             session_status="not_started",
             observation_status="not_started",
         )
-        await update_turn(
-            turn.turn_id,
-            message_persistence_status="unavailable",
-            error_code="conversation_message_persist_failed",
-        )
+        if (
+            await update_turn(
+                turn.turn_id,
+                message_persistence_status="unavailable",
+                error_code="conversation_message_persist_failed",
+            )
+            is False
+        ):
+            # done 后保留原执行结果，但落库失败仍须可见，不能因结果栅栏丢掉元数据。
+            await update_turn(turn.turn_id, message_persistence_status="unavailable")
         logger.error(
             "assistant message persistence failed; session state not advanced turn_id=%s",
             turn.turn_id,
@@ -275,7 +305,7 @@ async def _recover_pending_finalization(state: dict[str, str]) -> bool:
         return True
     turn = _turn_from_state(state)
     turn.status = state.get("status", turn.status)
-    return await _finish_assistant_persistence(
+    persisted = await _finish_assistant_persistence(
         turn,
         content=content,
         message_kind="error_answer"
@@ -283,13 +313,21 @@ async def _recover_pending_finalization(state: dict[str, str]) -> bool:
         else "final_answer",
         trace_id=state.get("trace_id") or trace_id_for_turn(turn.turn_id),
     )
+    if persisted:
+        # 正常执行可能在状态落库后、发布 deferred done 前失租；只补收尾，不重进 Runtime。
+        await publish_event(turn.turn_id, sse.done(turn.status, turn.turn_id))
+    return persisted
 
 
-async def _recover_interrupted_turn(turn: Turn, state: dict[str, str]) -> None:
+async def _recover_interrupted_turn(
+    turn: Turn, state: dict[str, str], *, lease_lost: bool = False
+) -> None:
     """Worker 丢失 lease 后只收口，不重新执行可能已提交的 Tool。"""
     error_info = turn.record_error(
-        "worker_restarted",
-        "执行 Worker 已中断，本轮未自动重试业务操作。",
+        "turn_lease_lost" if lease_lost else "worker_restarted",
+        "执行租约已失效，本轮已停止，未自动重试业务操作。"
+        if lease_lost
+        else "执行 Worker 已中断，本轮未自动重试业务操作。",
         phase=TurnPhase.TERMINAL,
         stop_reason=StopReason.PIPELINE_CRASH,
         status="timeout",
@@ -299,18 +337,23 @@ async def _recover_interrupted_turn(turn: Turn, state: dict[str, str]) -> None:
         "本轮执行被 Worker 中断，系统未自动重复执行操作，请确认当前业务状态后重试。"
     )
     trace_id = state.get("trace_id") or trace_id_for_turn(turn.turn_id)
-    await update_turn(
-        turn.turn_id,
-        status="timeout",
-        phase=turn.phase.value,
-        stop_reason=turn.stop_reason.value,
-        error_code=error_info["code"],
-        error_message=error_info["message"],
-        error_details=error_info,
-        final_answer=answer,
-        finalization_pending=True,
-        pending_approval=None,
-    )
+    if (
+        await update_turn(
+            turn.turn_id,
+            expected_statuses=("running", "awaiting_approval"),
+            status="timeout",
+            phase=turn.phase.value,
+            stop_reason=turn.stop_reason.value,
+            error_code=error_info["code"],
+            error_message=error_info["message"],
+            error_details=error_info,
+            final_answer=answer,
+            finalization_pending=True,
+            pending_approval=None,
+        )
+        is False
+    ):
+        return
     await _publish_worker_finalization(
         turn.turn_id,
         status="timeout",
@@ -347,17 +390,21 @@ async def _finalize_context_failure(
         status="failed",
     )
     answer = "当前会话上下文暂不可可靠读取，本轮未执行业务操作，请稍后重试。"
-    await update_turn(
-        turn.turn_id,
-        status="failed",
-        phase=turn.phase.value,
-        stop_reason=turn.stop_reason.value,
-        error_code=error_info["code"],
-        error_message=error_info["message"],
-        error_details=error_info,
-        final_answer=answer,
-        finalization_pending=True,
-    )
+    if (
+        await update_turn(
+            turn.turn_id,
+            status="failed",
+            phase=turn.phase.value,
+            stop_reason=turn.stop_reason.value,
+            error_code=error_info["code"],
+            error_message=error_info["message"],
+            error_details=error_info,
+            final_answer=answer,
+            finalization_pending=True,
+        )
+        is False
+    ):
+        return
     await _publish_worker_finalization(
         turn.turn_id,
         status="failed",
@@ -459,14 +506,7 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
         token=state["lease_token"],
     )
     current_state = await get_turn(turn.turn_id)
-    if not current_state or current_state.get("status") in {
-        "completed",
-        "terminated",
-        "failed",
-        "rejected",
-        "cancelled",
-        "timeout",
-    }:
+    if not current_state or current_state.get("status") in TERMINAL_STATUSES:
         return
     state = current_state
     queue_wait_ms: int | None = None
@@ -493,9 +533,10 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
         return
 
     renew_stop = asyncio.Event()
-    renew_task = asyncio.create_task(renew_until_done(lease, renew_stop))
-    final_answer = ""
-    deferred_done_event: dict[str, object] | None = None
+    lease_ready = asyncio.Event()
+    renew_task = asyncio.create_task(
+        renew_until_done(lease, renew_stop, ready=lease_ready)
+    )
     init_trace(
         conversation_id=turn.conversation_id,
         turn_id=turn.turn_id,
@@ -506,6 +547,47 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
     )
     if queue_wait_ms is not None:
         trace_queue_wait(queue_wait_ms)
+    execution = asyncio.create_task(_execute_turn(turn, state, lease_ready))
+    try:
+        await asyncio.wait((execution, renew_task), return_when=asyncio.FIRST_COMPLETED)
+        if execution.done():
+            await execution
+        else:
+            # 取消包含预加载、LLM、Tool 和审批等待的整个执行任务，禁止失租后继续推进。
+            execution.cancel()
+            with suppress(asyncio.CancelledError):
+                await execution
+            try:
+                await renew_task
+            except TurnLeaseLost as exc:
+                logger.error(
+                    "租约失效，已停止执行 turn_id=%s reason=%s",
+                    turn.turn_id,
+                    exc,
+                    extra={"code": "turn_lease_lost", "turn_id": turn.turn_id},
+                )
+            latest = await get_turn(turn.turn_id)
+            if latest and latest.get("status") not in TERMINAL_STATUSES:
+                await _recover_interrupted_turn(turn, latest, lease_lost=True)
+            elif (
+                latest
+                and latest.get("final_answer")
+                and not latest.get("terminal_event")
+            ):
+                await _recover_pending_finalization(latest)
+    finally:
+        execution.cancel()
+        await asyncio.gather(execution, return_exceptions=True)
+        await _cleanup_runtime_resources(turn, lease, renew_stop, renew_task, scope)
+
+
+async def _execute_turn(
+    turn: Turn, state: dict[str, str], lease_ready: asyncio.Event
+) -> None:
+    """只在租约确认后执行上下文预加载和 Runtime；资源由上层租约监督器释放。"""
+    await lease_ready.wait()
+    final_answer = ""
+    deferred_done_event: dict[str, object] | None = None
     trace_id = state.get("trace_id") or trace_id_for_turn(turn.turn_id)
     # Session View 在 application/Worker 边界读取一次，Runtime 只消费不可变快照。
     try:
@@ -585,7 +667,7 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
             # 再无条件写 running，否则会覆盖并发到达的用户取消。
             latest = await get_turn(turn.turn_id)
             if latest and latest.get("status") == "cancelled":
-                await _finalize_cancelled_before_runtime(turn, trace_id)
+                await _finalize_cancelled_turn(turn, trace_id)
                 return
             await publish_event(
                 turn.turn_id,
@@ -596,15 +678,12 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
             )
             async for event in run_turn(turn, approval_waiter):
                 latest = await get_turn(turn.turn_id)
+                if not latest or (
+                    latest.get("status") in TERMINAL_STATUSES
+                    and latest.get("status") not in {"cancelled", "rejected"}
+                ):
+                    return
                 if latest and latest.get("status") == "cancelled":
-                    turn.record_error(
-                        "turn_cancelled",
-                        "本轮任务已取消",
-                        phase=turn.phase,
-                        stop_reason=StopReason.USER_CANCELLED,
-                        status="cancelled",
-                    )
-                    final_answer = "本轮任务已取消，系统未确认业务操作是否完成。"
                     await publish_event(
                         turn.turn_id,
                         {
@@ -612,19 +691,8 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
                             "data": {"code": "turn_cancelled", "turn_id": turn.turn_id},
                         },
                     )
-                    await _publish_worker_finalization(
-                        turn.turn_id,
-                        status="cancelled",
-                        answer=final_answer,
-                        terminal_event=sse.turn_terminated(
-                            turn.turn_id,
-                            reason=StopReason.USER_CANCELLED.value,
-                            message="本轮任务已取消",
-                            step_count=turn.step_count,
-                            status="cancelled",
-                        ),
-                    )
-                    break
+                    await _finalize_cancelled_turn(turn, trace_id)
+                    return
                 event_type = event.get("type", "")
                 if event_type == "approval_required":
                     await create_approval(turn, event.get("data", {}))
@@ -632,28 +700,28 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
                 if event_type == "final_answer":
                     final_answer = event.get("data", {}).get("text", "")
                 if event_type == "done":
-                    # done 是客户端可见的持久化栅栏，必须等 Turn 状态和助手事实
-                    # 收尾完成后再发布，避免消费者收到 done 时仍读到旧状态。
+                    # done 是客户端可见的持久化栅栏，必须等状态与助手事实收尾后发布。
                     deferred_done_event = event
-                    if final_answer:
-                        await update_turn(
-                            turn.turn_id,
-                            final_answer=final_answer,
-                            finalization_pending=True,
-                        )
                 else:
                     await publish_event(turn.turn_id, event)
-        await update_turn(
-            turn.turn_id,
-            status=turn.status,
-            phase=turn.phase.value,
-            stop_reason=turn.stop_reason.value if turn.stop_reason else "",
-            error_code=turn.error_code or "",
-            error_message=turn.error_message or turn.error or "",
-            error_details=turn.error_details,
-            final_answer=final_answer,
-            finalization_pending=bool(final_answer),
-        )
+        if (
+            await update_turn(
+                turn.turn_id,
+                expected_statuses=("running", "awaiting_approval", turn.status)
+                if turn.status in {"cancelled", "rejected"}
+                else ("running", "awaiting_approval"),
+                status=turn.status,
+                phase=turn.phase.value,
+                stop_reason=turn.stop_reason.value if turn.stop_reason else "",
+                error_code=turn.error_code or "",
+                error_message=turn.error_message or turn.error or "",
+                error_details=turn.error_details,
+                final_answer=final_answer,
+                finalization_pending=bool(final_answer),
+            )
+            is False
+        ):
+            return
         if final_answer:
             await _finish_assistant_persistence(
                 turn,
@@ -677,17 +745,22 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
         timeout_answer = (
             "本轮执行超时，尚未确认请求是否完成，请稍后查看状态或重新发起。"
         )
-        await update_turn(
-            turn.turn_id,
-            status="timeout",
-            phase=turn.phase.value,
-            stop_reason=turn.stop_reason.value,
-            error_code=error_info["code"],
-            error_message=error_info["message"],
-            error_details=error_info,
-            final_answer=timeout_answer,
-            finalization_pending=True,
-        )
+        if (
+            await update_turn(
+                turn.turn_id,
+                expected_statuses=("running", "awaiting_approval"),
+                status="timeout",
+                phase=turn.phase.value,
+                stop_reason=turn.stop_reason.value,
+                error_code=error_info["code"],
+                error_message=error_info["message"],
+                error_details=error_info,
+                final_answer=timeout_answer,
+                finalization_pending=True,
+            )
+            is False
+        ):
+            return
         await publish_event(
             turn.turn_id,
             {
@@ -723,17 +796,22 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
             status="failed",
         )
         failure_answer = "本轮执行失败，系统未能确认请求是否完成，请稍后重试。"
-        await update_turn(
-            turn.turn_id,
-            status="failed",
-            phase=turn.phase.value,
-            stop_reason=turn.stop_reason.value,
-            error_code=error_info["code"],
-            error_message=error_info["message"],
-            error_details=error_info,
-            final_answer=failure_answer,
-            finalization_pending=True,
-        )
+        if (
+            await update_turn(
+                turn.turn_id,
+                expected_statuses=("running", "awaiting_approval"),
+                status="failed",
+                phase=turn.phase.value,
+                stop_reason=turn.stop_reason.value,
+                error_code=error_info["code"],
+                error_message=error_info["message"],
+                error_details=error_info,
+                final_answer=failure_answer,
+                finalization_pending=True,
+            )
+            is False
+        ):
+            return
         await _publish_worker_finalization(
             turn.turn_id,
             status="failed",
@@ -751,15 +829,6 @@ async def _run_turn(turn: Turn, state: dict[str, str]) -> None:
             message_kind="error_answer",
             trace_id=trace_id,
         )
-    finally:
-        renew_stop.set()
-        await renew_task
-        await release_turn(lease)
-        await wake_conversation(scope)
-        await wake_global_queue()
-        trace_turn_outcome(turn.status, turn.error)
-        await flush_now()
-        clear_trace()
 
 
 async def _worker_loop(stop: asyncio.Event, consumer: str) -> None:

@@ -66,6 +66,29 @@ def test_step_and_tool_failure_events_share_explicit_correlation_fields() -> Non
     assert failed["data"]["step"] == 2
 
 
+def test_progress_event_exposes_deterministic_observation_status() -> None:
+    event = sse.progress(
+        "list_system_crop_templates",
+        "unchanged",
+        "same_observation",
+        "sha256:test",
+        step=3,
+        tool_call_id="call-3",
+    )
+
+    assert event == {
+        "type": "progress",
+        "data": {
+            "tool_name": "list_system_crop_templates",
+            "tool_call_id": "call-3",
+            "step": 3,
+            "status": "unchanged",
+            "reason": "same_observation",
+            "observation_fingerprint": "sha256:test",
+        },
+    }
+
+
 def test_terminated_state_exposes_legacy_failed_fields() -> None:
     state = {"status": "terminated", "stop_reason": "step_budget_exhausted"}
 

@@ -118,3 +118,18 @@ def test_create_template_schema_requires_stage_duration_and_order() -> None:
 
     assert stages["minItems"] == 1
     assert stages["items"]["required"] == ["name", "duration_days", "order_index"]
+
+
+def test_crop_template_operation_tools_keep_agent_to_business_mapping() -> None:
+    skills = loader.SkillLoader(loader._SKILLS_DIR).load_all()
+    by_name = {skill.name: skill for skill in skills}
+
+    assert by_name["list_system_crop_templates"].mcp_tool == "manage_crop_cycle"
+    assert by_name["list_system_crop_templates"].operation == "system_templates"
+    assert by_name["list_system_crop_templates"].capability_group == "crop_template_catalog"
+    assert by_name["list_system_crop_templates"].data_scope == "system_templates"
+    assert by_name["list_crop_templates"].mcp_tool == "manage_crop_cycle"
+    assert by_name["list_crop_templates"].operation == "templates"
+    assert by_name["list_crop_templates"].data_scope == "farm_imported_templates"
+    assert by_name["query_crop_templates"].mcp_tool == "manage_crop_templates"
+    assert by_name["query_crop_templates"].operation == "query"

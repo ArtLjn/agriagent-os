@@ -4,6 +4,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../data/api/api_models.dart';
 import '../../data/repositories/business_repository.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_theme.dart';
 import '../../theme/app_text_styles.dart';
 import 'business_ui.dart';
 
@@ -46,6 +47,7 @@ class _LedgerCategoryManagementPageState
   Future<void> _showCreateSheet() async {
     final created = await showModalBottomSheet<bool>(
       context: context,
+      sheetAnimationStyle: AppMotion.sheetStyle(context),
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => _CreateCategorySheet(
@@ -182,7 +184,7 @@ class _CategoryTypeSwitch extends StatelessWidget {
               value == 'income' ? '收入' : '支出',
               style: AppTextStyles.small.copyWith(
                 color: AppColors.blue,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -291,7 +293,7 @@ class _CreateCategorySheetState extends State<_CreateCategorySheet> {
                 style: AppTextStyles.sectionTitle.copyWith(
                   fontSize: 20,
                   height: 26 / 20,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 12),
@@ -351,7 +353,7 @@ class _CategoryListCard extends StatelessWidget {
               '${categories.length} 个',
               style: AppTextStyles.small.copyWith(
                 color: AppColors.muted,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -421,7 +423,7 @@ class _CategoryListTile extends StatelessWidget {
                   style: AppTextStyles.listTitle.copyWith(
                     fontSize: 16,
                     height: 22 / 16,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -431,7 +433,7 @@ class _CategoryListTile extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.small.copyWith(
                     color: AppColors.muted,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
@@ -475,7 +477,7 @@ class _CategoryStateCard extends StatelessWidget {
               textAlign: TextAlign.center,
               style: AppTextStyles.body.copyWith(
                 color: AppColors.muted,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
@@ -508,7 +510,7 @@ class _CategoryTipCard extends StatelessWidget {
                 color: AppColors.blueDark,
                 fontSize: 13,
                 height: 18 / 13,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),

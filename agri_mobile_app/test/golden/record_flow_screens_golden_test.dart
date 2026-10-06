@@ -1,3 +1,4 @@
+import 'package:farm_manager_app/theme/app_theme.dart';
 import 'package:dio/dio.dart';
 import 'package:farm_manager_app/data/api/api_client.dart';
 import 'package:farm_manager_app/data/repositories/billing_repository.dart';
@@ -50,7 +51,8 @@ void main() {
         name: 'save-success',
       );
 
-    await tester.pumpDeviceBuilder(builder);
+    await tester.pumpDeviceBuilder(builder,
+        wrapper: materialAppWrapper(theme: AppTheme.light()));
     await screenMatchesGolden(tester, 'record_flow_mobile_screens');
   });
 }

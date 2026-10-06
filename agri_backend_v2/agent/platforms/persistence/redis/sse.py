@@ -8,6 +8,7 @@ Event types emitted to the Web UI:
   - tool_started  : Tool 开始执行，携带稳定调用标识
   - tool_finished : Tool 完成，携带耗时和结果/错误
   - observation   : tool result (data, possibly trimmed)
+  - progress      : deterministic progress ledger delta for a tool observation
   - approval_required : HITL gate fired (tool_name, args, risk_level)
   - approval_result   : user approved/rejected (decision, reason)
   - operation_committed : write operation committed with structured result
@@ -227,6 +228,36 @@ def observation(
     return {
         "type": "observation",
         "data": payload,
+    }
+
+
+def progress(
+    tool_name: str,
+    status: str,
+    reason: str,
+    observation_fingerprint: str,
+    *,
+    step: int = 0,
+    tool_call_id: str = "",
+    semantic_status: str = "",
+    semantic_reason: str = "",
+) -> dict:
+    """发布运行时进度判定；不把模型文本当作业务进度。"""
+    data = {
+        "tool_name": tool_name,
+        "tool_call_id": tool_call_id,
+        "step": step,
+        "status": status,
+        "reason": reason,
+        "observation_fingerprint": observation_fingerprint,
+    }
+    if semantic_status:
+        data["semantic_status"] = semantic_status
+    if semantic_reason:
+        data["semantic_reason"] = semantic_reason
+    return {
+        "type": "progress",
+        "data": data,
     }
 
 

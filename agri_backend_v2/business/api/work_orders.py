@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -94,6 +94,7 @@ class WageRequest(LaborEntryRequest):
     cycle_id: int = Field(gt=0)
     operation_type: str = Field(min_length=1, max_length=50)
     work_date: date
+    recorded_at: datetime | None = None
 
 
 class UpdateWageRequest(StrictRequest):
@@ -102,6 +103,7 @@ class UpdateWageRequest(StrictRequest):
     cycle_id: int | None = Field(default=None, gt=0)
     operation_type: str | None = Field(default=None, min_length=1, max_length=50)
     work_date: date | None = None
+    recorded_at: datetime | None = None
     pay_type: str | None = Field(default=None, max_length=20)
     quantity: Decimal | None = Field(default=None, ge=0)
     unit_price: Decimal | None = Field(default=None, ge=0)

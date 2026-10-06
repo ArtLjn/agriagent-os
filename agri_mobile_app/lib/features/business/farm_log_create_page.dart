@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../data/api/api_client.dart';
 import '../../data/repositories/business_repository.dart';
-import '../../shared/assets/app_assets.dart';
 import '../../theme/app_colors.dart';
 import 'business_ui.dart';
-import 'farm_log_hero_banner.dart';
 
 class FarmLogCreatePage extends StatefulWidget {
   const FarmLogCreatePage({
@@ -51,8 +50,8 @@ class _FarmLogCreatePageState extends State<FarmLogCreatePage> {
         'note': _note.text.trim(),
       }..removeWhere((_, value) => value == null || value == ''));
       _showMessage('保存农事成功');
-    } catch (_) {
-      _showMessage('保存失败，请稍后再试');
+    } catch (error) {
+      _showMessage(ApiClient.userMessageFor(error));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -110,11 +109,6 @@ class _FarmLogCreatePageState extends State<FarmLogCreatePage> {
         onSecondary: () => Navigator.of(context).maybePop(),
       ),
       children: [
-        const FarmLogHeroBanner(
-          title: '农事记录',
-          subtitle: '记录作业过程，后续可用于复盘和报表',
-          backgroundAsset: AppAssets.businessFarmLogBanner,
-        ),
         FormRowsCard(
           title: '作业信息',
           icon: LucideIcons.leaf,
@@ -147,10 +141,6 @@ class _FarmLogCreatePageState extends State<FarmLogCreatePage> {
               hintText: '补充说明',
             ),
           ],
-        ),
-        const AssistEntryCard(
-          text: '保存后同步到农事记录',
-          icon: LucideIcons.badgeCheck,
         ),
       ],
     );
@@ -242,7 +232,7 @@ class FarmLogDateTimePickerCard extends StatelessWidget {
                       color: AppColors.ink,
                       fontSize: 17,
                       height: 23 / 17,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                       letterSpacing: 0,
                     ),
                   ),

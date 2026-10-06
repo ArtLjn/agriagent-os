@@ -15,12 +15,14 @@ from typing import Any
 
 import httpx
 import pytest
+import pytest_asyncio
 
 from agent.api import approve, chat
 from agent.domains.harness.runtime import engine as react
 from agent.domains.harness.runtime.turn import Turn
 from agent.application import worker
 from agent.platforms.persistence.redis.coordination import TurnAdmission, TurnLease
+from agent.platforms.persistence.redis.coordination import TurnLeaseLost
 from agent.domains.harness.tools.base import Skill, SkillResult
 from agent.domains.harness.tools.registry import SkillRegistry
 from agent.bootstrap.app import app
@@ -83,6 +85,7 @@ class _FakeStore:
     approvals: dict[str, dict[str, Any]] = field(default_factory=dict)
     dispatches: list[str] = field(default_factory=list)
     worker_runs: list[str] = field(default_factory=list)
+    worker_tasks: list[asyncio.Task] = field(default_factory=list)
     messages: list[dict[str, Any]] = field(default_factory=list)
     business_calls: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
     approval_required: asyncio.Event = field(default_factory=asyncio.Event)
@@ -133,8 +136,13 @@ class _FakeStore:
             "status": "accepted",
         }
 
-    async def update_turn(self, turn_id: str, **fields: Any) -> None:
+    async def update_turn(
+        self, turn_id: str, *, expected_statuses: tuple[str, ...] = (), **fields: Any
+    ) -> bool:
+        if expected_statuses and self.turns[turn_id]["status"] not in expected_statuses:
+            return False
         self.turns[turn_id].update(fields)
+        return True
 
     async def get_turn(self, turn_id: str) -> dict[str, Any] | None:
         state = self.turns.get(turn_id)
@@ -146,7 +154,7 @@ class _FakeStore:
 
     async def publish_event(self, turn_id: str, event: dict[str, Any]) -> int:
         events = self.events.setdefault(turn_id, [])
-        if event["type"] == "done" and any(item["type"] == "done" for item in events):
+        if any(item["type"] == "done" for item in events):
             return next(item["seq"] for item in events if item["type"] == "done")
         item = {
             "seq": len(events) + 1,
@@ -163,9 +171,7 @@ class _FakeStore:
         ):
             item[metadata_field] = int(state.get(metadata_field, 0) or 0)
         item["source_status"] = str(
-            state.get("source_status")
-            or state.get("context_source_status")
-            or "empty"
+            state.get("source_status") or state.get("context_source_status") or "empty"
         )
         item["context_source_status"] = item["source_status"]
         item["data"].update(
@@ -178,6 +184,8 @@ class _FakeStore:
             }
         )
         events.append(item)
+        if event["type"] == "done":
+            state["terminal_event"] = "done"
         async with self.changed:
             self.changed.notify_all()
         return item["seq"]
@@ -209,6 +217,7 @@ class _FakeStore:
         task = asyncio.create_task(
             worker._run_turn(worker._turn_from_state(state), state)
         )
+        self.worker_tasks.append(task)
         task.add_done_callback(
             lambda done: done.exception() if not done.cancelled() else None
         )
@@ -244,8 +253,8 @@ class _FakeStore:
         return approval["status"] == "approved", approval.get("reason", "")
 
 
-@pytest.fixture
-def fake_runtime(monkeypatch: pytest.MonkeyPatch) -> _FakeStore:
+@pytest_asyncio.fixture
+async def fake_runtime(monkeypatch: pytest.MonkeyPatch):
     store = _FakeStore()
     skill = _FakeSkill("fake_lookup")
     write_skill = _FakeSkill("fake_write", write=True)
@@ -340,8 +349,13 @@ def fake_runtime(monkeypatch: pytest.MonkeyPatch) -> _FakeStore:
     async def persisted_observation(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
         return {"status": "ready", "source_status": "empty", "persisted": True}
 
-    async def renew_until_done(_lease, stop: asyncio.Event) -> None:
+    async def renew_until_done(_lease, stop: asyncio.Event, *, ready) -> None:
+        ready.set()
         await stop.wait()
+
+    async def mark_running(turn_id: str) -> bool:
+        await store.update_turn(turn_id, status="running")
+        return True
 
     monkeypatch.setattr(
         chat, "parse_identity", lambda _authorization: dict(TEST_IDENTITY)
@@ -364,7 +378,7 @@ def fake_runtime(monkeypatch: pytest.MonkeyPatch) -> _FakeStore:
     monkeypatch.setattr(approve, "resolve_approval", store.resolve_approval)
 
     monkeypatch.setattr(worker, "get_turn", store.get_turn)
-    monkeypatch.setattr(worker, "mark_running", lambda _turn_id: _true())
+    monkeypatch.setattr(worker, "mark_running", mark_running)
     monkeypatch.setattr(worker, "inspect_turn_lease", lambda _lease: _owned())
     monkeypatch.setattr(worker, "update_turn", store.update_turn)
     monkeypatch.setattr(worker, "publish_event", store.publish_event)
@@ -381,12 +395,15 @@ def fake_runtime(monkeypatch: pytest.MonkeyPatch) -> _FakeStore:
     monkeypatch.setattr(worker, "trace_turn_outcome", lambda *_args: None)
     monkeypatch.setattr(worker, "run_turn", react.run_turn)
     monkeypatch.setattr(worker.memory, "get_session_view", empty_session_view)
-    monkeypatch.setattr(
-        worker.memory, "persist_session_turn", persisted_session_turn
-    )
+    monkeypatch.setattr(worker.memory, "persist_session_turn", persisted_session_turn)
     monkeypatch.setattr(worker.memory, "observe", persisted_observation)
 
     monkeypatch.setattr(react, "_setup_turn_runtime", setup_runtime)
+
+    async def no_budget_estimate(_turn: Turn) -> tuple[None, None]:
+        return None, None
+
+    monkeypatch.setattr(react, "_estimate_turn_budget", no_budget_estimate)
     monkeypatch.setattr(react, "_skill_router_enabled", lambda: False)
     monkeypatch.setattr(react, "chat_stream", fake_llm)
     monkeypatch.setattr(react, "BusinessClient", BusinessClient)
@@ -399,11 +416,13 @@ def fake_runtime(monkeypatch: pytest.MonkeyPatch) -> _FakeStore:
     monkeypatch.setattr(react, "log_event", lambda *_args, **_kwargs: None)
 
     store.llm_mode = llm_mode  # type: ignore[attr-defined]
-    return store
-
-
-async def _true() -> bool:
-    return True
+    try:
+        yield store
+    finally:
+        for task in store.worker_tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*store.worker_tasks, return_exceptions=True)
 
 
 async def _owned() -> str:
@@ -444,7 +463,9 @@ def _sse_events(response: httpx.Response) -> list[dict[str, Any]]:
         data = next(
             line.removeprefix("data: ") for line in lines if line.startswith("data:")
         )
-        events.append({"type": event_type, "sse_event_id": event_id, **json.loads(data)})
+        events.append(
+            {"type": event_type, "sse_event_id": event_id, **json.loads(data)}
+        )
     return events
 
 
@@ -463,9 +484,7 @@ async def test_chat_worker_normal_chain_and_after_seq_reconnect(
         types = [event["type"] for event in first]
         assert types.count("progress") >= 2
         assert (
-            types.index("progress")
-            < types.index("final_answer")
-            < types.index("done")
+            types.index("progress") < types.index("final_answer") < types.index("done")
         )
         assert types.count("done") == 1
         assert first[-1]["type"] == "done"
@@ -477,7 +496,9 @@ async def test_chat_worker_normal_chain_and_after_seq_reconnect(
         assert len(fake_runtime.dispatches) == 1
         assert len(fake_runtime.worker_runs) == 0
 
-        observation_seq = max(event["seq"] for event in first if event["type"] == "progress")
+        observation_seq = max(
+            event["seq"] for event in first if event["type"] == "progress"
+        )
         reconnected = await _post_chat(
             client,
             request_id="normal-request",
@@ -494,6 +515,53 @@ async def test_chat_worker_normal_chain_and_after_seq_reconnect(
     assert len(fake_runtime.messages) == 2
     assert len(fake_runtime.dispatches) == 1
     assert len(fake_runtime.events[next(iter(fake_runtime.events))]) > len(first)
+
+
+@pytest.mark.asyncio
+async def test_context_revision_conflict_stops_before_business_tool_execution(
+    fake_runtime: _FakeStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def divergent_session_view(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        return {
+            "conversation_id": "conflict-conversation",
+            "messages": [],
+            "summary": None,
+            "conversation_revision": 2,
+            "summary_revision": 0,
+            "reset_generation": 0,
+            "source_status": "mongo",
+        }
+
+    monkeypatch.setattr(worker.memory, "get_session_view", divergent_session_view)
+    turn = Turn(
+        turn_id="conflict-turn",
+        conversation_id="conflict-conversation",
+        user_input="执行集成测试",
+        user_id=TEST_IDENTITY["user_id"],
+        farm_uid=TEST_IDENTITY["farm_uid"],
+        farm_id=TEST_IDENTITY["farm_id"],
+        scope=TEST_IDENTITY["scope"],
+    )
+    await fake_runtime.save_turn(
+        turn,
+        scope_hash="fake-scope",
+        lease_token="lease-conflict-turn",
+    )
+    fake_runtime.turns[turn.turn_id]["conversation_revision"] = 1
+    state = await fake_runtime.get_turn(turn.turn_id)
+    assert state is not None
+
+    await worker._run_turn(worker._turn_from_state(state), state)
+
+    events = fake_runtime.events[turn.turn_id]
+    assert fake_runtime.business_calls == []
+    assert any(event["type"] == "turn.failed" for event in events)
+    assert any(
+        event.get("data", {}).get("error", {}).get("code")
+        == "conversation_revision_divergence"
+        for event in events
+    )
 
 
 @pytest.mark.asyncio
@@ -554,9 +622,155 @@ async def test_worker_exception_has_error_final_answer_and_unique_done(
     types = [event["type"] for event in events]
     assert response.status_code == 200
     assert "error" in types
-    assert types.index("error") < types.index("final_answer") < types.index("turn.failed") < types.index("done")
+    assert (
+        types.index("error")
+        < types.index("final_answer")
+        < types.index("turn.failed")
+        < types.index("done")
+    )
     assert types.count("done") == 1
     error = next(event for event in events if event["type"] == "error")
-    assert "执行失败" in error["message"] or "fake worker runtime failure" in error["message"]
+    assert (
+        "执行失败" in error["message"]
+        or "fake worker runtime failure" in error["message"]
+    )
     final_answer = next(event for event in events if event["type"] == "final_answer")
     assert final_answer["text"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stage", ["unconfirmed", "preload", "runtime", "after_commit"])
+async def test_lease_loss_cancels_execution_without_replay(
+    fake_runtime: _FakeStore, monkeypatch: pytest.MonkeyPatch, stage: str
+) -> None:
+    entered, cancelled = asyncio.Event(), asyncio.Event()
+    original_view = worker.memory.get_session_view
+
+    async def renew(_lease, _stop, *, ready):
+        if stage != "unconfirmed":
+            ready.set()
+            await entered.wait()
+        raise TurnLeaseLost("测试租约失效")
+
+    async def preload(*args, **kwargs):
+        if stage == "unconfirmed":
+            pytest.fail("租约未确认前不得加载业务上下文")
+        if stage == "preload":
+            entered.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cancelled.set()
+        return await original_view(*args, **kwargs)
+
+    async def blocked_runtime(_turn, _waiter):
+        if stage == "after_commit":
+            fake_runtime.business_calls.append(("已提交的操作", {}))
+        entered.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            cancelled.set()
+        yield {"type": "final_answer", "data": {"text": "过期成功答复"}}
+
+    monkeypatch.setattr(worker, "renew_until_done", renew)
+    monkeypatch.setattr(worker.memory, "get_session_view", preload)
+    monkeypatch.setattr(worker, "run_turn", blocked_runtime)
+    turn = Turn(turn_id="lost-turn", conversation_id="lost-conversation")
+    await fake_runtime.save_turn(
+        turn, scope_hash="fake-scope", lease_token="lease-lost"
+    )
+    state = await fake_runtime.get_turn(turn.turn_id)
+    await asyncio.wait_for(worker._run_turn(turn, state), 1)
+
+    assert fake_runtime.turns[turn.turn_id]["status"] == "timeout"
+    assert fake_runtime.turns[turn.turn_id]["error_code"] == "turn_lease_lost"
+    events = fake_runtime.events[turn.turn_id]
+    assert [event["type"] for event in events].count("done") == 1
+    assert events[-1]["type"] == "done"
+    assert len(fake_runtime.messages) == 1
+    assert fake_runtime.messages[0]["message_kind"] == "error_answer"
+    assert cancelled.is_set() or stage == "unconfirmed"
+    assert len(fake_runtime.business_calls) == (1 if stage == "after_commit" else 0)
+
+
+@pytest.mark.asyncio
+async def test_rejected_approval_still_closes_stream_without_business_write(
+    fake_runtime: _FakeStore,
+) -> None:
+    fake_runtime.llm_mode["name"] = "write"
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        task = asyncio.create_task(
+            _post_chat(client, request_id="rejected", conversation_id="rejected")
+        )
+        await asyncio.wait_for(fake_runtime.approval_required.wait(), 1)
+        turn_id = next(iter(fake_runtime.turns))
+        await client.post(
+            "/api/v2/approve",
+            headers={"Authorization": "Bearer fake"},
+            json={"turn_id": turn_id, "decision": False, "reason": "拒绝执行"},
+        )
+        response = await asyncio.wait_for(task, 1)
+    assert fake_runtime.business_calls == []
+    assert fake_runtime.turns[turn_id]["status"] == "rejected"
+    assert _sse_events(response)[-1]["type"] == "done"
+
+
+@pytest.mark.asyncio
+async def test_cancelled_runtime_keeps_one_persisted_answer(
+    fake_runtime: _FakeStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def cancel_during_runtime(turn, _waiter):
+        await fake_runtime.update_turn(turn.turn_id, status="cancelled")
+        yield {"type": "assistant_delta", "data": {"text": "过期输出"}}
+
+    monkeypatch.setattr(worker, "run_turn", cancel_during_runtime)
+    turn = Turn(turn_id="cancel-turn", conversation_id="cancel-conversation")
+    await fake_runtime.save_turn(
+        turn, scope_hash="fake-scope", lease_token="lease-cancel"
+    )
+    state = await fake_runtime.get_turn(turn.turn_id)
+    await asyncio.wait_for(worker._run_turn(turn, state), 1)
+    assert fake_runtime.turns[turn.turn_id]["status"] == "cancelled"
+    assert len(fake_runtime.messages) == 1
+    assert fake_runtime.messages[0]["message_kind"] == "error_answer"
+    assert fake_runtime.events[turn.turn_id][-1]["type"] == "done"
+
+
+@pytest.mark.asyncio
+async def test_lease_loss_during_finalization_finishes_without_rerunning_tools(
+    fake_runtime: _FakeStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    persisting = asyncio.Event()
+    original_append = worker.append_message
+    attempts = 0
+
+    async def interrupted_append(**kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            persisting.set()
+            await asyncio.Event().wait()
+        return await original_append(**kwargs)
+
+    async def renew(_lease, _stop, *, ready):
+        ready.set()
+        await persisting.wait()
+        raise TurnLeaseLost("答复持久化期间失租")
+
+    monkeypatch.setattr(worker, "append_message", interrupted_append)
+    monkeypatch.setattr(worker, "renew_until_done", renew)
+    turn = Turn(turn_id="finalizing-turn", conversation_id="finalizing-conversation")
+    await fake_runtime.save_turn(
+        turn, scope_hash="fake-scope", lease_token="lease-finalizing"
+    )
+    state = await fake_runtime.get_turn(turn.turn_id)
+    await asyncio.wait_for(worker._run_turn(turn, state), 1)
+    assert fake_runtime.turns[turn.turn_id]["status"] == "completed"
+    assert len(fake_runtime.business_calls) == 1
+    assert len(fake_runtime.messages) == 1
+    assert fake_runtime.messages[0]["message_kind"] == "final_answer"
+    events = fake_runtime.events[turn.turn_id]
+    assert events[-1]["type"] == "done"
+    assert sum(event["type"] == "done" for event in events) == 1

@@ -4,6 +4,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../data/location/cities.dart';
 import '../../data/location/city_models.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_theme.dart';
 import '../../theme/app_text_styles.dart';
 
 part 'city_picker_sheet_models.dart';
@@ -30,6 +31,7 @@ Future<CityPickerResult?> showCityPickerSheet({
 }) {
   return showModalBottomSheet<CityPickerResult>(
     context: context,
+    sheetAnimationStyle: AppMotion.sheetStyle(context),
     isScrollControlled: true,
     useSafeArea: true,
     backgroundColor: Colors.transparent,
@@ -52,7 +54,8 @@ class _CityPickerSheet extends StatefulWidget {
 
   final String selectedCity;
   final Future<CityPickerResult?> Function()? onUseCurrentLocation;
-  final Future<List<CityPickerResult>> Function(String query)? onSearchLocations;
+  final Future<List<CityPickerResult>> Function(String query)?
+      onSearchLocations;
 
   @override
   State<_CityPickerSheet> createState() => _CityPickerSheetState();
@@ -90,7 +93,7 @@ class _CityPickerSheetState extends State<_CityPickerSheet> {
         ),
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.82,
+            maxHeight: (MediaQuery.sizeOf(context).height - bottomInset) * 0.82,
           ),
           child: Column(
             children: [
@@ -124,23 +127,22 @@ class _CityPickerSheetState extends State<_CityPickerSheet> {
       padding: const EdgeInsets.fromLTRB(18, 0, 14, 12),
       child: Row(
         children: [
-          SizedBox(
-            width: 44,
-            height: 44,
-            child: canGoBack
-                ? IconButton(
-                    tooltip: '返回上一级',
-                    onPressed: _back,
-                    icon: const Icon(LucideIcons.chevronLeft, size: 22),
-                    color: AppColors.blue,
-                  )
-                : null,
-          ),
+          if (canGoBack)
+            SizedBox(
+              width: 44,
+              height: 44,
+              child: IconButton(
+                tooltip: '返回上一级',
+                onPressed: _back,
+                icon: const Icon(LucideIcons.chevronLeft, size: 22),
+                color: AppColors.blue,
+              ),
+            ),
           Expanded(
             child: Text(
               _title(),
-              textAlign: TextAlign.center,
-              style: AppTextStyles.dateTitle,
+              textAlign: TextAlign.left,
+              style: AppTextStyles.sectionTitle,
             ),
           ),
           SizedBox(
@@ -460,7 +462,7 @@ class _CityPickerRow extends StatelessWidget {
                         style: AppTextStyles.body.copyWith(
                           color: isSelected ? AppColors.blue : AppColors.ink,
                           fontWeight:
-                              isSelected ? FontWeight.w800 : FontWeight.w600,
+                              isSelected ? FontWeight.w600 : FontWeight.w600,
                         ),
                       ),
                       if (item.subtitle != null) ...[

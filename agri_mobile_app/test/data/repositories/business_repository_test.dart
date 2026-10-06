@@ -11,29 +11,29 @@ void main() {
 
   setUp(() {
     adapter = RecordingAdapter({
-      '/cycles': paginatedCyclesResponse,
-      'POST /cycles': cycleResponse,
-      'PUT /cycles/7': cycleResponse,
-      'DELETE /cycles/7': {'message': 'ok'},
-      '/crops/templates': paginatedCropTemplatesResponse,
-      'POST /crops/templates': cropTemplateResponse,
-      'PUT /crops/templates/3': cropTemplateResponse,
-      'DELETE /crops/templates/3': {'message': 'ok'},
-      '/planting/workers/summary': paginatedWorkerSummariesResponse,
-      'POST /planting/workers': workerResponse,
-      'PUT /planting/workers/5': workerResponse,
-      'DELETE /planting/workers/5': {'message': 'ok'},
-      'POST /planting/labor/wages': wageResponse,
-      'POST /logs': logResponse,
-      'POST /planting/work-orders': workOrderResponse,
-      'POST /costs': costRecordResponse,
+      '/crop-cycles': paginatedCyclesResponse,
+      'POST /crop-cycles': cycleResponse,
+      'PATCH /crop-cycles/7': cycleResponse,
+      'DELETE /crop-cycles/7': {'message': 'ok'},
+      '/crop-templates': paginatedCropTemplatesResponse,
+      'POST /crop-templates': cropTemplateResponse,
+      'PATCH /crop-templates/3': cropTemplateResponse,
+      'DELETE /crop-templates/3': {'message': 'ok'},
+      '/workers/summary': paginatedWorkerSummariesResponse,
+      'POST /workers': workerResponse,
+      'PATCH /workers/5': workerResponse,
+      'DELETE /workers/5': {'message': 'ok'},
+      'POST /labor/wages': wageResponse,
+      'POST /farm-logs': logResponse,
+      'POST /work-orders': workOrderResponse,
+      'POST /cost-records': costRecordResponse,
     });
     final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
     dio.httpClientAdapter = adapter;
     repository = BusinessRepository(ApiClient(dio: dio));
   });
 
-  test('记账保存映射到 POST /costs', () async {
+  test('记账保存映射到 POST /cost-records', () async {
     await repository.createLedgerRecord({
       'record_type': 'cost',
       'category': '种子',
@@ -41,7 +41,7 @@ void main() {
       'record_date': '2026-06-10',
     });
 
-    final request = adapter.find('POST', '/costs');
+    final request = adapter.find('POST', '/cost-records');
     expect(request.data, containsPair('record_type', 'cost'));
     expect(request.data, containsPair('category', '种子'));
   });
@@ -52,10 +52,12 @@ void main() {
     await repository.saveCycle({'name': '春茬番茄'}, cycleId: 7);
     await repository.deleteCycle(7);
 
-    expect(adapter.find('GET', '/cycles').query, containsPair('page', 1));
-    expect(adapter.find('POST', '/cycles').data, containsPair('name', '春茬番茄'));
-    expect(adapter.find('PUT', '/cycles/7').data, containsPair('name', '春茬番茄'));
-    expect(adapter.find('DELETE', '/cycles/7').path, '/cycles/7');
+    expect(adapter.find('GET', '/crop-cycles').query, containsPair('page', 1));
+    expect(adapter.find('POST', '/crop-cycles').data,
+        containsPair('name', '春茬番茄'));
+    expect(adapter.find('PATCH', '/crop-cycles/7').data,
+        containsPair('name', '春茬番茄'));
+    expect(adapter.find('DELETE', '/crop-cycles/7').path, '/crop-cycles/7');
   });
 
   test('作物模板接口映射正确', () async {
@@ -66,14 +68,14 @@ void main() {
     await repository.deleteCropTemplate(3);
 
     expect(
-        adapter.find('GET', '/crops/templates').query, containsPair('page', 1));
-    expect(adapter.find('POST', '/crops/templates').data,
+        adapter.find('GET', '/crop-templates').query, containsPair('page', 1));
+    expect(adapter.find('POST', '/crop-templates').data,
         containsPair('name', '西瓜'));
-    expect(adapter.find('PUT', '/crops/templates/3').data,
+    expect(adapter.find('PATCH', '/crop-templates/3').data,
         containsPair('name', '西瓜'));
     expect(
-      adapter.find('DELETE', '/crops/templates/3').path,
-      '/crops/templates/3',
+      adapter.find('DELETE', '/crop-templates/3').path,
+      '/crop-templates/3',
     );
   });
 
@@ -85,30 +87,29 @@ void main() {
     await repository.createWage({'worker_name': '老王'});
     await repository.createWorkOrder({'operation_type': '浇水'});
 
-    expect(adapter.find('GET', '/planting/workers/summary').query,
+    expect(adapter.find('GET', '/workers/summary').query,
         containsPair('active_only', false));
-    expect(adapter.find('POST', '/planting/workers').data,
-        containsPair('name', '老王'));
-    expect(adapter.find('PUT', '/planting/workers/5').data,
-        containsPair('name', '老王'));
+    expect(adapter.find('POST', '/workers').data, containsPair('name', '老王'));
     expect(
-      adapter.find('DELETE', '/planting/workers/5').path,
-      '/planting/workers/5',
+        adapter.find('PATCH', '/workers/5').data, containsPair('name', '老王'));
+    expect(
+      adapter.find('DELETE', '/workers/5').path,
+      '/workers/5',
     );
-    expect(adapter.find('POST', '/planting/labor/wages').data,
+    expect(adapter.find('POST', '/labor/wages').data,
         containsPair('worker_name', '老王'));
-    expect(adapter.find('POST', '/planting/work-orders').data,
+    expect(adapter.find('POST', '/work-orders').data,
         containsPair('operation_type', '浇水'));
   });
 
-  test('农事记录接口映射到 POST /logs', () async {
+  test('农事记录接口映射到 POST /farm-logs', () async {
     await repository.createFarmLog({
       'cycle_id': 7,
       'operation_type': '浇水',
       'operation_date': '2026-06-10',
     });
 
-    final request = adapter.find('POST', '/logs');
+    final request = adapter.find('POST', '/farm-logs');
     expect(request.data, containsPair('cycle_id', 7));
     expect(request.data, containsPair('operation_type', '浇水'));
   });

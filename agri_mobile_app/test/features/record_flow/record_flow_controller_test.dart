@@ -18,30 +18,16 @@ void main() {
     );
   }
 
-  test('smart-fill 解析结果映射到确认模型', () async {
-    final adapter = RecordingAdapter({
-      '/smart-fill/parse': smartFillParseResponse,
-    });
-    final controller = controllerFor(adapter);
-
-    final draft = await controller.parse('今天买肥料 200');
-
-    expect(draft.originalText, '今天买肥料 200');
-    expect(draft.scene, 'ledger.record');
-    expect(draft.fields, {'amount': '200'});
-    expect(adapter.find('POST', '/smart-fill/parse').data, {
-      'scene': 'ledger.record',
-      'text': '今天买肥料 200',
-      'context': {},
-    });
-    expect(
-      adapter.find('POST', '/smart-fill/parse').headers['X-Idempotency-Key'],
-      isNotEmpty,
-    );
+  test('独立智能帮填缺少后端接口时明确返回不可用', () async {
+    final adapter = RecordingAdapter({});
+    await expectLater(controllerFor(adapter).parse('今天买肥料 200'),
+        throwsA(isA<UnsupportedApiException>()));
+    expect(adapter.requests, isEmpty);
   });
 
   test('成本场景保存到 costs', () async {
-    final adapter = RecordingAdapter({'POST /costs': costRecordResponse});
+    final adapter =
+        RecordingAdapter({'POST /cost-records': costRecordResponse});
     final controller = controllerFor(adapter);
 
     final result = await controller.save(
@@ -55,7 +41,7 @@ void main() {
     );
 
     expect(result.label, '已同步到账本');
-    expect(adapter.find('POST', '/costs').data, {
+    expect(adapter.find('POST', '/cost-records').data, {
       'amount': 200,
       'category': '肥料',
       'record_type': 'cost',
@@ -65,9 +51,9 @@ void main() {
   test('赊账、农事、作业单和工资场景保存到对应接口', () async {
     final adapter = RecordingAdapter({
       'POST /debts': costRecordResponse,
-      'POST /logs': logResponse,
-      'POST /planting/work-orders': workOrderResponse,
-      'POST /planting/labor/wages': wageResponse,
+      'POST /farm-logs': logResponse,
+      'POST /work-orders': workOrderResponse,
+      'POST /labor/wages': wageResponse,
     });
     final controller = controllerFor(adapter);
 
@@ -109,12 +95,11 @@ void main() {
     );
 
     expect(adapter.find('POST', '/debts').data, {'amount': 200});
-    expect(adapter.find('POST', '/logs').data, {'operation_type': '浇水'});
-    expect(adapter.find('POST', '/planting/work-orders').data, {
+    expect(adapter.find('POST', '/farm-logs').data, {'operation_type': '浇水'});
+    expect(adapter.find('POST', '/work-orders').data, {
       'operation_type': '浇水',
     });
-    expect(
-        adapter.find('POST', '/planting/labor/wages').data, {'worker_id': 4});
+    expect(adapter.find('POST', '/labor/wages').data, {'worker_id': 4});
   });
 
   test('缺字段和未知场景不会伪造保存目标', () async {

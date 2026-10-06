@@ -98,3 +98,53 @@ def test_finalization_warning_is_partial_when_visible_turn_completed() -> None:
     assert summary["status_reason"] == "turn_finalization_incomplete"
     assert summary["error_count"] == 0
     assert summary["warning_count"] == 1
+
+
+def test_summary_counts_decision_steps_and_explicit_parallel_batches() -> None:
+    summary = build_trace_request_summary(
+        [
+            {
+                "request_id": "trace-steps",
+                "trace_id": "trace-steps",
+                "node_type": "llm_call",
+                "node_name": "model",
+                "step_index": 1,
+                "duration_ms": 10,
+                "status": "success",
+            },
+            {
+                "request_id": "trace-steps",
+                "trace_id": "trace-steps",
+                "node_type": "llm_call",
+                "node_name": "model",
+                "step_index": 2,
+                "duration_ms": 10,
+                "status": "success",
+            },
+            {
+                "request_id": "trace-steps",
+                "trace_id": "trace-steps",
+                "node_type": "tool_call",
+                "node_name": "get_weather",
+                "step_index": 2,
+                "duration_ms": 5,
+                "status": "success",
+                "attributes": {"parallel_batch_id": "parallel-turn-2"},
+            },
+            {
+                "request_id": "trace-steps",
+                "trace_id": "trace-steps",
+                "node_type": "tool_call",
+                "node_name": "get_farm_status",
+                "step_index": 2,
+                "duration_ms": 5,
+                "status": "success",
+                "attributes": {"parallel_batch_id": "parallel-turn-2"},
+            },
+        ]
+    )
+
+    assert summary is not None
+    assert summary["metrics"]["decision_steps"] == 2
+    assert summary["metrics"]["parallel_batches"] == 1
+    assert summary["metrics"]["parallel_tool_calls"] == 2

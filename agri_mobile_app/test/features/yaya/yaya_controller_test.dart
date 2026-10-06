@@ -10,6 +10,68 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../support/api_test_fixtures.dart';
 
 void main() {
+  test('无正文的审批卡在流结束后仍可见', () async {
+    final repository = FakeStreamingYayaRepository([
+      YayaStreamEvent.fromJson({
+        'type': 'approval_required',
+        'turn_id': 'turn-1',
+        'arguments': {'name': '西瓜'}
+      }),
+      const YayaStreamEvent(done: true),
+    ]);
+    final controller = YayaController(repository: repository);
+    await controller.send('种西瓜');
+    expect(controller.messages, hasLength(2));
+    expect(
+        controller.messages.last.pendingAction?['arguments'], {'name': '西瓜'});
+  });
+  test('最终全文覆盖流式草稿，正文只显示一次', () async {
+    final repository = FakeStreamingYayaRepository([
+      YayaStreamEvent.fromJson({'type': 'final_answer_start'}),
+      YayaStreamEvent.fromJson({'type': 'final_answer_delta', 'delta': '我是芽芽'}),
+      YayaStreamEvent.fromJson({'type': 'final_answer', 'text': '我是芽芽'}),
+      YayaStreamEvent.fromJson({'type': 'done', 'status': 'completed'}),
+    ]);
+    final controller = YayaController(repository: repository);
+    await controller.send('你是谁');
+    expect(controller.messages.last.content, '我是芽芽');
+  });
+
+  test('平铺审批事件完整保留参数，失败后仍可重试', () async {
+    final repository = RetryApprovalYayaRepository([
+      YayaStreamEvent.fromJson({
+        'type': 'approval_required',
+        'turn_id': 'turn-1',
+        'tool_name': 'create_crop_cycle',
+        'arguments': {'name': '西瓜'},
+        'content': '请确认创建茬口',
+      }),
+      const YayaStreamEvent(done: true),
+    ]);
+    final controller = YayaController(repository: repository);
+    await controller.send('种西瓜');
+    expect(controller.pendingAction?['arguments'], {'name': '西瓜'});
+    await controller.respondToPendingAction('确认');
+    expect(controller.pendingAction, isNotNull);
+    expect(controller.messages.last.pendingAction, isNotNull);
+    expect(controller.errorMessage, isNotNull);
+    await controller.respondToPendingAction('确认');
+    expect(repository.approvalCalls, 2);
+    expect(controller.pendingAction, isNull);
+    expect(controller.messages.last.pendingAction, isNull);
+  });
+
+  test('失败终态保留诊断，后续最终答复继续显示', () async {
+    final repository = FakeStreamingYayaRepository([
+      YayaStreamEvent.fromJson({'type': 'turn.failed', 'message': '工具调用失败'}),
+      YayaStreamEvent.fromJson({'type': 'final_answer', 'text': '保存未完成'}),
+      YayaStreamEvent.fromJson({'type': 'done', 'status': 'failed'}),
+    ]);
+    final controller = YayaController(repository: repository);
+    await controller.send('保存');
+    expect(controller.errorMessage, '工具调用失败');
+    expect(controller.messages.last.content, '保存未完成');
+  });
   test('流式发送会追加用户消息并增量拼接芽芽回复', () async {
     final repository = FakeStreamingYayaRepository([
       const YayaStreamEvent(content: '建议'),
@@ -86,8 +148,11 @@ void main() {
 
   test('加载历史会话和消息', () async {
     final adapter = RecordingAdapter({
-      '/agent/conversations': [conversationResponse],
-      '/agent/conversations/s1/messages': [messageResponse],
+      '/conversations': [conversationResponse],
+      '/conversations/s1/messages': {
+        'items': [messageResponse],
+        'has_more': false
+      },
     });
     final dio = Dio(BaseOptions(baseUrl: 'http://192.168.1.13:9876/api/v2'));
     dio.httpClientAdapter = adapter;
@@ -199,6 +264,22 @@ class FakeStreamingYayaRepository extends YayaRepository {
         category: '种植',
       ),
     ];
+  }
+}
+
+class RetryApprovalYayaRepository extends FakeStreamingYayaRepository {
+  RetryApprovalYayaRepository(super.events);
+  int approvalCalls = 0;
+
+  @override
+  Future<void> approve(
+      {required String turnId,
+      required bool decision,
+      String reason = ''}) async {
+    expect(turnId, 'turn-1');
+    expect(decision, isTrue);
+    approvalCalls += 1;
+    if (approvalCalls == 1) throw StateError('网络中断');
   }
 }
 

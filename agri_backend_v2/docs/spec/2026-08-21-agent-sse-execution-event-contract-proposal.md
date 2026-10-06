@@ -1,6 +1,6 @@
 ---
 spec_id: 2026-08-21-agent-sse-execution-event-contract-proposal
-last_updated: 2026-08-21
+last_updated: 2026-10-04
 status: proposed
 review_target: Agent Harness、Turn Runtime、Redis Event Stream、Agent SSE 客户端
 ---
@@ -579,6 +579,17 @@ POST /api/v2/turns/{turn_id}/cancel
 
 Worker 崩溃后由现有 lease/reclaim/sweeper 机制决定是恢复执行还是标记失败；SSE
 消费者不能自行推断“没有事件就是失败”。
+
+租约通信故障与确认失租必须分开处理（2026-10-04 修复）：
+
+- Worker 在首次成功续租后才进入上下文预加载和 Runtime；Redis 通信异常只能在
+  已确认租期内进行有界重试，成功响应的网络耗时不得延长本地安全期限。
+- token 不匹配或超过租约确认期限时，Worker 取消整个执行任务，包括预加载、
+  模型、工具和审批等待。中断收口不自动重放可能已提交的业务操作。
+- 运行结束和中断恢复使用预期状态的原子比较写入；竞争失败的一方不能再落第二份答复，
+  已有终态不能被迟到的成功或失败结果覆盖。
+- Redis Lua 将事件序号分配、追加事件、TTL 续期和 `done` 标记放在同一原子操作内。
+  `done` 后禁止追加事件及改写结果字段，仍允许消息持久化元数据收尾。
 
 ## 11. Heartbeat、超时与取消
 

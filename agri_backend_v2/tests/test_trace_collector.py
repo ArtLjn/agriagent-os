@@ -90,6 +90,114 @@ def test_trace_llm_call_keeps_model_input_and_output(monkeypatch) -> None:
     assert node["token_usage"]["total_tokens"] == 138
 
 
+def test_trace_tool_call_keeps_agent_business_mapping(monkeypatch) -> None:
+    collector._queue.clear()
+
+
+def test_trace_catalog_recall_keeps_step_budget_evidence(monkeypatch) -> None:
+    collector._queue.clear()
+
+
+def test_trace_tool_call_can_mark_business_input_blocked(monkeypatch) -> None:
+    collector._queue.clear()
+    monkeypatch.setattr(
+        collector,
+        "get_trace",
+        lambda: SimpleNamespace(
+            trace_id="trace-input",
+            request_id="request-input",
+            conversation_id="conversation-input",
+            turn_id="turn-input",
+            user_id="user-input",
+            farm_uid="farm-input",
+        ),
+    )
+
+    collector.trace_tool_call(
+        "prepare_planting_plan",
+        {"crop_name": "水稻"},
+        {"status": "needs_information", "code": "custom_template_required"},
+        status="blocked",
+    )
+
+    assert collector._queue[-1]["status"] == "blocked"
+    collector._queue.clear()
+    monkeypatch.setattr(
+        collector,
+        "get_trace",
+        lambda: SimpleNamespace(
+            trace_id="trace-budget",
+            request_id="request-budget",
+            conversation_id="conversation-budget",
+            turn_id="turn-budget",
+            user_id="user-budget",
+            farm_uid="farm-budget",
+        ),
+    )
+
+    collector.trace_catalog_recall(
+        registry_count=3,
+        exposed_tool_count=4,
+        candidate_tools=["query_crop_templates"],
+        step_budget={
+            "resolved_steps": 20,
+            "source": "runtime_default",
+            "confidence": None,
+            "reason": "fallback_steps(20): no estimated_steps",
+        },
+    )
+
+    node = collector._queue[-1]
+    assert node["output_data"]["step_budget"]["resolved_steps"] == 20
+    assert node["attributes"]["step_budget_source"] == "runtime_default"
+    assert node["attributes"]["step_budget_limit"] == 20
+    assert node["attributes"]["step_budget_confidence"] is None
+    assert node["attributes"]["step_budget_reason"] == (
+        "fallback_steps(20): no estimated_steps"
+    )
+    collector._queue.clear()
+    monkeypatch.setattr(
+        collector,
+        "get_trace",
+        lambda: SimpleNamespace(
+            trace_id="trace-map",
+            request_id="request-map",
+            conversation_id="conversation-map",
+            turn_id="turn-map",
+            user_id="user-map",
+            farm_uid="farm-map",
+        ),
+    )
+    collector.trace_tool_call(
+        "list_system_crop_templates",
+        {"crop_type": "水稻"},
+        {"templates": []},
+        agent_tool_name="list_system_crop_templates",
+        business_tool_name="manage_crop_cycle",
+        operation="system_templates",
+        tool_call_id="call-map",
+        progress="advanced",
+        progress_reason="new_observation",
+        observation_fingerprint="sha256:test",
+        semantic_progress="advanced",
+        semantic_progress_reason="new_semantic_observation",
+        parallel_batch_id="parallel-turn-map-2",
+        step_index=2,
+    )
+
+    node = collector._queue[-1]
+    assert node["node_type"] == "tool_call"
+    assert node["node_name"] == "list_system_crop_templates"
+    assert node["step_index"] == 2
+    assert node["attributes"]["business_tool_name"] == "manage_crop_cycle"
+    assert node["attributes"]["operation"] == "system_templates"
+    assert node["attributes"]["tool_call_id"] == "call-map"
+    assert node["attributes"]["progress"] == "advanced"
+    assert node["attributes"]["semantic_progress"] == "advanced"
+    assert node["attributes"]["parallel_batch_id"] == "parallel-turn-map-2"
+    collector._queue.clear()
+
+
 def test_trace_nodes_form_parent_child_contract() -> None:
     collector._queue.clear()
     trace = init_trace(

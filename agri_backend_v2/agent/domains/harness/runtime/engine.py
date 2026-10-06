@@ -39,7 +39,7 @@ import logging
 import time
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 from agent.auth import create_delegation_token
 from agent.config import settings
@@ -51,7 +51,10 @@ from agent.domains.harness.runtime import planner, verify
 from agent.domains.harness.router import SkillRoute, SkillRouter
 from agent.domains.harness.runtime.turn import StopReason, Turn, TurnPhase
 from agent.platforms.persistence.redis import sse
-from agent.domains.harness.runtime.error_policy import LlmStreamError, classify_exception
+from agent.domains.harness.runtime.error_policy import (
+    LlmStreamError,
+    classify_exception,
+)
 from agent.platforms.llm.client import MODEL, chat_stream
 from agent.platforms.logging import log_event
 from agent.platforms.mcp.client import BusinessClient, McpCallError
@@ -91,6 +94,7 @@ class _SkillExecState:
     result: dict | None = None
     finalize_after_success: bool = False
     error: str | None = None
+    duration_ms: int = 0
 
 
 @dataclass
@@ -107,6 +111,17 @@ class _LlmResult:
 
     full_content: str = ""
     tool_calls: list[dict] = field(default_factory=list)
+
+
+def _skill_control_metadata(skill: Skill) -> dict[str, str]:
+    """统一提取 Skill 的跨层映射和语义控制字段，供 Ledger/Trace 共用。"""
+    return {
+        "business_tool_name": getattr(skill, "mcp_tool", ""),
+        "operation": getattr(skill, "operation", ""),
+        "capability_group": skill.capability_group,
+        "data_scope": skill.data_scope,
+        "freshness_requirement": skill.freshness_requirement,
+    }
 
 
 class _TurnRuntime(NamedTuple):
@@ -178,12 +193,47 @@ async def _prepare_turn_runtime(
 ) -> _TurnRuntime:
     """准备路由、Skill Registry、上下文和 ReAct 所需的运行时状态。"""
     route_result = await _route_turn_skills(turn)
+    estimated_steps, confidence = await _estimate_turn_budget(turn)
     if route_result is None:
-        runtime = _setup_turn_runtime(turn)
+        runtime = _setup_turn_runtime(
+            turn,
+            estimated_steps=estimated_steps,
+            confidence=confidence,
+        )
     else:
-        runtime = _setup_turn_runtime(turn, route_result=route_result)
+        runtime = _setup_turn_runtime(
+            turn,
+            route_result=route_result,
+            estimated_steps=estimated_steps,
+            confidence=confidence,
+        )
     turn.set_phase(TurnPhase.REASONING)
     return _TurnRuntime(*runtime)
+
+
+async def _estimate_turn_budget(turn: Turn) -> tuple[int | None, float | None]:
+    """在首个 ReAct 决策前读取模型估算；失败时保持 Runtime fallback。"""
+    try:
+        result: _LlmResult | None = None
+        async for item in _call_llm_stream(
+            planner.budget_estimate_messages(turn.user_input),
+            [planner.BUDGET_ESTIMATE_TOOL_SCHEMA],
+            tool_choice={
+                "type": "function",
+                "function": {"name": "estimate_step_budget"},
+            },
+        ):
+            if isinstance(item, _LlmResult):
+                result = item
+        if result is None:
+            raise RuntimeError("budget_estimate_empty")
+        estimate = planner.parse_budget_estimate(result.tool_calls, result.full_content)
+        if estimate is None:
+            logger.warning("budget estimate missing or invalid; using fallback_steps")
+        return estimate or (None, None)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("budget estimate unavailable; using fallback_steps: %s", exc)
+        return None, None
 
 
 async def _route_turn_skills(turn: Turn) -> SkillRoute | None:
@@ -291,7 +341,7 @@ async def _run_turn_loop(
         ):
             yield ev
 
-        # 写入成功后清空 tools，下一轮只允许生成最终答复。
+        # 查询完成或写入成功后均停止扩展工具；只有写入才产生提交事件。
         if turn.finalization_pending:
             tools_schema = []
 
@@ -362,9 +412,20 @@ def _setup_turn_runtime(
     turn: Turn,
     *,
     route_result: SkillRoute | None = None,
+    estimated_steps: int | None = None,
+    confidence: float | None = None,
 ) -> _TurnRuntime:
     """加载 skills、构建 tools schema、初始化 tracker。"""
     router_started = time.perf_counter()
+    step_budget = verify.resolve_step_budget(
+        fallback_steps=turn.max_steps,
+        estimated_steps=estimated_steps,
+        confidence=confidence,
+        maximum_steps=turn.max_steps,
+    ).to_dict()
+    turn.step_budget = step_budget
+    # 预算证据必须真正约束 ReAct 循环；仅写 Trace 会造成“显示有预算、执行仍跑旧上限”。
+    turn.max_steps = int(step_budget["resolved_steps"])
     # Worker 可在进入 Runtime 前注入 Mongo-backed Session View；直接调用
     # Runtime 的测试替身仍通过 Memory Service 入口提供空快照。
     if not turn.memory_snapshot:
@@ -407,11 +468,8 @@ def _setup_turn_runtime(
         exposed_tool_count=len(tools_schema),
         candidate_tools=candidate_tools,
         duration_ms=int((time.perf_counter() - router_started) * 1000),
-        router_mode=(
-            "llm_skill_router"
-            if route_result is not None
-            else "all_tools"
-        ),
+        router_mode=("llm_skill_router" if route_result is not None else "all_tools"),
+        step_budget=turn.step_budget,
     )
     context_started = time.perf_counter()
     turn.context_bundle = context.build_context_bundle(
@@ -584,7 +642,9 @@ async def _run_single_reasoning_step(
     doom_msg = verify.detect_doom_loop(tracker.calls)
     if doom_msg:
         logger.warning("DOOM_LOOP: %s", doom_msg)
-        async for ev in _emit_doom_loop_terminal(turn, doom_msg):
+        async for ev in _emit_doom_loop_terminal(
+            turn, doom_msg, blocked_action=tracker.last_action()
+        ):
             yield ev
         return
 
@@ -609,7 +669,11 @@ async def _run_single_reasoning_step(
     # ── 流式 LLM 调用 ──
     try:
         llm_result: _LlmResult | None = None
-        async for stream_item in _call_llm_stream(llm_messages, tools_schema):
+        async for stream_item in _call_llm_stream(
+            llm_messages,
+            tools_schema,
+            tool_choice="none" if turn.finalization_pending else None,
+        ):
             if isinstance(stream_item, _LlmResult):
                 llm_result = stream_item
                 continue
@@ -654,6 +718,15 @@ async def _run_single_reasoning_step(
         )
 
     # ── 写入已提交但收尾轮仍请求工具 ──
+    if (
+        turn.finalization_pending
+        and turn.committed_result is None
+        and llm_result.tool_calls
+    ):
+        # 模型违反只回答约束时不能把只读结果包装成写入成功。
+        async for ev in _handle_llm_error(turn, RuntimeError("查询后的答复仍请求工具")):
+            yield ev
+        return
     if turn.finalization_pending and llm_result.tool_calls:
         async for ev in _finalize_committed_with_fallback(
             turn, "写入已成功，但收尾模型仍请求调用工具；已阻止重复写入。"
@@ -737,7 +810,10 @@ async def _emit_final_answer(
 
 
 async def _call_llm_stream(
-    llm_messages: list[dict], tools_schema: list[dict]
+    llm_messages: list[dict],
+    tools_schema: list[dict],
+    *,
+    tool_choice: str | dict[str, Any] | None = None,
 ) -> AsyncGenerator[dict | _LlmResult, None]:
     """流式 LLM 调用，同时转发增量和等待心跳。"""
     _llm_start = time.time()
@@ -745,7 +821,14 @@ async def _call_llm_stream(
     tool_calls: list[dict] = []
     token_usage: dict | None = None
 
-    stream = chat_stream(llm_messages, tools=tools_schema)
+    if tool_choice is None:
+        stream = chat_stream(llm_messages, tools=tools_schema)
+    else:
+        stream = chat_stream(
+            llm_messages,
+            tools=tools_schema,
+            tool_choice=tool_choice,
+        )
     next_token = asyncio.create_task(stream.__anext__())
     try:
         while True:
@@ -1051,6 +1134,7 @@ async def _dispatch_parallel_tool_calls(
     Plan 不会进入这个分支。
     """
     queue: asyncio.Queue[tuple[int, dict | None]] = asyncio.Queue()
+    parallel_batch_id = f"parallel-{turn.turn_id}-{turn.step_count}"
     semaphore = asyncio.Semaphore(max(1, max_parallel_skills))
     skill_semaphores: dict[str, asyncio.Semaphore] = {}
     for tool_call in tool_calls:
@@ -1082,6 +1166,7 @@ async def _dispatch_parallel_tool_calls(
                             approval_waiter=approval_waiter,
                             turn=turn,
                             tracker=tracker,
+                            parallel_batch_id=parallel_batch_id,
                         ):
                             await queue.put((index, event))
                     finally:
@@ -1101,6 +1186,7 @@ async def _dispatch_parallel_tool_calls(
                                 approval_waiter=approval_waiter,
                                 turn=turn,
                                 tracker=tracker,
+                                parallel_batch_id=parallel_batch_id,
                             ):
                                 await queue.put((index, event))
                         finally:
@@ -1181,6 +1267,7 @@ async def _process_skill_call(
     approval_waiter: ApprovalWaiter,
     turn: Turn,
     tracker: verify.CallTracker,
+    parallel_batch_id: str = "",
 ) -> AsyncGenerator[dict, None]:
     """单个 skill tool_call 完整处理：校验→审批→执行→后处理。终止分支通过 turn 状态通知外层。"""
     turn.set_phase(TurnPhase.TOOL_PREPARING)
@@ -1244,6 +1331,7 @@ async def _process_skill_call(
         skill_ctx=skill_ctx,
         approval_waiter=approval_waiter,
         rationale=rationale,
+        parallel_batch_id=parallel_batch_id,
     ):
         yield ev
 
@@ -1259,12 +1347,77 @@ async def _post_process_skill_result(
     skill_ctx: SkillContext,
     approval_waiter: ApprovalWaiter,
     rationale: str,
+    parallel_batch_id: str = "",
 ) -> AsyncGenerator[dict, None]:
     """后处理：append tool_msg → finalize/followup。"""
     turn.messages.append(
         context.tool_result_message(tc["id"], tc["name"], state.result)
     )
-    tracker.record_observation(skill.name, tc["arguments"], state.result)
+    progress_delta = tracker.record_observation(
+        skill.name, tc["arguments"], state.result
+    )
+    progress_ev = sse.progress(
+        skill.name,
+        progress_delta["status"],
+        progress_delta["reason"],
+        progress_delta["observation_fingerprint"],
+        step=turn.step_count,
+        tool_call_id=tc["id"],
+        semantic_status=progress_delta["semantic_status"],
+        semantic_reason=progress_delta["semantic_reason"],
+    )
+    turn.emit(progress_ev["type"], progress_ev["data"])
+    yield progress_ev
+    trace_tool_call(
+        skill.name,
+        tc["arguments"],
+        state.result,
+        duration_ms=state.duration_ms,
+        error=state.error,
+        agent_tool_name=skill.name,
+        **_skill_control_metadata(skill),
+        tool_call_id=tc["id"],
+        progress=progress_delta["status"],
+        progress_reason=progress_delta["reason"],
+        observation_fingerprint=progress_delta["observation_fingerprint"],
+        semantic_progress=progress_delta["semantic_status"],
+        semantic_progress_reason=progress_delta["semantic_reason"],
+        parallel_batch_id=parallel_batch_id,
+        status=(
+            "blocked"
+            if state.result
+            and isinstance(state.result, dict)
+            and state.result.get("status") == "needs_information"
+            else ""
+        ),
+        step_index=turn.step_count,
+    )
+    result_data = state.result if isinstance(state.result, dict) else {}
+    if result_data.get("status") == "needs_information":
+        turn.finalization_request = {
+            "code": str(result_data.get("code") or "input_required"),
+            "message": str(result_data.get("message") or "请补充必要信息后继续。"),
+            "tool_name": skill.name,
+            "result": result_data,
+            "status": "needs_information",
+        }
+        return
+    if tracker.unchanged_count(skill.name, tc["arguments"]) >= 2:
+        _persist_blocked_action(
+            turn,
+            tracker.last_action(),
+            reason="unchanged_observation",
+            observation_fingerprint=progress_delta["observation_fingerprint"],
+        )
+        turn.finalization_request = {
+            "code": "no_progress_detected",
+            "message": "相同工具连续返回相同结果，任务没有继续推进。",
+            "tool_name": skill.name,
+            "result": {
+                "progress": progress_delta["status"],
+                "progress_reason": progress_delta["reason"],
+            },
+        }
     if state.error:
         result = state.result if isinstance(state.result, dict) else {}
         if not bool(result.get("retryable", False)):
@@ -1276,6 +1429,10 @@ async def _post_process_skill_result(
             }
         return
     if state.finalize_after_success:
+        if skill.dynamic_risk_level(tc["arguments"]) == "read":
+            # finalize_after_success 是收尾策略，不是数据库已提交的证据。
+            turn.finalization_pending = True
+            return
         _mark_committed(turn, state.result)
         committed_event = sse.operation_committed(turn.committed_result)
         turn.emit(committed_event["type"], committed_event["data"])
@@ -1310,7 +1467,39 @@ async def _prepare_skill_call(
         tc["arguments"] = enriched  # 回写，确保 action 事件显示真实参数
     prepared.args = args
 
-    tracker.record(skill.name, args)
+    if verify.is_blocked_action(turn.task_state, skill.name, args):
+        async for ev in _emit_blocked_action_repeat(turn, skill, tc["id"], args):
+            yield ev
+        prepared.proceed = False
+        return
+    if isinstance(turn.task_state, dict) and turn.task_state.get("status") == "blocked":
+        next_allowed = turn.task_state.get("next_allowed_action")
+        if isinstance(next_allowed, dict) and not verify.is_allowed_resume_action(
+            turn.task_state, skill.name, args
+        ):
+            async for ev in _emit_blocked_action_repeat(turn, skill, tc["id"], args):
+                yield ev
+            prepared.proceed = False
+            return
+        # 用户给出状态声明的下一动作，或明确给出不同动作，才清理临时阻断状态。
+        turn.task_state = None
+
+    if getattr(
+        skill, "operation", ""
+    ) == "system_templates" and verify.has_empty_observation(tracker, skill.name, args):
+        async for ev in _emit_empty_catalog_repeat(turn, skill, tc["id"], args):
+            yield ev
+        prepared.proceed = False
+        return
+
+    tracker.record(
+        skill.name,
+        args,
+        agent_tool_name=skill.name,
+        **_skill_control_metadata(skill),
+        tool_call_id=tc["id"],
+        step_index=turn.step_count,
+    )
     missing = skill.missing_required_params(args)
     if missing:
         async for ev in _emit_missing_params(
@@ -1377,15 +1566,28 @@ def _mark_committed(turn: Turn, result: dict | None) -> None:
 async def _emit_unknown_tool(
     turn: Turn, tool_call_id: str, tool_name: str
 ) -> AsyncGenerator[dict, None]:
-    """未知工具错误：发 observation + 写 tool_msg。"""
+    """未知工具错误：发 observation，并阻止后续 LLM 继续猜工具。"""
     err_msg = f"未知工具: {tool_name}"
-    result = {"error": err_msg}
+    result = {
+        "error": err_msg,
+        "code": "agent_tool_not_registered",
+        "agent_tool_name": tool_name,
+    }
+    trace_tool_call(
+        tool_name,
+        {},
+        result,
+        error=err_msg,
+        agent_tool_name=tool_name,
+        tool_call_id=tool_call_id,
+        step_index=turn.step_count,
+    )
     ev = sse.observation(
         tool_name,
         None,
         error=err_msg,
         error_info={
-            "code": "unknown_tool",
+            "code": "agent_tool_not_registered",
             "message": err_msg,
             "phase": TurnPhase.TOOL_PREPARING.value,
             "tool_name": tool_name,
@@ -1396,19 +1598,33 @@ async def _emit_unknown_tool(
     turn.emit("observation", ev["data"])
     yield ev
     turn.messages.append(context.tool_result_message(tool_call_id, tool_name, result))
+    turn.finalization_request = {
+        "code": "agent_tool_not_registered",
+        "message": err_msg,
+        "tool_name": tool_name,
+        "result": result,
+    }
 
 
 async def _emit_not_exposed_tool(
     turn: Turn, tool_call_id: str, tool_name: str, args: dict
 ) -> AsyncGenerator[dict, None]:
-    """阻止模型直接调用内部后继动作（如 commit_planting_plan）。"""
+    """阻止模型直接调用内部后继动作，并立即进入受控终态。"""
     err_msg = f"工具 {tool_name} 不可直接调用，需先准备计划并通过审批控件确认"
     result = {
         "error": "tool_not_exposed",
         "code": "tool_not_exposed",
         "message": err_msg,
     }
-    trace_tool_call(tool_name, args, result, error=err_msg)
+    trace_tool_call(
+        tool_name,
+        args,
+        result,
+        error=err_msg,
+        agent_tool_name=tool_name,
+        tool_call_id=tool_call_id,
+        step_index=turn.step_count,
+    )
     ev = sse.observation(
         tool_name,
         None,
@@ -1425,6 +1641,12 @@ async def _emit_not_exposed_tool(
     turn.emit("observation", ev["data"])
     yield ev
     turn.messages.append(context.tool_result_message(tool_call_id, tool_name, result))
+    turn.finalization_request = {
+        "code": "tool_not_exposed",
+        "message": err_msg,
+        "tool_name": tool_name,
+        "result": result,
+    }
 
 
 async def _emit_missing_params(
@@ -1438,7 +1660,16 @@ async def _emit_missing_params(
     """缺失必填参数：发 observation + 写 tool_msg。"""
     result = _missing_params_result(skill, missing)
     message = result["message"]
-    trace_tool_call(tool_name, args, result, error=message)
+    trace_tool_call(
+        tool_name,
+        args,
+        result,
+        error=message,
+        agent_tool_name=tool_name,
+        **_skill_control_metadata(skill),
+        tool_call_id=tool_call_id,
+        step_index=turn.step_count,
+    )
     ev = sse.observation(
         tool_name,
         None,
@@ -1455,6 +1686,121 @@ async def _emit_missing_params(
     turn.emit("observation", ev["data"])
     yield ev
     turn.messages.append(context.tool_result_message(tool_call_id, tool_name, result))
+
+
+async def _emit_blocked_action_repeat(
+    turn: Turn, skill: Skill, tool_call_id: str, args: dict
+) -> AsyncGenerator[dict, None]:
+    """跨 Turn 恢复时阻止原样重试已终止动作，并保留明确错误码。"""
+    message = "上一次执行已因相同动作无进展而停止，请补充条件或明确下一步动作。"
+    result = {
+        "error": "blocked_action_repeat",
+        "code": "blocked_action_repeat",
+        "message": message,
+        "retryable": False,
+    }
+    trace_tool_call(
+        skill.name,
+        args,
+        result,
+        error=message,
+        agent_tool_name=skill.name,
+        **_skill_control_metadata(skill),
+        tool_call_id=tool_call_id,
+        step_index=turn.step_count,
+    )
+    ev = sse.observation(
+        skill.name,
+        None,
+        error=message,
+        error_info={
+            "code": "blocked_action_repeat",
+            "message": message,
+            "phase": TurnPhase.TOOL_PREPARING.value,
+            "tool_name": skill.name,
+            "retryable": False,
+            "attempt": 0,
+        },
+    )
+    turn.emit("observation", ev["data"])
+    yield ev
+    turn.messages.append(context.tool_result_message(tool_call_id, skill.name, result))
+    async for terminal_ev in _emit_failure_terminal(
+        turn,
+        code="blocked_action_repeat",
+        message=message,
+        answer=message,
+        phase=TurnPhase.TOOL_PREPARING,
+        stop_reason=StopReason.RESUME_REQUIRES_NEW_ACTION,
+        status="terminated",
+    ):
+        yield terminal_ev
+
+
+async def _emit_empty_catalog_repeat(
+    turn: Turn, skill: Skill, tool_call_id: str, args: dict
+) -> AsyncGenerator[dict, None]:
+    """将空目录重复查询转换为自定义模板准备指引并继续 ReAct。"""
+    message = (
+        "系统作物模板目录当前为空，请不要再次查询该目录。"
+        "当前用户已经提出完整种植目标时，请结合已有农业常识生成自定义模板草案，"
+        "直接调用 prepare_planting_plan 准备计划；不要改用无关模板。"
+    )
+    result = {
+        "status": "needs_information",
+        "code": "system_template_catalog_empty",
+        "message": message,
+        "missing": ["custom_template.stages"],
+        "next_action": {
+            "agent_tool_name": "prepare_planting_plan",
+            "arguments": None,
+        },
+    }
+    blocked_action = {
+        "agent_tool_name": skill.name,
+        "arguments": dict(args),
+        **_skill_control_metadata(skill),
+    }
+    turn.task_state = {
+        "status": "blocked",
+        "reason": "empty_system_template_catalog",
+        "resume_policy": "ask_user",
+        "blocked_action": blocked_action,
+        "next_allowed_action": {
+            "agent_tool_name": "prepare_planting_plan",
+            # 自定义模板是当前用户目标的派生数据，不能在拦截时静态填充。
+            "arguments": None,
+        },
+    }
+    trace_tool_call(
+        skill.name,
+        args,
+        result,
+        error=None,
+        agent_tool_name=skill.name,
+        **_skill_control_metadata(skill),
+        tool_call_id=tool_call_id,
+        progress="blocked",
+        progress_reason="empty_catalog_already_observed",
+        status="blocked",
+        step_index=turn.step_count,
+    )
+    ev = sse.observation(
+        skill.name,
+        result,
+        error=None,
+        error_info={
+            "code": "system_template_catalog_empty",
+            "message": message,
+            "phase": TurnPhase.TOOL_PREPARING.value,
+            "tool_name": skill.name,
+            "retryable": False,
+            "attempt": 0,
+        },
+    )
+    turn.emit("observation", ev["data"])
+    yield ev
+    turn.messages.append(context.tool_result_message(tool_call_id, skill.name, result))
 
 
 async def _check_duplication(
@@ -1479,14 +1825,27 @@ async def _check_duplication(
             "相同查询没有产生新的结果，已停止继续调用工具。"
             "如需继续，请补充筛选条件或明确下一步业务动作。"
         )
-        async for ev in _emit_doom_loop_terminal(turn, message):
+        async for ev in _emit_doom_loop_terminal(
+            turn,
+            message,
+            blocked_action={"agent_tool_name": tool_name, "arguments": args},
+        ):
             yield ev
 
 
 async def _emit_doom_loop_terminal(
-    turn: Turn, detail: str
+    turn: Turn,
+    detail: str,
+    *,
+    blocked_action: dict[str, object] | None = None,
 ) -> AsyncGenerator[dict, None]:
     """发布 Doom 警告，再交给统一受控终止器收口。"""
+    if blocked_action:
+        _persist_blocked_action(
+            turn,
+            blocked_action,
+            reason=StopReason.DOOM_LOOP_DETECTED.value,
+        )
     warning_ev = sse.doom_loop_warning(detail, step=turn.step_count)
     turn.emit("doom_loop_warning", warning_ev["data"])
     yield warning_ev
@@ -1502,6 +1861,44 @@ async def _emit_doom_loop_terminal(
         yield ev
 
 
+def _persist_blocked_action(
+    turn: Turn,
+    action: dict[str, Any] | None,
+    *,
+    reason: str,
+    observation_fingerprint: str = "",
+) -> None:
+    """持久化最小阻断摘要，供下一 Turn 拒绝原样重放。"""
+    if not action:
+        return
+    blocked_action = {
+        "agent_tool_name": str(
+            action.get("agent_tool_name") or action.get("skill") or ""
+        ),
+        "arguments": dict(action.get("arguments") or action.get("args") or {}),
+    }
+    for field_name in (
+        "business_tool_name",
+        "operation",
+        "capability_group",
+        "data_scope",
+        "freshness_requirement",
+        "semantic_key",
+        "observation_fingerprint",
+    ):
+        value = action.get(field_name) or (
+            observation_fingerprint if field_name == "observation_fingerprint" else ""
+        )
+        if value:
+            blocked_action[field_name] = str(value)
+    turn.task_state = {
+        "status": "blocked",
+        "reason": reason,
+        "resume_policy": "ask_user",
+        "blocked_action": blocked_action,
+    }
+
+
 async def _finalize_requested_error(
     turn: Turn,
 ) -> AsyncGenerator[dict, None]:
@@ -1510,6 +1907,22 @@ async def _finalize_requested_error(
     code = str(request.get("code") or "tool_failed")
     message = str(request.get("message") or "工具执行失败")
     tool_name = str(request.get("tool_name") or "")
+    if request.get("status") == "needs_information":
+        result = request.get("result")
+        missing = result.get("missing", []) if isinstance(result, dict) else []
+        missing_text = f"（需要：{', '.join(map(str, missing))}）" if missing else ""
+        async for ev in _emit_failure_terminal(
+            turn,
+            code=code,
+            message=message,
+            answer=f"{message}{missing_text}",
+            phase=TurnPhase.FINALIZING,
+            tool_name=tool_name,
+            stop_reason=StopReason.USER_INPUT_REQUIRED,
+            status="terminated",
+        ):
+            yield ev
+        return
     answer = (
         f"调用 {tool_name or '业务工具'} 未完成：{message}。"
         "该错误不可重试，已停止继续调用工具，请补充信息后重试。"
@@ -1749,6 +2162,7 @@ async def _run_skill_call(
             turn.emit("heartbeat", heartbeat_ev["data"])
             yield heartbeat_ev
         _tool_ms = int((time.time() - _tool_start) * 1000)
+        state.duration_ms = _tool_ms
         # skill 兜底可能回写了 action 事件的 arguments
         action_data = _find_latest_action_data(turn, skill.name) or ev["data"]
         if action_data != ev["data"]:
@@ -1758,10 +2172,24 @@ async def _run_skill_call(
                 rationale=action_data.get("rationale", ""),
             )
         state.result_obj = result_obj
-        if result_obj.error:
+        result_data = result_obj.data if isinstance(result_obj.data, dict) else {}
+        needs_information = result_data.get("status") == "needs_information"
+        if result_obj.error and not needs_information:
             state.result = result_obj.data or {"error": result_obj.error}
             state.error = result_obj.error
             result_data = state.result if isinstance(state.result, dict) else {}
+            if result_data.get("code") in {"unknown_tool", "tool_not_found"}:
+                result_data = {
+                    **result_data,
+                    "code": "business_tool_not_registered",
+                    "business_tool_name": getattr(skill, "mcp_tool", ""),
+                    "agent_tool_name": skill.name,
+                }
+                state.result = result_data
+                state.error = str(
+                    result_data.get("message")
+                    or f"Business MCP 未注册工具 {getattr(skill, 'mcp_tool', '')}"
+                )
             retryable = bool(result_data.get("retryable", False))
             error_info = {
                 "code": str(result_data.get("code") or "tool_failed"),
@@ -1782,9 +2210,6 @@ async def _run_skill_call(
                 error=result_obj.error,
                 error_info=error_info,
             )
-            trace_tool_call(
-                skill.name, args, None, duration_ms=_tool_ms, error=result_obj.error
-            )
             finished_ev = sse.tool_finished(
                 turn.turn_id,
                 tool_call_id,
@@ -1795,9 +2220,11 @@ async def _run_skill_call(
             )
         else:
             state.result = result_obj.data
+            # Business 业务校验可能返回 needs_information + error 字段；这不是
+            # 工具崩溃，保留结构化结果并交给统一终态向用户索取缺失信息。
+            state.error = None
             state.finalize_after_success = skill.finalize_after_success
             obs_ev = sse.observation(skill.name, state.result)
-            trace_tool_call(skill.name, args, state.result, duration_ms=_tool_ms)
             finished_ev = sse.tool_finished(
                 turn.turn_id,
                 tool_call_id,
@@ -1808,7 +2235,7 @@ async def _run_skill_call(
             )
         turn.emit("tool_finished", finished_ev["data"])
         yield finished_ev
-        if result_obj.error:
+        if result_obj.error and not needs_information:
             failed_ev = sse.tool_failed(
                 turn.turn_id,
                 tool_call_id,
@@ -1859,6 +2286,7 @@ async def _run_skill_call(
             error_info=error_info,
         )
         duration_ms = int((time.time() - _tool_start) * 1000)
+        state.duration_ms = duration_ms
         finished_ev = sse.tool_finished(
             turn.turn_id,
             tool_call_id,
@@ -1881,7 +2309,6 @@ async def _run_skill_call(
         yield failed_ev
         turn.emit("observation", obs_ev["data"])
         yield obs_ev
-        trace_tool_call(skill.name, args, None, error=str(exc))
 
 
 # ── prepare → commit 审批后继 ─────────────────────────────
@@ -2373,6 +2800,12 @@ def _structured_commit_answer(result: dict) -> str:
     template = result.get("template") or {}
     cycle = result.get("cycle") or {}
     unit = result.get("planting_unit") or {}
+    if not all(
+        isinstance(item, dict) and item.get("id")
+        for item in (template, cycle, unit)
+    ):
+        # 通用写工具也复用此收尾器，缺少计划实体不能声称种植计划已创建。
+        return str(result.get("message") or "业务操作已完成，但详细结果暂未返回。")
     replay_note = (
         "（本次返回的是已提交请求的幂等结果）"
         if result.get("idempotent_replay")

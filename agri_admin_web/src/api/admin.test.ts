@@ -26,6 +26,7 @@ describe('admin api', () => {
               id: 'span-1',
               node_type: 'llm',
               node_name: 'planner',
+              step_index: 2,
               duration_ms: 12,
               status: 'completed',
               token_usage: null,
@@ -58,6 +59,8 @@ describe('admin api', () => {
     });
     expect(mockedApiClient.get).toHaveBeenNthCalledWith(2, '/agent/traces/trace%2F1/summary');
     expect(result.trace_id).toBe('trace-1');
+    expect(result.rounds).toHaveLength(1);
+    expect(result.rounds[0].round_index).toBe(2);
     expect(result.rounds[0].nodes).toHaveLength(1);
     expect(result.events?.[0].event_id).toBe('evt-1');
   });

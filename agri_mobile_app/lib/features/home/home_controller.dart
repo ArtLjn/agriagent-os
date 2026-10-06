@@ -18,7 +18,8 @@ class HomeController {
     final workOrders = results[2] as PageResult<ApiRecord>;
     final labor = Map<String, dynamic>.from(results[3] as Map);
     final unpaid = _number(labor['total_unpaid'] ?? labor['unpaid_amount']);
-    final weatherText = _weatherText(forecast);
+    final weather = _weather(forecast);
+    final weatherText = weather.text;
     final workOrderText = _metricValue(
       advice.overview,
       'work_order',
@@ -43,6 +44,8 @@ class HomeController {
       scoreText: scoreText,
       scoreCaption: scoreCaption,
       weatherText: weatherText,
+      weatherCondition: weather.condition,
+      weatherDescription: weather.description,
       workOrderCountText: workOrderText,
       pendingText: pendingText,
       adviceScoreText: advice.isAiGenerated ? '$score分' : '暂无评分',
@@ -83,48 +86,82 @@ class HomeController {
     return [HomeSuggestionViewModel(title: text, subtitle: '来自 AI 今日建议')];
   }
 
-  String _weatherText(Map<String, dynamic> data) {
-    final summary = _firstText(data, const ['summary', 'text', 'weather']);
-    final forecast = data['forecast'];
-    String daily = '';
-    if (forecast is List && forecast.isNotEmpty && forecast.first is Map) {
-      daily = _firstText(
-        Map<String, dynamic>.from(forecast.first as Map),
-        const ['summary', 'text', 'weather'],
-      );
+  ({String text, WeatherCondition condition, String description}) _weather(
+      Map<String, dynamic> data) {
+    Map<String, dynamic> today = const {};
+    for (final key in const ['daily', 'days', 'forecast']) {
+      final days = data[key];
+      if (days is List && days.isNotEmpty && days.first is Map) {
+        today = Map<String, dynamic>.from(days.first as Map);
+        break;
+      }
     }
-    final backendDaily = _legacyDailyWeatherText(data['daily']);
-    final parts =
-        [summary, daily, backendDaily].where((part) => part.isNotEmpty);
-    return parts.isEmpty ? '暂无天气' : parts.join(' ');
+    final description = _firstText(
+        today, const ['desc', 'weather_text', 'weather', 'summary', 'text']);
+    final condition =
+        _weatherCondition(description, today['code'] ?? today['weather_code']);
+    final current = data['current_weather'];
+    final temperature = _temperature(data['current_temp']) ??
+        (current is Map ? _temperature(current['temperature']) : null);
+    final min = _temperature(today['min_c'] ?? today['min_temp']);
+    final max = _temperature(today['max_c'] ?? today['max_temp']);
+    // 首页优先展示当天最低/最高温；范围缺失时才使用实时气温。
+    String text = min != null && max != null
+        ? '${min.round()}～${max.round()}℃'
+        : temperature == null
+            ? ''
+            : '${temperature.round()}℃';
+    if (text.isEmpty) {
+      text = description.isNotEmpty
+          ? description
+          : _firstText(data, const ['summary', 'text', 'weather']);
+    }
+    return (
+      text: text.isEmpty ? '暂无天气' : text,
+      condition: condition,
+      description: description,
+    );
   }
 
-  String _legacyDailyWeatherText(Object? dailyData) {
-    if (dailyData is! Map) return '';
-    final daily = Map<String, dynamic>.from(dailyData);
-    final maxTemps = _listValue(daily['temperature_2m_max']);
-    final precipitations = _listValue(daily['precipitation_sum']);
-    final maxTemp = maxTemps.isNotEmpty ? _number(maxTemps.first) : 0;
-    final precipitation =
-        precipitations.isNotEmpty ? _number(precipitations.first) : 0;
-    if (maxTemp == 0 && precipitation == 0) return '';
-
-    final weather =
-        _weatherLabel(maxTemp: maxTemp, precipitation: precipitation);
-    return '$weather ${maxTemp.round()}℃';
+  num? _temperature(Object? value) {
+    final parsed = value is num ? value : num.tryParse('$value');
+    return parsed != null && parsed.isFinite ? parsed : null;
   }
 
-  List<dynamic> _listValue(Object? value) {
-    if (value is List<dynamic>) return value;
-    if (value is List) return List<dynamic>.from(value);
-    return const [];
-  }
-
-  String _weatherLabel({required num maxTemp, required num precipitation}) {
-    if (maxTemp >= 32) return '高温';
-    if (precipitation >= 10) return '大雨';
-    if (precipitation >= 1) return '小雨';
-    return '晴';
+  WeatherCondition _weatherCondition(String description, Object? code) {
+    // 和风天气提供中文描述；Open-Meteo 提供 WMO 代码。不能通过气温猜天气。
+    if (description.contains('雷')) return WeatherCondition.thunder;
+    if (description.contains('雪') || description.contains('霰')) {
+      return WeatherCondition.snow;
+    }
+    if (description.contains('雨')) return WeatherCondition.rain;
+    if (description.contains('雾') || description.contains('霾')) {
+      return WeatherCondition.fog;
+    }
+    if (description.contains('阴')) return WeatherCondition.cloudy;
+    if (description.contains('云')) return WeatherCondition.partlyCloudy;
+    if (description.contains('晴')) return WeatherCondition.sunny;
+    return switch (int.tryParse('$code')) {
+      0 => WeatherCondition.sunny,
+      1 || 2 => WeatherCondition.partlyCloudy,
+      3 => WeatherCondition.cloudy,
+      45 || 48 => WeatherCondition.fog,
+      51 ||
+      53 ||
+      55 ||
+      61 ||
+      63 ||
+      65 ||
+      66 ||
+      67 ||
+      80 ||
+      81 ||
+      82 =>
+        WeatherCondition.rain,
+      71 || 73 || 75 || 77 || 85 || 86 => WeatherCondition.snow,
+      95 || 96 || 99 => WeatherCondition.thunder,
+      _ => WeatherCondition.unknown,
+    };
   }
 
   String _firstText(Map<String, dynamic> data, List<String> keys) {
@@ -156,12 +193,25 @@ class HomeController {
   }
 }
 
+enum WeatherCondition {
+  sunny,
+  partlyCloudy,
+  cloudy,
+  rain,
+  snow,
+  thunder,
+  fog,
+  unknown
+}
+
 class HomeViewModel {
   const HomeViewModel({
     required this.headline,
     required this.scoreText,
     required this.scoreCaption,
     required this.weatherText,
+    required this.weatherCondition,
+    required this.weatherDescription,
     required this.workOrderCountText,
     required this.pendingText,
     required this.adviceScoreText,
@@ -176,6 +226,8 @@ class HomeViewModel {
   final String scoreText;
   final String scoreCaption;
   final String weatherText;
+  final WeatherCondition weatherCondition;
+  final String weatherDescription;
   final String workOrderCountText;
   final String pendingText;
   final String adviceScoreText;

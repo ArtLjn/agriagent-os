@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:dropdown_search/dropdown_search.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../data/api/api_client.dart';
 import '../../data/api/api_models.dart';
 import '../../data/repositories/business_repository.dart';
 import '../../shared/widgets/animated_press.dart';
@@ -65,7 +66,6 @@ class _LedgerManualCreatePageState extends State<LedgerManualCreatePage> {
         'category': _categoryTextForSave(),
         'amount': amountValue,
         'settled_amount': amountValue,
-        'settlement_status': 'settled',
         'record_date': _recordDateText,
         'recorded_at': _recordedAtPayload,
         'note': _note.text.trim(),
@@ -73,8 +73,8 @@ class _LedgerManualCreatePageState extends State<LedgerManualCreatePage> {
       _clearFormAfterSave();
       widget.onSaved?.call();
       _showMessage('保存记录成功');
-    } catch (_) {
-      _showMessage('保存失败，请稍后再试');
+    } catch (error) {
+      _showMessage(ApiClient.userMessageFor(error));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -112,10 +112,9 @@ class _LedgerManualCreatePageState extends State<LedgerManualCreatePage> {
         onSecondary: () => Navigator.of(context).maybePop(),
       ),
       children: [
-        _AmountHero(
-          recordType: _recordType,
-          amount: _amount.text.trim(),
-          onTypeChanged: (value) => setState(() {
+        _RecordTypeSegmented(
+          value: _recordType,
+          onChanged: (value) => setState(() {
             _recordType = value;
             _category.clear();
             _customCategory = false;
@@ -144,7 +143,7 @@ class _LedgerManualCreatePageState extends State<LedgerManualCreatePage> {
                   style: const TextStyle(
                     color: AppColors.ink,
                     fontSize: 16,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     letterSpacing: 0,
                   ),
                   decoration: InputDecoration(
@@ -166,11 +165,10 @@ class _LedgerManualCreatePageState extends State<LedgerManualCreatePage> {
                 child: Text(
                   '￥',
                   style: TextStyle(
-                    color: _amount.text.isEmpty
-                        ? AppColors.subtle
-                        : AppColors.ink,
+                    color:
+                        _amount.text.isEmpty ? AppColors.subtle : AppColors.ink,
                     fontSize: 18,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -180,19 +178,18 @@ class _LedgerManualCreatePageState extends State<LedgerManualCreatePage> {
                     const TextInputType.numberWithOptions(decimal: true),
                 textAlign: TextAlign.right,
                 style: TextStyle(
-                  color: _amount.text.isEmpty
-                      ? AppColors.subtle
-                      : AppColors.ink,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
+                  color:
+                      _amount.text.isEmpty ? AppColors.subtle : AppColors.ink,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w600,
                   letterSpacing: 0,
                 ),
                 decoration: InputDecoration(
                   hintText: '0.00',
                   hintStyle: TextStyle(
                     color: AppColors.subtle,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w600,
                     letterSpacing: 0,
                   ),
                   border: InputBorder.none,
@@ -230,9 +227,6 @@ class _LedgerManualCreatePageState extends State<LedgerManualCreatePage> {
               ),
             ),
           ],
-        ),
-        _AssistEntryCard(
-          onTap: () => Navigator.of(context).maybePop(),
         ),
       ],
     );
@@ -320,160 +314,6 @@ String _timeText(TimeOfDay time) {
   final hour = time.hour.toString().padLeft(2, '0');
   final minute = time.minute.toString().padLeft(2, '0');
   return '$hour:$minute';
-}
-
-class _AmountHero extends StatelessWidget {
-  const _AmountHero({
-    required this.recordType,
-    required this.amount,
-    required this.onTypeChanged,
-  });
-
-  final String recordType;
-  final String amount;
-  final ValueChanged<String> onTypeChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final isIncome = recordType == 'income';
-    final accent = isIncome ? AppColors.green : AppColors.blue;
-    final accentSoft = isIncome ? AppColors.greenSoft : AppColors.blueSoft;
-    final amountDisplay = amount.isEmpty ? '0.00' : amount;
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 320),
-      curve: Curves.easeOutCubic,
-      padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.lineSoft),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x06000000),
-            blurRadius: 16,
-            offset: Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _RecordTypeSegmented(
-            value: recordType,
-            onChanged: onTypeChanged,
-          ),
-          const SizedBox(height: 20),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 240),
-            transitionBuilder: (child, anim) => FadeTransition(
-              opacity: anim,
-              child: SlideTransition(
-                position: Tween<Offset>(
-                  begin: const Offset(0, 0.06),
-                  end: Offset.zero,
-                ).animate(anim),
-                child: child,
-              ),
-            ),
-            child: amount.isEmpty
-                ? Text(
-                    '今天随手记一笔',
-                    key: const ValueKey('hero-hint'),
-                    style: TextStyle(
-                      color: AppColors.muted,
-                      fontSize: 15,
-                      height: 22 / 15,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0,
-                    ),
-                  )
-                : Row(
-                    key: ValueKey('hero-amount-$amountDisplay'),
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      Text(
-                        '￥',
-                        style: TextStyle(
-                          color: accent,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          height: 1.1,
-                        ),
-                      ),
-                      const SizedBox(width: 2),
-                      Flexible(
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            amountDisplay,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: AppColors.ink,
-                              fontSize: 40,
-                              fontWeight: FontWeight.w900,
-                              height: 1.05,
-                              letterSpacing: -0.5,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 320),
-                curve: Curves.easeOutCubic,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: accentSoft,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      isIncome
-                          ? LucideIcons.arrowDownLeft
-                          : LucideIcons.arrowUpRight,
-                      size: 13,
-                      color: accent,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      isIncome ? '收入' : '支出',
-                      style: TextStyle(
-                        color: accent,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.2,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                '金额将记录到农场账本',
-                style: TextStyle(
-                  color: AppColors.subtle,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _RecordTypeSegmented extends StatelessWidget {
@@ -567,7 +407,7 @@ class _SegmentedItem extends StatelessWidget {
                 style: TextStyle(
                   color: selected ? Colors.white : AppColors.muted,
                   fontSize: 14,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w600,
                   letterSpacing: 0.1,
                   fontFamily: null,
                 ),
@@ -622,7 +462,8 @@ class _RecordFormCard extends StatelessWidget {
 }
 
 class _CompactFormRow extends StatelessWidget {
-  const _CompactFormRow({required this.label, required this.child, this.prefix});
+  const _CompactFormRow(
+      {required this.label, required this.child, this.prefix});
 
   final String label;
   final Widget child;
@@ -695,46 +536,19 @@ class _LedgerDateTimeFormRow extends StatelessWidget {
             ),
             const SizedBox(width: 16),
             Expanded(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Text(
-                    dateText,
-                    style: const TextStyle(
-                      color: AppColors.ink,
-                      fontSize: 16,
-                      height: 22 / 16,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface2,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      timeText,
-                      style: const TextStyle(
-                        color: AppColors.muted,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  const Icon(
-                    LucideIcons.chevronRight,
-                    size: 18,
-                    color: AppColors.subtle,
-                  ),
-                ],
-              ),
+              child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                Expanded(
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                      Text(dateText, style: AppTextStyles.body),
+                      const SizedBox(height: 4),
+                      Text(timeText, style: AppTextStyles.small),
+                    ])),
+                const SizedBox(width: 8),
+                const Icon(LucideIcons.chevronRight,
+                    size: 18, color: AppColors.subtle),
+              ]),
             ),
           ],
         ),
@@ -852,9 +666,8 @@ class _LedgerCategoryPickerFormRowState
                 },
                 dropdownBuilder: (context, item) => _CategorySelectedView(
                   option: item,
-                  placeholder: widget.recordType == 'income'
-                      ? '选择收入分类'
-                      : '选择支出分类',
+                  placeholder:
+                      widget.recordType == 'income' ? '选择收入分类' : '选择支出分类',
                 ),
                 decoratorProps: const DropDownDecoratorProps(
                   decoration: InputDecoration(
@@ -926,7 +739,11 @@ class _LedgerCategoryPickerFormRowState
                             subtitle: widget.recordType == 'income'
                                 ? '选择收入来源，也可以输入关键字搜索'
                                 : '选择支出用途，也可以输入关键字搜索',
-                            onManageTap: widget.onManageTap,
+                            onManageTap: () {
+                              // 先关闭分类弹层，避免管理页返回后仍被旧分类列表遮挡。
+                              Navigator.of(context).pop();
+                              widget.onManageTap();
+                            },
                           ),
                           const SizedBox(height: 12),
                           Expanded(child: child),
@@ -1009,7 +826,7 @@ class _CategorySelectedView extends StatelessWidget {
             style: const TextStyle(
               color: AppColors.ink,
               fontSize: 15,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
               letterSpacing: 0,
             ),
           ),
@@ -1035,9 +852,7 @@ class _DropdownSearchCategoryTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: selected
-            ? AppColors.blueSoft
-            : AppColors.surface2,
+        color: selected ? AppColors.blueSoft : AppColors.surface2,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: selected ? AppColors.blue : AppColors.line,
@@ -1072,7 +887,7 @@ class _DropdownSearchCategoryTile extends StatelessWidget {
                   style: TextStyle(
                     color: AppColors.ink,
                     fontSize: 15,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     letterSpacing: 0,
                   ),
                 ),
@@ -1168,7 +983,7 @@ class _SheetTitle extends StatelessWidget {
                 style: const TextStyle(
                   color: AppColors.ink,
                   fontSize: 20,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                   letterSpacing: 0,
                 ),
               ),
@@ -1193,8 +1008,7 @@ class _SheetTitle extends StatelessWidget {
             scale: 0.96,
             onTap: onManageTap,
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
                 color: AppColors.blueSoft,
                 borderRadius: BorderRadius.circular(999),
@@ -1213,7 +1027,7 @@ class _SheetTitle extends StatelessWidget {
                     style: TextStyle(
                       color: AppColors.blue,
                       fontSize: 13,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                       letterSpacing: 0,
                     ),
                   ),
@@ -1228,78 +1042,6 @@ class _SheetTitle extends StatelessWidget {
           icon: const Icon(LucideIcons.x, size: 18, color: AppColors.muted),
         ),
       ],
-    );
-  }
-}
-
-class _AssistEntryCard extends StatelessWidget {
-  const _AssistEntryCard({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedPress(
-      scale: 0.98,
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: AppColors.blueSoft,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppColors.blue.withValues(alpha: 0.12)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 32,
-              height: 32,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(
-                LucideIcons.sparkles,
-                color: AppColors.blue,
-                size: 16,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    '一句话智能填写',
-                    style: TextStyle(
-                      color: AppColors.ink,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '说"买了200块化肥"试试',
-                    style: TextStyle(
-                      color: AppColors.muted,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: 0,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(
-              LucideIcons.chevronRight,
-              color: AppColors.blue,
-              size: 18,
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
