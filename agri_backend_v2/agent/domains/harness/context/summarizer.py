@@ -11,13 +11,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from agent.domains.harness.memory import service as memory
+from agent.domains.harness.memory.short_term import SESSION_HISTORY_MESSAGE_LIMIT
 from agent.platforms.llm.client import chat
 
 logger = logging.getLogger(__name__)
 
-KEEP_RECENT_TURNS = 6
-MIN_OLD_TURNS_TO_SUMMARIZE = 2
-SUMMARY_HISTORY_LIMIT = 2000
+# 短于存储层租约，超时只释放当前持有者，不让后台线程写入过时结果。
+SUMMARY_GENERATION_TIMEOUT_SECONDS = 20
 
 SUMMARY_PROMPT = """把以下多轮对话总结成 200 字以内的关键信息，便于后续 Agent 参考。
 要点：
@@ -27,7 +27,10 @@ SUMMARY_PROMPT = """把以下多轮对话总结成 200 字以内的关键信息�
 
 只输出总结正文，不要任何前缀和解释。
 
-对话：
+已有摘要（保留仍有效的事实，用新对话修正）：
+__PREVIOUS_SUMMARY__
+
+新增对话：
 __DIALOG__
 """
 
@@ -47,10 +50,10 @@ class SummaryResult:
     error_code: str | None = None
 
 
-def _summary_text(turns: list[list[dict[str, Any]]]) -> str:
+def _summary_text(turns: list[list[dict[str, Any]]], previous_summary: str = "") -> str:
     prompt = SUMMARY_PROMPT.replace(
         "__DIALOG__", json.dumps(turns, ensure_ascii=False, indent=2)
-    )
+    ).replace("__PREVIOUS_SUMMARY__", previous_summary or "无")
     result = chat(
         [
             {"role": "system", "content": "你是对话总结助手。"},
@@ -118,30 +121,52 @@ async def maybe_summarize_async(
             error_code="summary_source_revision_conflict",
         )
 
-    history = await chat_store.load_recent(
-        conversation_id,
-        limit=SUMMARY_HISTORY_LIMIT,
-        user_id=user_id,
-        farm_id=farm_id,
-    )
+    try:
+        history = await chat_store.load_recent(
+            conversation_id,
+            limit=SESSION_HISTORY_MESSAGE_LIMIT,
+            user_id=user_id,
+            farm_id=farm_id,
+            reset_at=(state or {}).get("reset_at"),
+            strict=True,
+        )
+    except Exception:  # noqa: BLE001
+        return SummaryResult(
+            None,
+            "unavailable",
+            "unavailable",
+            error_code="conversation_messages_unavailable",
+        )
     turns = memory.complete_turns(history)
-    if len(turns) < KEEP_RECENT_TURNS + MIN_OLD_TURNS_TO_SUMMARIZE:
+    keep = settings.context.recent_turn_limit
+    if len(turns) <= keep:
         return SummaryResult(
             None,
             "skipped",
             "mongo",
             conversation_revision=current_revision,
         )
-    if not force and len(turns) < KEEP_RECENT_TURNS + MIN_OLD_TURNS_TO_SUMMARIZE + 2:
+    old_turns = turns[:-keep]
+    watermark = (state or {}).get("summary_source_to_message_id")
+    old_turns = [
+        item
+        for item in old_turns
+        if not watermark
+        or not _message_id(item[-1])
+        or _message_id(item[-1]) > watermark
+    ]
+    if not old_turns:
         return SummaryResult(
-            None,
-            "skipped",
+            (state or {}).get("summary"),
+            "idempotent",
             "mongo",
+            summary_revision=int((state or {}).get("summary_revision", 0)),
             conversation_revision=current_revision,
         )
 
-    old_turns = turns[:-KEEP_RECENT_TURNS]
-    source_from = _message_id(old_turns[0][0])
+    source_from = (state or {}).get("summary_source_from_message_id") or _message_id(
+        old_turns[0][0]
+    )
     source_to = _message_id(old_turns[-1][-1])
     summary_key = _summary_key(
         conversation_id, source_conversation_revision, source_from, source_to
@@ -152,18 +177,8 @@ async def maybe_summarize_async(
         farm_id=farm_id,
         source_conversation_revision=source_conversation_revision,
         summary_key=summary_key,
+        source_summary_revision=int((state or {}).get("summary_revision", 0)),
     )
-    if claim.get("status") == "idempotent" and claim.get("summary_status") == "ready":
-        return SummaryResult(
-            claim.get("summary"),
-            "idempotent",
-            "mongo",
-            int(claim.get("summary_revision", 0) or 0),
-            int(claim.get("conversation_revision", 0) or 0),
-            source_from,
-            source_to,
-            claim.get("summary_content_hash"),
-        )
     if not claim.get("ok"):
         return SummaryResult(
             None,
@@ -174,8 +189,12 @@ async def maybe_summarize_async(
         )
 
     claim_revision = int(claim.get("conversation_revision", 0) or 0)
+    lease_token = (claim.get("summary_lease") or {}).get("token", "")
     try:
-        summary = await asyncio.to_thread(_summary_text, old_turns)
+        async with asyncio.timeout(SUMMARY_GENERATION_TIMEOUT_SECONDS):
+            summary = await asyncio.to_thread(
+                _summary_text, old_turns, (state or {}).get("summary") or ""
+            )
     except Exception as exc:  # noqa: BLE001
         logger.warning(
             "summary generation failed conversation=%s revision=%s error=%s",
@@ -190,6 +209,7 @@ async def maybe_summarize_async(
             claim_revision=claim_revision,
             source_revision=source_conversation_revision,
             summary_key=summary_key,
+            lease_token=lease_token,
             source_from=source_from,
             source_to=source_to,
             error_code="summary_generation_failed",
@@ -203,6 +223,7 @@ async def maybe_summarize_async(
             claim_revision=claim_revision,
             source_revision=source_conversation_revision,
             summary_key=summary_key,
+            lease_token=lease_token,
             source_from=source_from,
             source_to=source_to,
             error_code="summary_empty",
@@ -217,6 +238,7 @@ async def maybe_summarize_async(
         expected_revision=claim_revision,
         source_conversation_revision=source_conversation_revision,
         summary_key=summary_key,
+        lease_token=lease_token,
         summary=summary,
         status="ready",
         source_from_message_id=source_from,
@@ -256,6 +278,7 @@ async def _save_failed(
     claim_revision: int,
     source_revision: int,
     summary_key: str,
+    lease_token: str,
     source_from: str | None,
     source_to: str | None,
     error_code: str,
@@ -269,6 +292,7 @@ async def _save_failed(
         expected_revision=claim_revision,
         source_conversation_revision=source_revision,
         summary_key=summary_key,
+        lease_token=lease_token,
         status="failed",
         source_from_message_id=source_from,
         source_to_message_id=source_to,

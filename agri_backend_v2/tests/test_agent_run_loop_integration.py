@@ -431,6 +431,53 @@ async def _owned() -> str:
     return "owned"
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cleared_checkpoint", [False, True])
+async def test_next_turn_restores_mongo_blocked_action_before_tool_execution(
+    fake_runtime,
+    monkeypatch,
+    cleared_checkpoint,
+) -> None:
+    async def blocked_session(*args, **kwargs):
+        return {
+            "messages": [],
+            "conversation_revision": 1,
+            "summary_revision": 0,
+            "reset_generation": 0,
+            "source_status": "mongo",
+            "task_state": {
+                "status": "blocked",
+                "resume_policy": "ask_user",
+                "blocked_action": {"agent_tool_name": "fake_lookup", "arguments": {}},
+            },
+        }
+
+    monkeypatch.setattr(worker.memory, "get_session_view", blocked_session)
+    if cleared_checkpoint:
+
+        async def save_cleared_checkpoint(turn, **kwargs):
+            await fake_runtime.save_turn(turn, **kwargs)
+            fake_runtime.turns[turn.turn_id]["task_state"] = ""
+
+        monkeypatch.setattr(chat, "save_turn", save_cleared_checkpoint)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await _post_chat(
+            client,
+            request_id="restore-task",
+            conversation_id="restore-task",
+        )
+    events = _sse_events(response)
+    state = next(iter(fake_runtime.turns.values()))
+    if cleared_checkpoint:
+        assert len(fake_runtime.business_calls) == 1
+        assert state["task_state"] is None
+    else:
+        assert fake_runtime.business_calls == []
+        assert state["stop_reason"] == "resume_requires_new_action"
+    assert events[-1]["type"] == "done"
+
+
 async def _post_chat(
     client: httpx.AsyncClient,
     *,

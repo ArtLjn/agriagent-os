@@ -24,13 +24,34 @@ import hashlib
 import hmac
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
 
 from agent.config import settings
+from agent.platforms.persistence.mongo.conversation_state import (
+    _unavailable_result,
+)
+from agent.platforms.persistence.mongo.conversation_state import (
+    claim_summary_generation as claim_summary_generation,
+)
+from agent.platforms.persistence.mongo.conversation_state import (
+    clear_expired_session_state as clear_expired_session_state,
+)
+from agent.platforms.persistence.mongo.conversation_state import (
+    get_conversation_state as get_conversation_state,
+)
+from agent.platforms.persistence.mongo.conversation_state import (
+    reset_conversation_state as reset_conversation_state,
+)
+from agent.platforms.persistence.mongo.conversation_state import (
+    save_conversation_state as save_conversation_state,
+)
+from agent.platforms.persistence.mongo.conversation_state import (
+    save_summary_result as save_summary_result,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +67,6 @@ _state_collection: AsyncIOMotorCollection | None = None
 _state_indexes_initialized = False
 _observation_collection: AsyncIOMotorCollection | None = None
 _observation_indexes_initialized = False
-_UNSET = object()
 _CURSOR_VERSION = 1
 _MESSAGE_KIND_ALIASES = {
     "user_input": "prompt",
@@ -318,104 +338,6 @@ async def status() -> dict[str, Any]:
     return {"enabled": True, "reachable": True, "source_status": "mongo"}
 
 
-def _state_filter(
-    conversation_id: str,
-    *,
-    user_id: str,
-    farm_id: int | None,
-) -> dict[str, Any]:
-    """构造不可绕过租户边界的 state 查询条件。"""
-    return {
-        "userId": user_id,
-        "farmId": farm_id if farm_id is not None else _DEFAULT_FARM_ID,
-        "conversationId": conversation_id,
-    }
-
-
-def _unavailable_result(operation: str, exc: Exception | None = None) -> dict[str, Any]:
-    result: dict[str, Any] = {
-        "ok": False,
-        "status": "unavailable",
-        "source_status": "unavailable",
-        "code": "conversation_state_unavailable",
-        "operation": operation,
-    }
-    if exc is not None:
-        result["message"] = str(exc)
-    return result
-
-
-def _state_result(document: dict[str, Any], *, status: str = "ready") -> dict[str, Any]:
-    """将 Mongo camelCase 文档转换为 Memory Service 使用的稳定 snake_case 契约。"""
-    return {
-        "ok": True,
-        "status": status,
-        "source_status": "mongo",
-        "conversation_id": document.get("conversationId"),
-        "user_id": document.get("userId", ""),
-        "farm_uid": document.get("farmUid", ""),
-        "farm_id": document.get("farmId"),
-        "conversation_revision": int(document.get("conversationRevision", 0) or 0),
-        "summary_revision": int(document.get("summaryRevision", 0) or 0),
-        "reset_generation": int(document.get("resetGeneration", 0) or 0),
-        "summary": document.get("summary"),
-        "summary_status": document.get("summaryStatus", "ready"),
-        "summary_source_from_message_id": document.get("summarySourceFromMessageId"),
-        "summary_source_to_message_id": document.get("summarySourceToMessageId"),
-        "summary_source_conversation_revision": document.get(
-            "summarySourceConversationRevision"
-        ),
-        "summary_content_hash": document.get("summaryContentHash"),
-        "summary_generated_by": document.get("summaryGeneratedBy"),
-        "summary_created_at": document.get("summaryCreatedAt"),
-        "summary_expires_at": document.get("summaryExpiresAt"),
-        "pending_action": document.get("pendingAction"),
-        "task_state": document.get("taskState"),
-        "updated_at": document.get("updatedAt"),
-        "last_write_key": document.get("lastWriteKey"),
-    }
-
-
-def _result_attr(result: Any, name: str, default: Any = None) -> Any:
-    """兼容 Motor 返回对象和测试 fake 返回字典。"""
-    if isinstance(result, dict):
-        return result.get(name, default)
-    return getattr(result, name, default)
-
-
-def _is_expired(value: Any, *, now: datetime | None = None) -> bool:
-    """只把可解析且已到期的生命周期字段视为过期。"""
-    if not value:
-        return False
-    if isinstance(value, datetime):
-        expires_at = value
-    elif isinstance(value, str):
-        try:
-            expires_at = datetime.fromisoformat(value.replace("Z", "+00:00"))
-        except ValueError:
-            return False
-    else:
-        return False
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-    current = now or datetime.now(timezone.utc)
-    return expires_at <= current
-
-
-def _expired_state_fields(
-    document: dict[str, Any], *, now: datetime | None = None
-) -> tuple[bool, bool]:
-    """返回 pending action 与临时任务各自是否需要清理。"""
-    pending = document.get("pendingAction") or {}
-    task = document.get("taskState") or {}
-    return (
-        pending.get("status") in {"expired", "approved", "rejected", "cancelled"}
-        or _is_expired(pending.get("expires_at"), now=now),
-        task.get("status") in {"expired", "completed", "failed", "cancelled"}
-        or _is_expired(task.get("expires_at"), now=now),
-    )
-
-
 async def ensure_indexes() -> None:
     """异步初始化消息集合索引，避免在同步连接初始化中遗留协程。"""
     global _indexes_initialized
@@ -492,449 +414,6 @@ async def ensure_state_indexes() -> dict[str, Any]:
     except Exception as exc:  # noqa: BLE001
         logger.warning("conversation state index init failed: %s", exc)
         return _unavailable_result("ensure_state_indexes", exc)
-
-
-async def get_conversation_state(
-    conversation_id: str,
-    *,
-    user_id: str,
-    farm_id: int | None = None,
-    cleanup_expired: bool = True,
-) -> dict[str, Any] | None:
-    """读取租户范围内的 Conversation state。
-
-    返回 `None` 表示该租户下尚未创建 state；返回结构化 `unavailable` 表示
-    Mongo 边界不可用。两者不能混淆，调用方不得把 unavailable 当成空状态。
-    """
-    coll = get_state_collection()
-    if coll is None:
-        return _unavailable_result("get_conversation_state")
-    indexes = await ensure_state_indexes()
-    if indexes.get("status") == "unavailable":
-        return indexes
-    try:
-        document = await coll.find_one(
-            _state_filter(conversation_id, user_id=user_id, farm_id=farm_id)
-        )
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("conversation state read failed: %s", exc)
-        return _unavailable_result("get_conversation_state", exc)
-    if document is None:
-        return None
-    state = _state_result(document)
-    if not cleanup_expired:
-        return state
-    pending_expired, task_expired = _expired_state_fields(document)
-    if not pending_expired and not task_expired:
-        return state
-    cleaned = await clear_expired_session_state(
-        conversation_id,
-        user_id=user_id,
-        farm_id=farm_id,
-        expected_revision=state["conversation_revision"],
-        clear_pending_action=pending_expired,
-        clear_task_state=task_expired,
-    )
-    if cleaned.get("status") in {"ready", "idempotent"}:
-        return cleaned
-    # 清理与其他写入竞争时，不把已过期数据重新暴露给 Context。
-    return {
-        **state,
-        "status": "stale",
-        "pending_action": None if pending_expired else state.get("pending_action"),
-        "task_state": None if task_expired else state.get("task_state"),
-    }
-
-
-async def save_conversation_state(
-    conversation_id: str,
-    *,
-    user_id: str,
-    farm_id: int | None = None,
-    farm_uid: str | None = None,
-    expected_revision: int = 0,
-    summary: str | None | object = _UNSET,
-    summary_status: str | object = _UNSET,
-    summary_revision: int | object = _UNSET,
-    summary_source_from_message_id: str | None | object = _UNSET,
-    summary_source_to_message_id: str | None | object = _UNSET,
-    summary_source_conversation_revision: int | None | object = _UNSET,
-    summary_content_hash: str | None | object = _UNSET,
-    summary_generated_by: str | None | object = _UNSET,
-    summary_created_at: str | None | object = _UNSET,
-    summary_expires_at: str | None | object = _UNSET,
-    pending_action: dict[str, Any] | None | object = _UNSET,
-    task_state: dict[str, Any] | None | object = _UNSET,
-    reset_generation: int | object = _UNSET,
-    idempotency_key: str | None = None,
-    advance_conversation_revision: bool = True,
-) -> dict[str, Any]:
-    """以 revision CAS 保存 Conversation state。
-
-    新 state 使用 `expected_revision=0` 创建；已有 state 必须传入读取时的
-    `conversation_revision`。相同 `idempotency_key` 的重试返回当前版本，
-    不会再次递增 revision。摘要 claim/commit 可关闭 conversation revision
-    推进，只推进独立的 summary revision，避免后台压缩阻塞当前 Turn 收尾。
-    """
-    coll = get_state_collection()
-    if coll is None:
-        return _unavailable_result("save_conversation_state")
-    indexes = await ensure_state_indexes()
-    if indexes.get("status") == "unavailable":
-        return indexes
-
-    tenant_filter = _state_filter(conversation_id, user_id=user_id, farm_id=farm_id)
-    try:
-        current = await coll.find_one(tenant_filter)
-        if current is not None and idempotency_key:
-            if current.get("lastWriteKey") == idempotency_key:
-                return _state_result(current, status="idempotent")
-            current_revision = int(current.get("conversationRevision", 0) or 0)
-            if current_revision != expected_revision:
-                return {
-                    "ok": False,
-                    "status": "conflict",
-                    "source_status": "mongo",
-                    "code": "conversation_state_revision_conflict",
-                    "expected_revision": expected_revision,
-                    "actual_revision": current_revision,
-                    "state": _state_result(current),
-                }
-        elif current is not None:
-            current_revision = int(current.get("conversationRevision", 0) or 0)
-            if current_revision != expected_revision:
-                return {
-                    "ok": False,
-                    "status": "conflict",
-                    "source_status": "mongo",
-                    "code": "conversation_state_revision_conflict",
-                    "expected_revision": expected_revision,
-                    "actual_revision": current_revision,
-                    "state": _state_result(current),
-                }
-        elif expected_revision != 0:
-            return {
-                "ok": False,
-                "status": "conflict",
-                "source_status": "mongo",
-                "code": "conversation_state_revision_conflict",
-                "expected_revision": expected_revision,
-                "actual_revision": None,
-            }
-
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
-        set_doc: dict[str, Any] = {"updatedAt": now}
-        if farm_uid is not None:
-            set_doc["farmUid"] = farm_uid
-        if idempotency_key is not None:
-            set_doc["lastWriteKey"] = idempotency_key
-        field_values = {
-            "summary": summary,
-            "summaryStatus": summary_status,
-            "summaryRevision": summary_revision,
-            "summarySourceFromMessageId": summary_source_from_message_id,
-            "summarySourceToMessageId": summary_source_to_message_id,
-            "summarySourceConversationRevision": summary_source_conversation_revision,
-            "summaryContentHash": summary_content_hash,
-            "summaryGeneratedBy": summary_generated_by,
-            "summaryCreatedAt": summary_created_at,
-            "summaryExpiresAt": summary_expires_at,
-            "pendingAction": pending_action,
-            "taskState": task_state,
-            "resetGeneration": reset_generation,
-        }
-        for field_name, value in field_values.items():
-            if value is not _UNSET:
-                set_doc[field_name] = value
-
-        base_doc = {
-            **tenant_filter,
-            "sessionId": conversation_id,
-            "conversationRevision": 0,
-            "summaryRevision": 0,
-            "resetGeneration": 0,
-            "summaryStatus": "ready",
-            "createdAt": now,
-        }
-        # Mongo 不允许同一个 upsert 路径同时出现在 `$set` 和
-        # `$setOnInsert`。`farmUid` 等可选状态字段必须只由一个 modifier
-        # 负责，否则首次 Turn 的消息虽已落库，Conversation state 会因
-        # Mongo code 40 失败，最终被错误展示为 finalization incomplete。
-        for field_name in set_doc:
-            base_doc.pop(field_name, None)
-        if advance_conversation_revision:
-            base_doc.pop("conversationRevision", None)
-        update_doc: dict[str, Any] = {
-            "$set": set_doc,
-            "$setOnInsert": base_doc,
-        }
-        if advance_conversation_revision:
-            update_doc["$inc"] = {"conversationRevision": 1}
-        result = await coll.update_one(
-            {**tenant_filter, "conversationRevision": expected_revision},
-            update_doc,
-            upsert=True,
-        )
-        matched = int(_result_attr(result, "matched_count", 0) or 0)
-        upserted = _result_attr(result, "upserted_id")
-        if matched == 0 and upserted is None:
-            latest = await coll.find_one(tenant_filter)
-            actual = int(latest.get("conversationRevision", 0) or 0) if latest else None
-            return {
-                "ok": False,
-                "status": "conflict",
-                "source_status": "mongo",
-                "code": "conversation_state_revision_conflict",
-                "expected_revision": expected_revision,
-                "actual_revision": actual,
-            }
-        saved = await coll.find_one(tenant_filter)
-        if saved is None:
-            return _unavailable_result(
-                "save_conversation_state",
-                RuntimeError("state write acknowledged but document could not be read"),
-            )
-        return _state_result(saved)
-    except Exception as exc:  # noqa: BLE001
-        # 并发首次 upsert 可能因唯一索引先抛 DuplicateKeyError；重新读取后
-        # 将它归类为 CAS 冲突，而不是把已存在的新版本误报为存储不可用。
-        try:
-            latest = await coll.find_one(tenant_filter)
-        except Exception:  # noqa: BLE001
-            latest = None
-        if latest is not None:
-            actual = int(latest.get("conversationRevision", 0) or 0)
-            if actual != expected_revision:
-                return {
-                    "ok": False,
-                    "status": "conflict",
-                    "source_status": "mongo",
-                    "code": "conversation_state_revision_conflict",
-                    "expected_revision": expected_revision,
-                    "actual_revision": actual,
-                }
-        logger.warning("conversation state write failed: %s", exc)
-        return _unavailable_result("save_conversation_state", exc)
-
-
-async def clear_expired_session_state(
-    conversation_id: str,
-    *,
-    user_id: str,
-    farm_id: int | None,
-    expected_revision: int,
-    clear_pending_action: bool,
-    clear_task_state: bool,
-) -> dict[str, Any]:
-    """以 CAS 清理已过期的 Session 短时状态。"""
-    if not clear_pending_action and not clear_task_state:
-        return await get_conversation_state(
-            conversation_id,
-            user_id=user_id,
-            farm_id=farm_id,
-            cleanup_expired=False,
-        ) or _unavailable_result("clear_expired_session_state")
-    return await save_conversation_state(
-        conversation_id,
-        user_id=user_id,
-        farm_id=farm_id,
-        expected_revision=expected_revision,
-        pending_action=None if clear_pending_action else _UNSET,
-        task_state=None if clear_task_state else _UNSET,
-        idempotency_key=f"expiry:{conversation_id}:{expected_revision}",
-    )
-
-
-async def reset_conversation_state(
-    conversation_id: str,
-    *,
-    user_id: str,
-    farm_id: int | None = None,
-    expected_revision: int | None = None,
-    idempotency_key: str | None = None,
-) -> dict[str, Any]:
-    """清理 active state 并递增 reset generation，保留 conversationMessages。"""
-    current = await get_conversation_state(
-        conversation_id, user_id=user_id, farm_id=farm_id
-    )
-    if current and current.get("status") == "unavailable":
-        return current
-    revision = int(current.get("conversation_revision", 0) or 0) if current else 0
-    if expected_revision is not None and expected_revision != revision:
-        return {
-            "ok": False,
-            "status": "conflict",
-            "source_status": "mongo",
-            "code": "conversation_state_revision_conflict",
-            "expected_revision": expected_revision,
-            "actual_revision": revision,
-        }
-    return await save_conversation_state(
-        conversation_id,
-        user_id=user_id,
-        farm_id=farm_id,
-        farm_uid=(current or {}).get("farm_uid"),
-        expected_revision=revision,
-        summary=None,
-        summary_status="stale",
-        summary_revision=int((current or {}).get("summary_revision", 0) or 0) + 1,
-        summary_source_from_message_id=None,
-        summary_source_to_message_id=None,
-        summary_source_conversation_revision=None,
-        summary_content_hash=None,
-        summary_generated_by=None,
-        summary_created_at=None,
-        summary_expires_at=None,
-        pending_action=None,
-        task_state=None,
-        reset_generation=int((current or {}).get("reset_generation", 0) or 0) + 1,
-        idempotency_key=idempotency_key,
-    )
-
-
-async def claim_summary_generation(
-    conversation_id: str,
-    *,
-    user_id: str,
-    farm_id: int | None,
-    source_conversation_revision: int,
-    summary_key: str,
-) -> dict[str, Any]:
-    """以 Conversation revision CAS 抢占一次摘要生成任务。
-
-    ``summary_key`` 由会话、来源 revision 和来源消息范围组成。先写入
-    ``generating`` 再调用 LLM，其他 Worker 会在同一来源范围上收到冲突，
-    避免两个摘要任务互相覆盖。
-    """
-    current = await get_conversation_state(
-        conversation_id, user_id=user_id, farm_id=farm_id
-    )
-    if current and current.get("status") == "unavailable":
-        return current
-    if current is not None:
-        if (
-            current.get("summary_source_conversation_revision")
-            == source_conversation_revision
-            and current.get("summary_status") == "ready"
-        ):
-            return {**current, "status": "idempotent"}
-        if current.get("summary_status") == "generating":
-            if current.get("last_write_key") == f"{summary_key}:claim":
-                return {**current, "status": "idempotent"}
-            return {
-                "ok": False,
-                "status": "conflict",
-                "source_status": "mongo",
-                "code": "summary_generation_in_progress",
-                "actual_revision": current.get("conversation_revision"),
-            }
-        retrying_failed_summary = (
-            current.get("summary_status") == "failed"
-            and current.get("summary_source_conversation_revision")
-            == source_conversation_revision
-        )
-        if (
-            not retrying_failed_summary
-            and current.get("conversation_revision", 0) != source_conversation_revision
-        ):
-            return {
-                "ok": False,
-                "status": "conflict",
-                "source_status": "mongo",
-                "code": "summary_source_revision_conflict",
-                "expected_revision": source_conversation_revision,
-                "actual_revision": current.get("conversation_revision"),
-            }
-    elif source_conversation_revision != 0:
-        return {
-            "ok": False,
-            "status": "conflict",
-            "source_status": "mongo",
-            "code": "summary_source_revision_conflict",
-            "expected_revision": source_conversation_revision,
-            "actual_revision": None,
-        }
-
-    expected_revision = (
-        int(current.get("conversation_revision", 0) or 0)
-        if current is not None
-        and current.get("summary_status") == "failed"
-        and current.get("summary_source_conversation_revision")
-        == source_conversation_revision
-        else source_conversation_revision
-    )
-    return await save_conversation_state(
-        conversation_id,
-        user_id=user_id,
-        farm_id=farm_id,
-        expected_revision=expected_revision,
-        summary_status="generating",
-        summary_source_conversation_revision=source_conversation_revision,
-        idempotency_key=f"{summary_key}:claim",
-        advance_conversation_revision=False,
-    )
-
-
-async def save_summary_result(
-    conversation_id: str,
-    *,
-    user_id: str,
-    farm_id: int | None,
-    expected_revision: int,
-    source_conversation_revision: int,
-    summary_key: str,
-    summary: str | object = _UNSET,
-    status: str,
-    source_from_message_id: str | None = None,
-    source_to_message_id: str | None = None,
-    content_hash: str | None = None,
-    generated_by: str | None = None,
-    created_at: str | None = None,
-    expires_at: str | None = None,
-) -> dict[str, Any]:
-    """提交摘要结果；结果提交仍需匹配 claim 后产生的 state revision。"""
-    current = await get_conversation_state(
-        conversation_id, user_id=user_id, farm_id=farm_id
-    )
-    if current and current.get("status") == "unavailable":
-        return current
-    if current and current.get("last_write_key") == f"{summary_key}:commit":
-        return {**current, "status": "idempotent"}
-    if (
-        current is not None
-        and current.get("conversation_revision") != expected_revision
-    ):
-        return {
-            "ok": False,
-            "status": "conflict",
-            "source_status": "mongo",
-            "code": "summary_commit_revision_conflict",
-            "expected_revision": expected_revision,
-            "actual_revision": current.get("conversation_revision"),
-        }
-    current_summary_revision = int((current or {}).get("summary_revision", 0) or 0)
-    return await save_conversation_state(
-        conversation_id,
-        user_id=user_id,
-        farm_id=farm_id,
-        expected_revision=expected_revision,
-        summary=summary,
-        summary_status=status,
-        summary_revision=(
-            current_summary_revision + 1
-            if status == "ready"
-            else current_summary_revision
-        ),
-        summary_source_from_message_id=source_from_message_id,
-        summary_source_to_message_id=source_to_message_id,
-        summary_source_conversation_revision=source_conversation_revision,
-        summary_content_hash=content_hash,
-        summary_generated_by=generated_by,
-        summary_created_at=created_at,
-        summary_expires_at=expires_at,
-        idempotency_key=f"{summary_key}:commit",
-        advance_conversation_revision=False,
-    )
 
 
 async def append_message(
@@ -1077,10 +556,14 @@ async def load_recent(
     *,
     user_id: str | None = None,
     farm_id: int | None = None,
+    reset_at: str | None = None,
+    strict: bool = False,
 ) -> list[dict[str, Any]]:
     """Return recent N messages for a conversation, oldest first."""
     coll = get_collection()
     if coll is None:
+        if strict:
+            raise RuntimeError("conversation_messages_unavailable")
         return []
     await ensure_indexes()
     try:
@@ -1089,6 +572,8 @@ async def load_recent(
             filter_doc["farmId"] = farm_id
         if user_id:
             filter_doc["userId"] = user_id
+        if reset_at:
+            filter_doc["createdAt"] = {"$gt": reset_at}
         cursor = (
             coll.find(
                 filter_doc,
@@ -1121,6 +606,8 @@ async def load_recent(
         ]
     except Exception as exc:  # noqa: BLE001
         logger.warning("mongo load_recent failed (non-fatal): %s", exc)
+        if strict:
+            raise RuntimeError("conversation_messages_unavailable") from exc
         return []
 
 
@@ -1208,10 +695,16 @@ async def list_conversations(
             )
             if anchor is None:
                 return {"items": [], "next_cursor": None, "has_more": False}
-            pipeline.append({"$match": {"$or": [
-                {"last_at": {"$lt": anchor["createdAt"]}},
-                {"last_at": anchor["createdAt"], "_id": {"$lt": cursor}},
-            ]}})
+            pipeline.append(
+                {
+                    "$match": {
+                        "$or": [
+                            {"last_at": {"$lt": anchor["createdAt"]}},
+                            {"last_at": anchor["createdAt"], "_id": {"$lt": cursor}},
+                        ]
+                    }
+                }
+            )
         pipeline.append({"$limit": limit + 1})
         results = await coll.aggregate(pipeline).to_list(length=limit + 1)
     except Exception as exc:  # noqa: BLE001

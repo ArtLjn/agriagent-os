@@ -8,12 +8,26 @@ import logging
 import time
 import uuid
 from contextlib import suppress
+from copy import deepcopy
 
 from agent.config import settings
 from agent.domains.harness.memory import service as memory
+from agent.domains.harness.observability.trace import (
+    clear_trace,
+    flush_now,
+    init_trace,
+    trace_context_source_divergence,
+    trace_memory_observe,
+    trace_memory_read,
+    trace_persistence_state,
+    trace_queue_wait,
+    trace_turn_outcome,
+)
+from agent.domains.harness.observability.trace.context import trace_id_for_turn
 from agent.domains.harness.runtime.engine import run_turn
 from agent.domains.harness.runtime.turn import StopReason, Turn, TurnPhase
 from agent.platforms.persistence.mongo.chat_store import append_message
+from agent.platforms.persistence.redis import sse
 from agent.platforms.persistence.redis.coordination import (
     TurnLease,
     TurnLeaseLost,
@@ -26,18 +40,6 @@ from agent.platforms.persistence.redis.coordination import (
     wake_global_queue,
 )
 from agent.platforms.persistence.redis.redis_store import get_client, key
-from agent.domains.harness.observability.trace import (
-    clear_trace,
-    flush_now,
-    init_trace,
-    trace_queue_wait,
-    trace_turn_outcome,
-    trace_memory_observe,
-    trace_memory_read,
-    trace_context_source_divergence,
-    trace_persistence_state,
-)
-from agent.domains.harness.observability.trace.context import trace_id_for_turn
 from agent.platforms.persistence.redis.turn_store import (
     TERMINAL_STATUSES,
     create_approval,
@@ -49,7 +51,6 @@ from agent.platforms.persistence.redis.turn_store import (
     wait_approval,
 )
 from shared.roles import UserRole
-from agent.platforms.persistence.redis import sse
 
 logger = logging.getLogger(__name__)
 
@@ -644,6 +645,11 @@ async def _execute_turn(
     )
     turn.summary_revision = _state_int(turn.memory_snapshot.get("summary_revision"))
     turn.reset_generation = _state_int(turn.memory_snapshot.get("reset_generation"))
+    # 新 Turn 没有 Redis 任务检查点，必须恢复 Mongo 中的跨轮约束；
+    # 同一 Turn 重领时优先保留已执行阶段的检查点。
+    if "task_state" not in state and turn.task_state is None:
+        turn.task_state = deepcopy(turn.memory_snapshot.get("task_state"))
+    turn.memory_snapshot["task_state"] = deepcopy(turn.task_state)
     turn.context_source_status = str(
         turn.memory_snapshot.get("source_status")
         or turn.memory_snapshot.get("context_source_status")
@@ -654,6 +660,7 @@ async def _execute_turn(
         conversation_revision=turn.conversation_revision,
         summary_revision=turn.summary_revision,
         reset_generation=turn.reset_generation,
+        task_state=turn.task_state,
         source_status=turn.context_source_status,
         context_source_status=turn.context_source_status,
     )
