@@ -2904,11 +2904,14 @@ def _missing_params_result(skill: Skill, missing: list[str]) -> dict:
     ]
     return {
         "error": "missing_information",
+        "code": "missing_required_params",
         "missing": missing,
         "message": (
-            "当前请求缺少完成业务动作所需的信息："
+            "本次调用未填入以下必需信息："
             + "；".join(details)
-            + "。请停止调用工具，直接用自然、简短的中文向用户询问这些业务信息；"
+            + "。先检查当前输入和最近对话：已有明确信息时，补齐参数后再调用；"
+            "不要把模型漏填参数误认为用户未提供信息。"
+            "只有上下文确实缺少时，才用自然、简短的中文询问缺失信息；"
             "不要提及参数名、operation、tool 或 MCP。"
         ),
     }

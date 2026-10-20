@@ -88,56 +88,57 @@ def _stream_error_message(exc: Exception, *, stream_started: bool = False) -> st
     return str(exc)
 
 
-def _required_tool_args(
-    tool_name: str, tools: list[dict[str, Any]] | None
-) -> list[str]:
-    """返回工具 schema 声明的必填参数，用于识别流式响应丢参。"""
-    for tool in tools or []:
-        function = tool.get("function") or {}
-        if function.get("name") != tool_name:
-            continue
-        schema = function.get("parameters") or {}
-        required = schema.get("required") or []
-        return required if isinstance(required, list) else []
-    return []
-
-
 async def _repair_empty_stream_tool_calls(
     messages: list[dict[str, Any]],
     tools: list[dict[str, Any]] | None,
     tool_calls: list[dict[str, Any]],
     temperature: float,
 ) -> list[dict[str, Any]]:
-    """用非流式响应修复兼容网关丢失的工具参数增量。"""
-    if not any(
-        not call.get("arguments") and _required_tool_args(call.get("name", ""), tools)
-        for call in tool_calls
-    ):
-        return tool_calls
-
-    logger.warning(
-        "stream tool arguments empty; retrying once with non-stream response"
-    )
-    kwargs: dict[str, Any] = {
-        "model": MODEL,
-        "messages": messages,
-        "temperature": temperature,
+    """只补全已选工具的空参数，避免重做决策时换工具、漏调用或重复写入。"""
+    schemas = {
+        tool["function"]["name"]: tool
+        for tool in tools or []
+        if (tool.get("function") or {}).get("name")
     }
-    if tools:
-        kwargs["tools"] = tools
-        kwargs["tool_choice"] = "auto"
-    response = await _async_client.chat.completions.create(**kwargs)
-    message = response.choices[0].message
-    repaired: list[dict[str, Any]] = []
-    for call in message.tool_calls or []:
-        args_raw = call.function.arguments or "{}"
+    repaired = list(tool_calls)
+    for index, call in enumerate(tool_calls):
+        schema = schemas.get(call.get("name"))
+        parameters = ((schema or {}).get("function") or {}).get("parameters") or {}
+        # 可选参数也可能承载明确地点，空参数不能自动视为用户选择默认值。
+        # 真正无参数的工具无需增加模型调用；每个空调用最多补救一次。
+        if call.get("arguments") or not parameters.get("properties"):
+            continue
+        logger.warning("stream tool arguments empty; repairing tool=%s", call["name"])
+        response = await _async_client.chat.completions.create(
+            model=MODEL,
+            messages=[
+                *messages,
+                {
+                    "role": "system",
+                    "content": (
+                        "这是已选工具的参数补全，不是重新选择动作。"
+                        "请从当前输入和最近问答中提取有依据的参数，补全指定工具。"
+                        "不要把短回复当成业务参数，不要猜测缺失值；"
+                        "上下文仍没有的信息保持缺失，由系统继续追问。"
+                    ),
+                },
+            ],
+            temperature=temperature,
+            tools=[schema],
+            tool_choice={"type": "function", "function": {"name": call["name"]}},
+        )
+        candidates = response.choices[0].message.tool_calls or []
+        # 兼容端点可能忽略 tool_choice；绝不能接受不同工具或多次调用。
+        if len(candidates) != 1 or candidates[0].function.name != call["name"]:
+            continue
         try:
-            args = json.loads(args_raw)
-        except json.JSONDecodeError:
-            logger.warning("malformed repaired tool args: %s", args_raw)
-            args = {"_raw": args_raw}
-        repaired.append({"id": call.id, "name": call.function.name, "arguments": args})
-    return repaired or tool_calls
+            args = json.loads(candidates[0].function.arguments or "{}")
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if isinstance(args, dict) and args:
+            # 保留流式阶段的 ID 与位置，让已经发出的事件和 tool_result 仍能配对。
+            repaired[index] = {**call, "arguments": args}
+    return repaired
 
 
 def _log_cache_metrics(usage: Any) -> None:
