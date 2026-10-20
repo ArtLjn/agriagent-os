@@ -117,6 +117,8 @@ class Turn:
 
     # Output.
     final_answer: str | None = None
+    # 操作事实与任务完成分离；普通写工具、计划步骤及审批后继都记录在此。
+    committed_operations: list[dict[str, Any]] = field(default_factory=list)
     committed_result: dict[str, Any] | None = None
     finalization_pending: bool = False
     finalization_request: dict[str, Any] | None = None

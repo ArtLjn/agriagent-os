@@ -215,9 +215,7 @@ def test_commit_planting_plan_not_exposed_to_model() -> None:
     # commit 在 skill registry 中（Runtime 可按名查找驱动）
     assert "commit_planting_plan" in names
     # 但不在 OpenAI tools schema 中（模型看不到）
-    tool_names = {
-        t["function"]["name"] for t in loader.to_openai_tools(skills)
-    }
+    tool_names = {t["function"]["name"] for t in loader.to_openai_tools(skills)}
     assert "prepare_planting_plan" in tool_names
     assert "commit_planting_plan" not in tool_names
 
@@ -228,7 +226,7 @@ async def test_prepare_ready_drives_approval_and_commit_in_same_turn(
 ) -> None:
     calls = 0
 
-    async def fake_chat_stream(messages, tools):
+    async def fake_chat_stream(messages, tools, **kwargs):
         nonlocal calls
         calls += 1
         if calls == 1:
@@ -249,7 +247,10 @@ async def test_prepare_ready_drives_approval_and_commit_in_same_turn(
     assert event_types.count("approval_required") == 1
     # 审批展示内容来自 prepare 返回值
     approval_ev = next(e for e in events if e["type"] == "approval_required")
-    assert approval_ev["data"]["summary"] == _PrepareSkill.prepared_result["approval_summary"]
+    assert (
+        approval_ev["data"]["summary"]
+        == _PrepareSkill.prepared_result["approval_summary"]
+    )
     assert approval_ev["data"]["plan"]["crop_name"] == "西瓜"
     # approve 后只调用一次 commit（prepare 1 次 action + commit 1 次 action）
     assert event_types.count("action") == 2
@@ -257,18 +258,18 @@ async def test_prepare_ready_drives_approval_and_commit_in_same_turn(
     # Business 返回 committed 后产生一次 operation_committed
     assert event_types.count("operation_committed") == 1
     assert event_types.count("final_answer") == 1
+    assert "write_committed_reply_failed" not in event_types
+    assert turn.final_answer == "种植计划已创建完成。"
     assert turn.status == "completed"
-    assert turn.step_count == 2
-    assert not any(
-        event.get("data", {}).get("code") == "max_steps" for event in events
-    )
+    assert turn.step_count == 1
+    assert not any(event.get("data", {}).get("code") == "max_steps" for event in events)
 
 
 @pytest.mark.asyncio
 async def test_commit_uses_prepare_arguments_not_model_reconstructed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def fake_chat_stream(messages, tools):
+    async def fake_chat_stream(messages, tools, **kwargs):
         yield {"type": "done", "tool_calls": [_prepare_call()]}
         return
 
@@ -309,7 +310,7 @@ async def test_approval_stale_ends_turn_without_further_tools(
 
     llm_calls = 0
 
-    async def fake_chat_stream(messages, tools):
+    async def fake_chat_stream(messages, tools, **kwargs):
         nonlocal llm_calls
         llm_calls += 1
         if llm_calls == 1:
@@ -336,7 +337,9 @@ async def test_approval_stale_ends_turn_without_further_tools(
 
 
 @pytest.mark.asyncio
-async def test_prepare_result_incomplete_ends_turn(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_prepare_result_incomplete_ends_turn(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """prepare 返回 ready 但缺少提交所需字段时，返回 prepare_result_incomplete。"""
 
     class _BrokenPrepare(_PrepareSkill):
@@ -345,7 +348,7 @@ async def test_prepare_result_incomplete_ends_turn(monkeypatch: pytest.MonkeyPat
             data.pop("approval_fingerprint")  # 缺关键字段
             return SkillResult(data=data)
 
-    async def fake_chat_stream(messages, tools):
+    async def fake_chat_stream(messages, tools, **kwargs):
         yield {"type": "done", "tool_calls": [_prepare_call()]}
         return
 
@@ -367,7 +370,7 @@ async def test_prepare_result_incomplete_ends_turn(monkeypatch: pytest.MonkeyPat
 async def test_rejected_approval_ends_turn_without_commit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def fake_chat_stream(messages, tools):
+    async def fake_chat_stream(messages, tools, **kwargs):
         yield {"type": "done", "tool_calls": [_prepare_call()]}
         return
 
@@ -412,7 +415,7 @@ async def test_direct_commit_call_blocked_without_pending_approval(
         async def execute(self, params, ctx) -> SkillResult:
             raise AssertionError("ok turn 不应触发 prepare")
 
-    async def fake_chat_stream(messages, tools):
+    async def fake_chat_stream(messages, tools, **kwargs):
         # 模型尝试直接调用 commit（commit 未暴露，但防御性测试）
         yield {
             "type": "done",
@@ -452,7 +455,7 @@ async def test_committed_write_uses_structured_fallback_when_reply_fails(
 ) -> None:
     calls = 0
 
-    async def fake_chat_stream(messages, tools):
+    async def fake_chat_stream(messages, tools, **kwargs):
         nonlocal calls
         calls += 1
         if calls == 1:

@@ -84,14 +84,10 @@ async def test_read_finalization_disables_tools_and_returns_model_answer(
     turn.finalization_pending = True
     events = [
         event
-        async for event in react._run_single_reasoning_step(
+        async for event in react._run_finalization(
             turn=turn,
-            tools_schema=[],
             tracker=react.verify.CallTracker(),
-            plan_box={"plan": None},
-            skill_index={},
-            skill_ctx=SimpleNamespace(),
-            approval_waiter=_approve,
+            plan=None,
         )
     ]
     assert choices == ["none"]
@@ -101,9 +97,11 @@ async def test_read_finalization_disables_tools_and_returns_model_answer(
 
 
 def test_commit_fallback_requires_real_planting_entities() -> None:
-    assert "种植计划" not in react._structured_commit_answer({"message": "农场概览"})
-    assert "种植计划" not in react._structured_commit_answer({"id": 12})
-    assert "种植计划已提交成功" in react._structured_commit_answer(
+    assert "种植计划" not in react.finalization.structured_commit_answer(
+        {"message": "农场概览"}
+    )
+    assert "种植计划" not in react.finalization.structured_commit_answer({"id": 12})
+    assert "种植计划已提交成功" in react.finalization.structured_commit_answer(
         {
             "template": {"id": 1},
             "cycle": {"id": 2},
@@ -126,14 +124,10 @@ async def test_read_finalization_tool_request_fails_without_write_success(
     turn.finalization_pending = True
     events = [
         event
-        async for event in react._run_single_reasoning_step(
+        async for event in react._run_finalization(
             turn=turn,
-            tools_schema=[],
             tracker=react.verify.CallTracker(),
-            plan_box={"plan": None},
-            skill_index={},
-            skill_ctx=SimpleNamespace(),
-            approval_waiter=_approve,
+            plan=None,
         )
     ]
     assert turn.status == "failed"
@@ -1580,20 +1574,26 @@ async def test_estimate_turn_budget_reads_model_prediction(monkeypatch) -> None:
     }
 
 
-def test_setup_applies_resolved_budget_to_react_loop(monkeypatch) -> None:
+@pytest.mark.parametrize(
+    "hard_limit,estimate,resolved", [(20, 8, 12), (20, 1, 2), (2, 8, 2), (1, 8, 1)]
+)
+def test_setup_keeps_hard_limit_and_records_estimate(
+    monkeypatch, hard_limit, estimate, resolved
+) -> None:
     monkeypatch.setattr(react.skill_loader, "load_all", lambda: [])
-    turn = Turn(user_input="预算测试", max_steps=20)
+    turn = Turn(user_input="1", max_steps=hard_limit)
 
     react._setup_turn_runtime(
         turn,
-        estimated_steps=8,
+        estimated_steps=estimate,
         confidence=0.8,
     )
 
-    assert turn.step_budget["estimated_steps"] == 8
+    assert turn.step_budget["estimated_steps"] == estimate
     assert turn.step_budget["confidence"] == 0.8
-    assert turn.step_budget["resolved_steps"] == 12
-    assert turn.max_steps == 12
+    assert turn.step_budget["resolved_steps"] == resolved
+    assert turn.step_budget["hard_limit"] == hard_limit
+    assert turn.max_steps == hard_limit
 
 
 @pytest.mark.asyncio
@@ -1760,7 +1760,7 @@ async def test_llm_stream_forwards_deltas_and_final_result(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_max_steps_emits_user_visible_terminal_answer() -> None:
     turn = Turn(user_input="无法完成的任务")
-    events = [event async for event in react._finalize_turn(turn)]
+    events = [event async for event in react.finalization.finalize_turn(turn)]
 
     assert turn.status == "terminated"
     assert turn.error is None

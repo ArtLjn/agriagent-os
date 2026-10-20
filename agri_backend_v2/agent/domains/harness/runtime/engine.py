@@ -47,7 +47,7 @@ from agent.domains.harness.context import builder as context
 from agent.domains.harness.context import summarizer, tokenizer
 from agent.domains.harness.control import approval as hitl
 from agent.domains.harness.memory import service as memory
-from agent.domains.harness.runtime import planner, verify
+from agent.domains.harness.runtime import finalization, planner, verify
 from agent.domains.harness.router import SkillRoute, SkillRouter
 from agent.domains.harness.runtime.turn import StopReason, Turn, TurnPhase
 from agent.platforms.persistence.redis import sse
@@ -216,7 +216,11 @@ async def _estimate_turn_budget(turn: Turn) -> tuple[int | None, float | None]:
     try:
         result: _LlmResult | None = None
         async for item in _call_llm_stream(
-            planner.budget_estimate_messages(turn.user_input),
+            planner.budget_estimate_messages(
+                turn.user_input,
+                memory_snapshot=turn.memory_snapshot,
+                task_state=turn.task_state,
+            ),
             [planner.BUDGET_ESTIMATE_TOOL_SCHEMA],
             tool_choice={
                 "type": "function",
@@ -320,8 +324,10 @@ async def _run_turn_loop(
     approval_waiter: ApprovalWaiter,
 ) -> AsyncGenerator[dict, None]:
     """执行 ReAct 单步循环，并在循环结束时统一选择终态收尾器。"""
-    while turn.status == "running" and (
-        turn.step_count < turn.max_steps or turn.finalization_pending
+    while (
+        turn.status == "running"
+        and turn.step_count < turn.max_steps
+        and not turn.finalization_pending
     ):
         turn.set_phase(TurnPhase.REASONING)
         turn.step_count += 1
@@ -340,10 +346,6 @@ async def _run_turn_loop(
             approval_waiter=approval_waiter,
         ):
             yield ev
-
-        # 查询完成或写入成功后均停止扩展工具；只有写入才产生提交事件。
-        if turn.finalization_pending:
-            tools_schema = []
 
         if turn.status != "running":
             break
@@ -380,7 +382,7 @@ async def _run_turn_loop(
         finalizer = (
             _finalize_requested_error(turn)
             if turn.finalization_request is not None
-            else _finalize_turn(turn)
+            else _run_finalization(turn, tracker, plan_box["plan"])
         )
         async for ev in finalizer:
             yield ev
@@ -424,8 +426,8 @@ def _setup_turn_runtime(
         maximum_steps=turn.max_steps,
     ).to_dict()
     turn.step_budget = step_budget
-    # 预算证据必须真正约束 ReAct 循环；仅写 Trace 会造成“显示有预算、执行仍跑旧上限”。
-    turn.max_steps = int(step_budget["resolved_steps"])
+    # 预估值仅用于观测；短回复可能延续复杂任务，不能让模型估算压低硬上限。
+    turn.step_budget["hard_limit"] = turn.max_steps
     # Worker 可在进入 Runtime 前注入 Mongo-backed Session View；直接调用
     # Runtime 的测试替身仍通过 Memory Service 入口提供空快照。
     if not turn.memory_snapshot:
@@ -672,7 +674,6 @@ async def _run_single_reasoning_step(
         async for stream_item in _call_llm_stream(
             llm_messages,
             tools_schema,
-            tool_choice="none" if turn.finalization_pending else None,
         ):
             if isinstance(stream_item, _LlmResult):
                 llm_result = stream_item
@@ -716,23 +717,6 @@ async def _run_single_reasoning_step(
             decision_source="llm_tool_call",
             step_index=turn.step_count,
         )
-
-    # ── 写入已提交但收尾轮仍请求工具 ──
-    if (
-        turn.finalization_pending
-        and turn.committed_result is None
-        and llm_result.tool_calls
-    ):
-        # 模型违反只回答约束时不能把只读结果包装成写入成功。
-        async for ev in _handle_llm_error(turn, RuntimeError("查询后的答复仍请求工具")):
-            yield ev
-        return
-    if turn.finalization_pending and llm_result.tool_calls:
-        async for ev in _finalize_committed_with_fallback(
-            turn, "写入已成功，但收尾模型仍请求调用工具；已阻止重复写入。"
-        ):
-            yield ev
-        return
 
     # ── 有 tool_calls → 文本是思考过程 ──
     if llm_result.tool_calls and llm_result.full_content:
@@ -780,6 +764,8 @@ async def _emit_final_answer(
     content: str,
     plan,
     tracker: verify.CallTracker,
+    *,
+    complete_step: bool = True,
 ) -> AsyncGenerator[dict, None]:
     """无 tool_calls 时输出最终回答 + pre-completion checklist。"""
     guard_issue = verify.write_completion_guard_issue(
@@ -823,11 +809,12 @@ async def _emit_final_answer(
     turn.status = "completed"
     turn.stop_reason = StopReason.MODEL_COMPLETED
     turn.set_phase(TurnPhase.TERMINAL)
-    step_completed_ev = sse.step_completed(
-        turn.turn_id, turn.step_count, status="completed"
-    )
-    turn.emit(step_completed_ev["type"], step_completed_ev["data"])
-    yield step_completed_ev
+    if complete_step:
+        step_completed_ev = sse.step_completed(
+            turn.turn_id, turn.step_count, status="completed"
+        )
+        turn.emit(step_completed_ev["type"], step_completed_ev["data"])
+        yield step_completed_ev
     yield sse.final_answer_start()
     if content:
         yield sse.final_answer_delta(content)
@@ -849,6 +836,7 @@ async def _call_llm_stream(
     tools_schema: list[dict],
     *,
     tool_choice: str | dict[str, Any] | None = None,
+    max_tokens: int | None = None,
 ) -> AsyncGenerator[dict | _LlmResult, None]:
     """流式 LLM 调用，同时转发增量和等待心跳。"""
     _llm_start = time.time()
@@ -856,7 +844,14 @@ async def _call_llm_stream(
     tool_calls: list[dict] = []
     token_usage: dict | None = None
 
-    if tool_choice is None:
+    if max_tokens is not None:
+        stream = chat_stream(
+            llm_messages,
+            tools=tools_schema,
+            tool_choice=tool_choice,
+            max_tokens=max_tokens,
+        )
+    elif tool_choice is None:
         stream = chat_stream(llm_messages, tools=tools_schema)
     else:
         stream = chat_stream(
@@ -909,6 +904,9 @@ async def _call_llm_stream(
     finally:
         if not next_token.done():
             next_token.cancel()
+        # 超时/取消收尾时也关闭底层流，避免调用仍在后台消耗预算。
+        await asyncio.gather(next_token, return_exceptions=True)
+        await stream.aclose()
 
     _llm_ms = int((time.time() - _llm_start) * 1000)
     trace_llm_call(
@@ -980,7 +978,7 @@ def _validate_tool_calls(turn: Turn, tool_calls: list[dict]) -> dict | None:
 async def _handle_llm_error(turn: Turn, exc: Exception) -> AsyncGenerator[dict, None]:
     """LLM 调用失败时的错误处理：已提交→结构化降级，否则→failed。"""
     if turn.committed_result is not None:
-        async for ev in _finalize_committed_with_fallback(
+        async for ev in finalization.finalize_committed_with_fallback(
             turn, f"写入已成功，但最终答复生成失败：{exc}"
         ):
             yield ev
@@ -1023,6 +1021,8 @@ async def _handle_llm_error(turn: Turn, exc: Exception) -> AsyncGenerator[dict, 
         classified.category.value,
         stream_started=isinstance(exc, LlmStreamError) and exc.stream_started,
     )
+    if summary := finalization.committed_summary(turn):
+        answer = f"{summary}\n\n{answer}"
     turn.final_answer = answer
     failed_ev = sse.turn_failed(
         turn.turn_id,
@@ -1469,9 +1469,6 @@ async def _post_process_skill_result(
             turn.finalization_pending = True
             return
         _mark_committed(turn, state.result)
-        committed_event = sse.operation_committed(turn.committed_result)
-        turn.emit(committed_event["type"], committed_event["data"])
-        yield committed_event
         return
     async for ev in _drive_followup_if_ready(
         skill=skill,
@@ -1592,11 +1589,10 @@ def _rejected_final_answer(turn: Turn) -> str | None:
 
 
 def _mark_committed(turn: Turn, result: dict | None) -> None:
-    """标记 turn 已提交：写 committed_result + finalization_pending + trace。"""
+    """工作流明确完成后要求收尾；通用提交事实已在工具执行边界记录。"""
     committed = result if isinstance(result, dict) else {"result": result}
     turn.committed_result = committed
     turn.finalization_pending = True
-    trace_commit_state(committed, reply_generated=False)
 
 
 async def _emit_unknown_tool(
@@ -1987,6 +1983,8 @@ async def _emit_failure_terminal(
     status: str = "failed",
 ) -> AsyncGenerator[dict, None]:
     """统一发出失败或受控终止，保证答复和语义终态顺序一致。"""
+    if summary := finalization.committed_summary(turn):
+        answer = f"{summary}\n\n{answer}"
     if status in {"terminated", "rejected"}:
         if status == "rejected":
             error_info = turn.record_error(
@@ -2269,6 +2267,14 @@ async def _run_skill_call(
                 _tool_ms,
                 result=state.result,
             )
+        # 在向消费者让出控制权前保留提交事实，取消/断开不能抹掉已经成功的写入。
+        committed = (
+            not state.error
+            and not needs_information
+            and finalization.record_committed_operation(
+                turn, skill, args, state.result, tool_call_id
+            )
+        )
         turn.emit("tool_finished", finished_ev["data"])
         yield finished_ev
         if result_obj.error and not needs_information:
@@ -2284,6 +2290,11 @@ async def _run_skill_call(
             yield failed_ev
         turn.emit("observation", obs_ev["data"])
         yield obs_ev
+        if committed:
+            trace_commit_state(state.result, reply_generated=False)
+            committed_event = sse.operation_committed(state.result)
+            turn.emit(committed_event["type"], committed_event["data"])
+            yield committed_event
     except Exception as exc:
         logger.exception("skill execution failed: %s", skill.name)
         if isinstance(exc, McpCallError):
@@ -2424,8 +2435,7 @@ async def _drive_approval_followup(
         return
 
     # 6. 成功 → operation_committed + 进入无工具确定性收尾
-    async for ev in _finalize_followup_success(turn, state.result):
-        yield ev
+    _mark_committed(turn, state.result)
 
 
 async def _emit_followup_skill_missing(
@@ -2489,19 +2499,6 @@ async def _converge_followup_error(
     )
     turn.emit("error", err_ev["data"])
     yield err_ev
-
-
-async def _finalize_followup_success(
-    turn: Turn, result: dict
-) -> AsyncGenerator[dict, None]:
-    """commit 成功 → operation_committed + 进入无工具确定性收尾。"""
-    committed = result if isinstance(result, dict) else {"result": result}
-    turn.committed_result = committed
-    turn.finalization_pending = True
-    trace_commit_state(committed, reply_generated=False)
-    committed_event = sse.operation_committed(committed)
-    turn.emit(committed_event["type"], committed_event["data"])
-    yield committed_event
 
 
 def _extract_followup_args(
@@ -2648,6 +2645,7 @@ async def _execute_plan_steps(
     for step_idx, step in enumerate(plan.steps):
         step.status = "running"
         step_obs: str | None = None
+        step_failed = False
         async for sub_event, obs in _execute_plan_step(
             step.skill,
             step.args,
@@ -2657,8 +2655,12 @@ async def _execute_plan_steps(
             approval_waiter,
             turn,
             tracker,
+            tool_call_id=f"plan-{turn.step_count}-{step_idx + 1}-{step.skill}",
         ):
             if sub_event is not None:
+                # 工具失败也会产生观察文本，不能仅因有文本就将计划步骤标成成功。
+                if sub_event["type"] in {"observation", "tool_finished"}:
+                    step_failed |= bool(sub_event["data"].get("error"))
                 yield (sub_event, None, False)
             if obs is not None:
                 step_obs = obs
@@ -2669,7 +2671,8 @@ async def _execute_plan_steps(
             step.status = "failed"
             step.error = "no observation"
         else:
-            step.status = "done"
+            step.status = "failed" if step_failed else "done"
+            step.error = step_obs if step_failed else None
         step.result = step_obs
 
         step_ev = sse.plan_step_done(step_idx, step.skill, step.status, step.result)
@@ -2690,6 +2693,8 @@ async def _execute_plan_step(
     approval_waiter: ApprovalWaiter,
     turn: Turn,
     tracker: verify.CallTracker,
+    *,
+    tool_call_id: str,
 ) -> AsyncGenerator[tuple[dict | None, str | None], None]:
     """执行单个 skill 调用（plan 内部每步都走这个）。
 
@@ -2732,7 +2737,7 @@ async def _execute_plan_step(
         args=args,
         rationale=rationale,
         approval_waiter=approval_waiter,
-        tool_call_id=f"plan-{tool_name}",
+        tool_call_id=tool_call_id,
     ):
         yield (ev, None)
 
@@ -2750,7 +2755,7 @@ async def _execute_plan_step(
         skill_ctx=skill_ctx,
         rationale=rationale,
         state=state,
-        tool_call_id=f"plan-{tool_name}",
+        tool_call_id=tool_call_id,
     ):
         yield (ev, None)
 
@@ -2772,88 +2777,80 @@ def _build_skill_obs_str(tool_name: str, args: dict, state: _SkillExecState) -> 
 # ── Finalize & Teardown ───────────────────────────────────
 
 
-async def _finalize_turn(turn: Turn) -> AsyncGenerator[dict, None]:
-    """while 循环结束后：running→completed/terminated。"""
-    if turn.committed_result is not None:
-        async for ev in _finalize_committed_with_fallback(
-            turn, "写入已成功，但收尾轮次未生成最终答复。"
-        ):
-            yield ev
-    else:
-        answer = "本轮执行已达到推理步数上限，尚未完成请求。已停止继续调用工具，请补充信息后重试。"
-        turn.record_termination(
-            StopReason.STEP_BUDGET_EXHAUSTED,
-            "达到最大步数限制，请缩小问题范围或重试",
-            phase=TurnPhase.FINALIZING,
-        )
-        turn.final_answer = answer
-        yield sse.final_answer_start()
-        yield sse.final_answer(answer)
-        terminal_ev = sse.turn_terminated(
-            turn.turn_id,
-            reason=StopReason.STEP_BUDGET_EXHAUSTED.value,
-            message="达到最大步数限制，请缩小问题范围或重试",
-            step_count=turn.step_count,
-        )
-        turn.emit(terminal_ev["type"], terminal_ev["data"])
-        yield terminal_ev
-
-
-async def _finalize_committed_with_fallback(
-    turn: Turn, message: str
+async def _run_finalization(
+    turn: Turn, tracker: verify.CallTracker, plan
 ) -> AsyncGenerator[dict, None]:
-    """写入已提交但收尾失败时，用结构化结果生成确定性答复。
+    """在决策循环外最多收尾一次；不增加步数、不调工具、不重新进入 ReAct。
 
-    统一处理三种场景：
-    - LLM 流式调用失败（_handle_llm_error）
-    - 收尾轮仍请求工具（_run_single_reasoning_step）
-    - while 结束后仍未生成答复（_finalize_turn）
+    流读取、超时和终态分发保留在同一编排函数，确保取消边界与单次收尾一致；
+    证据校验和确定性兜底独立放在 finalization 模块，避免拆散状态转换。
     """
-    ev = sse.write_committed_reply_failed(message)
-    turn.emit(ev["type"], ev["data"])
-    yield ev
-    turn.final_answer = _structured_commit_answer(turn.committed_result or {})
-    turn.finalization_pending = False
-    turn.status = "completed"
-    turn.stop_reason = StopReason.MODEL_COMPLETED
-    turn.set_phase(TurnPhase.TERMINAL)
-    yield sse.final_answer_start()
-    yield sse.final_answer(turn.final_answer)
-    completed_ev = sse.turn_completed(
-        turn.turn_id,
-        stop_reason=turn.stop_reason.value,
-        step_count=turn.step_count,
+    turn.set_phase(TurnPhase.FINALIZING)
+    requested = turn.finalization_pending
+    messages = (
+        turn.messages if requested else finalization.finalization_messages(turn, plan)
     )
-    turn.emit(completed_ev["type"], completed_ev["data"])
-    yield completed_ev
-
-
-# ── 辅助函数 ──────────────────────────────────────────────
-
-
-def _structured_commit_answer(result: dict) -> str:
-    """LLM 收尾失败时，只使用已提交结果生成确定性答复。"""
-    template = result.get("template") or {}
-    cycle = result.get("cycle") or {}
-    unit = result.get("planting_unit") or {}
-    if not all(
-        isinstance(item, dict) and item.get("id")
-        for item in (template, cycle, unit)
-    ):
-        # 通用写工具也复用此收尾器，缺少计划实体不能声称种植计划已创建。
-        return str(result.get("message") or "业务操作已完成，但详细结果暂未返回。")
-    replay_note = (
-        "（本次返回的是已提交请求的幂等结果）"
-        if result.get("idempotent_replay")
-        else ""
+    try:
+        result = None
+        async with asyncio.timeout(finalization.FINALIZATION_TIMEOUT_SECONDS):
+            async for item in _call_llm_stream(
+                messages,
+                [],
+                tool_choice="none",
+                max_tokens=finalization.FINALIZATION_MAX_TOKENS,
+            ):
+                if isinstance(item, _LlmResult):
+                    result = item
+                elif item["type"] == "heartbeat":
+                    yield item
+        if result is None or result.tool_calls or not result.full_content.strip():
+            raise ValueError("finalization_invalid_response")
+        if requested:
+            answer, outcome = result.full_content, "completed"
+        else:
+            decision = finalization.parse_finalization(result.full_content, turn, plan)
+            answer, outcome = decision.answer, decision.outcome
+        # 收尾不能通过 write guard 再进入纠错轮；无写入证据时直接确定性兜底。
+        if verify.write_completion_guard_issue(
+            user_input=turn.user_input,
+            content=answer,
+            tracker=tracker,
+            committed_result=turn.committed_result,
+        ):
+            raise ValueError("finalization_write_not_executed")
+    except Exception as exc:
+        log_event(
+            logger,
+            logging.WARNING,
+            "finalization_fallback",
+            status="fallback",
+            data={
+                "code": "finalization_failed",
+                "turn_id": turn.turn_id,
+                "exception_type": type(exc).__name__,
+            },
+        )
+        fallback = (
+            _handle_llm_error(turn, exc)
+            if requested
+            else finalization.finalize_turn(turn)
+        )
+        async for event in fallback:
+            yield event
+        return
+    if outcome == "completed":
+        async for event in _emit_final_answer(
+            turn, answer, plan, tracker, complete_step=False
+        ):
+            yield event
+        return
+    reason = (
+        StopReason.USER_INPUT_REQUIRED
+        if outcome == "needs_information"
+        else StopReason.STEP_BUDGET_EXHAUSTED
     )
-    return (
-        "种植计划已提交成功"
-        f"{replay_note}：模板“{template.get('name', '未知')}”（ID {template.get('id', '-')}），"
-        f"茬口“{cycle.get('name', '未知')}”（ID {cycle.get('id', '-')}），"
-        f"种植单元“{unit.get('name', '未知')}”（ID {unit.get('id', '-')}，"
-        f"面积 {unit.get('area_mu', '-')} 亩）。"
-    )
+    async for event in finalization.finalize_turn(turn, answer=answer, reason=reason):
+        yield event
 
 
 def _append_followup_messages(

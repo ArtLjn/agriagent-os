@@ -297,6 +297,7 @@ async def chat_stream(
     tools: list[dict[str, Any]] | None = None,
     temperature: float = 0.3,
     tool_choice: str | dict[str, Any] | None = None,
+    max_tokens: int | None = None,
 ) -> AsyncGenerator[dict[str, Any], None]:
     """Async streaming chat. Yields incremental tokens.
 
@@ -321,9 +322,13 @@ async def chat_stream(
         "temperature": temperature,
         "stream": True,
     }
+    if max_tokens is not None:
+        kwargs["max_tokens"] = max_tokens
     if tools:
         kwargs["tools"] = tools
         kwargs["tool_choice"] = tool_choice or "auto"
+    elif tool_choice is not None:
+        kwargs["tool_choice"] = tool_choice
 
     last_exc: Exception | None = None
 
