@@ -21,6 +21,9 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 _BUDGET_ESTIMATE_TOOL_NAME = "estimate_step_budget"
+# 估算器只需最近的对话及任务摘要，限制体积以免重复消耗完整上下文预算。
+_BUDGET_CONTEXT_MAX_CHARS = 4000
+_BUDGET_CONTEXT_MESSAGES = 6
 _BUDGET_ESTIMATE_SYSTEM_PROMPT = """你是 Agent Harness 的 Runtime 预算估算器。
 你只负责估算完成用户请求所需的 ReAct 决策轮数，不执行任何业务工具，不回答用户。
 请调用 estimate_step_budget，返回 estimated_steps 和 0 到 1 之间的 confidence。
@@ -160,14 +163,34 @@ def plan_summary_for_observation(plan: Plan) -> str:
     return f"[PLAN 完成 goal={plan.goal}] " + "；".join(parts)
 
 
-def budget_estimate_messages(user_input: str) -> list[dict[str, str]]:
-    """构造预算预估请求，隔离用户内容与 Runtime 控制规则。"""
+def budget_estimate_messages(
+    user_input: str,
+    *,
+    memory_snapshot: dict | None = None,
+    task_state: dict | None = None,
+) -> list[dict[str, str]]:
+    """估算延续中的任务，避免把“1”或“继续”误当成独立的简单请求。"""
+    snapshot = memory_snapshot or {}
+    history = [
+        {
+            "role": item.get("role"),
+            "content": str(item.get("content") or "")[:_BUDGET_CONTEXT_MAX_CHARS],
+        }
+        for item in (snapshot.get("messages") or [])[-_BUDGET_CONTEXT_MESSAGES:]
+        if isinstance(item, dict) and item.get("role") in {"user", "assistant"}
+    ]
     return [
         {"role": "system", "content": _BUDGET_ESTIMATE_SYSTEM_PROMPT},
         {
             "role": "user",
             "content": json.dumps(
-                {"user_request": str(user_input or "")[:4000]},
+                {
+                    "user_request": str(user_input or "")[:_BUDGET_CONTEXT_MAX_CHARS],
+                    "recent_messages": history,
+                    "task_state": str(task_state or snapshot.get("task_state") or "")[
+                        :_BUDGET_CONTEXT_MAX_CHARS
+                    ],
+                },
                 ensure_ascii=False,
                 separators=(",", ":"),
             ),

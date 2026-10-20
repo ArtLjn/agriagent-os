@@ -261,7 +261,9 @@ async def fake_runtime(monkeypatch: pytest.MonkeyPatch):
     registry = SkillRegistry.from_skills([skill, write_skill])
     llm_mode = {"name": "read", "calls": 0}
 
-    async def fake_llm(_messages, tools) -> AsyncGenerator[dict[str, Any], None]:
+    async def fake_llm(
+        _messages, tools, **kwargs
+    ) -> AsyncGenerator[dict[str, Any], None]:
         llm_mode["calls"] += 1
         if llm_mode["name"] == "read" and llm_mode["calls"] == 1:
             yield {"type": "text", "delta": "开始查询"}

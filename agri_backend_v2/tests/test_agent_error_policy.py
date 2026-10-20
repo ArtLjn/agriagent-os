@@ -141,3 +141,39 @@ async def test_react_preserves_stream_failure_category_and_final_state() -> None
     assert "中断" in events[-2]["data"]["text"]
     assert turn.stop_reason == StopReason.LLM_FAILED
     assert turn.error_details["category"] == "transient"
+
+
+@pytest.mark.asyncio
+async def test_finalization_limits_reach_provider_without_tools(monkeypatch) -> None:
+    requests = []
+
+    async def create(**kwargs):
+        requests.append(kwargs)
+
+        async def chunks():
+            yield SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        delta=SimpleNamespace(content="已完成", tool_calls=None)
+                    )
+                ],
+                usage=None,
+            )
+
+        return chunks()
+
+    monkeypatch.setattr(llm._async_client.chat.completions, "create", create)
+    events = [
+        event
+        async for event in llm.chat_stream(
+            [],
+            [],
+            tool_choice="none",
+            max_tokens=react.finalization.FINALIZATION_MAX_TOKENS,
+        )
+    ]
+    assert len(requests) == 1
+    assert requests[0]["max_tokens"] == react.finalization.FINALIZATION_MAX_TOKENS
+    assert requests[0]["tool_choice"] == "none"
+    assert "tools" not in requests[0]
+    assert events[-1]["type"] == "done"
