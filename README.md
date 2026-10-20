@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/farm-manager-design-spec/banner.png" alt="AgriAgentOS" width="100%">
+  <img src="./banner.png" alt="AgriAgentOS" width="100%">
 </p>
 
 <p align="center">

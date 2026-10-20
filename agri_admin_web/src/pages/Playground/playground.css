@@ -31,6 +31,7 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
   overflow: hidden;
   container-type: inline-size;
 }
@@ -91,7 +92,7 @@
 .playground-session-id .anticon { flex-shrink: 0; opacity: 0.6; }
 
 /* ── 消息区 ── */
-.playground-messages { flex: 1; min-height: 0; overflow: auto; scrollbar-gutter: stable both-edges; padding: 20px var(--pg-gutter) 8px; }
+.playground-messages { flex: 1 1 0; min-height: 0; overflow: auto; scrollbar-gutter: stable both-edges; padding: 20px var(--pg-gutter) 8px; }
 .playground-message {
   display: flex;
   min-width: 0;
@@ -246,7 +247,7 @@
 .execution-plan { padding-left: 23px; }
 
 /* ── 底部输入区 ── */
-.playground-footer { flex-shrink: 0; padding: 8px var(--pg-gutter) 16px; border-top: 1px solid var(--pg-border-soft); background: var(--pg-bg); }
+.playground-footer { flex: 0 0 auto; position: relative; z-index: 1; padding: 8px var(--pg-gutter) 16px; border-top: 1px solid var(--pg-border-soft); background: var(--pg-bg); }
 .playground-composer { width: 100%; max-width: var(--pg-content-width); margin: 0 auto; border: 1px solid var(--pg-border); border-radius: 14px; padding: 12px 14px 10px; background: var(--pg-surface); transition: border-color 120ms ease, box-shadow 120ms ease; }
 .playground-composer:focus-within { border-color: rgba(88, 166, 255, 0.7); box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.1); }
 .playground-composer textarea.ant-input { border: 0; background: transparent; resize: none; padding: 0; box-shadow: none; color: var(--pg-text); font-size: 14px; line-height: 1.6; }

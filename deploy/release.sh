@@ -20,7 +20,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 VERSION_FILE="$PROJECT_ROOT/VERSION"
-PUBSPEC="$PROJECT_ROOT/mobile-app/pubspec.yaml"
+PUBSPEC="$PROJECT_ROOT/agri_mobile_app/pubspec.yaml"
 APP_NAME="FarmManager"
 
 # === 服务器配置(环境变量覆盖) ===

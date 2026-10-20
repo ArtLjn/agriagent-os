@@ -185,6 +185,10 @@ export default function Playground() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [llmContextOpen, setLlmContextOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // 只有用户仍在底部时才自动跟随流式输出，避免把正在向上翻看的用户拽回底部。
+  const stickToBottomRef = useRef(true);
+  // 递增令牌用于作废尚未执行的自动滚动，避免用户上翻后被旧的滚动任务拽回底部。
+  const autoScrollTokenRef = useRef(0);
   const activeSession = sessions[sessionId] ?? emptySessionState();
   const messages = activeSession.messages;
   const loading = activeSession.loading;
@@ -265,6 +269,7 @@ export default function Playground() {
   /* ── 切换会话 ── */
   const switchConversation = useCallback(async (sid: string) => {
     setSessionId(sid);
+    stickToBottomRef.current = true;
     updateSession(sid, () => ({ ...emptySessionState(), loading: true }));
     try {
       const [page, turnPage] = await Promise.all([
@@ -341,6 +346,7 @@ export default function Playground() {
   const createNewSession = useCallback(() => {
     const sid = generateSessionId();
     setSessionId(sid);
+    stickToBottomRef.current = true;
     ensureSession(sid);
   }, [ensureSession]);
 
@@ -507,15 +513,23 @@ export default function Playground() {
     void refreshSessionTimeline(sessionId);
   }, [refreshSessionTimeline, sessionId, selectedDevUser]);
 
-  const scrollToBottom = useCallback(() => {
+  const scrollToBottom = useCallback((force = false) => {
+    if (!force && !stickToBottomRef.current) return;
+    const token = ++autoScrollTokenRef.current;
     setTimeout(() => {
-      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+      if (token !== autoScrollTokenRef.current) return;
+      if (!force && !stickToBottomRef.current) return;
+      const container = scrollRef.current;
+      if (!container) return;
+      // 流式输出频繁触发，使用瞬时滚动避免动画与用户滚动互相拉扯。
+      container.scrollTo({ top: container.scrollHeight, behavior: 'auto' });
     }, 50);
   }, []);
 
   const handleClear = useCallback(() => {
     const sid = generateSessionId();
     setSessionId(sid);
+    stickToBottomRef.current = true;
     setSessions((prev) => ({ ...prev, [sid]: emptySessionState() }));
   }, []);
 
@@ -542,7 +556,8 @@ export default function Playground() {
       turnDetail: null,
       turnDetailLoading: false,
     }));
-    scrollToBottom();
+    stickToBottomRef.current = true;
+    scrollToBottom(true);
 
     try {
       const clientRequestId = `${targetSessionId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -900,7 +915,14 @@ export default function Playground() {
           className="playground-messages surface-scroll"
           ref={scrollRef}
           onScroll={(event) => {
-            if (event.currentTarget.scrollTop <= 48) void loadOlderMessages();
+            const container = event.currentTarget;
+            const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 80;
+            stickToBottomRef.current = nearBottom;
+            if (!nearBottom) {
+              // 离开底部后停止流式自动跟随，并取消尚未执行的滚动任务。
+              autoScrollTokenRef.current += 1;
+            }
+            if (container.scrollTop <= 48) void loadOlderMessages();
           }}
         >
           {messages.length === 0 && (
