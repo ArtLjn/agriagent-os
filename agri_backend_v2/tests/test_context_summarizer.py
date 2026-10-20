@@ -30,7 +30,9 @@ def _history(turn_count: int = 8) -> list[dict[str, str]]:
 
 
 @pytest.mark.asyncio
-async def test_summary_uses_snapshot_revision_and_persists_metadata(monkeypatch) -> None:
+async def test_summary_uses_snapshot_revision_and_persists_metadata(
+    monkeypatch,
+) -> None:
     monkeypatch.setattr(config.settings.mongodb, "enabled", True)
     monkeypatch.setattr(
         chat_store,
@@ -56,8 +58,9 @@ async def test_summary_uses_snapshot_revision_and_persists_metadata(monkeypatch)
                 "ok": True,
                 "status": "ready",
                 "source_status": "mongo",
-                "conversation_revision": 5,
+                "conversation_revision": 4,
                 "summary_status": "generating",
+                "summary_lease": {"token": "lease-1"},
             }
         ),
     )
@@ -69,7 +72,7 @@ async def test_summary_uses_snapshot_revision_and_persists_metadata(monkeypatch)
             "ok": True,
             "status": "ready",
             "source_status": "mongo",
-            "conversation_revision": 6,
+            "conversation_revision": 4,
             "summary_revision": 1,
         }
 
@@ -93,7 +96,8 @@ async def test_summary_uses_snapshot_revision_and_persists_metadata(monkeypatch)
     assert result.source_from_message_id == "message-0-user"
     assert result.source_to_message_id == "message-1-assistant"
     assert saved["source_conversation_revision"] == 4
-    assert saved["expected_revision"] == 5
+    assert saved["expected_revision"] == 4
+    assert saved["lease_token"] == "lease-1"
     assert saved["status"] == "ready"
     assert len(saved["content_hash"]) == 64
 

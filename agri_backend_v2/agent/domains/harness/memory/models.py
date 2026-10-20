@@ -40,6 +40,7 @@ class SessionView(TypedDict, total=False):
     summary_content_hash: str | None
     conversation_revision: int
     reset_generation: int
+    reset_at: str | None
     pending_action: dict[str, Any] | None
     task_state: dict[str, Any] | None
     source_status: str

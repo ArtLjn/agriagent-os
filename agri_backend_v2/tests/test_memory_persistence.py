@@ -4,13 +4,45 @@ from __future__ import annotations
 
 from copy import deepcopy
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
 from agent.application import worker
 from agent.domains.harness.runtime.turn import Turn
 from agent.platforms.persistence.mongo import chat_store
+
+
+@pytest.mark.asyncio
+async def test_recent_messages_query_filters_reset_boundary(monkeypatch):
+    cursor = Mock()
+    cursor.sort.return_value = cursor
+    cursor.limit.return_value = cursor
+    cursor.to_list = AsyncMock(return_value=[])
+    collection = Mock()
+    collection.find.return_value = cursor
+    monkeypatch.setattr(chat_store, "get_collection", lambda: collection)
+    monkeypatch.setattr(chat_store, "ensure_indexes", AsyncMock())
+    await chat_store.load_recent(
+        "conversation-1",
+        user_id="user-1",
+        farm_id=1,
+        reset_at="2026-10-20 10:00:00.000000",
+        strict=True,
+    )
+    assert collection.find.call_args.args[0] == {
+        "conversationId": "conversation-1",
+        "userId": "user-1",
+        "farmId": 1,
+        "createdAt": {"$gt": "2026-10-20 10:00:00.000000"},
+    }
+
+
+@pytest.mark.asyncio
+async def test_missing_message_store_does_not_masquerade_as_empty_history(monkeypatch):
+    monkeypatch.setattr(chat_store, "get_collection", lambda: None)
+    with pytest.raises(RuntimeError, match="conversation_messages_unavailable"):
+        await chat_store.load_recent("conversation-1", strict=True)
 
 
 class FakeInsertResult:
@@ -80,7 +112,9 @@ async def test_message_append_is_idempotent(fake_collection, monkeypatch) -> Non
 
 
 @pytest.mark.asyncio
-async def test_observation_append_is_idempotent(fake_observation_collection, monkeypatch) -> None:
+async def test_observation_append_is_idempotent(
+    fake_observation_collection, monkeypatch
+) -> None:
     monkeypatch.setattr(
         chat_store, "get_observation_collection", lambda: fake_observation_collection
     )

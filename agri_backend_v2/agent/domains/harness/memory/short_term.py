@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from agent.domains.harness.memory.models import SessionView
 
-
 logger = logging.getLogger(__name__)
+# 防止排队消息挤占完整轮次，同时为失败摘要保留有界的原文回退。
+SESSION_HISTORY_MESSAGE_LIMIT = 2000
 
 
 def source_divergence(
@@ -153,6 +156,7 @@ def empty_session_view(
         "summary_content_hash": None,
         "conversation_revision": 0,
         "reset_generation": 0,
+        "reset_at": None,
         "pending_action": None,
         "task_state": None,
         "source_status": source_status,
@@ -193,14 +197,71 @@ async def get_session_view(
                 source_status="unavailable",
             )
 
-        recent = await chat_store.load_recent(
-            conversation_id,
-            limit=max(settings.context.recent_turn_limit * 2, 2),
-            user_id=user_id,
-            farm_id=farm_id,
-        )
         state = state or {}
+        keep = settings.context.recent_turn_limit
+        limit = (keep + 1) * 2 + 1
+        while True:
+            recent = await chat_store.load_recent(
+                conversation_id,
+                limit=limit,
+                user_id=user_id,
+                farm_id=farm_id,
+                reset_at=state.get("reset_at"),
+                strict=True,
+            )
+            turns = complete_turns(recent)
+            watermark = state.get("summary_source_to_message_id")
+            covered = (
+                watermark
+                and recent
+                and recent[0].get("message_id")
+                and recent[0]["message_id"] <= watermark
+            )
+            if (
+                (len(turns) >= keep and covered)
+                or len(recent) < limit
+                or limit >= SESSION_HISTORY_MESSAGE_LIMIT
+            ):
+                break
+            limit = min(limit * 2, SESSION_HISTORY_MESSAGE_LIMIT)
+        # 历史退出窗口前先更新摘要；短消息不会触发 token 水位，因此不能只依赖压缩。
+        if len(turns) > keep:
+            from agent.domains.harness.context import summarizer
+
+            result = await summarizer.maybe_summarize_async(
+                conversation_id,
+                user_id=user_id,
+                farm_id=farm_id,
+                source_conversation_revision=int(state.get("conversation_revision", 0)),
+            )
+            refreshed = await chat_store.get_conversation_state(
+                conversation_id, user_id=user_id, farm_id=farm_id
+            )
+            if refreshed and refreshed.get("status") == "unavailable":
+                raise RuntimeError("conversation_state_unavailable")
+            # reset 与摘要竞争时，不能把旧代次读到的消息交给新请求。
+            if (refreshed or {}).get("reset_generation", 0) != state.get(
+                "reset_generation", 0
+            ):
+                raise RuntimeError("conversation_reset_during_memory_read")
+            state = refreshed or state
+            if result.status not in {"ready", "idempotent"}:
+                logger.warning(
+                    "session summary refresh incomplete code=%s conversation=%s",
+                    result.error_code or result.status,
+                    conversation_id,
+                )
         summary_status = state.get("summary_status", "empty")
+        watermark = state.get("summary_source_to_message_id")
+        # 摘要失败时保留本次读取中未被摘要覆盖的原文，避免静默丢失刚滑出的轮次。
+        old_turns = turns[:-keep]
+        uncovered = [
+            item
+            for item in old_turns
+            if not watermark
+            or not item[-1].get("message_id")
+            or item[-1]["message_id"] > watermark
+        ]
         view: SessionView = {
             **empty_session_view(
                 conversation_id,
@@ -208,10 +269,10 @@ async def get_session_view(
                 farm_id=farm_id,
                 source_status="mongo",
             ),
-            "messages": project_recent_turns(
-                recent, settings.context.recent_turn_limit
-            ),
-            "summary": state.get("summary") if summary_status == "ready" else None,
+            "messages": [
+                message for item in uncovered + turns[-keep:] for message in item
+            ],
+            "summary": state.get("summary"),
             "summary_revision": int(state.get("summary_revision", 0) or 0),
             "summary_status": summary_status,
             "summary_source_from_message_id": state.get(
@@ -224,6 +285,7 @@ async def get_session_view(
             "summary_content_hash": state.get("summary_content_hash"),
             "conversation_revision": int(state.get("conversation_revision", 0) or 0),
             "reset_generation": int(state.get("reset_generation", 0) or 0),
+            "reset_at": state.get("reset_at"),
             "pending_action": state.get("pending_action"),
             "task_state": state.get("task_state"),
         }
@@ -267,7 +329,18 @@ async def persist_session_turn(
         "farm_uid": farm_uid,
         "expected_revision": expected_revision,
         "pending_action": prepare_pending_action(pending_action, turn_id=turn_id),
-        "idempotency_key": f"turn:{turn_id}:session-state",
+        # 同一轮可能多次审批；相同原始载荷重试幂等，状态转换必须另行写入。
+        "idempotency_key": "turn:{}:session-state:{}".format(
+            turn_id,
+            hashlib.sha256(
+                json.dumps(
+                    [pending_action, task_state],
+                    sort_keys=True,
+                    ensure_ascii=False,
+                    default=str,
+                ).encode()
+            ).hexdigest(),
+        ),
     }
     # None 具有“清除旧恢复门”的明确语义；否则不同动作恢复后 Mongo 会保留
     # 上一轮的 blocked_action，导致后续 Turn 继续被错误拦截。
@@ -309,14 +382,14 @@ async def reset_session(
 def complete_turns(messages: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
     """将消息投影成已完成的 user/assistant Turn。"""
     turns: list[list[dict[str, Any]]] = []
-    pending: list[dict[str, Any]] = []
+    pending: dict[str, dict[str, Any]] = {}
     for message in messages:
+        # 无 turn_id 的历史数据只在无 ID 消息间配对，不能污染有 ID 的新请求。
+        turn_id = str(message.get("turn_id") or "")
         if message.get("role") == "user":
-            pending = [message]
-        elif message.get("role") == "assistant" and pending:
-            pending.append(message)
-            turns.append(pending)
-            pending = []
+            pending[turn_id] = message
+        elif message.get("role") == "assistant" and turn_id in pending:
+            turns.append([pending.pop(turn_id), message])
     return turns
 
 

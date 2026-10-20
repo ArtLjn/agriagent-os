@@ -213,7 +213,9 @@ async def test_expired_pending_action_is_cleared_on_read(fake_state_store) -> No
 
 
 @pytest.mark.asyncio
-async def test_expired_task_state_is_cleared_with_pending_action(fake_state_store) -> None:
+async def test_expired_task_state_is_cleared_with_pending_action(
+    fake_state_store,
+) -> None:
     await chat_store.save_conversation_state(
         "conversation-1",
         user_id="user-1",
@@ -250,7 +252,9 @@ async def test_state_boundary_reports_unavailable_without_fake_success(
 
 
 @pytest.mark.asyncio
-async def test_summary_claim_is_cas_and_idempotent(fake_state_store) -> None:
+async def test_summary_claim_excludes_duplicate_and_concurrent_workers(
+    fake_state_store,
+) -> None:
     initial = await chat_store.save_conversation_state(
         "conversation-1", user_id="user-1", farm_id=1
     )
@@ -273,7 +277,8 @@ async def test_summary_claim_is_cas_and_idempotent(fake_state_store) -> None:
         source_conversation_revision=initial["conversation_revision"],
         summary_key="summary-source-1",
     )
-    assert duplicate["status"] == "idempotent"
+    assert duplicate["status"] == "conflict"
+    assert duplicate["code"] == "summary_generation_in_progress"
 
     concurrent = await chat_store.claim_summary_generation(
         "conversation-1",
@@ -305,6 +310,7 @@ async def test_summary_result_persists_source_range_hash_and_is_idempotent(
         user_id="user-1",
         farm_id=1,
         expected_revision=claim["conversation_revision"],
+        lease_token=claim["summary_lease"]["token"],
         source_conversation_revision=initial["conversation_revision"],
         summary_key="summary-source-1",
         summary="已确认地块 A",
@@ -326,6 +332,7 @@ async def test_summary_result_persists_source_range_hash_and_is_idempotent(
         user_id="user-1",
         farm_id=1,
         expected_revision=claim["conversation_revision"],
+        lease_token=claim["summary_lease"]["token"],
         source_conversation_revision=initial["conversation_revision"],
         summary_key="summary-source-1",
         summary="已确认地块 A",
@@ -354,6 +361,7 @@ async def test_failed_summary_can_be_retried_for_same_source_revision(
         user_id="user-1",
         farm_id=1,
         expected_revision=claim["conversation_revision"],
+        lease_token=claim["summary_lease"]["token"],
         source_conversation_revision=initial["conversation_revision"],
         summary_key="summary-source-1",
         status="failed",

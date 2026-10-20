@@ -3,6 +3,38 @@
 > Spec ID: 2026-08-10-context-prompt-cache-architecture
 > 状态: implemented
 > 关联文件: agent/core/context.py, agent/core/memory.py, agent/prompts/system.md, agent/prompts/__init__.py, agent/infra/llm.py, agent/core/react.py
+> last_updated: 2026-10-20
+
+## 当前短时记忆实现补充（2026-10-20）
+
+本节描述 `agent/domains/harness/memory/short_term.py`、
+`agent/domains/harness/context/summarizer.py` 和
+`agent/platforms/persistence/mongo/conversation_state.py` 的当前行为。
+下文旧路径和 JSON 记忆描述保留为设计历史，以本节的 Mongo 会话实现为准。
+
+- 消息按 `turn_id` 配对，缺少 ID 的历史消息只在同类消息间配对。近期窗口按完整轮次计算，
+  默认 6 轮；当前用户输入和排队中的请求不占完整轮次名额。
+- 历史读取逐步扩大到上一份摘要的覆盖边界，最多读取 2000 条消息。窗口外出现未覆盖轮次时，
+  在构建模型上下文前更新摘要，不再只依赖 token 水位触发。新摘要合并上一份摘要与新增历史，
+  已覆盖范围不重复调用模型；失败时保留上一份有效摘要和本次读取范围内未覆盖的原文。
+  极长积压超过读取上限时仍有覆盖限制，不能保证无限历史无损恢复。
+- 摘要使用独立的 60 秒租约和每次抢占唯一的 token，模型调用最多等待 20 秒。
+  `summaryLease` 保存 token、消息范围键、来源版本、重置代次和到期时间；
+  `summaryCommitKey`、`summaryCommitToken` 标识提交重试。会话正常推进版本不阻止摘要提交；
+  重置和超时接管使旧持有者失效。摘要不覆盖会话写入的 `lastWriteKey`，
+  失败或生成中也不会隐藏上一份有效摘要。
+- 审批状态写入的幂等键包含本轮原始 pending/task 载荷摘要，区分等待审批、后续审批和终态清理。
+  相同载荷的重试幂等；状态改变会实际写入。
+- `resetAt` 使用与消息 `createdAt` 一致的时间格式，近期历史和摘要只读取重置后消息。
+  历史展示记录不删除；重置前请求的迟到回复因缺少对应新代次问题，不进入完整轮次。
+- Worker 为新一轮恢复 Mongo `task_state`，同时传给执行器和提示词；同一轮恢复时保留 Redis
+  中已有的任务检查点。这里恢复的是现有结构化状态，不通过额外模型猜测通用任务、候选项或参数。
+- 消息读取失败按 `unavailable` 处理，不伪装成空历史。租户过滤与会话版本校验保持生效。
+
+`chat_store.py` 保留连接管理、消息及 observation 存储和兼容导出；
+会话状态模块承接原来超过 1000 行文件中的 CAS、过期清理、重置和摘要持久化。
+回归覆盖见 `tests/test_session_memory_lifecycle.py` 和
+`tests/test_agent_run_loop_integration.py`。
 
 ## 1. 问题分析
 
