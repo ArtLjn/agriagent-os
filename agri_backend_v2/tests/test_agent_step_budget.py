@@ -61,6 +61,191 @@ class _BusinessClient:
         pass
 
 
+@pytest.mark.parametrize(
+    ("answer", "evidence", "accepted"),
+    [
+        ("总收入：100000 元（已结算）\n- **已结算收入**：100000 元", True, True),
+        ("总收入：100000 元（已结算）", False, False),
+        ("总成本：1000 元（1000 元未结算，0.00 元已结算）", True, True),
+        ("我已为您结算所有账单。", True, False),
+        ("总收入（已结算），已创建新账单。", True, False),
+    ],
+)
+@pytest.mark.parametrize("fenced", [False, True])
+def test_financial_status_is_not_a_new_settlement_action(
+    answer, evidence, accepted, fenced
+):
+    turn = Turn(user_input="财务分析")
+    turn.emit(
+        "tool_finished",
+        {
+            "tool_call_id": "summary",
+            "result": {"settled_income": 100000, "settled_cost": 0} if evidence else {},
+        },
+    )
+    content = json.dumps(
+        {
+            "outcome": "completed",
+            "answer": answer,
+            "remaining_actions": [],
+            "evidence_tool_call_ids": ["summary"],
+        },
+        ensure_ascii=False,
+    )
+    if fenced:
+        content = f"```json\n{content}\n```"
+    if accepted:
+        assert finalization.parse_finalization(content, turn, None).answer == answer
+    else:
+        with pytest.raises(ValueError, match="finalization_write_without_commit"):
+            finalization.parse_finalization(content, turn, None)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("valid_summary", "unfinished_plan"), [(True, False), (False, False), (True, True)]
+)
+async def test_repeated_reads_stop_tools_and_finalize_existing_results(
+    monkeypatch, valid_summary, unfinished_plan
+):
+    summary = (
+        react._LlmResult(
+            full_content=json.dumps(
+                {
+                    "outcome": "completed",
+                    "answer": "已查到芒果茬口，编号 1。",
+                    "remaining_actions": [],
+                    "evidence_tool_call_ids": ["read-1"],
+                },
+                ensure_ascii=False,
+            )
+        )
+        if valid_summary
+        else _tool("get_crop_cycle_detail", "forbidden-read")
+    )
+    skills, calls, approvals, approve = _runtime(
+        monkeypatch,
+        [
+            _tool("get_crop_cycle_detail", "read-1"),
+            _tool("get_crop_cycle_detail", "read-2"),
+            _tool("get_crop_cycle_detail", "blocked-read"),
+            summary,
+        ],
+        skills=[_ReadSkill()],
+        plan=(
+            planner.Plan(
+                goal="查看全部茬口",
+                steps=[planner.Step("查看其他茬口", "query_crop_cycles", {})],
+            )
+            if unfinished_plan
+            else None
+        ),
+    )
+    turn = Turn(user_input="查询芒果茬口", max_steps=10)
+    events = [event async for event in react.run_turn(turn, approve)]
+    assert skills[0].calls == 2
+    assert not approvals
+    assert len(calls) == 4
+    assert calls[-1]["tools"] == []
+    assert calls[-1]["tool_choice"] == "none"
+    assert calls[-1]["max_tokens"] == finalization.FINALIZATION_MAX_TOKENS
+    closed_call = next(
+        msg
+        for msg in calls[-1]["messages"]
+        if msg.get("tool_call_id") == "blocked-read"
+    )
+    assert json.loads(closed_call["content"])["code"] == "execution_stopped"
+    assert "芒果" in turn.final_answer
+    assert "步数上限" not in turn.final_answer
+    types = [event["type"] for event in events]
+    assert types.count("doom_loop_warning") == 1
+    assert types.count("final_answer") == types.count("done") == 1
+    if valid_summary and not unfinished_plan:
+        assert turn.status == "completed"
+        assert turn.task_state is None
+        assert types.count("turn.completed") == 1
+    else:
+        assert turn.status == "terminated"
+        assert turn.stop_reason == StopReason.DOOM_LOOP_DETECTED
+        assert types.count("turn.terminated") == 1
+
+
+@pytest.mark.asyncio
+async def test_duplicate_read_waits_for_inflight_batch_before_single_summary(
+    monkeypatch,
+):
+    class SlowRead(_ReadSkill):
+        def __init__(self):
+            super().__init__()
+            self._meta["name"] = "query_other_records"
+            self._meta["execution"] = {"mode": "parallel_safe"}
+
+        async def execute(self, params, ctx):
+            self.calls += 1
+            await asyncio.sleep(0.01)
+            return SkillResult(data={"income": 100})
+
+    repeated, slow = _ReadSkill(), SlowRead()
+    repeated._meta["execution"] = {"mode": "parallel_safe"}
+    _, calls, _, approve = _runtime(
+        monkeypatch,
+        [
+            _tool(repeated.name, "read-1"),
+            _tool(repeated.name, "read-2"),
+            react._LlmResult(
+                tool_calls=[
+                    {"id": "late-read", "name": slow.name, "arguments": {}},
+                    {"id": "blocked-read", "name": repeated.name, "arguments": {}},
+                ]
+            ),
+            react._LlmResult(
+                full_content=json.dumps(
+                    {
+                        "outcome": "completed",
+                        "answer": "查询得到收入 100 元。",
+                        "remaining_actions": [],
+                        "evidence_tool_call_ids": ["late-read"],
+                    },
+                    ensure_ascii=False,
+                )
+            ),
+        ],
+        skills=[repeated, slow],
+    )
+    turn = Turn(user_input="查询收入", max_steps=10)
+    events = [event async for event in react.run_turn(turn, approve)]
+    assert repeated.calls == 2
+    assert slow.calls == 1
+    assert len(calls) == 4
+    assert any(
+        msg.get("tool_call_id") == "late-read" and "100" in msg["content"]
+        for msg in calls[-1]["messages"]
+    )
+    assert turn.status == "completed"
+    assert sum(event["type"] == "final_answer" for event in events) == 1
+
+
+@pytest.mark.asyncio
+async def test_repeated_write_still_terminates_without_summary_call(monkeypatch):
+    async def forbidden(*args, **kwargs):
+        raise AssertionError("写入死循环不能进入只读收尾")
+        yield
+
+    monkeypatch.setattr(react, "_call_llm_stream", forbidden)
+    tracker = react.verify.CallTracker()
+    tracker.record("create_work_order", {}, risk_level="write_confirm")
+    turn = Turn(user_input="创建工单")
+    turn.emit("tool_finished", {"tool_call_id": "write", "result": {"id": 1}})
+    events = [
+        event
+        async for event in react._emit_doom_loop_terminal(
+            turn, "重复写入", tracker=tracker
+        )
+    ]
+    assert turn.stop_reason == StopReason.DOOM_LOOP_DETECTED
+    assert events[-1]["type"] == "turn.terminated"
+
+
 def _tool(name: str, call_id: str) -> react._LlmResult:
     return react._LlmResult(tool_calls=[{"id": call_id, "name": name, "arguments": {}}])
 

@@ -1,5 +1,24 @@
 # Agent Harness：max_steps Control 设计方法论
 
+> last_updated: 2026-10-20
+
+## 当前实现：重复只读查询的收尾
+
+重复查询保护与步数上限独立生效，不通过增加 max_steps 掩盖无进展循环。
+当本轮所有动作均明确为只读，且已取得工具结果时，重复查询仍被拦截，但允许
+复用现有 Finalizer 做一次无工具收尾（20 秒、1536 tokens）。收尾须引用真实
+成功调用 ID；证据足够才完成，否则保留未完成事项。写入或风险未知的循环仍受控终止。
+
+被拦截调用补上“未执行”的 tool 消息以闭合协议，不计入成功证据。模型收尾失败时，
+返回已有查询结果的有界摘要，并保留 `doom_loop_detected`，不误报为步数耗尽。
+收尾先等待同批已启动的只读调用结束，再用完整计划验证完成状态。有真实结算汇总
+证据时，报表的“已结算收入”标签不视为本轮结算动作；新的写入完成声明仍须有提交证据。
+
+财务查询边界同时兼容年度汇总的 `record_type:category` 分组键：
+`cost:化肥` 转为 `record_type=cost, category=化肥`，并保持农场隔离与分页；
+显式收支类型冲突时返回 `category_record_type_conflict`。普通 API 与写入分类不改写。
+Agent 的 `query_cost_records` schema 暴露 `record_type`，避免把分类编码当成真实名称。
+
 ## 1. 设计目标
 
 `max_steps` 不应该被设计成一个普通异常，而应该被视为 Agent Harness 中的

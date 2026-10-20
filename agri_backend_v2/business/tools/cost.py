@@ -20,6 +20,8 @@ from business.mcp_app import mcp
 from business.services import cost_category_service, cost_service
 from business.tools._headers import require_farm_operation_permission
 
+_RECORD_TYPES = frozenset({"cost", "income"})
+
 
 def _to_decimal(value, field: str) -> Decimal:
     """将入参转为 Decimal；非法值抛 ValueError。"""
@@ -74,8 +76,8 @@ def manage_cost(
 
     Single tool with eight operations:
       - operation="query"  [RISK: read]
-          查询成本/收入记录列表（分页），可按 cycle_id 和 category 过滤。
-          相关参数：cycle_id, category, skip, limit。
+          查询成本/收入记录列表（分页），可按收支类型、茬口和分类过滤。
+          相关参数：record_type, cycle_id, category, skip, limit。
 
       - operation="create" [RISK: write_confirm]
           创建一条成本或收入记录。必填：record_type (cost/income)、category、
@@ -113,7 +115,8 @@ def manage_cost(
       operation: "query" | "create" | "summary" | "profit" | "delete" |
                  "categories" | "create_category" | "delete_category"
       record_type: 记录类型 cost 或 income（create/create_category 必填）
-      category: 分类名，如"种子"、"化肥"（create 必填，query 可选过滤，create_category 必填）
+      category: 分类名，如"种子"、"化肥"；query 兼容汇总键"cost:化肥"，
+          解析出的类型须与显式 record_type 一致（create/create_category 必填）
       amount: 金额（create 必填）
       record_date: 记录日期 YYYY-MM-DD（create 必填）
       cycle_id: 茬口 ID（create 可选关联，query/profit 用于过滤或计算）
@@ -154,11 +157,24 @@ def manage_cost(
     farm_id = principal["farm_id"]
 
     if op == "query":
+        # 年度汇总的键是“类型:分类”，不能把 cost:化肥 当作数据库分类名。
+        # 在 MCP 查询边界兼容该格式，普通 API 和写入的分类名称不做改写。
+        if category and ":" in category:
+            prefix, _, name = category.partition(":")
+            if prefix in _RECORD_TYPES and name:
+                if record_type and record_type != prefix:
+                    return {
+                        "error": "category_record_type_conflict",
+                        "code": "category_record_type_conflict",
+                        "message": "分类中的收支类型与筛选条件不一致，请确认查询范围。",
+                    }
+                record_type, category = prefix, name
         with session_scope() as db:
             records = cost_service.get_records(
                 db,
                 farm_id=farm_id,
                 cycle_id=cycle_id,
+                record_type=record_type,
                 category=category,
                 skip=skip,
                 limit=limit,
