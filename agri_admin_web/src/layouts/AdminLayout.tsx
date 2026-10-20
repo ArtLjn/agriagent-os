@@ -69,6 +69,7 @@ const pageTitles: Record<string, string> = {
   '/logs': '农事日志',
   '/costs': '成本记账',
   '/agent': 'AI 助手',
+  '/assistant-settings': '助手设置',
   '/weather': '天气预报',
   '/users': '用户管理',
   '/operations': '业务调试中心',

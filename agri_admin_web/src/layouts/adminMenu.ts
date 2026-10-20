@@ -53,6 +53,7 @@ export const menuGroups: AdminMenuGroup[] = [
       { key: '/costs', icon: 'dollar', label: '成本记账' },
       { key: '/weather', icon: 'cloud', label: '天气预报' },
       { key: '/agent', icon: 'agent', label: 'AI 助手' },
+      { key: '/assistant-settings', icon: 'setting', label: '助手设置' },
     ],
   },
   {

@@ -61,6 +61,10 @@ apiClient.interceptors.response.use(
         window.location.href = "/login";
         return Promise.reject(new Error("登录已过期"));
       }
+      // 页面自行展示错误的请求不弹全局提示。
+      if ((error.config as { silent?: boolean } | undefined)?.silent) {
+        return Promise.reject(error);
+      }
       if (status === 429) {
         message.error("请求过于频繁，请稍后再试");
       } else if (status === 422) {

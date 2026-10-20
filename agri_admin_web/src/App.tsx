@@ -10,6 +10,7 @@ import Logs from './pages/Logs';
 import Costs from './pages/Costs';
 import Dashboard from './pages/Dashboard';
 import Agent from './pages/Agent';
+import AssistantSettings from './pages/AssistantSettings';
 import Weather from './pages/Weather';
 import TraceMonitor from './pages/TraceMonitor';
 import TokenDashboard from './pages/TokenDashboard';
@@ -88,6 +89,7 @@ export default function App() {
             <Route path="/logs" element={<AuthGuard><Logs /></AuthGuard>} />
             <Route path="/costs" element={<AuthGuard><Costs /></AuthGuard>} />
             <Route path="/agent" element={<AuthGuard><Agent /></AuthGuard>} />
+            <Route path="/assistant-settings" element={<AuthGuard><AssistantSettings /></AuthGuard>} />
             <Route path="/weather" element={<AuthGuard><Weather /></AuthGuard>} />
             <Route path="/dev/traces" element={<AuthGuard><TraceMonitor /></AuthGuard>} />
             <Route path="/dev/tokens" element={<AuthGuard><TokenDashboard /></AuthGuard>} />

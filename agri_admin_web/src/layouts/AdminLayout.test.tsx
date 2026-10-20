@@ -31,6 +31,7 @@ describe('AdminLayout 菜单信息架构', () => {
       '/costs',
       '/weather',
       '/agent',
+      '/assistant-settings',
     ]);
   });
 });
