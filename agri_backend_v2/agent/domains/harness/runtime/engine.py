@@ -382,7 +382,18 @@ async def _run_turn_loop(
         finalizer = (
             _finalize_requested_error(turn)
             if turn.finalization_request is not None
-            else _run_finalization(turn, tracker, plan_box["plan"])
+            and turn.finalization_request.get("code")
+            != StopReason.DOOM_LOOP_DETECTED.value
+            else _run_finalization(
+                turn,
+                tracker,
+                plan_box["plan"],
+                reason=(
+                    StopReason.DOOM_LOOP_DETECTED
+                    if turn.finalization_request is not None
+                    else StopReason.STEP_BUDGET_EXHAUSTED
+                ),
+            )
         )
         async for ev in finalizer:
             yield ev
@@ -645,7 +656,10 @@ async def _run_single_reasoning_step(
     if doom_msg:
         logger.warning("DOOM_LOOP: %s", doom_msg)
         async for ev in _emit_doom_loop_terminal(
-            turn, doom_msg, blocked_action=tracker.last_action()
+            turn,
+            doom_msg,
+            blocked_action=tracker.last_action(),
+            tracker=tracker,
         ):
             yield ev
         return
@@ -1100,6 +1114,8 @@ async def _dispatch_tool_calls(
             max_parallel_skills=settings.max_parallel_skills,
         ):
             yield ev
+        if turn.finalization_pending or turn.status != "running":
+            return
         if turn.finalization_request is not None:
             async for ev in _finalize_requested_error(turn):
                 yield ev
@@ -1305,6 +1321,8 @@ async def _process_skill_call(
     parallel_batch_id: str = "",
 ) -> AsyncGenerator[dict, None]:
     """单个 skill tool_call 完整处理：校验→审批→执行→后处理。终止分支通过 turn 状态通知外层。"""
+    if turn.finalization_pending or turn.status != "running":
+        return
     turn.set_phase(TurnPhase.TOOL_PREPARING)
     tool_name = tc["name"]
     args = tc["arguments"]
@@ -1544,7 +1562,7 @@ async def _prepare_skill_call(
 
     async for ev in _check_duplication(turn, tracker, skill.name, args):
         yield ev
-    if turn.status != "running":
+    if turn.finalization_pending or turn.status != "running":
         prepared.proceed = False
 
 
@@ -1861,6 +1879,7 @@ async def _check_duplication(
             turn,
             message,
             blocked_action={"agent_tool_name": tool_name, "arguments": args},
+            tracker=tracker,
         ):
             yield ev
 
@@ -1870,17 +1889,42 @@ async def _emit_doom_loop_terminal(
     detail: str,
     *,
     blocked_action: dict[str, object] | None = None,
+    tracker: verify.CallTracker | None = None,
 ) -> AsyncGenerator[dict, None]:
-    """发布 Doom 警告，再交给统一受控终止器收口。"""
+    """重复动作一律停止；只读链路已有结果时允许一次无工具、带证据校验的收尾。"""
     if blocked_action:
         _persist_blocked_action(
             turn,
             blocked_action,
             reason=StopReason.DOOM_LOOP_DETECTED.value,
         )
-    warning_ev = sse.doom_loop_warning(detail, step=turn.step_count)
+    # 写入或未知风险仍走原终止器，不把“停止重复查询”变成额外执行授权。
+    can_summarize = (
+        tracker is not None
+        and tracker.calls
+        and all(call.get("risk_level") == "read" for call in tracker.calls)
+        and any(
+            event["type"] == "tool_finished"
+            and not event["data"].get("error")
+            and event["data"].get("result") is not None
+            for event in turn.events
+        )
+    )
+    if can_summarize:
+        # 只请求收尾，等本批已发出的只读调用结束后，由外层携带完整 plan 收尾。
+        # 不能在并行工具子任务中调用模型，否则会遗漏其他结果或重复发布终态。
+        turn.finalization_request = {"code": StopReason.DOOM_LOOP_DETECTED.value}
+        turn.finalization_pending = True
+    warning_ev = sse.doom_loop_warning(
+        "相同查询没有产生新结果，已停止继续调用工具，正在汇总已有结果。"
+        if can_summarize
+        else detail,
+        step=turn.step_count,
+    )
     turn.emit("doom_loop_warning", warning_ev["data"])
     yield warning_ev
+    if can_summarize:
+        return
     async for ev in _emit_failure_terminal(
         turn,
         code="doom_loop_detected",
@@ -2778,7 +2822,11 @@ def _build_skill_obs_str(tool_name: str, args: dict, state: _SkillExecState) -> 
 
 
 async def _run_finalization(
-    turn: Turn, tracker: verify.CallTracker, plan
+    turn: Turn,
+    tracker: verify.CallTracker,
+    plan,
+    *,
+    reason: StopReason = StopReason.STEP_BUDGET_EXHAUSTED,
 ) -> AsyncGenerator[dict, None]:
     """在决策循环外最多收尾一次；不增加步数、不调工具、不重新进入 ReAct。
 
@@ -2786,7 +2834,7 @@ async def _run_finalization(
     证据校验和确定性兜底独立放在 finalization 模块，避免拆散状态转换。
     """
     turn.set_phase(TurnPhase.FINALIZING)
-    requested = turn.finalization_pending
+    requested = turn.finalization_pending and turn.finalization_request is None
     messages = (
         turn.messages if requested else finalization.finalization_messages(turn, plan)
     )
@@ -2833,7 +2881,7 @@ async def _run_finalization(
         fallback = (
             _handle_llm_error(turn, exc)
             if requested
-            else finalization.finalize_turn(turn)
+            else finalization.finalize_turn(turn, reason=reason)
         )
         async for event in fallback:
             yield event
@@ -2843,11 +2891,11 @@ async def _run_finalization(
             turn, answer, plan, tracker, complete_step=False
         ):
             yield event
+        if reason == StopReason.DOOM_LOOP_DETECTED:
+            turn.task_state = None
         return
     reason = (
-        StopReason.USER_INPUT_REQUIRED
-        if outcome == "needs_information"
-        else StopReason.STEP_BUDGET_EXHAUSTED
+        StopReason.USER_INPUT_REQUIRED if outcome == "needs_information" else reason
     )
     async for event in finalization.finalize_turn(turn, answer=answer, reason=reason):
         yield event

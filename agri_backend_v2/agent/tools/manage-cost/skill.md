@@ -29,9 +29,9 @@ triggers:
 operations:
   query:
     tool_name: query_cost_records
-    description: 查询农场成本和收入记录，可按茬口或分类筛选。
+    description: 查询农场成本和收入记录，可按收支类型、茬口或分类筛选。汇总键 cost:化肥 对应 record_type=cost、category=化肥；相同筛选返回空时不要重复查询。
     risk_level: read
-    parameters: [cycle_id, category, skip, limit]
+    parameters: [cycle_id, record_type, category, skip, limit]
     required: []
   create:
     tool_name: create_cost_record
