@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { isAxiosError } from 'axios';
-import { Input, Button, Space, Tag, Tooltip, message, Select } from 'antd';
-import { SendOutlined, DeleteOutlined, CopyOutlined, PlusOutlined, MenuFoldOutlined, MenuUnfoldOutlined, LoadingOutlined, LinkOutlined, ProfileOutlined } from '@ant-design/icons';
+import { Input, Button, Space, Tooltip, message, Select } from 'antd';
+import { SendOutlined, DeleteOutlined, CopyOutlined, PlusOutlined, MenuFoldOutlined, MenuUnfoldOutlined, LoadingOutlined, LinkOutlined, ProfileOutlined, ExperimentOutlined } from '@ant-design/icons';
 import { listTraces, getTimeline, type TraceTimeline } from '../../api/admin';
 import {
   streamChat,
@@ -21,11 +21,10 @@ import {
   type PendingPlan,
   type StreamTraceContext,
 } from '../../api/agent';
-import { MarkdownContent } from '../../components/MarkdownContent';
 import { palette } from '../../styles/theme';
 import { buildConversationRows } from './conversationRows';
 import { buildSessionDebugExport, type DebugExportMessage } from './sessionDebugExport';
-import { applyHistoricalPendingResolution, canConfirmAssistantMessage, hasPendingConfirmationControls, type PendingResolution } from './pendingPlanControls';
+import { applyHistoricalPendingResolution, type PendingResolution } from './pendingPlanControls';
 import {
   buildPlaygroundTraceMetrics,
   extractLatestLlmContextSnapshot,
@@ -35,21 +34,19 @@ import { copyAsyncText } from './clipboard';
 import { buildTraceMonitorUrl, selectLatestTraceId } from './traceLinks';
 import { LlmContextInspector, LlmContextTriggerButton } from './LlmContextInspector';
 import { QuickPrompts } from './QuickPrompts';
-import { ExecutionTimeline } from './ExecutionTimeline';
+import { ChatBubble } from './ChatBubble';
+import './playground.css';
 import { appendExecutionEvent, executionEventFromChunk, type ExecutionEvent } from './executionEvents';
+import { formatDuration } from './executionTimelineModel';
 import { authStore } from '../../stores/authStore';
 import { getSsePresentationProfile, roleLabel, USER_ROLES } from '../../constants/roles';
 
 const CARD = palette.bgElevated;
-const BORDER = palette.border;
 const TEXT = palette.text;
 const TEXT_DIM = palette.textMuted;
 const ACCENT = palette.accent;
-const USER_BG = palette.accentStrong;
 const SIDEBAR_BG = palette.bgElevated;
 const SIDEBAR_BORDER = palette.borderSoft;
-const ROW_HOVER = 'rgba(139, 148, 158, 0.08)';
-const ROW_ACTIVE = 'rgba(88, 166, 255, 0.12)';
 
 interface Message {
   id: string;
@@ -126,49 +123,6 @@ function mapHistoricalMessage(message: ConversationMessage, index: number): Mess
   };
 }
 
-/* ── 执行状态标签 ── */
-function ExecutionStatus({ skills, pendingAction, pendingPlan, pendingResolution }: { skills?: string[]; pendingAction?: PendingAction | null; pendingPlan?: boolean; pendingResolution?: PendingResolution | null }) {
-  if (pendingResolution) {
-    const canceled = pendingResolution === 'canceled';
-    return (
-      <span style={{
-        fontSize: 11, color: canceled ? '#8b949e' : '#52c41a', background: canceled ? 'rgba(139,148,158,0.12)' : 'rgba(82,196,26,0.12)',
-        padding: '2px 8px', borderRadius: 4, border: `1px solid ${canceled ? '#8b949e' : '#52c41a'}`,
-      }}>
-        {canceled ? '🚫 已取消执行' : '✅ 已确认执行'}
-      </span>
-    );
-  }
-  if (pendingAction || pendingPlan) {
-    return (
-      <span style={{
-        fontSize: 11, color: '#faad14', background: 'rgba(250,173,20,0.12)',
-        padding: '2px 8px', borderRadius: 4, border: '1px solid #faad14',
-      }}>
-        ⏳ 待确认执行
-      </span>
-    );
-  }
-  if (skills && skills.length > 0) {
-    return (
-      <span style={{
-        fontSize: 11, color: '#52c41a', background: 'rgba(82,196,26,0.12)',
-        padding: '2px 8px', borderRadius: 4, border: '1px solid #52c41a',
-      }} title={skills.join(', ')}>
-        ✅ 真实执行了 {skills.length} 个函数
-      </span>
-    );
-  }
-  return (
-    <span style={{
-      fontSize: 11, color: TEXT_DIM, background: 'rgba(139,148,158,0.12)',
-      padding: '2px 8px', borderRadius: 4, border: `1px solid ${TEXT_DIM}`,
-    }}>
-      💬 纯文本生成
-    </span>
-  );
-}
-
 function formatMetricNumber(value: number | null): string {
   if (value === null) return '-';
   return value.toLocaleString('zh-CN');
@@ -176,148 +130,10 @@ function formatMetricNumber(value: number | null): string {
 
 function TraceMetricPill({ label, value, accent }: { label: string; value: string; accent?: string }) {
   return (
-    <span style={{
-      color: TEXT_DIM,
-      fontSize: 12,
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: 4,
-    }}>
-      {label}: <span style={{ color: accent ?? TEXT, fontFamily: 'monospace' }}>{value}</span>
+    <span className="pg-stat">
+      {label}
+      <span className="pg-stat__value" style={accent ? { color: accent } : undefined}>{value}</span>
     </span>
-  );
-}
-
-/* ── 聊天气泡组件 ── */
-function ChatBubble({
-  role, content, events, skills, loading, pendingAction, pendingPlan, pendingResolution,
-  turnId, traceId, onAction, onViewDetails,
-}: {
-  role: 'user' | 'assistant';
-  content: string;
-  events?: ExecutionEvent[];
-  skills?: string[];
-  loading: boolean;
-  pendingAction?: PendingAction | null;
-  pendingPlan?: PendingPlan | null;
-  pendingResolution?: PendingResolution | null;
-  turnId?: string | null;
-  traceId?: string | null;
-  onAction?: (action: string) => void;
-  onViewDetails?: (turnId: string) => void;
-}) {
-  const isUser = role === 'user';
-  const hasConfirmationControls = hasPendingConfirmationControls({ role, content, pendingAction, pendingPlan, pendingResolution });
-  const canConfirm = canConfirmAssistantMessage({ role, content, pendingAction, pendingPlan, pendingResolution });
-  const confirmationDisabled = !canConfirm || !onAction;
-  return (
-    <div style={{ marginBottom: isUser ? 16 : 28, display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start', minWidth: 0 }}>
-      {!isUser && (
-        <div style={{
-          width: 32, height: 32, borderRadius: 10, background: '#238636',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: '#fff', fontSize: 14, fontWeight: 700, marginRight: 10, flexShrink: 0,
-        }}>AI</div>
-      )}
-      <div style={{
-        background: isUser ? USER_BG : 'transparent',
-        color: TEXT,
-        padding: isUser ? '10px 16px' : 0,
-        borderRadius: isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-        maxWidth: isUser ? '78%' : 'min(100%, 1240px)',
-        width: isUser ? 'auto' : '100%',
-        minWidth: 0,
-        wordBreak: 'break-word',
-      }}>
-        {isUser ? content : (
-          <>
-            <ExecutionTimeline events={events} loading={loading} />
-            {content && <MarkdownContent content={content} style={{ color: TEXT, lineHeight: 1.75, fontSize: 15 }} />}
-          </>
-        )}
-        {/* ── 执行状态 + 技能标签 ── */}
-        {!isUser && (
-          <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-            <ExecutionStatus
-              skills={skills}
-              pendingAction={canConfirm ? pendingAction : null}
-              pendingPlan={canConfirm && !pendingAction}
-              pendingResolution={pendingResolution}
-            />
-            {skills && skills.length > 0 && skills.map((s) => (
-              <span key={s} style={{
-                fontSize: 11, color: ACCENT, background: 'rgba(88,166,255,0.12)',
-                padding: '2px 8px', borderRadius: 4, border: `1px solid ${ACCENT}`,
-              }}>
-                ⚡ {s}
-              </span>
-            ))}
-            {turnId && onViewDetails && (
-              <Tooltip title={traceId ? '查看 Turn / Trace 详情' : '查看 Turn 详情'}>
-                <Button
-                  type="text"
-                  size="small"
-                  aria-label="查看执行详情"
-                  icon={<ProfileOutlined />}
-                  onClick={() => onViewDetails(turnId)}
-                  style={{ color: TEXT_DIM, padding: '0 4px', height: 24 }}
-                />
-              </Tooltip>
-            )}
-          </div>
-        )}
-        {!isUser && pendingAction?.context && (
-          <div style={{ marginTop: 8, padding: '8px 10px', background: 'rgba(139,148,158,0.08)', borderRadius: 8, fontSize: 13, color: '#8b949e' }}>
-            {pendingAction.context.original_input && (
-              <div style={{ marginBottom: 4 }}>📝 理解：您说的是「{pendingAction.context.original_input}」</div>
-            )}
-            {pendingAction.context.notes?.map((note, i) => (
-              <div key={i} style={{ marginBottom: i < pendingAction.context!.notes.length - 1 ? 4 : 0 }}>{note}</div>
-            ))}
-          </div>
-        )}
-        {!isUser && hasConfirmationControls && (
-          <div style={{ display: 'flex', gap: 8, marginTop: 10, justifyContent: 'flex-end' }}>
-            <button
-              disabled={confirmationDisabled}
-              onClick={() => {
-                if (!confirmationDisabled) onAction?.('确认');
-              }}
-              style={{
-                background: confirmationDisabled ? '#2d333b' : '#238636',
-                color: confirmationDisabled ? '#8b949e' : '#fff',
-                border: 'none',
-                borderRadius: 6,
-                padding: '4px 16px',
-                cursor: confirmationDisabled ? 'not-allowed' : 'pointer',
-                fontSize: 13,
-                opacity: confirmationDisabled ? 0.72 : 1,
-              }}
-            >
-              确认
-            </button>
-            <button
-              disabled={confirmationDisabled}
-              onClick={() => {
-                if (!confirmationDisabled) onAction?.('取消');
-              }}
-              style={{
-                background: '#30363d',
-                color: '#8b949e',
-                border: 'none',
-                borderRadius: 6,
-                padding: '4px 16px',
-                cursor: confirmationDisabled ? 'not-allowed' : 'pointer',
-                fontSize: 13,
-                opacity: confirmationDisabled ? 0.72 : 1,
-              }}
-            >
-              取消
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
   );
 }
 
@@ -839,7 +655,7 @@ export default function Playground() {
   const isThinking = loading && Boolean(lastMessage) && lastMessage.content === '' && !lastMessage.events?.length;
 
   return (
-    <div style={{ height: '100%', display: 'flex', background: palette.bg }}>
+    <div className="playground-workspace">
       {/* ── 会话列表侧边栏 ── */}
       <div
         style={{
@@ -891,38 +707,23 @@ export default function Playground() {
             const isActive = conversationId === sessionId;
             const sessionState = sessions[conversationId];
             const isRunning = Boolean(sessionState?.loading);
+            // 会话标题优先展示最近一条消息，机器 ID 只在 tooltip / 复制动作里出现
+            const title = conv.last_message?.trim() || (conv.local ? '新会话' : conversationId);
             return (
               <div
                 key={conversationId}
                 onClick={() => switchConversation(conversationId)}
+                className={`pg-session${isActive ? ' pg-session--active' : ''}`}
                 style={{
                   padding: sidebarCollapsed ? '8px 0' : '8px 10px',
-                  borderRadius: 8,
-                  marginBottom: 2,
-                  cursor: 'pointer',
-                  background: isActive ? ROW_ACTIVE : 'transparent',
-                  borderLeft: isActive ? `3px solid ${ACCENT}` : '3px solid transparent',
-                  transition: 'background 120ms ease',
                   display: sidebarCollapsed ? 'flex' : 'block',
                   justifyContent: sidebarCollapsed ? 'center' : undefined,
                   alignItems: sidebarCollapsed ? 'center' : undefined,
                 }}
-                onMouseEnter={(e) => {
-                  if (!isActive) e.currentTarget.style.background = ROW_HOVER;
-                }}
-                onMouseLeave={(e) => {
-                  if (!isActive) e.currentTarget.style.background = 'transparent';
-                }}
               >
                 {sidebarCollapsed ? (
-                  <Tooltip title={conversationId} placement="right">
-                    <div style={{
-                      width: 28, height: 28, borderRadius: 8,
-                      background: isActive ? ACCENT : 'rgba(139,148,158,0.12)',
-                      color: isActive ? '#fff' : TEXT_DIM,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 12, fontWeight: 600,
-                    }}>
+                  <Tooltip title={`${title} · ${conversationId}`} placement="right">
+                    <div className={`pg-session__dot${isActive ? ' pg-session__dot--active' : ''}`}>
                       {conversationId.slice(-2)}
                     </div>
                   </Tooltip>
@@ -930,19 +731,8 @@ export default function Playground() {
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
                       {isRunning && <LoadingOutlined style={{ color: ACCENT, fontSize: 11, flexShrink: 0 }} />}
-                      <div style={{
-                        color: TEXT,
-                        fontSize: 12,
-                        fontWeight: isActive ? 600 : 500,
-                        fontFamily: 'monospace',
-                        lineHeight: 1.4,
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        flex: 1,
-                        minWidth: 0,
-                      }} title={conversationId}>
-                        {conversationId}
+                      <div className="pg-session__title" title={conversationId}>
+                        {title}
                       </div>
                     </div>
                     <div style={{
@@ -952,38 +742,41 @@ export default function Playground() {
                       gap: 4,
                       marginTop: 4,
                     }}>
-                      <div style={{ color: TEXT_DIM, fontSize: 11, flexShrink: 0 }}>
+                      <div className="pg-session__meta">
                         {new Date(conv.last_at).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        {conv.message_count > 0 && ` · ${conv.message_count} 条`}
                       </div>
-                      <Space size={0} style={{ opacity: isActive ? 1 : 0.6, flexShrink: 0 }}>
-                        <Tooltip title="复制 Session ID">
-                          <Button
-                            type="text"
-                            size="small"
-                            icon={<CopyOutlined />}
-                            onClick={(e) => { e.stopPropagation(); void copySessionId(conversationId); }}
-                            style={{ color: isActive ? ACCENT : TEXT_DIM, padding: '0 4px', minWidth: 24, height: 24 }}
-                          />
-                        </Tooltip>
-                        <Tooltip title="跳转链路追踪">
-                          <Button
-                            type="text"
-                            size="small"
-                            icon={<LinkOutlined />}
-                            onClick={(e) => { e.stopPropagation(); openTraceMonitor(conversationId); }}
-                            style={{ color: TEXT_DIM, padding: '0 4px', minWidth: 24, height: 24 }}
-                          />
-                        </Tooltip>
-                        <Tooltip title="复制调试 JSON">
-                          <Button
-                            type="text"
-                            size="small"
-                            icon={<ProfileOutlined />}
-                            onClick={(e) => { e.stopPropagation(); copySessionJson(conversationId); }}
-                            style={{ color: TEXT_DIM, padding: '0 4px', minWidth: 24, height: 24 }}
-                          />
-                        </Tooltip>
-                      </Space>
+                      <span className="pg-session__actions">
+                        <Space size={0}>
+                          <Tooltip title="复制 Session ID">
+                            <Button
+                              type="text"
+                              size="small"
+                              icon={<CopyOutlined />}
+                              onClick={(e) => { e.stopPropagation(); void copySessionId(conversationId); }}
+                              style={{ color: TEXT_DIM, padding: '0 4px', minWidth: 24, height: 24 }}
+                            />
+                          </Tooltip>
+                          <Tooltip title="跳转链路追踪">
+                            <Button
+                              type="text"
+                              size="small"
+                              icon={<LinkOutlined />}
+                              onClick={(e) => { e.stopPropagation(); openTraceMonitor(conversationId); }}
+                              style={{ color: TEXT_DIM, padding: '0 4px', minWidth: 24, height: 24 }}
+                            />
+                          </Tooltip>
+                          <Tooltip title="复制调试 JSON">
+                            <Button
+                              type="text"
+                              size="small"
+                              icon={<ProfileOutlined />}
+                              onClick={(e) => { e.stopPropagation(); copySessionJson(conversationId); }}
+                              style={{ color: TEXT_DIM, padding: '0 4px', minWidth: 24, height: 24 }}
+                            />
+                          </Tooltip>
+                        </Space>
+                      </span>
                     </div>
                   </div>
                 )}
@@ -999,137 +792,123 @@ export default function Playground() {
       </div>
 
       {/* ── 主聊天区域 ── */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden', padding: '16px 20px 16px', position: 'relative' }}>
-        {/* 子 header - Playground 配置 */}
-        <div className="playground-toolbar" style={{
-          padding: '8px 16px',
-          marginBottom: 16,
-          background: CARD,
-          border: `1px solid ${BORDER}`,
-          borderRadius: 10,
-          flexShrink: 0,
-        }}>
-          <div className="playground-toolbar__main">
-            <Select
-              placeholder="选择用户"
-              value={selectedDevUser?.user_id ?? ''}
-              onChange={(value) => {
-                const user = devUsers.find((u) => u.user_id === value) ?? null;
-                setSelectedDevUser(user);
-                setLlmContextOpen(false);
-                // 切换用户后开启新会话，避免历史会话身份混淆
-                const sid = generateSessionId();
-                setSessionId(sid);
-                setSessions({ [sid]: emptySessionState() });
-                setConversations([]);
-                // 使用 dev-users 返回的 token 获取该用户自己的会话，避免展示管理员会话。
-                const nextToken = user?.token ?? null;
-                void loadConversations(nextToken).catch(() => {
-                  message.error('加载会话列表失败');
-                });
-              }}
-              className="playground-user-select"
-              styles={{ popup: { root: { background: CARD } } }}
-              options={[
-                { value: '', label: '默认用户（admin 自身）' },
-                ...devUsers.map((u) => ({
-                  value: u.user_id,
-                  label: `${u.nickname || u.phone} (farm:${u.farm_id}, ${u.role})`,
-                })),
-              ]}
-            />
-            <div
-              className="playground-identity"
-              title={`viewer: admin · acting_as: ${selectedDevUser?.user_id ?? 'admin'} · presentation: ${selectedDevUser ? 'user' : 'debug'}`}
-            >
-              <span className="playground-identity__label">调试身份</span>
-              <Tag color={presentationProfile === 'user' ? 'blue' : 'purple'} style={{ margin: 0 }}>
-                {presentationProfile === 'user' ? `${roleLabel(executionRole)}视图` : '管理员调试视图'}
-              </Tag>
-              <span className="playground-identity__acting-as">
-                acting_as: {selectedDevUser?.user_id ?? 'admin'}
-              </span>
-            </div>
-            <Tooltip title="点击复制 Session ID">
-              <button
-                type="button"
-                className="playground-session-id"
-                onClick={() => void copySessionId(sessionId)}
+      <div className="playground-chat">
+        {/* 顶栏：与全局 header、会话 header 对齐 */}
+        <div className="playground-toolbar">
+          <div className="playground-toolbar__inner">
+            <div className="playground-toolbar__main">
+              <Select
+                placeholder="选择用户"
+                value={selectedDevUser?.user_id ?? ''}
+                onChange={(value) => {
+                  const user = devUsers.find((u) => u.user_id === value) ?? null;
+                  setSelectedDevUser(user);
+                  setLlmContextOpen(false);
+                  // 切换用户后开启新会话，避免历史会话身份混淆
+                  const sid = generateSessionId();
+                  setSessionId(sid);
+                  setSessions({ [sid]: emptySessionState() });
+                  setConversations([]);
+                  // 使用 dev-users 返回的 token 获取该用户自己的会话，避免展示管理员会话。
+                  const nextToken = user?.token ?? null;
+                  void loadConversations(nextToken).catch(() => {
+                    message.error('加载会话列表失败');
+                  });
+                }}
+                className="playground-user-select"
+                styles={{ popup: { root: { background: CARD } } }}
+                options={[
+                  { value: '', label: '默认用户（admin 自身）' },
+                  ...devUsers.map((u) => ({
+                    value: u.user_id,
+                    label: `${u.nickname || u.phone} (farm:${u.farm_id}, ${u.role})`,
+                  })),
+                ]}
+              />
+              <div
+                className="playground-identity"
+                title={`viewer: admin · acting_as: ${selectedDevUser?.user_id ?? 'admin'} · presentation: ${selectedDevUser ? 'user' : 'debug'}`}
               >
-                <span>{sessionId}</span>
-                <CopyOutlined />
-              </button>
-            </Tooltip>
-          </div>
-          <div className="playground-toolbar__actions">
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={createNewSession}
-              style={{
-                borderRadius: 6,
-                fontWeight: 500,
-                fontSize: 13,
-                height: 32,
-                paddingInline: 14,
-                boxShadow: '0 1px 3px rgba(31, 111, 235, 0.3)',
-              }}
-            >
-              新建会话
-            </Button>
-            <Button
-              type="default"
-              icon={<DeleteOutlined />}
-              onClick={handleClear}
-              className="playground-toolbar__ghost"
-              style={{
-                color: TEXT_DIM,
-                height: 32,
-                paddingInline: 12,
-                borderRadius: 6,
-                fontSize: 13,
-                borderColor: 'transparent',
-                background: 'transparent',
-              }}
-            >
-              清空
-            </Button>
-            <span style={{ width: 1, height: 16, background: BORDER, margin: '0 4px', flexShrink: 0 }} />
-            <LlmContextTriggerButton
-              hasSnapshot={Boolean(llmContextSnapshot)}
-              loading={loading || traceLoading}
-              onClick={() => {
-                if (llmContextOpen) return;
-                openLlmContextInspector();
-              }}
-              disabled={Boolean(selectedDevUser)}
-            />
+                <span className={`pg-chip ${presentationProfile === 'user' ? 'pg-chip--accent' : 'pg-chip--muted'}`}>
+                  {presentationProfile === 'user' ? `${roleLabel(executionRole)}视图` : '管理员视图'}
+                </span>
+                {selectedDevUser && (
+                  <span className="playground-identity__acting-as">
+                    acting_as: {selectedDevUser.user_id}
+                  </span>
+                )}
+              </div>
+              <Tooltip title={`${sessionId}（点击复制）`}>
+                <button
+                  type="button"
+                  className="playground-session-id"
+                  onClick={() => void copySessionId(sessionId)}
+                >
+                  <span>{sessionId}</span>
+                  <CopyOutlined />
+                </button>
+              </Tooltip>
+            </div>
+            <div className="playground-toolbar__actions">
+              <LlmContextTriggerButton
+                hasSnapshot={Boolean(llmContextSnapshot)}
+                loading={loading || traceLoading}
+                onClick={() => {
+                  if (llmContextOpen) return;
+                  openLlmContextInspector();
+                }}
+                disabled={Boolean(selectedDevUser)}
+              />
+              <span className="playground-toolbar__divider" />
+              <Button
+                type="text"
+                icon={<DeleteOutlined />}
+                onClick={handleClear}
+                className="playground-toolbar__danger"
+                style={{
+                  color: TEXT_DIM,
+                  height: 32,
+                  paddingInline: 10,
+                  borderRadius: 8,
+                  fontSize: 13,
+                }}
+              >
+                清空
+              </Button>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                aria-label="新建会话"
+                onClick={createNewSession}
+                style={{
+                  borderRadius: 8,
+                  fontWeight: 500,
+                  fontSize: 13,
+                  height: 32,
+                  paddingInline: 14,
+                  boxShadow: 'none',
+                }}
+              >
+                新建会话
+              </Button>
+            </div>
           </div>
         </div>
 
         {/* 消息区域 */}
-        <div ref={scrollRef} style={{
-          flex: 1, minHeight: 0, overflow: 'auto',
-          padding: '4px 8px 12px',
-          marginBottom: 10,
-        }} onScroll={(event) => {
-          if (event.currentTarget.scrollTop <= 48) void loadOlderMessages();
-        }}>
+        <div
+          className="playground-messages surface-scroll"
+          ref={scrollRef}
+          onScroll={(event) => {
+            if (event.currentTarget.scrollTop <= 48) void loadOlderMessages();
+          }}
+        >
           {messages.length === 0 && (
-            <div style={{
-              height: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: TEXT_DIM,
-              textAlign: 'center',
-              padding: '16px 24px',
-            }}>
-              <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.7 }}>🧪</div>
-              <div style={{ fontSize: 18, marginBottom: 6, color: TEXT, fontWeight: 500 }}>Playground — 开发者调试</div>
-              <div style={{ fontSize: 13, maxWidth: 420, lineHeight: 1.6 }}>
-                点击下方快捷提示词直接发起对话，或在输入框中输入你的问题
+            <div className="pg-empty">
+              <div className="pg-empty__badge"><ExperimentOutlined /></div>
+              <div className="pg-empty__title">田掌柜 Agent Playground</div>
+              <div className="pg-empty__hint">
+                选择下方场景快速发起对话，或直接输入问题；执行过程、工具调用与上下文会实时呈现在对话里
               </div>
               <QuickPrompts
                 onSelect={(prompt) => { void handleSend(prompt); }}
@@ -1180,120 +959,125 @@ export default function Playground() {
           onRefresh={() => refreshSessionTimeline(sessionId)}
         />
 
-        {/* 执行摘要 - 紧凑单行 */}
-        {(timeline !== null || traceLoading || turnDetailLoading || turnDetail !== null) && (
-          <div style={{
-            marginBottom: 10,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
-            padding: '6px 4px',
-            flexShrink: 0,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-              <span style={{ color: ACCENT, fontSize: 12, fontWeight: 500 }}>执行摘要</span>
-              {turnDetailLoading ? (
-                <span style={{ color: TEXT_DIM, fontSize: 12 }}>加载 Turn 详情...</span>
-              ) : traceLoading ? (
-                <span style={{ color: TEXT_DIM, fontSize: 12 }}>加载中...</span>
-              ) : timeline && timeline.rounds ? (
-                <>
-                  {turnDetail && (
-                    <Tag color={turnDetail.events_status === 'available' ? 'success' : 'warning'} style={{ fontSize: 11, margin: 0 }}>
-                      Turn: {turnDetail.status}
-                    </Tag>
-                  )}
-                  <TraceMetricPill
-                    label="节点"
-                    value={formatMetricNumber(timeline.rounds.reduce((s, r) => s + r.nodes.length, 0))}
-                  />
-                  <TraceMetricPill label="轮次" value={formatMetricNumber(timeline.rounds.length)} />
-                  <TraceMetricPill
-                    label="耗时"
-                    value={`${formatMetricNumber(timeline.rounds.reduce((s, r) => s + r.nodes.reduce((ns, n) => ns + (n.duration_ms || 0), 0), 0))}ms`}
-                  />
-                  <TraceMetricPill
-                    label="上下文"
-                    value={`${formatMetricNumber(traceMetrics.contextTokens)} / ${formatMetricNumber(traceMetrics.contextBudget)}`}
-                  />
-                  <TraceMetricPill
-                    label="最终 Prompt"
-                    value={`${formatMetricNumber(traceMetrics.promptTokens)} / ${formatMetricNumber(traceMetrics.promptMaxTokens)}`}
-                  />
-                  <TraceMetricPill
-                    label="模型 Token"
-                    value={formatMetricNumber(traceMetrics.llmTotalTokens)}
-                  />
-                  <TraceMetricPill
-                    label="压缩/丢弃"
-                    value={`${traceMetrics.contextCompressedCount} / ${traceMetrics.contextDroppedCount}`}
-                    accent={compressed ? '#faad14' : TEXT}
-                  />
-                  {compressed && (
-                    <Tooltip title={traceMetrics.promptActions.length > 0 ? `最终 Prompt 动作：${traceMetrics.promptActions.join(', ')}` : '上下文预算触发了压缩或丢弃'}>
-                      <Tag color="warning" style={{ fontSize: 11, margin: 0 }}>
-                        自动压缩已触发
-                      </Tag>
-                    </Tooltip>
-                  )}
-                  {/* Skill 标签 */}
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    {(() => {
-                      const skillNodes = timeline.rounds.flatMap(r => r.nodes).filter(n => n.node_type === 'skill_call');
-                      return skillNodes.slice(0, 3).map((n, i) => (
-                        <Tag key={i} color="success" style={{ fontSize: 11, margin: 0 }}>{n.node_name}</Tag>
-                      ));
-                    })()}
-                  </div>
-                </>
-              ) : turnDetail ? (
-                <Tag color="warning" style={{ fontSize: 11, margin: 0 }}>
-                  执行证据不可用
-                </Tag>
-              ) : (
-                <span style={{ color: TEXT_DIM, fontSize: 12 }}>暂无数据</span>
-              )}
+        {/* ── 底部输入区：Trace 摘要 + 输入框共用一列宽 ── */}
+        <div className="playground-footer">
+          {/* Trace 摘要 - 紧凑单行 */}
+          {(timeline !== null || traceLoading || turnDetailLoading || turnDetail !== null) && (
+            <div className="pg-summary">
+              <div className="pg-summary__stats">
+                <span className="pg-summary__label">Trace 摘要</span>
+                {turnDetailLoading ? (
+                  <span style={{ color: TEXT_DIM, fontSize: 12 }}>加载 Turn 详情...</span>
+                ) : traceLoading ? (
+                  <span style={{ color: TEXT_DIM, fontSize: 12 }}>加载中...</span>
+                ) : timeline && timeline.rounds ? (
+                  <>
+                    {turnDetail && (
+                      <span className={`pg-chip ${turnDetail.events_status === 'available' ? 'pg-chip--success' : 'pg-chip--warning'}`}>
+                        Turn: {turnDetail.status}
+                      </span>
+                    )}
+                    <TraceMetricPill
+                      label="节点"
+                      value={formatMetricNumber(timeline.rounds.reduce((s, r) => s + r.nodes.length, 0))}
+                    />
+                    <TraceMetricPill label="轮次" value={formatMetricNumber(timeline.rounds.length)} />
+                    <TraceMetricPill
+                      label="耗时"
+                      value={formatDuration(timeline.rounds.reduce((s, r) => s + r.nodes.reduce((ns, n) => ns + (n.duration_ms || 0), 0), 0))}
+                    />
+                    {/* 缺数据的指标直接隐藏，避免 - / - 占位看起来像坏了 */}
+                    {traceMetrics.contextTokens !== null && (
+                      <TraceMetricPill
+                        label="上下文"
+                        value={`${formatMetricNumber(traceMetrics.contextTokens)} / ${formatMetricNumber(traceMetrics.contextBudget)}`}
+                      />
+                    )}
+                    {traceMetrics.promptTokens !== null && (
+                      <TraceMetricPill
+                        label="最终 Prompt"
+                        value={`${formatMetricNumber(traceMetrics.promptTokens)} / ${formatMetricNumber(traceMetrics.promptMaxTokens)}`}
+                      />
+                    )}
+                    {traceMetrics.llmTotalTokens > 0 && (
+                      <TraceMetricPill
+                        label="模型 Token"
+                        value={formatMetricNumber(traceMetrics.llmTotalTokens)}
+                      />
+                    )}
+                    {(traceMetrics.contextCompressedCount > 0 || traceMetrics.contextDroppedCount > 0) && (
+                      <TraceMetricPill
+                        label="压缩/丢弃"
+                        value={`${traceMetrics.contextCompressedCount} / ${traceMetrics.contextDroppedCount}`}
+                        accent={compressed ? palette.warning : undefined}
+                      />
+                    )}
+                    {compressed && (
+                      <Tooltip title={traceMetrics.promptActions.length > 0 ? `最终 Prompt 动作：${traceMetrics.promptActions.join(', ')}` : '上下文预算触发了压缩或丢弃'}>
+                        <span className="pg-chip pg-chip--warning">自动压缩已触发</span>
+                      </Tooltip>
+                    )}
+                    {/* Skill 标签 */}
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {(() => {
+                        const skillNodes = timeline.rounds.flatMap(r => r.nodes).filter(n => n.node_type === 'skill_call');
+                        return skillNodes.slice(0, 3).map((n, i) => (
+                          <span key={i} className="pg-chip pg-chip--success">{n.node_name}</span>
+                        ));
+                      })()}
+                    </div>
+                  </>
+                ) : turnDetail ? (
+                  <span className="pg-chip pg-chip--warning">执行证据不可用</span>
+                ) : (
+                  <span style={{ color: TEXT_DIM, fontSize: 12 }}>暂无数据</span>
+                )}
+              </div>
+              <Button
+                size="small"
+                type="link"
+                onClick={() => {
+                  window.open(buildTraceMonitorUrl({ conversationId: sessionId, traceId: timeline?.trace_id }), '_blank');
+                }}
+                style={{ color: ACCENT, padding: 0, flexShrink: 0 }}
+              >
+                链路详情 →
+              </Button>
             </div>
-            <Button
-              size="small"
-              type="link"
-              onClick={() => {
-                window.open(buildTraceMonitorUrl({ conversationId: sessionId, traceId: timeline?.trace_id }), '_blank');
-              }}
-              style={{ color: ACCENT, padding: 0, flexShrink: 0 }}
-            >
-              链路详情 →
-            </Button>
-          </div>
-        )}
+          )}
 
-        {/* 输入区域 */}
-        <Space.Compact style={{ width: '100%' }}>
-          <Input
-            size="large"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onPressEnter={() => {
-              void handleSend();
-            }}
-            placeholder={loading ? '当前会话生成中，可切换或新建会话并行聊天' : '输入你的问题...'}
-            disabled={loading}
-            style={{ background: CARD, borderColor: BORDER, color: TEXT, height: 48, fontSize: 14 }}
-          />
-          <Button
-            size="large"
-            type="primary"
-            icon={<SendOutlined />}
-            onClick={() => {
-              void handleSend();
-            }}
-            loading={loading}
-            style={{ height: 48, paddingInline: 24, fontSize: 14 }}
-          >
-            发送
-          </Button>
-        </Space.Compact>
+          {/* 输入区域 */}
+          <div className="playground-composer">
+            <Input.TextArea
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+                  event.preventDefault();
+                  void handleSend();
+                }
+              }}
+              autoSize={{ minRows: 2, maxRows: 6 }}
+              placeholder={loading ? '当前会话生成中，可切换或新建会话并行聊天' : '输入你的问题，让 Agent 帮你处理任务…'}
+              disabled={loading}
+              aria-label="对话输入"
+            />
+            <div className="playground-composer__footer">
+              <span>{loading ? 'Agent 正在执行任务' : 'Enter 发送 · Shift + Enter 换行'}</span>
+              <Button
+                type="primary"
+                aria-label="发送"
+                icon={<SendOutlined />}
+                onClick={() => { void handleSend(); }}
+                loading={loading}
+                disabled={!input.trim() && !loading}
+                style={{ height: 32, borderRadius: 8, fontSize: 13, paddingInline: 16 }}
+              >
+                发送
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

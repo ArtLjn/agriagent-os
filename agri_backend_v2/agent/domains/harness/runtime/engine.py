@@ -767,6 +767,14 @@ async def _run_single_reasoning_step(
         yield ev
 
 
+_WRITE_GUARD_REMINDER = (
+    "上一轮回答声称已完成写操作，但本轮没有任何写工具调用记录，该回答无效。"
+    "禁止在未调用写工具的情况下声称已记录、已创建、已删除或已更新。"
+    "请继续处理当前用户请求：调用正确的写工具完成操作；"
+    "如果缺少必要业务信息，请先向用户追问。"
+)
+
+
 async def _emit_final_answer(
     turn: Turn,
     content: str,
@@ -774,6 +782,33 @@ async def _emit_final_answer(
     tracker: verify.CallTracker,
 ) -> AsyncGenerator[dict, None]:
     """无 tool_calls 时输出最终回答 + pre-completion checklist。"""
+    guard_issue = verify.write_completion_guard_issue(
+        user_input=turn.user_input,
+        content=content,
+        tracker=tracker,
+        committed_result=turn.committed_result,
+    )
+    if guard_issue:
+        turn.write_guard_attempts += 1
+        warning = sse.verification_warning([guard_issue], step=turn.step_count)
+        turn.emit(warning["type"], warning["data"])
+        yield warning
+        if turn.write_guard_attempts < 2:
+            # 把无效答复与纠正提示回灌给模型，让它继续完成真实写操作。
+            turn.messages.append({"role": "assistant", "content": content})
+            turn.messages.append({"role": "system", "content": _WRITE_GUARD_REMINDER})
+            turn.set_phase(TurnPhase.REASONING)
+            return
+        async for ev in _emit_failure_terminal(
+            turn,
+            code="write_not_executed",
+            message="模型未实际执行写操作，已阻止伪造的成功答复",
+            answer="我还没有实际执行写入操作，请重新发送请求或补充信息后重试。",
+            phase=TurnPhase.FINALIZING,
+            stop_reason=StopReason.TOOL_FAILED,
+        ):
+            yield ev
+        return
     turn.set_phase(TurnPhase.FINALIZING)
     issues = verify.pre_completion_checklist(plan, tracker)
     if issues:
@@ -1496,6 +1531,7 @@ async def _prepare_skill_call(
         skill.name,
         args,
         agent_tool_name=skill.name,
+        risk_level=skill.dynamic_risk_level(args),
         **_skill_control_metadata(skill),
         tool_call_id=tc["id"],
         step_index=turn.step_count,
@@ -2672,7 +2708,7 @@ async def _execute_plan_step(
     if enriched != args:
         args = enriched
 
-    tracker.record(tool_name, args)
+    tracker.record(tool_name, args, risk_level=skill.dynamic_risk_level(args))
     missing = skill.missing_required_params(args)
     if missing:
         result = _missing_params_result(skill, missing)

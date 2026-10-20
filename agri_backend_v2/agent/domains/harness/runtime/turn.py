@@ -120,6 +120,8 @@ class Turn:
     committed_result: dict[str, Any] | None = None
     finalization_pending: bool = False
     finalization_request: dict[str, Any] | None = None
+    # 模型未调用写工具却声称写入成功时的纠正次数，防止无限重试。
+    write_guard_attempts: int = 0
     events: list[dict[str, Any]] = field(default_factory=list)
     # events are SSE-flavored: {"type": "thought|action|observation|...",
     #                            "data": {...}, "ts": float}

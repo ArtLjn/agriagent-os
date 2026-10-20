@@ -8,9 +8,9 @@ import type { PlaygroundLlmContextSnapshot } from './traceMetrics';
 const BORDER = palette.border;
 const TEXT = palette.text;
 const TEXT_DIM = palette.textMuted;
-const PANEL_BG = '#0d1117';
+const PANEL_BG = palette.bg;
 const ACCENT = palette.accent;
-const HEADER_BG = '#161b22';
+const HEADER_BG = palette.bgElevated;
 
 function EmptyContextState({
   loading,
@@ -65,20 +65,20 @@ export function LlmContextTriggerButton({
   return (
     <Tooltip title="查看最终送入模型的 LLM Context" placement="top">
       <Button
-        type={active ? 'primary' : 'default'}
+        type="default"
         icon={<FileSearchOutlined />}
         loading={loading}
         disabled={disabled}
         onClick={onClick}
-        className={active ? undefined : 'playground-toolbar__ghost'}
+        className={active ? undefined : 'playground-toolbar__quiet'}
         style={{
           height: 32,
-          borderRadius: 6,
+          borderRadius: 8,
           paddingInline: 12,
           fontSize: 13,
-          background: active ? ACCENT : 'transparent',
-          borderColor: active ? ACCENT : BORDER,
-          color: active ? '#fff' : TEXT_DIM,
+          background: active ? 'rgba(88, 166, 255, 0.12)' : 'transparent',
+          borderColor: active ? 'rgba(88, 166, 255, 0.32)' : BORDER,
+          color: active ? ACCENT : TEXT_DIM,
           fontWeight: 500,
         }}
       >

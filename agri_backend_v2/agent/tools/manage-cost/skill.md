@@ -186,3 +186,5 @@ parameters:
 - create / create_category 是 write_confirm，需用户确认
 - delete / delete_category 是 write_high，必须用户明确确认
 - query/summary/profit/categories 是 read，不闸门
+- **create 必须实际调用 `create_cost_record`**；`list_cost_categories` 只用于查询可用分类，
+  不能代替记账。未调用 create 工具时，禁止回复"已记录/已记账"

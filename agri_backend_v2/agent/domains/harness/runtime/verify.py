@@ -11,8 +11,32 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
 from dataclasses import dataclass, field
 from typing import Any
+
+# 写操作风险等级；用于确认「模型声称已写入」是否有真实工具证据。
+WRITE_RISK_LEVELS = frozenset({"write_confirm", "write_high"})
+
+# 明确的写操作请求（用于避免把历史事实陈述误判为新一轮写入）。
+_WRITE_REQUEST_PATTERN = re.compile(
+    r"(?:帮我|给我|替我|麻烦)?记(?:一?笔|一下|个|账)"
+    r"|记账"
+    r"|(?:创建|新增|添加|新建|删除|删掉|修改|更新|提交|保存|导入|结算|还款|扣款|登记|设置)"
+    r"|(?:买|采购|购买|花费|花了|支出|收入|卖出|卖了)"
+)
+
+# 模型常见的「写入已完成」措辞；只匹配动作完成声明，不匹配查询结果。
+_WRITE_CLAIM_PATTERNS = (
+    re.compile(
+        r"(?:已经|已)(?:成功|完成)?(?:为您|为你|帮你|给您|给我|为我)?"
+        r"(?:记录|记账|记好|创建|新增|添加|删除|更新|修改|提交|保存|导入|结算|设置|登记|还款|扣款)"
+    ),
+    re.compile(
+        r"(?:记录|记账|记好|创建|新增|添加|删除|更新|修改|提交|保存|导入|结算|设置|登记|还款|扣款)"
+        r"(?:成功|完成|好了)"
+    ),
+)
 
 # ─── ProgressLedger ──────────────────────────────────────────
 
@@ -200,6 +224,7 @@ class ProgressLedger:
         capability_group: str = "",
         data_scope: str = "",
         freshness_requirement: str = "",
+        risk_level: str = "",
         tool_call_id: str = "",
         step_index: int | None = None,
     ) -> int:
@@ -212,6 +237,7 @@ class ProgressLedger:
             "capability_group": capability_group,
             "data_scope": data_scope,
             "freshness_requirement": freshness_requirement,
+            "risk_level": risk_level,
             "tool_call_id": tool_call_id,
             "step_index": step_index,
         }
@@ -482,6 +508,41 @@ def pre_completion_checklist(
             issues.append(f"警告：{skill} 已重复调用 {n} 次（可能是低效）")
 
     return issues
+
+
+def looks_like_write_request(text: str) -> bool:
+    """判断当前用户请求是否表达写操作意图。"""
+    return bool(_WRITE_REQUEST_PATTERN.search(text or ""))
+
+
+def claims_write_completion(content: str) -> bool:
+    """判断回答是否声称写操作已经完成（而非查询结果）。"""
+    normalized = re.sub(r"\s+", "", content or "")
+    return any(pattern.search(normalized) for pattern in _WRITE_CLAIM_PATTERNS)
+
+
+def has_write_call(tracker: CallTracker) -> bool:
+    """本轮是否实际发起过写工具调用。"""
+    return any(call.get("risk_level") in WRITE_RISK_LEVELS for call in tracker.calls)
+
+
+def write_completion_guard_issue(
+    *,
+    user_input: str,
+    content: str,
+    tracker: CallTracker,
+    committed_result: dict[str, Any] | None,
+) -> str | None:
+    """拦截「未调用写工具却声称已写入」的伪造成功答复。"""
+    if not content or committed_result is not None:
+        return None
+    if not looks_like_write_request(user_input):
+        return None
+    if has_write_call(tracker):
+        return None
+    if not claims_write_completion(content):
+        return None
+    return "回答声称已完成写操作，但本轮没有实际调用写工具，结果并未落库"
 
 
 # ─── 辅助函数 ─────────────────────────────────────────────────

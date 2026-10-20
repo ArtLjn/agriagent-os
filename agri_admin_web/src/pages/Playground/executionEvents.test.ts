@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { appendExecutionEvent, executionEventFromChunk } from './executionEvents';
-import { buildTimelineItems } from './ExecutionTimeline';
+import { buildTimelineItems } from './executionTimelineModel';
 
 describe('executionEventFromChunk', () => {
   it('保留 SSE 事件的展示顺序和工具参数', () => {
