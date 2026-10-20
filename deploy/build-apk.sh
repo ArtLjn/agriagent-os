@@ -5,17 +5,19 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-MOBILE_DIR="$PROJECT_ROOT/mobile-app"
+MOBILE_DIR="$PROJECT_ROOT/agri_mobile_app"
 OUTPUT_DIR="$MOBILE_DIR/build/app/outputs/flutter-apk"
 DIST_DIR="$PROJECT_ROOT"
 APP_NAME="FarmManager"
 GRADLE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}/farm-manager/gradle"
 
-# 默认 API 地址
-PROD_API_URL="https://api.farm.lllcnm.cn"
-COMPANY_API_URL="http://172.16.57.244:8099"
-HOME_API_URL="http://10.167.110.141:8099"
+# 默认 API 地址（生产环境经 Caddy 反代）
+PROD_API_URL="https://admin.farm.lllcnm.cn/api"
+PROD_AGENT_API_URL="https://admin.farm.lllcnm.cn/api/agent"
+COMPANY_API_URL="http://172.16.57.244:8099/api/v2"
+HOME_API_URL="http://10.167.110.141:8099/api/v2"
 API_URL="$PROD_API_URL"
+AGENT_API_URL="$PROD_AGENT_API_URL"
 BUILD_TYPE="release"
 DRY_RUN=0
 SKIP_PUB_GET=0
@@ -35,8 +37,10 @@ usage() {
   --gradle-home DIR      指定隔离的 Gradle 缓存目录（默认 ~/.cache/farm-manager/gradle）
 
 API 地址:
-  --api URL              自定义 API 地址
-  --api=URL              自定义 API 地址
+  --api URL              自定义业务 API 地址
+  --api=URL              自定义业务 API 地址
+  --agent-api URL        自定义 Agent API 地址
+  --agent-api=URL        自定义 Agent API 地址
   --local                使用公司局域网地址
   --home                 使用家庭局域网地址
 
@@ -105,8 +109,16 @@ while [ "$#" -gt 0 ]; do
       GRADLE_HOME="$1"
       shift
       ;;
-    --local) API_URL="$COMPANY_API_URL"; shift ;;
-    --home) API_URL="$HOME_API_URL"; shift ;;
+    --local)
+      API_URL="$COMPANY_API_URL"
+      AGENT_API_URL="$COMPANY_API_URL"
+      shift
+      ;;
+    --home)
+      API_URL="$HOME_API_URL"
+      AGENT_API_URL="$HOME_API_URL"
+      shift
+      ;;
     --api=*)
       API_URL="${1#--api=}"
       [ -n "$API_URL" ] || fail "--api 不能为空"
@@ -116,6 +128,17 @@ while [ "$#" -gt 0 ]; do
       shift
       [ -n "${1:-}" ] || fail "--api 需要提供 URL"
       API_URL="$1"
+      shift
+      ;;
+    --agent-api=*)
+      AGENT_API_URL="${1#--agent-api=}"
+      [ -n "$AGENT_API_URL" ] || fail "--agent-api 不能为空"
+      shift
+      ;;
+    --agent-api)
+      shift
+      [ -n "${1:-}" ] || fail "--agent-api 需要提供 URL"
+      AGENT_API_URL="$1"
       shift
       ;;
     --output-dir=*)
@@ -141,9 +164,11 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-if [[ "$API_URL" != http://* && "$API_URL" != https://* ]]; then
-  fail "API 地址必须以 http:// 或 https:// 开头: $API_URL"
-fi
+for url in "$API_URL" "$AGENT_API_URL"; do
+  if [[ "$url" != http://* && "$url" != https://* ]]; then
+    fail "API 地址必须以 http:// 或 https:// 开头: $url"
+  fi
+done
 
 if [[ "$DIST_DIR" != /* ]]; then
   DIST_DIR="$PROJECT_ROOT/$DIST_DIR"
@@ -163,7 +188,8 @@ echo "========================================="
 echo " FarmManager Flutter APK 打包"
 echo "========================================="
 echo " 构建类型: $BUILD_TYPE"
-echo " API 地址: $API_URL"
+echo " 业务API:  $API_URL"
+echo " AgentAPI: $AGENT_API_URL"
 echo " 应用版本: v$VERSION_NAME"
 echo " 输出目录: $DIST_DIR"
 echo " Gradle缓存: $GRADLE_HOME"
@@ -175,7 +201,8 @@ fi
 
 BUILD_COMMAND=(
   flutter build apk "$BUILD_MODE_FLAG"
-  "--dart-define=API_BASE_URL=$API_URL"
+  "--dart-define=BUSINESS_API_BASE_URL=$API_URL"
+  "--dart-define=AGENT_API_BASE_URL=$AGENT_API_URL"
 )
 
 if [ "$DRY_RUN" -eq 1 ]; then

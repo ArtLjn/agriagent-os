@@ -10,10 +10,10 @@ EMULATOR_ID="${EMULATOR_ID:-Pixel_9_Pro_XL}"
 # Android 模拟器通过 10.0.2.2 访问电脑回环地址；USB 真机使用 ADB 转发。
 LOCAL_API_HOST="127.0.0.1"
 if [[ "$DEVICE_ID" == emulator-* ]]; then
-  LOCAL_API_HOST="10.0.2.2"
+  LOCAL_API_HOST="api.farm.lllcnm.cn"
 fi
-BUSINESS_API_URL="${BUSINESS_API_URL:-http://$LOCAL_API_HOST:9876/api/v2}"
-AGENT_API_URL="${AGENT_API_URL:-http://$LOCAL_API_HOST:8000/api/v2}"
+BUSINESS_API_URL="${BUSINESS_API_URL:-https://$LOCAL_API_HOST:9876/api/v2}"
+AGENT_API_URL="${AGENT_API_URL:-https://$LOCAL_API_HOST:8000/api/v2}"
 
 cd "$APP_DIR"
 

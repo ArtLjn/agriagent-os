@@ -9,7 +9,7 @@ set -e
 SERVER_IP="43.155.217.74"
 SERVER_USER="root"
 REMOTE_DIR="/root/workspace/farm-apk"
-DOWNLOAD_URL="http://${SERVER_IP}:8098"
+DOWNLOAD_URL="https://apk.farm.lllcnm.cn"
 
 APK_PATH="${1:-}"
 VERSION="${2:-}"
