@@ -24,6 +24,7 @@ describe('AdminLayout 菜单信息架构', () => {
 
   it('业务调试归纳管理员个人 app 账号的业务数据视图', () => {
     expect(groupByLabel('业务调试')).toEqual([
+      '/memos',
       '/operations',
       '/crops',
       '/cycles',

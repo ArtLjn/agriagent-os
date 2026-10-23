@@ -200,9 +200,28 @@ if ! "${UV_BIN}" sync --frozen --all-packages; then
     rdie "uv sync 失败"
 fi
 
+# 交给 systemd 按服务相同的语义读取环境文件，避免 shell 展开密码中的 $ 等字符。
+# 迁移和连通性检查必须与正式服务指向同一数据库。
+BUSINESS_CHECK=(
+    systemd-run --quiet --wait --pipe --collect
+    --property="WorkingDirectory=${REMOTE_DIR}"
+    --property="EnvironmentFile=-${REMOTE_DIR}/.env"
+    --setenv="PYTHONPATH=${REMOTE_DIR}"
+    --setenv="PYTHONDONTWRITEBYTECODE=1"
+    "${REMOTE_DIR}/.venv/bin/python" -B
+)
+
+# 只执行已审核的备忘录增量迁移，不扫描或执行目录中的 down SQL。
+# MySQL DDL 自动提交；后续代码回滚保留备忘录表和已有数据。
+rlog "检查并补齐备忘录表..."
+if ! "${BUSINESS_CHECK[@]}" -m scripts.migrate_memos --apply; then
+    rollback
+    rdie "备忘录迁移失败，未切换服务"
+fi
+
 # 在切换 systemd 前确认 Business 能连接数据库，并完成必要的初始管理员检查。
 rlog "检查 Business 数据库..."
-if ! .venv/bin/python -c 'from business.db import check_connection; from business.services.auth_service import ensure_admin_user; check_connection(); ensure_admin_user()'; then
+if ! "${BUSINESS_CHECK[@]}" -c 'from business.db import check_connection; from business.services.auth_service import ensure_admin_user; check_connection(); ensure_admin_user()'; then
     rollback
     rdie "Business 数据库检查失败"
 fi

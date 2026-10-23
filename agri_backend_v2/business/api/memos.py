@@ -3,6 +3,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from business.api.deps import require_permission
@@ -11,7 +12,15 @@ from business.services import memo_service as service
 from shared.api_response import api_http_exception
 from shared.roles import Permission
 
-router = APIRouter(prefix="/memos", tags=["memos"])
+router = APIRouter(
+    prefix="/memos",
+    tags=["memos"],
+    responses={
+        503: {
+            "description": "备忘录表未初始化或存储暂不可用；detail.code 为 memo_schema_not_ready 或 memo_storage_unavailable"
+        }
+    },
+)
 
 
 @router.get("")
@@ -24,15 +33,21 @@ def list_memos(
     skip: int = Query(default=0, ge=0),
 ) -> dict:
     """搜索自己的备忘录，身份不得由请求参数覆盖。"""
-    return service.list_memos(
-        db,
-        farm_id=user["farm_id"],
-        user_id=user["user_id"],
-        keyword=keyword,
-        archived=archived,
-        limit=limit,
-        skip=skip,
-    )
+    try:
+        return service.list_memos(
+            db,
+            farm_id=user["farm_id"],
+            user_id=user["user_id"],
+            keyword=keyword,
+            archived=archived,
+            limit=limit,
+            skip=skip,
+        )
+    except SQLAlchemyError as exc:
+        error = service.storage_error(exc, operation="query")
+        raise api_http_exception(
+            error.code, str(error), status_code=503, meta=error.meta
+        ) from None
 
 
 @router.post("", status_code=201)
@@ -46,6 +61,11 @@ def create_memo(
         return service.create_memo(
             db, farm_id=user["farm_id"], user_id=user["user_id"], request=request
         )
+    except SQLAlchemyError as exc:
+        error = service.storage_error(exc, operation="create")
+        raise api_http_exception(
+            error.code, str(error), status_code=503, meta=error.meta
+        ) from None
     except service.MemoError as exc:
         raise api_http_exception(
             exc.code, str(exc), status_code=409, meta=exc.meta
@@ -68,6 +88,11 @@ def update_memo(
             memo_id=memo_id,
             request=request,
         )
+    except SQLAlchemyError as exc:
+        error = service.storage_error(exc, operation="update")
+        raise api_http_exception(
+            error.code, str(error), status_code=503, meta=error.meta
+        ) from None
     except service.MemoError as exc:
         raise api_http_exception(
             exc.code,

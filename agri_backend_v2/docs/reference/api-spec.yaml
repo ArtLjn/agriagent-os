@@ -53,6 +53,8 @@ paths:
           - type: 'null'
           title: Authorization
       responses:
+        '503':
+          description: 备忘录表未初始化或存储暂不可用；detail.code 为 memo_schema_not_ready 或 memo_storage_unavailable，meta.operation 标明当前操作，不包含 SQL 或用户内容。
         '200':
           description: Successful Response
           content:
@@ -89,6 +91,8 @@ paths:
             schema:
               $ref: '#/components/schemas/MemoCreate'
       responses:
+        '503':
+          description: 备忘录表未初始化或存储暂不可用；detail.code 为 memo_schema_not_ready 或 memo_storage_unavailable，meta.operation 标明当前操作，不包含 SQL 或用户内容。
         '201':
           description: Successful Response
           content:
@@ -132,6 +136,8 @@ paths:
             schema:
               $ref: '#/components/schemas/MemoUpdate'
       responses:
+        '503':
+          description: 备忘录表未初始化或存储暂不可用；detail.code 为 memo_schema_not_ready 或 memo_storage_unavailable，meta.operation 标明当前操作，不包含 SQL 或用户内容。
         '200':
           description: Successful Response
           content:

@@ -457,3 +457,72 @@ def test_mcp_denies_write_before_opening_database(monkeypatch):
     with pytest.raises(_headers.McpToolAuthorizationError) as error:
         memo_tools.manage_memos(operation="create", **request().model_dump())
     assert error.value.permission == Permission.FARM_WRITE
+
+
+@pytest.mark.parametrize("operation", ["query", "create", "update", "archive"])
+def test_missing_table_is_safe_in_mcp(sessions, monkeypatch, operation):
+    monkeypatch.setattr(
+        _headers, "get_principal", lambda permission: {"farm_id": 1, "user_id": "u1"}
+    )
+    monkeypatch.setattr(memo_tools, "session_scope", sessions.begin)
+    with sessions.begin() as db:
+        Memo.__table__.drop(db.connection())
+    result = memo_tools.manage_memos(
+        operation=operation, memo_id=1, archived=True, **request().model_dump()
+    )
+    assert result["code"] == "memo_schema_not_ready"
+    assert result["error"] == result["code"]
+    assert result["meta"] == {"operation": operation}
+    assert "SELECT" not in str(result) and "接头" not in str(result)
+
+
+@pytest.mark.parametrize(
+    "method,path,body",
+    [
+        ("get", "/api/v2/memos", None),
+        ("post", "/api/v2/memos", request().model_dump()),
+        ("patch", "/api/v2/memos/1", {"title": "秘密笔记"}),
+    ],
+)
+def test_rest_missing_table_returns_actionable_503(sessions, method, path, body):
+    with sessions.begin() as db:
+        Memo.__table__.drop(db.connection())
+    app = FastAPI()
+    install_api_exception_handlers(app)
+    app.include_router(memos.router, prefix="/api/v2")
+    app.dependency_overrides[get_current_user] = lambda: {
+        "farm_id": 1,
+        "user_id": "u1",
+        "role": "user",
+        "scope": "farm:read farm:write",
+    }
+
+    def db_dependency():
+        with sessions.begin() as db:
+            yield db
+
+    app.dependency_overrides[get_db] = db_dependency
+    with TestClient(app) as client:
+        response = client.request(method, path, json=body)
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "memo_schema_not_ready"
+    assert "SQL" not in response.text and "秘密笔记" not in response.text
+
+
+@pytest.mark.parametrize(
+    "number,code", [(1146, "memo_schema_not_ready"), (2006, "memo_storage_unavailable")]
+)
+def test_mysql_storage_errors_do_not_expose_parameters(number, code):
+    from pymysql.err import ProgrammingError
+    from sqlalchemy.exc import DBAPIError
+
+    error = service.storage_error(
+        DBAPIError(
+            "SELECT secret FROM memos",
+            {"content": "秘密"},
+            ProgrammingError(number, "秘密 SQL"),
+        ),
+        operation="create",
+    )
+    assert error.code == code
+    assert "秘密" not in str(error)

@@ -46,6 +46,7 @@ export const menuGroups: AdminMenuGroup[] = [
     icon: 'control',
     label: '业务调试',
     children: [
+      { key: '/memos', icon: 'form', label: '提醒 / 备忘录' },
       { key: '/operations', icon: 'control', label: '业务调试中心' },
       { key: '/crops', icon: 'read', label: '作物模板' },
       { key: '/cycles', icon: 'fieldTime', label: '种植周期' },

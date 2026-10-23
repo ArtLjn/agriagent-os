@@ -80,6 +80,7 @@ import {
   type SmartCreateMeta,
   type SmartCreateResult,
 } from './smartCreateModel';
+import { MemoPanel } from '../Memos';
 import { UnitCreateModal } from './UnitCreateModal';
 
 type WorkerForm = {
@@ -180,7 +181,7 @@ const defaultCategoryIcons = [
   { value: 'other', label: '其他' },
 ];
 
-const operationTabKeys = ['smart', 'planting', 'labor', 'finance', 'settings'] as const;
+const operationTabKeys = ['smart', 'planting', 'labor', 'finance', 'memos', 'settings'] as const;
 type OperationTabKey = typeof operationTabKeys[number];
 
 function isOperationTabKey(value: string | null): value is OperationTabKey {
@@ -279,6 +280,11 @@ export default function Operations() {
             key: 'finance',
             label: <span><DollarOutlined /> 赊账与分类</span>,
             children: <FinancePanel />,
+          },
+          {
+            key: 'memos',
+            label: <span><FormOutlined /> 提醒 / 备忘录</span>,
+            children: <MemoPanel />,
           },
           {
             key: 'settings',

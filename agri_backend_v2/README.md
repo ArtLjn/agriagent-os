@@ -81,3 +81,17 @@ bash agri_backend_v2/business/scripts/test_rest_api.sh
 5. `agent/context.py` → 看 LLM 上下文怎么拼
 6. `agent/hitl.py` → 看闸门怎么拦写操作
 7. `agent/memory.py` → 看跨会话状态
+
+
+### 备忘录数据库迁移
+
+新环境使用 `sql/farm_manager.sql` 初始化。已有环境在当前目录使用 Business 的实际环境变量执行：
+
+```bash
+# 默认只检查，不修改数据库。
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m scripts.migrate_memos
+# 缺表时只创建 memos；重复执行不会覆盖数据。
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m scripts.migrate_memos --apply
+```
+
+`deploy/server-sync.sh` 已在服务切换前接入迁移，迁移失败中止发布。已有表结构不兼容时需人工审核修复，不能通过删除表解决；代码回滚保留表与数据。管理端入口为“业务调试 → 提醒 / 备忘录”，也可打开 `/operations?tab=memos`。完整边界与验收见 [备忘录设计](docs/design/memos-and-farm-review.md)。

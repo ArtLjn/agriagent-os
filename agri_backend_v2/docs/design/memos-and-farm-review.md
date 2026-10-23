@@ -71,10 +71,11 @@ payments = await registry.require("get_payment_overview").execute({}, ctx)
 
 ## 发布和回滚
 
-1. 在目标数据库执行 `business/migrations/20261023_memos_up.sql`，再发布 Business 与 Agent。
-2. 重启 Agent 使新增 skill 被目录加载器发现。
-3. 应用启动不自动迁移；本次开发未修改线上数据库。
-4. 回滚先停止相关流量并备份备忘录，撤回服务版本；down SQL 会删除表，仅在确认后执行。
+1. 在 `agri_backend_v2` 下使用 Business 实际运行环境执行 `python -B -m scripts.migrate_memos` 只读检查；缺表时执行 `python -B -m scripts.migrate_memos --apply`。脚本仅执行 `business/migrations/20261023_memos_up.sql`，已有表只校验列、主键、幂等唯一约束、列表索引和关联外键，不覆盖数据。结构不兼容时中止，由管理员审核修复。
+2. `deploy/server-sync.sh` 在服务切换前自动执行该专项增量迁移，沿用配置及 `.env` 环境覆盖，失败时回滚代码并停止切换。MySQL 命名锁串行化重复部署；DDL 自动提交，代码回滚不删除新增表。新库初始化基线 `sql/farm_manager.sql` 同步包含相同 DDL。
+3. 重启 Agent 使新增 skill 被目录加载器发现。
+4. 应用启动不自动迁移，迁移属于发布步骤。2026-10-23 已在本地与线上共用的 farm_manager 数据库补建缺失表，重复执行与结构校验通过；服务器旧代码仍需正常发布，建表不等于前后端已更新。
+5. 回滚先停止相关流量并备份备忘录，撤回服务版本；down SQL 会删除表，仅在确认后执行。
 
 ## 验证
 
@@ -83,3 +84,13 @@ payments = await registry.require("get_payment_overview").execute({}, ctx)
 接入回归从真实 SkillRegistry 加载技能，经 SkillContext、BusinessClient 和进程内 FastMCP 传输执行到数据库，覆盖创建重放、编辑、归档恢复、业务错误传播和两个盘点工具。测试仅替换鉴权主体与数据库，不调用外部模型，也不验证线上 HTTP 传输；缺参测试验证在 MCP 调用前阻止无效写入。
 
 接口文档见 `../reference/api-spec.yaml`，包含本次备忘录与 Agent 管理接口；其余端点以运行服务 `/openapi.json` 为准。
+
+## 管理端与错误处理
+
+侧栏“业务调试 → 提醒 / 备忘录”（`/memos`）和业务调试中心的同名页签（`/operations?tab=memos`）共用 `pages/Memos/index.tsx` 的 MemoPanel。面板提供搜索、分页、新建、编辑、置顶、归档、恢复和错误重试。只读取当前登录用户，Playground 模拟用户不会与管理员记录混在一起。创建网络失败保留输入和请求键；换筛选取消旧请求，避免迟到响应覆盖当前结果。
+
+`src/api/memos.ts` 封装 REST 请求和类型；新页面独立于已超长的 Operations 文件，并由独立路由与页签共同使用。`scripts/migrate_memos.py` 是发布脚本和运维 CLI 共用的数据库迁移边界，不属于请求时业务逻辑，禁止应用启动自动建表。
+
+REST 数据库异常返回 503，MCP 返回带 error/code/message/meta 的失败结果。缺表为 `memo_schema_not_ready`，其他存储失败为 `memo_storage_unavailable`；用户能看到修复提示，响应和业务日志均不包含 SQL、绑定参数或备忘录正文。
+
+新增验证：缺表下 REST 三个端点和 MCP 四种操作均不会报告成功；模拟 MySQL 1146 和断连异常检查脱敏；迁移覆盖缺表、重复执行、结构不完整、锁超时和失败释放锁。前端覆盖筛选、幂等重试、编辑、置顶、归档恢复、分页收缩和迟到响应。
