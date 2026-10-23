@@ -5,9 +5,22 @@ export interface DashboardSummary {
   name: string;
   location: string | null;
   today: string;
-  active_cycles: unknown[];
+  active_cycles: {
+    cycle_id: number;
+    crop: string;
+    area_mu: number | null;
+    current_stage: string | null;
+    start_date: string | null;
+    field_name: string | null;
+    status: string;
+  }[];
   recent_logs_count: number;
-  recent_logs_preview: unknown[];
+  recent_logs_preview: {
+    id: number;
+    operation_type: string;
+    operation_date: string | null;
+    note?: string | null;
+  }[];
   weather_today: {
     date: string;
     max_c: number;

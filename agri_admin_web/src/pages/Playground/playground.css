@@ -255,6 +255,8 @@
   border-radius: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
+  /* 容器已提供 focus-within 提示，避免全局 focus-visible 再画一层矩形。 */
+  outline: none;
   resize: none;
   padding: 0;
   color: var(--pg-text);

@@ -1,0 +1,65 @@
+/* 仪表盘独立布局，复用全局主题令牌，避免影响其他管理页面。 */
+.farm-dashboard { color: var(--app-text); }
+.farm-dashboard .page-shell { max-width: 1480px; }
+.dashboard-actions { display: flex; align-items: center; gap: 16px; }
+.dashboard-actions time, .dashboard-eyebrow { color: var(--app-secondary); font-size: 12px; letter-spacing: .06em; }
+.dashboard-error { margin-bottom: 20px; }
+.dashboard-overview { display: grid; grid-template-columns: 1.3fr 1fr .8fr; align-items: center; gap: 32px; padding: 32px; border: 1px solid var(--app-border); border-radius: 18px; background: var(--app-surface); border-left: 4px solid var(--app-green); }
+.dashboard-overview h2 { margin: 12px 0 8px; font-size: 24px; letter-spacing: -.04em; overflow-wrap: anywhere; }
+.dashboard-overview p { margin: 0 0 24px; color: var(--app-secondary); font-size: 13px; }
+.farm-dashboard a { color: var(--app-secondary); text-decoration: none; transition: background 120ms ease, color 120ms ease; }
+.farm-dashboard a:hover { color: var(--app-text); }
+.dashboard-overview a { color: var(--app-green); font-size: 13px; }
+.dashboard-profit, .dashboard-overview__balance { display: flex; flex-direction: column; gap: 12px; font-size: 13px; }
+.dashboard-profit { border-left: 1px solid var(--app-border); padding-left: 32px; }
+.dashboard-profit strong { font-size: clamp(26px, 2.8vw, 42px); font-weight: 600; letter-spacing: -.05em; }
+.dashboard-overview__balance strong { font-size: 26px; font-weight: 500; }
+.dashboard-overview small { color: var(--app-secondary); font-size: 12px; }
+.dashboard-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 20px 0; }
+.dashboard-metric { display: flex; align-items: flex-start; gap: 16px; padding: 24px; border: 1px solid var(--app-border); border-radius: 14px; background: var(--app-surface); color: var(--app-secondary); font-size: 13px; }
+.dashboard-metric > .anticon:first-child { padding: 10px; background: var(--app-green-soft); color: var(--app-green); border-radius: 10px; font-size: 19px; }
+.dashboard-metric > .anticon:last-child:not(:first-child) { margin-left: auto; font-size: 12px; }
+.dashboard-metric strong { display: block; color: var(--app-text); font-size: 32px; font-weight: 600; line-height: 1.5; font-variant-numeric: tabular-nums; }
+.dashboard-metric small { font-size: 13px; color: var(--app-secondary); font-weight: 400; }
+.dashboard-metric em { font-style: normal; font-size: 12px; }
+.dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 20px; }
+.dashboard-panel { min-width: 0; padding: 26px; background: var(--app-surface); border: 1px solid var(--app-border); border-radius: 14px; }
+.dashboard-panel header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 24px; }
+.dashboard-panel h2 { font-size: 17px; margin: 5px 0 0; font-weight: 600; }
+.dashboard-panel header a { font-size: 12px; flex-shrink: 0; }
+.dashboard-cycle-list { max-height: 330px; overflow: auto; }
+.dashboard-cycle { display: flex; align-items: center; gap: 14px; padding: 17px 0; border-top: 1px solid var(--app-border-soft); }
+.dashboard-cycle:hover { background: var(--app-fill); }
+.dashboard-cycle__icon { color: var(--app-green); font-size: 20px; }
+.dashboard-cycle__name { flex: 1; min-width: 0; }
+.dashboard-cycle__name strong { display: block; font-size: 14px; color: var(--app-text); overflow-wrap: anywhere; }
+.dashboard-cycle__name small { display: block; font-size: 12px; margin-top: 5px; }
+.dashboard-stage { background: var(--app-green-soft); color: var(--app-green); padding: 4px 9px; border-radius: 6px; font-size: 12px; }
+.dashboard-cycle__date { font-size: 11px; }
+.dashboard-weather__main { display: flex; align-items: center; gap: 24px; padding: 15px 0 30px; }
+.dashboard-weather__main > .anticon { font-size: 56px; color: var(--app-accent); }
+.dashboard-weather__main strong { display: block; font-size: 32px; font-weight: 500; letter-spacing: -.03em; }
+.dashboard-weather__main span:not(.anticon) { color: var(--app-secondary); }
+.dashboard-weather__details { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--app-border-soft); padding-top: 22px; }
+.dashboard-weather__details div { display: flex; flex-direction: column; gap: 8px; }
+.dashboard-weather__details span { font-size: 12px; color: var(--app-secondary); }
+.dashboard-weather__details strong { font-size: 22px; font-weight: 500; }
+.dashboard-weather__details small { font-size: 12px; color: var(--app-secondary); }
+.dashboard-money { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; margin: 22px 0; font-size: 13px; }
+.dashboard-money strong { font-variant-numeric: tabular-nums; font-weight: 500; }
+.dashboard-money > div { width: 100%; height: 7px; background: var(--app-fill-strong); border-radius: 8px; overflow: hidden; }
+.dashboard-money i { display: block; height: 100%; background: var(--app-green); border-radius: inherit; }
+.dashboard-money--cost i { background: var(--app-accent); }
+.dashboard-wages { display: flex; justify-content: space-between; border-top: 1px solid var(--app-border-soft); padding-top: 20px; font-size: 13px; color: var(--app-secondary); }
+.dashboard-wages strong { color: var(--app-text); font-weight: 500; }
+.dashboard-activity { list-style: none; padding: 0; margin: 0; }
+.dashboard-activity li { display: flex; align-items: baseline; gap: 12px; padding: 13px 0; border-top: 1px solid var(--app-border-soft); }
+.dashboard-activity__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--app-green); flex-shrink: 0; }
+.dashboard-activity li > div { flex: 1; min-width: 0; }
+.dashboard-activity strong { font-size: 13px; font-weight: 500; }
+.dashboard-activity p { margin: 5px 0 0; font-size: 12px; color: var(--app-secondary); overflow-wrap: anywhere; }
+.dashboard-activity time { font-size: 11px; color: var(--app-secondary); flex-shrink: 0; }
+@media (max-width: 1100px) { .dashboard-cycle__date { display: none; } .dashboard-overview { gap: 20px; padding: 24px; } .dashboard-profit { padding-left: 20px; } }
+@media (max-width: 800px) { .dashboard-grid { grid-template-columns: 1fr; } .dashboard-overview { grid-template-columns: 1fr 1fr; } .dashboard-overview__intro { grid-column: 1 / -1; } .dashboard-profit { border-left: 0; padding-left: 0; } .dashboard-metric { padding: 16px; gap: 10px; } .dashboard-metric > .anticon:first-child { display: none; } }
+@media (max-width: 480px) { .dashboard-metrics { grid-template-columns: 1fr; gap: 8px; } .dashboard-metric > .anticon:first-child { display: block; } .dashboard-metric strong { font-size: 26px; } .dashboard-overview { grid-template-columns: 1fr; } .dashboard-overview__intro { grid-column: auto; } .dashboard-panel { padding: 20px; } .dashboard-cycle { gap: 10px; } .dashboard-stage { max-width: 100px; } }
+@media (prefers-reduced-motion: reduce) { .farm-dashboard a { transition: none; } }
