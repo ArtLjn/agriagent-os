@@ -9,6 +9,7 @@ import logging
 import re
 import time
 import uuid
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -198,7 +199,7 @@ async def enqueue(turn) -> None:
             },
             upsert=True,
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 -- 后台投递故障不能使已经完成的主对话失败。
         logger.warning(
             "memory enqueue unavailable code=%s",
             getattr(exc, "code", type(exc).__name__),
@@ -300,8 +301,17 @@ async def apply_candidates(task: dict, candidates: list[Candidate]) -> None:
         )
         if candidate.relation != "new" and target is None:
             continue  # 模型引用只能来自当前身份与农场的可见记录。
+        correcting_explicit = bool(
+            target
+            and target["source_type"] == "explicit"
+            and candidate.relation == "contradict"
+            and candidate.merged_text
+        )
         if target and target["source_type"] == "explicit":
-            continue  # 用户手动修改优先，不让后台观察改回旧值。
+            # 普通观察不覆盖手工事实；用户后来明确纠正同一事实时允许更新，旧任务仍不能改回去。
+            updated_at = datetime.fromisoformat(target["updated_at"]).timestamp()
+            if not correcting_explicit or task.get("observed_at", 0) <= updated_at:
+                continue
         key = target["key"] if target else candidate.key
         configured_key = {
             "response.detail_level": "detail_level",
@@ -321,7 +331,7 @@ async def apply_candidates(task: dict, candidates: list[Candidate]) -> None:
         if record and (
             record["status"] in {"deleted", "expired"}
             or (record.get("expires_at") and record["expires_at"] <= now())
-            or record["source_type"] == "explicit"
+            or (record["source_type"] == "explicit" and not correcting_explicit)
         ):
             continue
         if record and not target and record["text"] != text:
@@ -382,6 +392,7 @@ async def apply_candidates(task: dict, candidates: list[Candidate]) -> None:
         )[-100:]
         record.update(
             text=text,
+            source_type="inferred",
             category=candidate.category
             if not target
             else target.get("category", candidate.category),
@@ -481,7 +492,7 @@ async def process_one() -> bool:
                 "$unset": {"text": "", "error_code": ""},
             },
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 -- 外部模型或存储故障统一进入有上限的租约重试。
         failed = task["attempts"] >= memory_runtime.attempts
         logger.warning(
             "memory learning failed code=%s task_id=%s turn_id=%s attempt=%s terminal=%s",
@@ -515,7 +526,7 @@ async def _run(index_only: bool = False) -> None:
                 await process_one()
         except asyncio.CancelledError:
             raise
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- 单个任务故障不能退出常驻 Worker，取消信号已单独传播。
             logger.warning(
                 "memory worker unavailable code=%s",
                 getattr(exc, "code", type(exc).__name__),
