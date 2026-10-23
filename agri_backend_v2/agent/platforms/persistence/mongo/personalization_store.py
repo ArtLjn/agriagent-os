@@ -39,7 +39,11 @@ async def load(user_id: str) -> dict:
     """存储故障必须与没有配置区分，禁止将故障伪装为空记录。"""
     try:
         owner = owner_key(user_id)
-        return await collection().find_one({"_id": owner}) or new_document(owner)
+        doc = await collection().find_one({"_id": owner}) or new_document(owner)
+        # 旧版默认关闭不等于用户主动关闭；显式选择始终优先于新版默认值。
+        if "auto_learn_enabled" not in doc["field_sources"]:
+            doc["settings"]["auto_learn_enabled"] = True
+        return doc
     except PyMongoError as exc:
         raise MemoryError(
             "memory_storage_unavailable", "记忆存储暂不可用", 503
@@ -98,9 +102,10 @@ async def create_memory(user_id: str, farm_uid: str, request: MemoryCreate) -> d
             if existing["status"] == "deleted":
                 raise MemoryError("memory_deleted", "该记忆已删除，请使用新的标识")
             fields = request.model_dump()
-            if any(existing[k] != v for k, v in fields.items()) or (
-                request.scope == "user_farm" and existing["farm_uid"] != farm_uid
-            ):
+            if any(
+                existing.get(k, "general" if k == "category" else None) != v
+                for k, v in fields.items()
+            ) or (request.scope == "user_farm" and existing["farm_uid"] != farm_uid):
                 raise MemoryError("memory_id_conflict", "记忆标识已被使用")
             return existing
     if request.key in Settings.model_fields or request.key.startswith("response."):

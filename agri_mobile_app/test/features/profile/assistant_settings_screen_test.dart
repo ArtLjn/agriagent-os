@@ -37,6 +37,7 @@ void main() {
     await tester.enterText(find.byType(TextField).first, '李师傅');
     await tester.scrollUntilVisible(find.text('保存设置'), 250,
         scrollable: find.byType(Scrollable).first);
+    expect(find.textContaining('无需逐条确认'), findsOneWidget);
     await tester.tap(find.text('保存设置'));
     await tester.pumpAndSettle();
     expect(adapter.find('PATCH', '/me/personalization').data,

@@ -521,9 +521,13 @@ def claims_write_completion(content: str) -> bool:
     return any(pattern.search(normalized) for pattern in _WRITE_CLAIM_PATTERNS)
 
 
-def has_write_call(tracker: CallTracker) -> bool:
-    """本轮是否实际发起过写工具调用。"""
-    return any(call.get("risk_level") in WRITE_RISK_LEVELS for call in tracker.calls)
+def has_write_call(tracker: CallTracker, *, include_unpersisted: bool = True) -> bool:
+    """风险分类记录写入尝试；核验完成声明时需排除明确未持久化的调用。"""
+    return any(
+        call.get("risk_level") in WRITE_RISK_LEVELS
+        and (include_unpersisted or call.get("persisted") is not False)
+        for call in tracker.calls
+    )
 
 
 def write_completion_guard_issue(
@@ -538,7 +542,7 @@ def write_completion_guard_issue(
         return None
     if not looks_like_write_request(user_input):
         return None
-    if has_write_call(tracker):
+    if has_write_call(tracker, include_unpersisted=False):
         return None
     if not claims_write_completion(content):
         return None

@@ -570,7 +570,6 @@ class MemoryRuntimeCfg:
     review_memory_limit: int = 30
     initial_confidence: float = 0.3
     evidence_confidence_step: float = 0.2
-    conflict_confidence: float = 0.1
     rag_url: str = field(default_factory=lambda: os.getenv("MEMORY_RAG_URL", ""))
     rag_api_key: str = field(
         default_factory=lambda: os.getenv("MEMORY_RAG_API_KEY", "")
@@ -593,15 +592,6 @@ class MemoryRuntimeCfg:
     attempts: int = field(
         default_factory=lambda: int(os.getenv("MEMORY_ATTEMPTS", "3"))
     )
-    min_turns: int = field(
-        default_factory=lambda: int(os.getenv("MEMORY_MIN_TURNS", "3"))
-    )
-    min_conversations: int = field(
-        default_factory=lambda: int(os.getenv("MEMORY_MIN_CONVERSATIONS", "2"))
-    )
-    candidate_days: int = field(
-        default_factory=lambda: int(os.getenv("MEMORY_CANDIDATE_DAYS", "30"))
-    )
     context_chars: int = field(
         default_factory=lambda: int(os.getenv("MEMORY_CONTEXT_CHARS", "3000"))
     )
@@ -621,9 +611,6 @@ class MemoryRuntimeCfg:
             "poll_seconds",
             "lease_seconds",
             "attempts",
-            "min_turns",
-            "min_conversations",
-            "candidate_days",
             "context_chars",
             "extraction_chars",
         ):

@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 MAX_MEMORIES = 200
 MAX_CONTEXT_MEMORIES = 5
+MemoryCategory = Literal["profile", "preference", "work", "response", "general"]
 COLLECTION_NAME = "agentUserPreferences"
 REPLY_STYLE_GUIDANCE = {
     "default": "自然、清晰地回答",
@@ -55,7 +56,7 @@ class Settings(BaseModel):
     custom_instructions: str = Field(default="", max_length=500)
     loading_greeting_enabled: bool = True
     execution_detail_level: Literal["concise", "detailed"] = "concise"
-    auto_learn_enabled: bool = False
+    auto_learn_enabled: bool = True
     use_saved_memories: bool = True
 
 
@@ -68,6 +69,7 @@ class MemoryCreate(BaseModel):
     memory_id: str = Field(pattern=r"^[a-zA-Z0-9_-]{1,64}$")
     scope: Literal["user", "user_farm"] = "user"
     kind: Literal["preference", "habit", "episode"] = "preference"
+    category: MemoryCategory = "general"
     key: str = Field(min_length=1, max_length=100)
     text: str = Field(min_length=1, max_length=500)
     conditions: list[Annotated[str, Field(min_length=1, max_length=100)]] = Field(

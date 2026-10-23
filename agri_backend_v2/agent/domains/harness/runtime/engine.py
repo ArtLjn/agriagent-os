@@ -836,7 +836,7 @@ async def _emit_final_answer(
         memory_issue
         and memory_issue.can_acknowledge
         and all(
-            call["skill"] == memory_tools.TOOL_NAME and call["risk_level"] == "read"
+            call["skill"] == memory_tools.TOOL_NAME and call.get("persisted") is False
             for call in tracker.calls
         )
         and not turn.committed_operations
@@ -1263,13 +1263,23 @@ async def _dispatch_tool_calls(
             turn.emit(started_ev["type"], started_ev["data"])
             yield started_ev
             result = await memory_tools.execute(turn, tc["arguments"], tool_call_id)
-            args = tc["arguments"] if isinstance(tc["arguments"], dict) else {}
+            try:
+                args = (
+                    _json.loads(tc["arguments"])
+                    if isinstance(tc["arguments"], str)
+                    else tc["arguments"]
+                )
+            except (ValueError, TypeError):
+                args = {}
+            args = args if isinstance(args, dict) else {}
             tracker.record(
                 memory_tools.TOOL_NAME,
                 args,
                 tool_call_id=tool_call_id,
-                risk_level="write_confirm" if result.get("persisted") else "read",
+                # 风险由请求动作决定，是否落库单独记录；失败的写请求不能伪装成读取。
+                risk_level="read" if args.get("action") == "list" else "write_confirm",
             )
+            tracker.calls[-1]["persisted"] = result.get("persisted") is True
             tracker.record_observation(memory_tools.TOOL_NAME, args, result)
             duration_ms = int((time.perf_counter() - started) * 1000)
             error = (

@@ -62,6 +62,7 @@ export interface MemoryRecord {
   farm_id?: number | null;
   farm_name?: string | null;
   kind: MemoryKind;
+  category?: MemoryCategory;
   key: string;
   value?: unknown;
   text: string;
@@ -83,8 +84,11 @@ export interface ListMemoriesParams {
   page_size?: number;
   scope?: MemoryScope;
   kind?: MemoryKind;
+  category?: MemoryCategory;
   status?: MemoryStatus;
 }
+
+export type MemoryCategory = "profile" | "preference" | "work" | "response" | "general";
 
 export interface MemoryListResponse {
   items: MemoryRecord[];
