@@ -10,8 +10,13 @@ from typing import Any
 
 import yaml
 
+# 支持直接执行脚本和作为测试模块导入，复用运行时字段定义，避免两份契约漂移。
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from agent.domains.harness.tools.base import CONTROL_METADATA_FIELDS, ROUTING_FIELDS
+
 FRONT_MATTER_RE = re.compile(r"^---\s*\n(.*?)\n---", re.DOTALL)
 TOP_LEVEL_FIELDS = {
+    *CONTROL_METADATA_FIELDS,
     "schema_version",
     "name",
     "kind",
@@ -21,13 +26,16 @@ TOP_LEVEL_FIELDS = {
     "execution",
     "completion",
     "description",
+    "routing",
     "triggers",
     "operations",
     "parameters",
 }
 OPERATION_FIELDS = {
+    *CONTROL_METADATA_FIELDS,
     "tool_name",
     "description",
+    "routing",
     "risk_level",
     "parameters",
     "required",
@@ -50,7 +58,7 @@ def parse_front_matter(path: Path) -> dict[str, Any]:
         raise ValueError("缺少以 --- 包围的 YAML front matter")
     value = yaml.safe_load(match.group(1))
     if not isinstance(value, dict):
-        raise ValueError("front matter 必须解析为对象")
+        raise TypeError("front matter 必须解析为对象")
     return value
 
 
@@ -58,6 +66,23 @@ def _is_string_list(value: Any) -> bool:
     return isinstance(value, list) and all(
         isinstance(item, str) and item for item in value
     )
+
+
+def _validate_routing(meta: dict, source: str, errors: list[str]) -> None:
+    """源码检查和操作展开前都拒绝无效的模型选择边界。"""
+    routing = meta.get("routing", {})
+    for field in CONTROL_METADATA_FIELDS:
+        if field in meta and (
+            not isinstance(meta[field], str) or not meta[field].strip()
+        ):
+            errors.append(f"{source}: {field} 必须是非空字符串")
+    if not isinstance(routing, dict) or any(
+        key not in ROUTING_FIELDS
+        or not _is_string_list(value)
+        or any(not item.strip() for item in value)
+        for key, value in routing.items()
+    ):
+        errors.append(f"{source}: routing 必须使用支持的字段及非空字符串列表")
 
 
 def validate_metadata(meta: dict[str, Any], source: str = "skill.md") -> list[str]:
@@ -86,6 +111,7 @@ def validate_metadata(meta: dict[str, Any], source: str = "skill.md") -> list[st
     ):
         errors.append(f"{source}: finalize_after_success 必须是布尔值")
     _validate_execution(meta.get("execution"), source, errors)
+    _validate_routing(meta, source, errors)
     _validate_completion(meta.get("completion"), source, errors)
     if (
         not isinstance(meta.get("description"), str)
@@ -151,6 +177,7 @@ def validate_metadata(meta: dict[str, Any], source: str = "skill.md") -> list[st
             if boolean_field in config and not isinstance(config[boolean_field], bool):
                 errors.append(f"{path}.{boolean_field} 必须是布尔值")
         _validate_execution(config.get("execution"), path, errors)
+        _validate_routing(config, path, errors)
         _validate_completion(config.get("completion"), path, errors)
         followup = config.get("approval_followup")
         if followup is not None:
@@ -273,13 +300,17 @@ def validate_directory(skills_dir: Path) -> list[str]:
                     )
                 else:
                     public_tools[tool_name] = path
-        except (OSError, ValueError, yaml.YAMLError) as exc:
+        except (OSError, ValueError, TypeError, yaml.YAMLError) as exc:
             errors.append(f"{path}: {exc}")
     return errors
 
 
 def main() -> int:
-    skills_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("agri_backend_v2/agent/skills")
+    skills_dir = (
+        Path(sys.argv[1])
+        if len(sys.argv) > 1
+        else Path(__file__).resolve().parents[1] / "agent" / "tools"
+    )
     errors = validate_directory(skills_dir)
     if errors:
         print("\n".join(errors), file=sys.stderr)

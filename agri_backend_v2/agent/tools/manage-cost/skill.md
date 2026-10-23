@@ -4,6 +4,10 @@ name: manage_cost
 kind: mcp
 mcp_tool: business.manage_cost
 risk_level: mixed
+routing:
+  use_when: [材料等实际收支流水、分类统计及茬口利润。]
+  avoid_when: [工资工时用作业单能力，不能重复记账；欠款查赊账；采购待办查备忘录。]
+  examples: [化肥花了多少, 这茬赚了多少钱]
 description: |
   管理农场财务记账（实际收支流水）。根据用户意图选择 operation：
   - create: 用户要记账/记录实际收支（如「买化肥100」「收入500」「花了200买农药」）

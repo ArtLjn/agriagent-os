@@ -1,5 +1,32 @@
 # Agent Harness：Skill / Tool Routing 方法论
 
+> last_updated: 2026-10-23
+
+## 当前实现：共享选择边界与完整意图保留
+
+默认 `main_agent` 模式仍提供全量工具，没有每轮仅选一个 Skill 的限制，也不新增额外路由 LLM 调用。
+主模型和可选 `llm_router` 共用 `routing` 元数据：适用意图、排除范围、典型表达；独立路由目录
+增加聚合 Skill 下的动作说明，避免只看大类名称误选。元数据版本为 `skill-metadata.v2`。
+
+独立路由器接收最近最多四条 user/assistant 消息，每条最多 1200 字，保持为不可信输入数据。
+只用历史解释省略和指代，当前纠正或换题优先。允许多个候选；`uncertain=true` 或候选超过
+配置上限时降级到全量工具，而不是直接截掉后面的用户要求。候选集合不代表必须执行，更不代表写入授权。
+自定义 Router backend 可接受可选的 `history` 关键字；旧 backend 在无历史时保持兼容，不支持历史时安全降级全量。
+
+验证使用 `tests/test_skill_routing_replay.py` 中的脱敏对照集，覆盖个人事项、天气预警、历史农事、
+明确作业单、工资、材料账目、复合查询、短回复和偏好交流。默认跳过外部模型，按需在后端目录执行：
+
+```bash
+AGENT_ROUTING_LIVE=1 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m pytest -q -p no:cacheprovider tests/test_skill_routing_replay.py
+```
+
+业务工具选择回放使用合成结果，绝不调用真实业务工具。普通偏好另外验证真实模型判断、记忆工具的无写入分支和运行时答复核验，
+存储入口设为一旦访问即失败，要求最终正常完成且不声称长期保存或系统故障。单次通过不代表所有表达均可靠，
+发现误选应补入对照集并同时验证相近意图，不能仅给某个句子加固定路由规则。
+
+系统提示词仅保留跨能力原则，不维护具体问法清单。聚合级用途和示例只在 Router 目录出现一次，
+动作工具继承排除边界、补充自身需要的说明，避免把整个 Skill 的例句复制到每个增删改查动作。
+
 ## 1. 核心原则
 
 Agent Harness 中是否需要 Skill Router，不应该由 Skill / Tool 数量单独决定。

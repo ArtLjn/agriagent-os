@@ -4,6 +4,10 @@ name: manage_debt
 kind: mcp
 mcp_tool: business.manage_debt
 risk_level: mixed
+routing:
+  use_when: [交易对象的赊账、欠款、应收应付和还款。]
+  avoid_when: [工人工资查 query_wages；材料收支查账目；全部待结款用 get_payment_overview。]
+  examples: [谁还欠我的钱, 老王的欠款结清了吗]
 description: |
   管理农场赊账。根据用户意图选择 operation：
   - create: 用户要记录赊账（如「欠张三500化肥款」「李四借了300」「应收王五200」）

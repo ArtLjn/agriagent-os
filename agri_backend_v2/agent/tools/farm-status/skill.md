@@ -4,6 +4,10 @@ name: get_farm_status
 kind: mcp
 mcp_tool: business.get_farm_status
 risk_level: read
+routing:
+  use_when: [查看农场当前的整体状态和活跃茬口概览。]
+  avoid_when: [个人安排和备忘查 query_memos，具体派工查 query_work_orders，已做农事查 query_farm_logs。今日概览不能回答明天的个人事项或预报。]
+  examples: [农场现在整体怎么样, 当前有哪些活跃茬口]
 description: 查询农场当前整体状态：活跃茬口、最近农事、今日天气。
 triggers:
   - 农场状态

@@ -256,7 +256,11 @@ async def _route_turn_skills(turn: Turn) -> SkillRoute | None:
         return None
 
     router_registry = SkillRegistry.from_skills(skill_loader.load_all())
-    route_result = await _build_skill_router().route(turn.user_input, router_registry)
+    route_result = await _build_skill_router().route(
+        turn.user_input,
+        router_registry,
+        history=turn.memory_snapshot.get("messages") or [],
+    )
     trace_skill_router(
         registry_count=len(router_registry.all()),
         exposed_tool_count=len(router_registry.exposed_tools()),
@@ -828,11 +832,36 @@ async def _emit_final_answer(
     保留在同一编排函数，以便核对纠错返回和最终事件互斥，避免收尾后再次进入执行循环。
     """
     memory_issue = await memory_tools.completion_guard_issue(turn, content)
-    guard_issue = memory_issue or verify.write_completion_guard_issue(
-        user_input=turn.user_input,
-        content=content,
-        tracker=tracker,
-        committed_result=turn.committed_result,
+    if (
+        memory_issue
+        and memory_issue.can_acknowledge
+        and all(
+            call["skill"] == memory_tools.TOOL_NAME and call["risk_level"] == "read"
+            for call in tracker.calls
+        )
+        and not turn.committed_operations
+        and turn.committed_result is None
+    ):
+        # 普通偏好不是执行任务：修正不实承诺即可完成对话，让受控后台学习正常接收观察。
+        # 只对没有其他业务调用的纯偏好陈述兜底，不能掩盖混合请求中的未完成操作。
+        content = memory_tools.PREFERENCE_ACKNOWLEDGEMENT
+        log_event(
+            logger,
+            logging.INFO,
+            "memory_reply_repaired",
+            code="preference_acknowledged",
+            data={"turn_id": turn.turn_id},
+        )
+        memory_issue = None
+    guard_issue = (
+        memory_issue.message
+        if memory_issue
+        else verify.write_completion_guard_issue(
+            user_input=turn.user_input,
+            content=content,
+            tracker=tracker,
+            committed_result=turn.committed_result,
+        )
     )
     if guard_issue:
         turn.write_guard_attempts += 1

@@ -11,7 +11,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from agent.domains.harness.tools.base import McpSkill, Skill
+from agent.domains.harness.tools.base import (
+    CONTROL_METADATA_FIELDS,
+    ROUTING_FIELDS,
+    McpSkill,
+    Skill,
+)
 
 
 class SkillRegistryError(ValueError):
@@ -62,6 +67,20 @@ class SkillRegistry:
 
     @staticmethod
     def _validate_skill(skill: Skill) -> None:
+        # 文档配置进入模型提示前验证类型；错误字段不能静默丢弃并退化为模糊描述。
+        for metadata in (skill._meta, getattr(skill, "_operation_config_meta", {})):
+            routing = metadata.get("routing", {})
+            if not isinstance(routing, dict) or any(
+                key not in ROUTING_FIELDS
+                or not isinstance(value, list)
+                or any(not isinstance(item, str) or not item.strip() for item in value)
+                for key, value in routing.items()
+            ):
+                raise SkillRegistryError(
+                    "invalid_routing_metadata",
+                    skill.name,
+                    "routing 必须使用支持的字段及非空字符串列表",
+                )
         schema = skill.parameters_schema
         if not isinstance(schema, dict) or schema.get("type") != "object":
             raise SkillRegistryError(
@@ -98,11 +117,7 @@ class SkillRegistry:
             raise SkillRegistryError(
                 "mcp_tool_missing", skill.name, "MCP Skill must declare mcp_tool"
             )
-        for field_name in (
-            "capability_group",
-            "data_scope",
-            "freshness_requirement",
-        ):
+        for field_name in CONTROL_METADATA_FIELDS:
             value = skill._control_metadata(field_name)
             raw_value = skill._meta.get(field_name)
             if raw_value is not None and not isinstance(raw_value, str):
@@ -303,12 +318,12 @@ class SkillRegistry:
                     "name": name,
                     "description": metadata_skill.description,
                     "capabilities": list(metadata_skill.capabilities),
-                    "context_dependencies": list(
-                        metadata_skill.context_dependencies
-                    ),
+                    "context_dependencies": list(metadata_skill.context_dependencies),
                     "capability_groups": [],
                     "data_scopes": [],
                     "risk_levels": [],
+                    "routing": metadata_skill.routing,
+                    "actions": [],
                 },
             )
             for field_name, value in (
@@ -320,9 +335,20 @@ class SkillRegistry:
             risk_levels = item["risk_levels"]
             if skill.risk_level not in risk_levels:
                 risk_levels.append(skill.risk_level)
+            action = {
+                "name": skill.name,
+                "description": skill.description,
+                "risk_level": skill.risk_level,
+            }
+            # 聚合能力可能同时含查询、创建和结算；保留操作差异，不能只凭大类名称选择。
+            if skill.routing != metadata_skill.routing:
+                action["routing"] = skill.routing
+            item["actions"].append(action)
         return [catalog[name] for name in sorted(catalog)]
 
-    def tools_for_router_skills(self, skill_names: tuple[str, ...]) -> list[dict[str, Any]]:
+    def tools_for_router_skills(
+        self, skill_names: tuple[str, ...]
+    ) -> list[dict[str, Any]]:
         """将 Router 选中的 Skill 展开为模型可见的 Tool Schema。"""
         selected = set(skill_names)
         return [

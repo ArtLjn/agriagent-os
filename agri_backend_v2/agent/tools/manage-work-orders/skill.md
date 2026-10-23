@@ -4,6 +4,10 @@ name: manage_work_orders
 kind: mcp
 mcp_tool: business.manage_work_orders
 risk_level: mixed
+routing:
+  use_when: [明确的农事作业单、派工、工时和工人工资。]
+  avoid_when: [个人提醒先查备忘录；已做农事查日志；材料收支查账目。]
+  examples: [明天的作业单, 本月未结工资]
 description: |
   管理农事作业单、工时记录和工人工资查询。根据用户意图选择 operation：
   - create: 创建作业单/安排农事活动（如「创建播种作业单」「安排今天施肥」）

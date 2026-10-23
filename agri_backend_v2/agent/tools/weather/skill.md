@@ -4,6 +4,10 @@ name: get_weather
 kind: mcp
 mcp_tool: business.get_weather
 risk_level: read
+routing:
+  use_when: [查询某地点和日期的天气、气象预警，或判断天气是否适合作业。]
+  avoid_when: [用户个人备忘和提醒事项属于 query_memos；不要把“我的提醒”自动解释为天气预警。当前天气不能替代指定日期的预报。]
+  examples: [明天苏州什么天气, 明天有什么气象预警, 明天适合打药吗]
 description: 查询指定位置未来 1-7 天的天气预报、官方气象预警和高温大雨大风霜冻等农事风险。
 triggers:
   - 天气

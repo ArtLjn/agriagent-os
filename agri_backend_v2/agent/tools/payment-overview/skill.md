@@ -4,6 +4,10 @@ name: get_payment_overview
 kind: mcp
 mcp_tool: business.get_payment_overview
 risk_level: read
+routing:
+  use_when: [同时盘点应收、应付和未结工资等多个来源的待结款。]
+  avoid_when: [单个工人的工资明细查 query_wages；具体往来赊账查 query_debts。盘点成功不代表执行付款。]
+  examples: [还有哪些钱没结, 应收应付和工资一起盘点一下]
 description: 同时盘点应收赊账、应付赊账和未结工资，适用于“还有哪些钱没结”“收付款盘点”。
 triggers: [待结款, 收付款盘点, 未结工资]
 operations: {}
