@@ -37,6 +37,21 @@ describe('AdminLayout 菜单信息架构', () => {
 });
 
 describe('AdminLayout 侧边栏折叠', () => {
+  it('当前 Agent 分组可以收起，页面重渲染不会强制展开', async () => {
+    const view = render(<MemoryRouter initialEntries={['/dev/playground']}><AdminLayout><div>工作区</div></AdminLayout></MemoryRouter>);
+    const group = await screen.findByRole('menuitem', { name: 'Agent 平台' });
+    expect(group).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(group);
+    await waitFor(() => expect(group).toHaveAttribute('aria-expanded', 'false'));
+    view.rerender(<MemoryRouter initialEntries={['/dev/playground']}><AdminLayout><div>更新工作区</div></AdminLayout></MemoryRouter>);
+    expect(group).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(group);
+    await waitFor(() => expect(group).toHaveAttribute('aria-expanded', 'true'));
+    fireEvent.click(screen.getByRole('menuitem', { name: '业务运营' }));
+    await waitFor(() => expect(group).toHaveAttribute('aria-expanded', 'false'));
+    expect(screen.getByRole('menuitem', { name: '业务运营' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
   it('通过品牌栏按钮收起和展开侧边栏', async () => {
     render(
       <MemoryRouter initialEntries={['/dev/data-flywheel']}>
@@ -48,11 +63,13 @@ describe('AdminLayout 侧边栏折叠', () => {
 
     expect(screen.getByRole('img', { name: '田掌柜' })).toBeInTheDocument();
     expect(screen.getByText('智能种植运营助手')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '退出登录' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '折叠侧边栏' }));
 
     await waitFor(() => {
       expect(screen.queryByText('智能种植运营助手')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '退出登录' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: '展开侧边栏' })).toBeInTheDocument();
     });
 

@@ -42,7 +42,8 @@ describe("personalization api", () => {
     resetPersonalizationDemo();
   });
 
-  it("默认演示模式不发起请求，避免未实现接口触发 401 跳登录", async () => {
+  it("显式演示模式不发起请求", async () => {
+    vi.stubEnv("VITE_PERSONALIZATION_API_ENABLED", "false");
     const settings = await personalizationApi.getSettings();
 
     expect(mockedApiClient.get).not.toHaveBeenCalled();
@@ -63,9 +64,9 @@ describe("personalization api", () => {
       nickname: "李师傅",
     });
 
-    expect(mockedApiClient.get).toHaveBeenCalledWith("/me/personalization", { silent: true });
+    expect(mockedApiClient.get).toHaveBeenCalledWith("/agent/me/personalization", { silent: true });
     expect(mockedApiClient.patch).toHaveBeenCalledWith(
-      "/me/personalization",
+      "/agent/me/personalization",
       { expected_revision: 3, nickname: "李师傅" },
       { silent: true },
     );
@@ -87,22 +88,29 @@ describe("personalization api", () => {
       status: "active",
     });
 
-    expect(mockedApiClient.get).toHaveBeenCalledWith("/me/memories", {
+    expect(mockedApiClient.get).toHaveBeenCalledWith("/agent/me/memories", {
       params: { page: 1, page_size: 20, scope: "user", status: "active" },
       silent: true,
     });
   });
 
-  it("接口未接入时降级到本地演示数据并标记演示模式", async () => {
+  it("真实接口失败时不使用演示数据伪装成功", async () => {
     vi.stubEnv("VITE_PERSONALIZATION_API_ENABLED", "true");
     mockedApiClient.get.mockRejectedValueOnce({
       isAxiosError: true,
       response: { status: 404 },
     });
 
-    const settings = await personalizationApi.getSettings();
-
-    expect(settings.assistant_name).toBe("田掌柜");
-    expect(isPersonalizationDemo()).toBe(true);
+    await expect(personalizationApi.getSettings()).rejects.toMatchObject({
+      response: { status: 404 },
+    });
+    expect(isPersonalizationDemo()).toBe(false);
   });
+  it("新增明确记忆发送稳定标识到 Agent，默认使用真实接口", async () => {
+    mockedApiClient.post.mockResolvedValueOnce({ data: { memory_id: "stable" } } as never);
+    const payload = { memory_id: "stable", key: "manual.stable", text: "先看成本", scope: "user" as const };
+    await personalizationApi.createMemory(payload);
+    expect(mockedApiClient.post).toHaveBeenCalledWith("/agent/me/memories", payload, { silent: true });
+  });
+
 });

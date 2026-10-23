@@ -144,6 +144,7 @@ class _AppShellState extends State<AppShell>
                   onCreateRecord: () => _openLedgerCreate(context),
                 ),
                 ProfileScreen(
+                  agentClient: widget.dependencies.yaya.client,
                   repository: widget.dependencies.profile,
                   locations: widget.dependencies.locations,
                   location: widget.dependencies.location,

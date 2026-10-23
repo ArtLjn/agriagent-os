@@ -50,10 +50,16 @@ export default function MemoryTable({
       render: (_: unknown, record: MemoryRecord) => (
         <div style={{ maxWidth: 380 }}>
           <div>{record.text}</div>
+          {record.review_reason && (
+            <div style={captionStyle}>{record.review_reason}</div>
+          )}
+          {record.conflicts_with && (
+            <Tag color="warning">与已有记忆不一致，请核对</Tag>
+          )}
           {(record.conditions ?? []).length > 0 && (
             <Space size={4} wrap style={{ marginTop: 6 }}>
               {(record.conditions ?? []).map((condition) => (
-                <Tag key={condition} color="blue" bordered={false}>
+                <Tag key={condition} bordered={false} className="memory-condition-tag">
                   {condition}
                 </Tag>
               ))}

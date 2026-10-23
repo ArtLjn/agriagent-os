@@ -9,6 +9,7 @@ See harness_study spec: docs/00-react-loop.md, docs/01-vertical-slice.md.
 
 from __future__ import annotations
 
+import time
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
@@ -76,6 +77,8 @@ class Turn:
 
     # Input.
     user_input: str = ""
+    temporary: bool = False
+    accepted_at: float = field(default_factory=time.time)
 
     # Identity（farm_uid 是对外可信标识，farm_id 仅为 Redis/历史状态兼容）。
     user_id: str = ""

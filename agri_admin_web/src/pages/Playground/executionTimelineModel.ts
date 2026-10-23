@@ -13,7 +13,7 @@ export const eventMeta: Record<ExecutionEvent['type'], { label: string; color: s
   approval_required: { label: '等待确认', color: palette.warning },
   approval_result: { label: '审批结果', color: palette.purple },
   operation_committed: { label: '业务提交', color: palette.success },
-  context_usage: { label: '上下文', color: '#8b949e' },
+  context_usage: { label: '上下文', color: 'rgba(235, 235, 245, 0.6)' },
   context_compressing: { label: '上下文压缩', color: palette.warning },
   context_compressed: { label: '压缩完成', color: palette.success },
   doom_loop_warning: { label: '循环告警', color: palette.danger },

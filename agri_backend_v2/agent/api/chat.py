@@ -49,6 +49,7 @@ logger = logging.getLogger(__name__)
 
 class ChatRequest(BaseModel):
     message: str
+    temporary: bool = False
     conversation_id: str = "default"
     client_request_id: str | None = None
 
@@ -68,6 +69,11 @@ async def chat(
 ) -> StreamingResponse:
     """Create a durable turn and stream replayable Redis events."""
     conv_id = req.conversation_id or "default"
+    # 独立命名空间避免临时模式读入普通会话历史。
+    if conv_id.startswith("temporary:"):
+        req.temporary = True
+    elif req.temporary:
+        conv_id = f"temporary:{conv_id}"
     identity = require_identity_permission(
         parse_identity(authorization), Permission.AGENT_INVOKE
     )
@@ -98,6 +104,7 @@ async def chat(
     turn = Turn(
         conversation_id=conv_id,
         user_input=req.message,
+        temporary=req.temporary,
         user_id=identity["user_id"],
         farm_uid=identity["farm_uid"],
         farm_id=identity["farm_id"],

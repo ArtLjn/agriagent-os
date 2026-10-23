@@ -5,13 +5,29 @@
     <link rel="icon" type="image/png" href="/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>田掌柜 Admin</title>
+    <script>
+      (() => {
+        try {
+          const stored = localStorage.getItem('tianzhanggui-theme')
+            ?? localStorage.getItem('tianzhanggui-login-theme');
+          document.documentElement.dataset.theme = stored === 'light' ? 'light' : 'dark';
+        } catch {
+          document.documentElement.dataset.theme = 'dark';
+        }
+      })();
+    </script>
     <style>
       html, body, #root {
         margin: 0;
         padding: 0;
         width: 100%;
         height: 100%;
-        background: #0d1117;
+        background: #f2f0ed;
+      }
+      html[data-theme="dark"],
+      html[data-theme="dark"] body,
+      html[data-theme="dark"] #root {
+        background: #202020;
       }
     </style>
   </head>

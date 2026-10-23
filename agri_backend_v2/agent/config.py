@@ -554,3 +554,81 @@ def _build_settings() -> Settings:
 
 
 settings = _build_settings()
+
+
+@dataclass
+class MemoryRuntimeCfg:
+    """记忆后台任务与独立检索预算，密钥仅通过环境注入。"""
+
+    context_timeout: float = field(
+        default_factory=lambda: float(os.getenv("MEMORY_CONTEXT_TIMEOUT", "1.5"))
+    )
+    index_batch_size: int = 3
+    assessment_timeout: float = field(
+        default_factory=lambda: float(os.getenv("MEMORY_ASSESSMENT_TIMEOUT", "15"))
+    )
+    review_memory_limit: int = 30
+    initial_confidence: float = 0.3
+    evidence_confidence_step: float = 0.2
+    conflict_confidence: float = 0.1
+    rag_url: str = field(default_factory=lambda: os.getenv("MEMORY_RAG_URL", ""))
+    rag_api_key: str = field(
+        default_factory=lambda: os.getenv("MEMORY_RAG_API_KEY", "")
+    )
+    rag_collection: str = field(
+        default_factory=lambda: os.getenv("MEMORY_RAG_COLLECTION", "agent_user_memory")
+    )
+    retrieve_timeout: float = field(
+        default_factory=lambda: float(os.getenv("MEMORY_RETRIEVE_TIMEOUT", "0.8"))
+    )
+    index_timeout: float = field(
+        default_factory=lambda: float(os.getenv("MEMORY_INDEX_TIMEOUT", "30.0"))
+    )
+    poll_seconds: float = field(
+        default_factory=lambda: float(os.getenv("MEMORY_POLL_SECONDS", "5.0"))
+    )
+    lease_seconds: int = field(
+        default_factory=lambda: int(os.getenv("MEMORY_LEASE_SECONDS", "120"))
+    )
+    attempts: int = field(
+        default_factory=lambda: int(os.getenv("MEMORY_ATTEMPTS", "3"))
+    )
+    min_turns: int = field(
+        default_factory=lambda: int(os.getenv("MEMORY_MIN_TURNS", "3"))
+    )
+    min_conversations: int = field(
+        default_factory=lambda: int(os.getenv("MEMORY_MIN_CONVERSATIONS", "2"))
+    )
+    candidate_days: int = field(
+        default_factory=lambda: int(os.getenv("MEMORY_CANDIDATE_DAYS", "30"))
+    )
+    context_chars: int = field(
+        default_factory=lambda: int(os.getenv("MEMORY_CONTEXT_CHARS", "3000"))
+    )
+    extraction_chars: int = field(
+        default_factory=lambda: int(os.getenv("MEMORY_EXTRACTION_CHARS", "12000"))
+    )
+
+    def __post_init__(self):
+        """禁止把个人记忆写入已知业务知识库，并拒绝无效超时/门槛。"""
+        if not self.rag_collection or self.rag_collection == "ticket_knowledge":
+            raise ValueError("memory_collection_must_be_dedicated")
+        for name in (
+            "assessment_timeout",
+            "context_timeout",
+            "retrieve_timeout",
+            "index_timeout",
+            "poll_seconds",
+            "lease_seconds",
+            "attempts",
+            "min_turns",
+            "min_conversations",
+            "candidate_days",
+            "context_chars",
+            "extraction_chars",
+        ):
+            if getattr(self, name) <= 0:
+                raise ValueError(f"memory_config_must_be_positive:{name}")
+
+
+memory_runtime = MemoryRuntimeCfg()

@@ -12,11 +12,12 @@ import {
 } from 'antd';
 import { FileSearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import { listPrompts, reloadPrompts, type PromptItem } from '../../api/admin';
+import { palette } from '../../styles/theme';
 
-const CARD_BG = '#161b22';
-const BORDER = '#30363d';
-const TEXT = '#e6edf3';
-const TEXT_DIM = '#8b949e';
+const CARD_BG = palette.bgElevated;
+const BORDER = palette.border;
+const TEXT = palette.text;
+const TEXT_DIM = palette.textMuted;
 
 export default function PromptInspector() {
   const [prompts, setPrompts] = useState<PromptItem[]>([]);
@@ -185,7 +186,7 @@ export default function PromptInspector() {
               style={{
                 marginTop: 16,
                 padding: 12,
-                backgroundColor: '#0d1117',
+                backgroundColor: palette.codeBg,
                 border: `1px solid ${BORDER}`,
                 borderRadius: 6,
                 maxHeight: 400,

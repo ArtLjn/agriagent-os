@@ -47,6 +47,7 @@ from agent.domains.harness.context import builder as context
 from agent.domains.harness.context import summarizer, tokenizer
 from agent.domains.harness.control import approval as hitl
 from agent.domains.harness.memory import service as memory
+from agent.domains.harness.memory import tools as memory_tools
 from agent.domains.harness.runtime import finalization, planner, verify
 from agent.domains.harness.router import SkillRoute, SkillRouter
 from agent.domains.harness.runtime.turn import StopReason, Turn, TurnPhase
@@ -192,6 +193,15 @@ async def _prepare_turn_runtime(
     turn: Turn,
 ) -> _TurnRuntime:
     """准备路由、Skill Registry、上下文和 ReAct 所需的运行时状态。"""
+    turn.memory_snapshot.pop("personalization", None)
+    turn.memory_snapshot.update(
+        await memory.get_personalization_context(
+            user_id=turn.user_id,
+            farm_uid=turn.farm_uid,
+            query=turn.user_input,
+            temporary=turn.temporary,
+        )
+    )
     route_result = await _route_turn_skills(turn)
     estimated_steps, confidence = await _estimate_turn_budget(turn)
     if route_result is None:
@@ -465,6 +475,8 @@ def _setup_turn_runtime(
     )
     # 注入 make_plan 工具，让 LLM 可以一次性规划多步任务
     tools_schema.append(planner.MAKE_PLAN_TOOL_SCHEMA)
+    if not turn.temporary:
+        tools_schema.append(memory_tools.TOOL_SCHEMA)
     turn.business_tools = tools_schema
     logger.info(
         "loaded %d skills: %s",
@@ -608,6 +620,14 @@ async def _try_compress_context(turn: Turn) -> AsyncGenerator[dict, None]:
                 user_id=turn.user_id,
                 farm_id=turn.farm_id,
             )
+            turn.memory_snapshot.update(
+                await memory.get_personalization_context(
+                    user_id=turn.user_id,
+                    farm_uid=turn.farm_uid,
+                    query=turn.user_input,
+                    temporary=turn.temporary,
+                )
+            )
             turn.context_bundle = context.build_context_bundle(
                 turn.user_input,
                 turn.memory_snapshot,
@@ -680,6 +700,28 @@ async def _run_single_reasoning_step(
     )
 
     # ── System Reminder（对抗长会话指令衰减）──
+    # 每次调用前刷新控制状态，删除与关闭读取不等待下一轮才生效。
+    fresh = await memory.get_personalization_context(
+        user_id=turn.user_id,
+        farm_uid=turn.farm_uid,
+        query=turn.user_input,
+        temporary=turn.temporary,
+    )
+    turn.memory_snapshot.pop("personalization", None)
+    turn.memory_snapshot.update(fresh)
+    turn.messages = [
+        m
+        for m in turn.messages
+        if not (
+            m.get("role") == "user"
+            and str(m.get("content", "")).startswith("<user-personalization>")
+        )
+    ]
+    memory_tools.discard_stale_results(
+        turn.messages, fresh.get("personalization_revision")
+    )
+    if fresh.get("personalization"):
+        turn.messages.insert(1, {"role": "user", "content": fresh["personalization"]})
     llm_messages = context.append_reminder(turn.messages, turn.step_count)
 
     # ── 流式 LLM 调用 ──
@@ -782,7 +824,9 @@ async def _emit_final_answer(
     complete_step: bool = True,
 ) -> AsyncGenerator[dict, None]:
     """无 tool_calls 时输出最终回答 + pre-completion checklist。"""
-    guard_issue = verify.write_completion_guard_issue(
+    guard_issue = await memory_tools.completion_guard_issue(
+        turn, content
+    ) or verify.write_completion_guard_issue(
         user_input=turn.user_input,
         content=content,
         tracker=tracker,
@@ -796,7 +840,12 @@ async def _emit_final_answer(
         if turn.write_guard_attempts < 2:
             # 把无效答复与纠正提示回灌给模型，让它继续完成真实写操作。
             turn.messages.append({"role": "assistant", "content": content})
-            turn.messages.append({"role": "system", "content": _WRITE_GUARD_REMINDER})
+            turn.messages.append(
+                {
+                    "role": "system",
+                    "content": guard_issue + "。" + _WRITE_GUARD_REMINDER,
+                }
+            )
             turn.set_phase(TurnPhase.REASONING)
             return
         async for ev in _emit_failure_terminal(
@@ -1123,6 +1172,63 @@ async def _dispatch_tool_calls(
 
     for tc in serial_calls:
         tool_call_id = tc["id"]
+
+        if tc["name"] == memory_tools.TOOL_NAME:
+            started = time.perf_counter()
+            started_ev = sse.tool_started(
+                turn.turn_id,
+                tool_call_id,
+                memory_tools.TOOL_NAME,
+                turn.step_count,
+                tc["arguments"],
+            )
+            turn.emit(started_ev["type"], started_ev["data"])
+            yield started_ev
+            result = await memory_tools.execute(turn, tc["arguments"], tool_call_id)
+            args = tc["arguments"] if isinstance(tc["arguments"], dict) else {}
+            tracker.record(
+                memory_tools.TOOL_NAME,
+                args,
+                tool_call_id=tool_call_id,
+                risk_level="write_confirm" if result.get("persisted") else "read",
+            )
+            tracker.record_observation(memory_tools.TOOL_NAME, args, result)
+            duration_ms = int((time.perf_counter() - started) * 1000)
+            error = (
+                None
+                if result.get("ok")
+                else {"code": result.get("code"), "message": result.get("message")}
+            )
+            finished_ev = sse.tool_finished(
+                turn.turn_id,
+                tool_call_id,
+                memory_tools.TOOL_NAME,
+                turn.step_count,
+                duration_ms,
+                result,
+                error,
+            )
+            turn.emit(finished_ev["type"], finished_ev["data"])
+            yield finished_ev
+            trace_tool_call(
+                memory_tools.TOOL_NAME,
+                args,
+                result,
+                duration_ms=duration_ms,
+                error=result.get("code") if error else None,
+                tool_call_id=tool_call_id,
+                step_index=turn.step_count,
+            )
+            turn.messages.append(
+                context.tool_result_message(
+                    tool_call_id, memory_tools.TOOL_NAME, result
+                )
+            )
+            yield {
+                "type": "observation",
+                "data": {"tool_name": memory_tools.TOOL_NAME, "result": result},
+            }
+            continue
 
         # make_plan 特殊工具：转入 planner 处理
         if tc["name"] == "make_plan":

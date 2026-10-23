@@ -1,17 +1,19 @@
 import { useState, useEffect, useRef } from 'react';
-import { Tabs, Input, Button, Select, Space, message, Typography } from 'antd';
+import { Tabs, Input, Button, Select, Space, Switch, message, Typography } from 'antd';
 import { SendOutlined, BulbOutlined, FileTextOutlined, HistoryOutlined } from '@ant-design/icons';
 import { approveTurn, streamChat, type PendingAction } from '../../api/agent';
+import { personalizationApi, type PersonalizationSettings } from '../../api/personalization';
 import { listCycles, type CropCycleListItem } from '../../api/cycles';
 import { MarkdownContent } from '../../components/MarkdownContent';
+import { palette } from '../../styles/theme';
 
-const BG = '#0d1117';
-const CARD = '#161b22';
-const BORDER = '#30363d';
-const TEXT = '#e6edf3';
-const TEXT_DIM = '#8b949e';
-const USER_BG = '#1f6feb';
-const AI_BG = '#21262d';
+const BG = palette.bg;
+const CARD = palette.bgElevated;
+const BORDER = palette.border;
+const TEXT = palette.text;
+const TEXT_DIM = palette.textMuted;
+const USER_BG = palette.accentFill;
+const AI_BG = palette.bgSoftStrong;
 
 function generateSessionId(): string {
   return `agent-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -47,14 +49,14 @@ function ChatBubble({ role, content, pendingAction, onAction }: { role: string; 
     <div style={{ marginBottom: 16, display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start' }}>
       {!isUser && (
         <div style={{
-          width: 32, height: 32, borderRadius: '50%', background: '#238636',
+          width: 32, height: 32, borderRadius: '50%', background: palette.accentFill,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           color: '#fff', fontSize: 14, fontWeight: 700, marginRight: 10, flexShrink: 0,
         }}>AI</div>
       )}
       <div style={{
         background: isUser ? USER_BG : AI_BG,
-        color: TEXT,
+        color: isUser ? '#ffffff' : TEXT,
         padding: '10px 16px',
         borderRadius: isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
         maxWidth: '70%',
@@ -62,7 +64,7 @@ function ChatBubble({ role, content, pendingAction, onAction }: { role: string; 
       }}>
         {isUser ? content : <MarkdownContent content={content} style={{ color: TEXT, lineHeight: 1.7, fontSize: 14 }} />}
         {!isUser && pendingAction?.context && (
-          <div style={{ marginTop: 8, padding: '8px 10px', background: 'rgba(139,148,158,0.08)', borderRadius: 8, fontSize: 13, color: '#8b949e' }}>
+          <div style={{ marginTop: 8, padding: '8px 10px', background: palette.bgSoft, borderRadius: 8, fontSize: 13, color: palette.textMuted }}>
             {pendingAction.context.original_input && (
               <div style={{ marginBottom: 4 }}>📝 理解：您说的是「{pendingAction.context.original_input}」</div>
             )}
@@ -84,10 +86,14 @@ function ChatBubble({ role, content, pendingAction, onAction }: { role: string; 
 
 /* ── 对话 Tab ── */
 function ChatTab({ cycles, selectedCycle, setSelectedCycle }: { cycles: CropCycleListItem[]; selectedCycle?: number; setSelectedCycle: (v?: number) => void }) {
-  const [sessionId] = useState<string>(generateSessionId);
+  const [sessionId, setSessionId] = useState<string>(generateSessionId);
+  const [temporary, setTemporary] = useState(() => new URLSearchParams(window.location.search).get('temporary') === '1');
+  const [preferences, setPreferences] = useState<PersonalizationSettings | null>(null);
+  useEffect(() => { if (!temporary) void personalizationApi.getSettings().then(setPreferences).catch(() => setPreferences(null)); }, [temporary]);
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<{ role: string; content: string; pendingAction?: PendingAction | null }[]>([]);
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState<string[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -101,12 +107,19 @@ function ChatTab({ cycles, selectedCycle, setSelectedCycle }: { cycles: CropCycl
     setInput('');
     setMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
     setLoading(true);
+    setProgress([]);
     scrollToBottom();
     try {
       let idx = -1;
       setMessages((prev) => { idx = prev.length - 1; return prev; });
-      for await (const chunk of streamChat(userMsg, sessionId)) {
-        if (chunk.type === 'content') {
+      for await (const chunk of streamChat(userMsg, sessionId, undefined, { temporary })) {
+        if (chunk.type === 'progress' && chunk.data.message) {
+          setProgress((items) => [...items.slice(-19), chunk.data.message!]);
+        } else if (chunk.type === 'tool_started') {
+          setProgress((items) => [...items.slice(-19), `正在执行：${chunk.data.tool_name}`]);
+        } else if (chunk.type === 'tool_finished') {
+          setProgress((items) => [...items.slice(-19), chunk.data.error ? '操作未完成，请查看回复' : '操作已完成']);
+        } else if (chunk.type === 'content') {
           setMessages((prev) => {
             const next = [...prev];
             next[idx] = { ...next[idx], content: next[idx].content + chunk.data };
@@ -148,6 +161,7 @@ function ChatTab({ cycles, selectedCycle, setSelectedCycle }: { cycles: CropCycl
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 180px)' }}>
       <div style={{ marginBottom: 12 }}>
+        <Space style={{ marginRight: 16 }}><Switch aria-label="临时对话" checked={temporary} disabled={loading} onChange={(value) => { setTemporary(value); setSessionId(generateSessionId()); setMessages([]); }} />临时对话</Space>
         <Select placeholder="关联茬口（可选）" allowClear style={{ width: 220 }}
           value={selectedCycle} onChange={setSelectedCycle}
           options={cycles.map((c) => ({ value: c.id, label: c.name }))} />
@@ -161,7 +175,7 @@ function ChatTab({ cycles, selectedCycle, setSelectedCycle }: { cycles: CropCycl
         {messages.length === 0 && (
           <div style={{ textAlign: 'center', color: TEXT_DIM, padding: '60px 0' }}>
             <div style={{ fontSize: 40, marginBottom: 16 }}>🌾</div>
-            <div style={{ fontSize: 16, marginBottom: 8 }}>你好，我是农业技术顾问</div>
+            <div style={{ fontSize: 16, marginBottom: 8 }}>{temporary ? "临时对话" : `你好，我是${preferences?.assistant_name || "农业技术顾问"}`}</div>
             <div style={{ fontSize: 13 }}>可以问我天气、种植周期、农事记录、成本收支等问题</div>
           </div>
         )}
@@ -174,10 +188,11 @@ function ChatTab({ cycles, selectedCycle, setSelectedCycle }: { cycles: CropCycl
             onAction={(action) => { void handleApproval(i, action); }}
           />
         ))}
+        {!temporary && preferences?.execution_detail_level === 'detailed' && progress.length > 0 && <details open={loading} style={{ color: TEXT_DIM, marginBottom: 12 }}><summary>执行过程</summary>{progress.map((item, index) => <div key={index}>{item}</div>)}</details>}
         {loading && messages[messages.length - 1]?.content === '' && (
           <div style={{ display: 'flex', alignItems: 'center', color: TEXT_DIM, padding: '0 42px' }}>
             <span className="ant-spin-dot" style={{ marginRight: 8 }} />
-            AI 正在思考中...
+            {(temporary || preferences?.loading_greeting_enabled !== false) ? "正在为你整理，请稍候…" : "处理中…"}
           </div>
         )}
       </div>

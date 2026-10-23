@@ -50,9 +50,23 @@ class _YayaScreenState extends State<YayaScreen> {
     controller.send(prompt);
   }
 
-  void _startNewConversation() {
+  Future<void> _startNewConversation() async {
     _closeDrawer();
-    controller.startNewConversation();
+    final temporary = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+              title: const Text('新建对话'),
+              content: const Text('临时对话不读取个性化，也不保存长期记忆。聊天记录仍按历史策略保存。'),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('普通对话')),
+                TextButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: const Text('临时对话'))
+              ],
+            ));
+    if (temporary != null && mounted) controller.setTemporary(temporary);
   }
 
   @override
@@ -60,6 +74,7 @@ class _YayaScreenState extends State<YayaScreen> {
     super.initState();
     controller.loadConversations().catchError((Object _) {});
     _loadUserNickname();
+    controller.loadPreferences();
   }
 
   Future<void> _loadUserNickname() async {
@@ -174,10 +189,18 @@ class _YayaHomePage extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
           child: _YayaHeader(
+            assistantName: controller.assistantName,
             onMenuPressed: onMenuPressed,
             onNewConversationPressed: onNewConversationPressed,
           ),
         ),
+        if (controller.temporary) const Text('临时对话 · 不读取或保存长期记忆'),
+        if (controller.showDetails && controller.progress.isNotEmpty)
+          ExpansionTile(
+              title: const Text('执行过程'),
+              children: controller.progress
+                  .map((text) => ListTile(title: Text(text)))
+                  .toList()),
         Expanded(
             child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
@@ -187,6 +210,8 @@ class _YayaHomePage extends StatelessWidget {
             child: hasMessages
                 ? _MessageList(
                     messages: controller.messages,
+                    assistantName: controller.assistantName,
+                    showGreeting: controller.showGreeting,
                     errorMessage: controller.errorMessage,
                     onPendingAction: controller.respondToPendingAction)
                 : _YayaEmptyPanel(onSelected: controller.send),
@@ -231,6 +256,8 @@ class _ComposerPanel extends StatelessWidget {
 
 class _MessageList extends StatelessWidget {
   const _MessageList({
+    required this.assistantName,
+    required this.showGreeting,
     required this.messages,
     required this.errorMessage,
     required this.onPendingAction,
@@ -239,6 +266,8 @@ class _MessageList extends StatelessWidget {
   final List<YayaMessageViewModel> messages;
   final String? errorMessage;
   final ValueChanged<String> onPendingAction;
+  final String assistantName;
+  final bool showGreeting;
 
   @override
   Widget build(BuildContext context) {
@@ -247,6 +276,8 @@ class _MessageList extends StatelessWidget {
       children: [
         for (final message in messages) ...[
           _MessageBubble(
+            assistantName: assistantName,
+            showGreeting: showGreeting,
             message: message,
             onPendingAction: onPendingAction,
           ),
@@ -260,17 +291,23 @@ class _MessageList extends StatelessWidget {
 
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
+    required this.assistantName,
+    required this.showGreeting,
     required this.message,
     required this.onPendingAction,
   });
 
   final YayaMessageViewModel message;
   final ValueChanged<String> onPendingAction;
+  final String assistantName;
+  final bool showGreeting;
 
   @override
   Widget build(BuildContext context) {
     final isUser = message.role == 'user';
-    final content = message.content.isEmpty ? '芽芽正在思考...' : message.content;
+    final content = message.content.isEmpty
+        ? (showGreeting ? '$assistantName正在思考...' : '处理中…')
+        : message.content;
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Row(
@@ -308,7 +345,7 @@ class _MessageBubble extends StatelessWidget {
                             const YayaMascot(size: 20),
                             const SizedBox(width: 6),
                             Text(
-                              message.content.isEmpty ? '正在分析' : '芽芽',
+                              message.content.isEmpty ? '正在分析' : assistantName,
                               style: AppTextStyles.small.copyWith(
                                 color: AppColors.muted,
                                 fontWeight: FontWeight.w600,
@@ -621,7 +658,10 @@ class _ErrorBanner extends StatelessWidget {
 
 class _YayaHeader extends StatelessWidget {
   const _YayaHeader(
-      {required this.onMenuPressed, required this.onNewConversationPressed});
+      {required this.onMenuPressed,
+      required this.onNewConversationPressed,
+      required this.assistantName});
+  final String assistantName;
   final VoidCallback onMenuPressed;
   final VoidCallback onNewConversationPressed;
 
@@ -636,7 +676,8 @@ class _YayaHeader extends StatelessWidget {
           child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
         const YayaMascot(size: 28),
         const SizedBox(width: 8),
-        Text('芽芽', style: AppTextStyles.sectionTitle.copyWith(fontSize: 20)),
+        Text(assistantName,
+            style: AppTextStyles.sectionTitle.copyWith(fontSize: 20)),
       ])),
       IconButton(
           tooltip: '新对话',

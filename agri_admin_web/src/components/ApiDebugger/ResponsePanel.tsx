@@ -1,4 +1,5 @@
 import { Tag } from 'antd';
+import { palette } from '../../styles/theme';
 
 interface Props {
   status: number | null; duration: number | null; body: string;
@@ -17,7 +18,7 @@ export default function ResponsePanel({ status, duration, body }: Props) {
         {status !== null && <Tag color={statusColor(status)}>{status}</Tag>}
         {duration !== null && <Tag>{duration}ms</Tag>}
       </div>
-      <pre style={{ background: '#0d1117', color: '#c9d1d9', padding: 12, borderRadius: 6, maxHeight: 400, overflow: 'auto', fontSize: 12, border: '1px solid #30363d', fontFamily: 'monospace' }}>
+      <pre style={{ background: palette.codeBg, color: palette.textMuted, padding: 12, borderRadius: 6, maxHeight: 400, overflow: 'auto', fontSize: 12, border: `1px solid ${palette.border}`, fontFamily: 'monospace' }}>
         {body || '无响应'}
       </pre>
     </div>

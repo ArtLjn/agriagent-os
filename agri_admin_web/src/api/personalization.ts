@@ -70,6 +70,8 @@ export interface MemoryRecord {
   source_message_ids: string[];
   evidence_count: number;
   confidence?: number | null;
+  review_reason?: string;
+  conflicts_with?: string | null;
   status: MemoryStatus;
   revision: number;
   created_at: string;
@@ -108,15 +110,11 @@ export interface ClearMemoriesResponse {
   memory_generation: number;
 }
 
-const NOT_IMPLEMENTED_STATUS = new Set([404, 405, 501]);
 
-/**
- * 后端尚未实现个性化接口时，页面默认使用本地演示数据，避免请求落入
- * 根路径 MCP 中间件返回 401 并触发全局登录跳转。
- * 接口上线后设置 VITE_PERSONALIZATION_API_ENABLED=true 即可切换。
- */
+
+/** 只有显式关闭真实接口时才允许演示，网络错误绝不回退成保存成功。 */
 function isApiEnabled(): boolean {
-  return import.meta.env.VITE_PERSONALIZATION_API_ENABLED === "true";
+  return import.meta.env.VITE_PERSONALIZATION_API_ENABLED !== "false";
 }
 
 let demoMode = false;
@@ -128,10 +126,6 @@ export function isPersonalizationDemo(): boolean {
 export function resetPersonalizationDemo(): void {
   demoMode = false;
   personalizationDemoStore.reset();
-}
-
-function isEndpointMissing(error: unknown): boolean {
-  return isAxiosError(error) && NOT_IMPLEMENTED_STATUS.has(error.response?.status ?? 0);
 }
 
 function silentConfig(config: AxiosRequestConfig = {}): AxiosRequestConfig {
@@ -146,17 +140,9 @@ async function requestWithDemo<T>(
     demoMode = true;
     return fallback();
   }
-  try {
-    const response = await request();
-    demoMode = false;
-    return response.data;
-  } catch (error) {
-    if (!isEndpointMissing(error)) {
-      throw error;
-    }
-    demoMode = true;
-    return fallback();
-  }
+  demoMode = false;
+  const response = await request();
+  return response.data;
 }
 
 export function personalizationErrorMessage(error: unknown): string {
@@ -171,16 +157,21 @@ export function personalizationErrorMessage(error: unknown): string {
 }
 
 export const personalizationApi = {
+  createMemory: async (payload: { memory_id: string; key: string; text: string; scope: MemoryScope; conditions?: string[] }) => {
+    if (!isApiEnabled()) throw new Error("演示模式不支持新增记忆，请连接真实服务");
+    const response = await apiClient.post<MemoryRecord>("/agent/me/memories", payload, silentConfig());
+    return response.data;
+  },
   getSettings: () =>
     requestWithDemo(
-      () => apiClient.get<PersonalizationSettings>("/me/personalization", silentConfig()),
+      () => apiClient.get<PersonalizationSettings>("/agent/me/personalization", silentConfig()),
       () => personalizationDemoStore.getSettings(),
     ),
 
   updateSettings: (payload: PersonalizationUpdatePayload) =>
     requestWithDemo(
       () => apiClient.patch<PersonalizationSettings>(
-        "/me/personalization",
+        "/agent/me/personalization",
         payload,
         silentConfig(),
       ),
@@ -189,14 +180,14 @@ export const personalizationApi = {
 
   listMemories: (params: ListMemoriesParams = {}) =>
     requestWithDemo(
-      () => apiClient.get<MemoryListResponse>("/me/memories", silentConfig({ params })),
+      () => apiClient.get<MemoryListResponse>("/agent/me/memories", silentConfig({ params })),
       () => personalizationDemoStore.listMemories(params),
     ),
 
   updateMemory: (memoryId: string, payload: MemoryUpdatePayload) =>
     requestWithDemo(
       () => apiClient.patch<MemoryRecord>(
-        `/me/memories/${memoryId}`,
+        `/agent/me/memories/${memoryId}`,
         payload,
         silentConfig(),
       ),
@@ -206,7 +197,7 @@ export const personalizationApi = {
   deleteMemory: (memoryId: string) =>
     requestWithDemo(
       () => apiClient.delete<DeleteMemoryResponse>(
-        `/me/memories/${memoryId}`,
+        `/agent/me/memories/${memoryId}`,
         silentConfig(),
       ),
       () => personalizationDemoStore.deleteMemory(memoryId),
@@ -215,7 +206,7 @@ export const personalizationApi = {
   clearMemories: () =>
     requestWithDemo(
       () => apiClient.post<ClearMemoriesResponse>(
-        "/me/memories/clear",
+        "/agent/me/memories/clear",
         {},
         silentConfig(),
       ),

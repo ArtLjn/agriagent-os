@@ -1,9 +1,9 @@
 import { Card, Col, Empty, Row, Space } from 'antd';
+import { useThemeMode } from '../../theme/themeContext';
 import {
   AMBER,
   BLUE,
   BORDER,
-  CARD_BG,
   GREEN,
   HOURS_24,
   PURPLE,
@@ -32,6 +32,28 @@ const truncateStyle = {
 
 const modelUsageColumns = 'minmax(190px, 1.4fr) minmax(280px, 2.8fr) 112px 72px';
 const heatmapColumns = `minmax(150px, 180px) repeat(${HOURS_24.length}, 28px) 94px 72px 82px`;
+
+const CHART_THEME = {
+  light: {
+    bg: '#ffffff',
+    grid: 'rgba(23, 39, 29, 0.12)',
+    dim: '#5f7367',
+    soft: '#8ba093',
+    track: 'rgba(23, 39, 29, 0.06)',
+  },
+  dark: {
+    bg: '#16211b',
+    grid: 'rgba(255, 255, 255, 0.1)',
+    dim: 'rgba(230, 242, 232, 0.62)',
+    soft: 'rgba(230, 242, 232, 0.36)',
+    track: 'rgba(255, 255, 255, 0.08)',
+  },
+} as const;
+
+function useChartTheme() {
+  const { mode } = useThemeMode();
+  return CHART_THEME[mode];
+}
 
 export function EmptyBlock({ description }: { description: string }) {
   return (
@@ -103,7 +125,7 @@ export function ModelUsageRows({
                   </div>
                 </div>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ display: 'flex', height: 24, background: '#21262d', borderRadius: 4, overflow: 'hidden' }}>
+                  <div style={{ display: 'flex', height: 24, background: 'var(--app-fill-strong)', borderRadius: 4, overflow: 'hidden' }}>
                     <div style={{ width: totalWidth, display: 'flex' }}>
                       <div style={{ width: `${promptPercent}%`, background: BLUE }} />
                       <div style={{ width: `${completionPercent}%`, background: GREEN }} />
@@ -154,6 +176,7 @@ export function TokenTrendChart({
   maxTrendTokens: number;
   maxTrendRequests: number;
 }) {
+  const chartTheme = useChartTheme();
   if (!hourlyTrend.some((item) => item.total_tokens > 0 || item.request_count > 0)) {
     return <EmptyBlock description="今日暂无可用于趋势图的真实 Token trace" />;
   }
@@ -174,18 +197,18 @@ export function TokenTrendChart({
   return (
     <div style={{ overflowX: 'auto', paddingBottom: 2 }}>
       <svg role="img" aria-label="Token 用量和请求数时间趋势" viewBox={`0 0 ${chartWidth} ${chartHeight}`} style={{ minWidth: 980, width: '100%', height: 280, display: 'block' }}>
-        <rect x={0} y={0} width={chartWidth} height={chartHeight} fill={CARD_BG} />
+        <rect x={0} y={0} width={chartWidth} height={chartHeight} fill={chartTheme.bg} />
         {[0, 0.5, 1].map((tick) => {
           const y = padding.top + plotHeight - tick * plotHeight;
           return (
             <g key={tick}>
-              <line x1={padding.left} x2={chartWidth - padding.right} y1={y} y2={y} stroke={BORDER} strokeOpacity={tick === 0 ? 0.9 : 0.58} />
-              <text x={padding.left - 10} y={y + 4} textAnchor="end" fill={TEXT_DIM} fontSize={12}>{formatCompactNumber(maxTrendTokens * tick)}</text>
-              <text x={chartWidth - padding.right + 10} y={y + 4} fill={TEXT_DIM} fontSize={12}>{formatCompactNumber(maxTrendRequests * tick)}</text>
+              <line x1={padding.left} x2={chartWidth - padding.right} y1={y} y2={y} stroke={chartTheme.grid} strokeOpacity={tick === 0 ? 0.9 : 0.58} />
+              <text x={padding.left - 10} y={y + 4} textAnchor="end" fill={chartTheme.dim} fontSize={12}>{formatCompactNumber(maxTrendTokens * tick)}</text>
+              <text x={chartWidth - padding.right + 10} y={y + 4} fill={chartTheme.dim} fontSize={12}>{formatCompactNumber(maxTrendRequests * tick)}</text>
             </g>
           );
         })}
-        <text x={padding.left - 8} y={padding.top - 8} textAnchor="end" fill={TEXT_SOFT} fontSize={12} fontWeight={700}>Token</text>
+        <text x={padding.left - 8} y={padding.top - 8} textAnchor="end" fill={chartTheme.soft} fontSize={12} fontWeight={700}>Token</text>
         <text x={chartWidth - padding.right + 10} y={padding.top - 8} fill={AMBER} fontSize={12} fontWeight={700}>请求</text>
         {hourlyTrend.map((item, index) => {
           const x = padding.left + barSlot * index + (barSlot - barWidth) / 2;
@@ -197,7 +220,7 @@ export function TokenTrendChart({
           const labelX = padding.left + barSlot * index + barSlot / 2;
           return (
             <g key={item.key}>
-              <rect x={x} y={padding.top} width={barWidth} height={plotHeight} fill="#21262d" opacity={0.5} rx={3}>
+              <rect x={x} y={padding.top} width={barWidth} height={plotHeight} fill={chartTheme.track} opacity={0.5} rx={3}>
                 <title>{`${item.label} Token ${formatNumber(item.total_tokens)}，请求 ${formatNumber(item.request_count)}`}</title>
               </rect>
               {item.total_tokens > 0 && (
@@ -207,14 +230,14 @@ export function TokenTrendChart({
                 </>
               )}
               {index % 3 === 0 && (
-                <text x={labelX} y={chartHeight - 18} textAnchor="middle" fill={TEXT_DIM} fontSize={12} transform={`rotate(-55 ${labelX} ${chartHeight - 18})`}>{item.shortLabel}</text>
+                <text x={labelX} y={chartHeight - 18} textAnchor="middle" fill={chartTheme.dim} fontSize={12} transform={`rotate(-55 ${labelX} ${chartHeight - 18})`}>{item.shortLabel}</text>
               )}
             </g>
           );
         })}
         <path d={svgPath(linePoints)} fill="none" stroke={AMBER} strokeWidth={2.4} strokeLinejoin="round" strokeLinecap="round" />
         {linePoints.map((point) => (
-          <circle key={point.item.key} cx={point.x} cy={point.y} r={3.5} fill={AMBER} stroke={CARD_BG} strokeWidth={1.5}>
+          <circle key={point.item.key} cx={point.x} cy={point.y} r={3.5} fill={AMBER} stroke={chartTheme.bg} strokeWidth={1.5}>
             <title>{`${point.item.label} 请求 ${formatNumber(point.item.request_count)}，Token ${formatNumber(point.item.total_tokens)}`}</title>
           </circle>
         ))}
@@ -224,6 +247,7 @@ export function TokenTrendChart({
 }
 
 export function PerformanceTrendChart({ hourlyTrend }: { hourlyTrend: TrendPoint[] }) {
+  const chartTheme = useChartTheme();
   if (!hourlyTrend.some((item) => item.total_tokens > 0 || item.request_count > 0)) {
     return <EmptyBlock description="今日暂无可用于性能走势的真实 Token trace" />;
   }
@@ -247,28 +271,28 @@ export function PerformanceTrendChart({ hourlyTrend }: { hourlyTrend: TrendPoint
   return (
     <div style={{ overflowX: 'auto', paddingBottom: 2 }}>
       <svg role="img" aria-label="平均 Token 和请求数时间走势" viewBox={`0 0 ${chartWidth} ${chartHeight}`} style={{ minWidth: 980, width: '100%', height: 230, display: 'block' }}>
-        <rect x={0} y={0} width={chartWidth} height={chartHeight} fill={CARD_BG} />
+        <rect x={0} y={0} width={chartWidth} height={chartHeight} fill={chartTheme.bg} />
         {[0, 0.5, 1].map((tick) => {
           const y = padding.top + plotHeight - tick * plotHeight;
           return (
             <g key={tick}>
-              <line x1={padding.left} x2={chartWidth - padding.right} y1={y} y2={y} stroke={BORDER} strokeOpacity={0.58} />
-              <text x={padding.left - 10} y={y + 4} textAnchor="end" fill={TEXT_DIM} fontSize={12}>{formatCompactNumber(maxAvgTokens * tick)}</text>
-              <text x={chartWidth - padding.right + 10} y={y + 4} fill={TEXT_DIM} fontSize={12}>{formatCompactNumber(maxRequests * tick)}</text>
+              <line x1={padding.left} x2={chartWidth - padding.right} y1={y} y2={y} stroke={chartTheme.grid} strokeOpacity={0.58} />
+              <text x={padding.left - 10} y={y + 4} textAnchor="end" fill={chartTheme.dim} fontSize={12}>{formatCompactNumber(maxAvgTokens * tick)}</text>
+              <text x={chartWidth - padding.right + 10} y={y + 4} fill={chartTheme.dim} fontSize={12}>{formatCompactNumber(maxRequests * tick)}</text>
             </g>
           );
         })}
         <text x={padding.left - 8} y={padding.top - 8} textAnchor="end" fill={GREEN} fontSize={12} fontWeight={700}>平均</text>
         <text x={chartWidth - padding.right + 10} y={padding.top - 8} fill={PURPLE} fontSize={12} fontWeight={700}>请求</text>
-        <path d={svgPath(avgPoints)} fill="none" stroke="#56d695" strokeWidth={2.2} strokeLinejoin="round" strokeLinecap="round" />
+        <path d={svgPath(avgPoints)} fill="none" stroke="#63e6be" strokeWidth={2.2} strokeLinejoin="round" strokeLinecap="round" />
         <path d={svgPath(requestPoints)} fill="none" stroke={PURPLE} strokeWidth={2.2} strokeLinejoin="round" strokeLinecap="round" />
         {avgPoints.map((point) => (
-          <circle key={`avg-${point.item.key}`} cx={point.x} cy={point.y} r={3} fill="#56d695" stroke={CARD_BG} strokeWidth={1.4}>
+          <circle key={`avg-${point.item.key}`} cx={point.x} cy={point.y} r={3} fill="#63e6be" stroke={chartTheme.bg} strokeWidth={1.4}>
             <title>{`${point.item.label} 平均 ${formatCompactNumber(point.item.request_count > 0 ? point.item.total_tokens / point.item.request_count : 0)} tokens/请求`}</title>
           </circle>
         ))}
         {requestPoints.map((point) => (
-          <circle key={`req-${point.item.key}`} cx={point.x} cy={point.y} r={3} fill={PURPLE} stroke={CARD_BG} strokeWidth={1.4}>
+          <circle key={`req-${point.item.key}`} cx={point.x} cy={point.y} r={3} fill={PURPLE} stroke={chartTheme.bg} strokeWidth={1.4}>
             <title>{`${point.item.label} 请求 ${formatNumber(point.item.request_count)}`}</title>
           </circle>
         ))}
@@ -313,8 +337,8 @@ export function HeatmapSection({
                       style={{
                         height: 22,
                         borderRadius: 4,
-                        background: value > 0 ? `rgba(46, 160, 103, ${intensity})` : '#21262d',
-                        border: '1px solid rgba(48, 54, 61, 0.72)',
+                        background: value > 0 ? `rgba(34, 197, 94, ${intensity})` : 'var(--app-fill-strong)',
+                        border: '1px solid var(--app-border)',
                       }}
                     />
                   );

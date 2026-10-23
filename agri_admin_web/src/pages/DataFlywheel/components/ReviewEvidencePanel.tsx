@@ -82,7 +82,7 @@ function EvidenceBlock({
   tone: 'user' | 'assistant';
 }) {
   return (
-    <div style={{ ...evidenceBlockStyle, background: tone === 'assistant' ? 'rgba(88, 166, 255, 0.08)' : palette.bg }}>
+    <div style={{ ...evidenceBlockStyle, background: tone === 'assistant' ? palette.bgSoft : palette.bg }}>
       <Typography.Text style={{ color: palette.textMuted, fontSize: 12 }}>{title}</Typography.Text>
       <Typography.Paragraph ellipsis={{ rows: 5, expandable: true, symbol: '展开' }} style={evidenceTextStyle}>
         {content}

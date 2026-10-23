@@ -1,18 +1,23 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Table, Button, Modal, Form, Input, DatePicker, Select, Space, message, Tag, Popconfirm, Card, Alert } from 'antd';
-import { PlusOutlined, BugOutlined, EyeOutlined, EditOutlined, DeleteOutlined, FieldTimeOutlined, RobotOutlined } from '@ant-design/icons';
+import { App, Table, Button, Modal, Form, Input, DatePicker, Select, Space, message, Dropdown, Card, Alert, Empty } from 'antd';
+import { PlusOutlined, BugOutlined, EditOutlined, DeleteOutlined, SearchOutlined, EllipsisOutlined, ClockCircleOutlined, ArrowRightOutlined, RobotOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { listCycles, createCycle, updateCycle, deleteCycle, parseCycle, type CropCycleListItem, type CycleParseResponse } from '../../api/cycles';
 import { listTemplates, type CropTemplate } from '../../api/crops';
 import ApiDebugger from '../../components/ApiDebugger';
-import { PageShell, Toolbar } from '../../components/PageShell';
+import { PageShell } from '../../components/PageShell';
 import { cardStyle } from '../../styles/theme';
 import { buildCycleFormValues } from '../Operations/smartCreateModel';
 
 export default function Cycles() {
+  const { modal } = App.useApp();
   const [data, setData] = useState<CropCycleListItem[]>([]);
   const [templates, setTemplates] = useState<CropTemplate[]>([]);
+  const [query, setQuery] = useState('');
+  const [stage, setStage] = useState<string>();
+  const [selectedId, setSelectedId] = useState<number>();
+  const [loadError, setLoadError] = useState(false);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [debugOpen, setDebugOpen] = useState(false);
@@ -26,6 +31,7 @@ export default function Cycles() {
 
   const fetchData = useCallback(async (page: number, pageSize: number) => {
     setLoading(true);
+    setLoadError(false);
     try {
       const [cyclesRes, tplRes] = await Promise.all([
         listCycles({ page, page_size: pageSize }),
@@ -35,7 +41,7 @@ export default function Cycles() {
       setPagination({ current: page, pageSize, total: cyclesRes.total });
       setTemplates(tplRes.items);
     } catch {
-      message.error('加载失败');
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -119,55 +125,65 @@ export default function Cycles() {
     }
   };
 
+  // 接口仅支持分页；筛选明确限定本页，避免把局部命中误报成全量结果。
+  const visibleData = data.filter((item) =>
+    `${item.name} ${item.crop_template_name ?? ''}`.toLowerCase().includes(query.trim().toLowerCase())
+    && (!stage || item.current_stage_name === stage));
+  const selected = visibleData.find((item) => item.id === selectedId) ?? visibleData[0];
+  const stageOptions = [...new Set(data.map((item) => item.current_stage_name).filter(Boolean))]
+    .map((value) => ({ value, label: value }));
   const columns = [
-    { title: 'ID', dataIndex: 'id', width: 60 },
-    { title: '名称', dataIndex: 'name' },
-    { title: '作物', dataIndex: 'crop_template_name', render: (text: string) => <Tag color="green">{text}</Tag> },
+    { title: '种植计划', dataIndex: 'name', width: 270, render: (name: string, record: CropCycleListItem) => (
+      <div className="cycle-name"><span className="cycle-number">{String(record.id).padStart(2, '0')}</span>
+        <button type="button" aria-pressed={selected?.id === record.id} onClick={() => setSelectedId(record.id)}>{name}</button>
+      </div>
+    ) },
     { title: '开始日期', dataIndex: 'start_date' },
-    { title: '状态', dataIndex: 'status', render: (s: string) => <Tag color={s === 'active' ? 'green' : 'default'}>{s === 'active' ? '进行中' : s}</Tag> },
-    { title: '当前阶段', dataIndex: 'current_stage_name', render: (text: string | undefined) => text || '-' },
-    {
-      title: '操作',
-      key: 'action',
-      render: (_: unknown, r: CropCycleListItem) => (
-        <Space>
-          <Button icon={<EyeOutlined />} size="small" onClick={() => navigate(`/cycles/${r.id}`)}>详情</Button>
-          <Button icon={<EditOutlined />} size="small" onClick={() => openEdit(r)}>编辑</Button>
-          <Popconfirm
-            title="确认删除"
-            description={`删除 "${r.name}"？`}
-            onConfirm={() => handleDelete(r.id)}
-            okText="删除"
-            cancelText="取消"
-          >
-            <Button danger icon={<DeleteOutlined />} size="small">删除</Button>
-          </Popconfirm>
-        </Space>
-      ),
-    },
+    { title: '当前阶段', dataIndex: 'current_stage_name', render: (text?: string) => text || '尚未设置' },
+    { title: '状态', dataIndex: 'status', render: (status: string) => (
+      <span className="cycle-status"><ClockCircleOutlined />{status === 'active' ? '进行中' : status}</span>
+    ) },
+    { title: '操作', key: 'action', width: 180, fixed: 'right' as const, render: (_: unknown, record: CropCycleListItem) => (
+      <Space>
+        <Button onClick={() => navigate(`/cycles/${record.id}`)}>查看详情</Button>
+        <Dropdown trigger={['click']} menu={{ items: [
+          { key: 'edit', label: '编辑茬口', icon: <EditOutlined />, onClick: () => openEdit(record) },
+          { key: 'delete', label: '删除茬口', icon: <DeleteOutlined />, danger: true, onClick: () => modal.confirm({
+            title: '确认删除', content: `删除“${record.name}”？`, okText: '删除', cancelText: '取消',
+            okButtonProps: { danger: true }, onOk: () => handleDelete(record.id),
+          }) },
+        ] }}>
+          <Button type="text" aria-label={`更多操作：${record.name}`} icon={<EllipsisOutlined />} />
+        </Dropdown>
+      </Space>
+    ) },
   ];
 
   return (
     <PageShell
       title="种植周期"
-      description="跟踪每个茬口从开始日期到当前阶段的进度，支持推进、编辑和日志联动。"
+      description="查看种植进展，管理每一季的农事。"
+      actions={<Button type="primary" aria-label="新建茬口" icon={<PlusOutlined aria-hidden />} onClick={openCreate}>新建茬口</Button>}
     >
-      <Toolbar
-        left={(
-          <>
-            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新建茬口</Button>
-            <Button icon={<BugOutlined />} onClick={() => setDebugOpen(true)}>调试</Button>
-          </>
-        )}
-        right={<span style={{ color: '#8b949e', fontSize: 13 }}><FieldTimeOutlined /> 共 {pagination.total} 个周期</span>}
-      />
+      <div className="cycles-toolbar">
+        <span>全部周期 <strong>{pagination.total}</strong></span>
+        <div className="cycles-toolbar__filters">
+          <Input aria-label="搜索本页种植计划" placeholder="搜索本页种植计划" prefix={<SearchOutlined />} allowClear value={query} onChange={(event) => setQuery(event.target.value)} />
+          <Select aria-label="筛选本页阶段" placeholder="本页阶段" allowClear value={stage} onChange={setStage} options={stageOptions} />
+          <Button aria-label="接口调试" title="接口调试" icon={<BugOutlined />} onClick={() => setDebugOpen(true)} />
+        </div>
+      </div>
+      {loadError && <Alert type="error" showIcon message="种植周期加载失败" description="请检查网络后重试。错误代码：CYCLES_LOAD_FAILED" action={<Button onClick={() => fetchData(pagination.current, pagination.pageSize)}>重试</Button>} />}
       <Table
         rowKey="id"
-        dataSource={data}
+        className="cycles-table"
+        dataSource={loadError ? [] : visibleData}
+        rowClassName={(record) => record.id === selected?.id ? 'cycle-row--selected' : ''}
+        locale={{ emptyText: <Empty description={query || stage ? '本页没有匹配的种植计划，请调整筛选' : '暂无种植周期，点击新建茬口开始'} /> }}
         columns={columns}
         loading={loading}
-        size="small"
-        scroll={{ x: 860 }}
+        size="large"
+        scroll={{ x: 950 }}
         pagination={{
           current: pagination.current,
           pageSize: pagination.pageSize,
@@ -176,10 +192,18 @@ export default function Cycles() {
           pageSizeOptions: [10, 20, 50],
           showTotal: (count) => `共 ${count} 条`,
         }}
-        onChange={(p) => fetchData(p.current ?? 1, p.pageSize ?? pagination.pageSize)}
+        onChange={(p) => { setQuery(''); setStage(undefined); fetchData(p.current ?? 1, p.pageSize ?? pagination.pageSize); }}
       />
 
-      <Modal title={editingId !== null ? '编辑茬口' : '新建茬口'} open={modalOpen} onOk={editingId !== null ? handleUpdate : handleCreate} onCancel={() => { setModalOpen(false); setEditingId(null); form.resetFields(); }}>
+      {selected && !loadError && (
+        <aside className="cycle-summary" aria-label="选中种植计划摘要">
+          <strong>{selected.name}</strong><span>当前阶段 {selected.current_stage_name || '尚未设置'}</span>
+          <span>开始于 {selected.start_date}</span>
+          <Button type="link" onClick={() => navigate(`/cycles/${selected.id}`)}>查看种植详情 <ArrowRightOutlined /></Button>
+        </aside>
+      )}
+
+      <Modal okText="保存" cancelText="取消" title={editingId !== null ? '编辑茬口' : '新建茬口'} open={modalOpen} onOk={editingId !== null ? handleUpdate : handleCreate} onCancel={() => { setModalOpen(false); setEditingId(null); form.resetFields(); }}>
         {editingId === null && (
           <Card size="small" title={<span><RobotOutlined /> 智能茬口</span>} style={{ ...cardStyle, marginBottom: 16 }}>
             <Space.Compact style={{ width: '100%' }}>
@@ -207,7 +231,7 @@ export default function Cycles() {
           <Form.Item name="crop_template_id" label="作物模板" rules={[{ required: true }]}>
             <Select options={templates.map((t) => ({ value: t.id, label: t.name }))} />
           </Form.Item>
-          <Form.Item name="start_date" label="开始日期" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item>
+          <Form.Item name="start_date" label="开始日期" rules={[{ required: true }]}><DatePicker placeholder="选择开始日期" style={{ width: '100%' }} /></Form.Item>
           <Form.Item name="field_name" label="地块名称"><Input /></Form.Item>
         </Form>
       </Modal>

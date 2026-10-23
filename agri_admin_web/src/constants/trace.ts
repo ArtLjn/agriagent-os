@@ -3,14 +3,14 @@
  * 与 Gantt 图、trace 列表共用。
  */
 export const NODE_TYPE_COLORS: Record<string, string> = {
-  routing: '#f0883e',        // 橙色 — 路由决策
-  catalog_recall: '#f0883e', // 橙色 — Skill 候选
-  prompt_render: '#1890ff',  // 蓝色 — Prompt 渲染
-  llm_call: '#722ed1',       // 紫色 — LLM 调用
-  skill_call: '#52c41a',     // 绿色 — Skill 执行
-  final_context: '#06b6d4',   // 青色 — Final 上下文边界
-  output_guard: '#faad14',    // 黄色 — 输出防泄漏
-  error: '#ff4d4f',          // 红色 — 错误节点
+  routing: '#e0a23c',        // 琥珀 — 路由决策
+  catalog_recall: '#e0a23c', // 琥珀 — Skill 候选
+  prompt_render: '#4f8cff',  // 蓝色 — Prompt 渲染
+  llm_call: '#a78bfa',       // 紫色 — LLM 调用
+  skill_call: '#3fae72',     // 绿色 — Skill 执行
+  final_context: '#22b8cf',  // 青色 — Final 上下文边界
+  output_guard: '#e0a23c',   // 琥珀 — 输出防泄漏
+  error: '#e5534b',          // 红色 — 错误节点
 };
 
 const NODE_TYPE_ALIASES: Record<string, string> = {
@@ -37,7 +37,7 @@ function normalizeNodeType(nodeType: string): string {
 
 /** 获取节点类型的颜色，未知类型返回默认灰色 */
 export function getNodeColor(nodeType: string): string {
-  return NODE_TYPE_COLORS[normalizeNodeType(nodeType)] || '#8b949e';
+  return NODE_TYPE_COLORS[normalizeNodeType(nodeType)] || '#93a89b';
 }
 
 /** 获取节点类型的中文标签 */

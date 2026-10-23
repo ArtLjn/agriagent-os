@@ -11,6 +11,34 @@ class YayaController extends ChangeNotifier {
   final List<YayaMessageViewModel> messages = [];
   final List<ConversationSummary> conversations = [];
   bool sending = false;
+  bool temporary = false;
+  Map<String, dynamic> preferences = {};
+  final List<String> progress = [];
+  String get assistantName =>
+      temporary ? '助手' : (preferences['assistant_name'] as String? ?? '芽芽');
+  bool get showGreeting =>
+      temporary || preferences['loading_greeting_enabled'] != false;
+  bool get showDetails =>
+      !temporary && preferences['execution_detail_level'] == 'detailed';
+
+  Future<void> loadPreferences() async {
+    if (temporary) return;
+    try {
+      final loaded = await repository.loadPersonalization();
+      if (_disposed) return;
+      preferences = loaded;
+      _safeNotify();
+    } catch (_) {
+      // 配置失败不阻断对话，也不保存为默认值覆盖服务端。
+    }
+  }
+
+  void setTemporary(bool value) {
+    if (sending) return;
+    temporary = value;
+    startNewConversation();
+  }
+
   String? errorMessage;
   String? activeSessionId;
   List<String> lastSkills = const [];
@@ -36,6 +64,7 @@ class YayaController extends ChangeNotifier {
     }
     final loaded = await repository.loadMessages(sessionId);
     if (_disposed) return;
+    temporary = sessionId.startsWith('temporary:');
     activeSessionId = sessionId;
     activeTurnId = null;
     pendingAction = null;
@@ -58,6 +87,7 @@ class YayaController extends ChangeNotifier {
     pendingAction = null;
     lastSkills = const [];
     messages.clear();
+    progress.clear();
     _safeNotify();
   }
 
@@ -65,6 +95,7 @@ class YayaController extends ChangeNotifier {
     final trimmed = text.trim();
     if (trimmed.isEmpty || sending) return;
     sending = true;
+    progress.clear();
     errorMessage = null;
     pendingAction = null;
     activeTurnId = null;
@@ -75,9 +106,12 @@ class YayaController extends ChangeNotifier {
     messages.add(const YayaMessageViewModel(role: 'assistant', content: ''));
     _safeNotify();
     try {
+      await loadPreferences();
+      if (_disposed) return;
       await for (final event in repository.streamMessage(
         trimmed,
         sessionId: sessionId,
+        temporary: temporary,
       )) {
         if (_disposed) break;
         if (event.done) {
@@ -109,6 +143,10 @@ class YayaController extends ChangeNotifier {
                 ? content
                 : current.content + content,
           );
+        }
+        if (event.progress != null) {
+          progress.add(event.progress!);
+          if (progress.length > 20) progress.removeAt(0);
         }
         if (event.skills.isNotEmpty) lastSkills = event.skills;
         if (event.pendingAction != null) {

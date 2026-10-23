@@ -1,13 +1,13 @@
-export const BG = '#0d1117';
-export const CARD_BG = '#161b22';
-export const BORDER = '#30363d';
-export const TEXT = '#e6edf3';
-export const TEXT_DIM = '#8b949e';
-export const TEXT_SOFT = '#c9d1d9';
-export const GREEN = '#238636';
-export const BLUE = '#2f81f7';
-export const AMBER = '#d29922';
-export const PURPLE = '#8b6bb1';
+export const BG = 'var(--app-bg)';
+export const CARD_BG = 'var(--app-surface)';
+export const BORDER = 'var(--app-border)';
+export const TEXT = 'var(--app-text)';
+export const TEXT_DIM = 'var(--app-secondary)';
+export const TEXT_SOFT = 'var(--app-tertiary)';
+export const GREEN = '#3fae72';
+export const BLUE = '#4f8cff';
+export const AMBER = '#e0a23c';
+export const PURPLE = '#a78bfa';
 export const HOURS_24 = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, '0'));
 
 export type NormalizedModelStats = {

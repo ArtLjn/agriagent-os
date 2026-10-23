@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Alert,
   App,
@@ -7,6 +7,7 @@ import {
   Input,
   Modal,
   Tag,
+  Select,
 } from "antd";
 import {
   personalizationApi,
@@ -24,6 +25,8 @@ interface MemoryEditModalProps {
 
 interface MemoryEditFormValues {
   text: string;
+  scope: "user" | "user_farm";
+  conditions: string;
 }
 
 export default function MemoryEditModal({
@@ -35,15 +38,16 @@ export default function MemoryEditModal({
   const { message } = App.useApp();
   const [form] = Form.useForm<MemoryEditFormValues>();
   const [saving, setSaving] = useState(false);
+  const createId = useRef(crypto.randomUUID());
 
   useEffect(() => {
-    if (!open || !record) return;
+    if (!open) return;
     form.resetFields();
-    form.setFieldsValue({ text: record.text });
+    createId.current = crypto.randomUUID();
+    form.setFieldsValue({ text: record?.text ?? "", scope: record?.scope ?? "user", conditions: record?.conditions.join("\n") ?? "" });
   }, [open, record, form]);
 
   const handleSave = async () => {
-    if (!record) return;
     let values: MemoryEditFormValues;
     try {
       values = await form.validateFields();
@@ -52,11 +56,22 @@ export default function MemoryEditModal({
     }
     setSaving(true);
     try {
-      await personalizationApi.updateMemory(record.memory_id, {
-        expected_revision: record.revision,
-        text: values.text.trim(),
-      });
-      message.success("记忆已更新，来源已标记为手动编辑");
+      if (record) {
+        await personalizationApi.updateMemory(record.memory_id, {
+          expected_revision: record.revision,
+          text: values.text.trim(),
+          conditions: values.conditions.split("\n").map((value) => value.trim()).filter(Boolean),
+        });
+      } else {
+        await personalizationApi.createMemory({
+          memory_id: createId.current,
+          key: `manual.${createId.current}`,
+          text: values.text.trim(),
+          conditions: values.conditions.split("\n").map((value) => value.trim()).filter(Boolean),
+          scope: values.scope,
+        });
+      }
+      message.success(record ? "记忆已更新" : "记忆已保存");
       onSaved();
     } catch (error) {
       message.error(personalizationErrorMessage(error));
@@ -71,7 +86,7 @@ export default function MemoryEditModal({
 
   return (
     <Modal
-      title="编辑记忆"
+      title={record ? "编辑记忆" : "新增记忆"}
       open={open}
       onCancel={onCancel}
       onOk={() => void handleSave()}
@@ -81,9 +96,9 @@ export default function MemoryEditModal({
       width={560}
       destroyOnHidden
     >
-      {record && (
+      {(
         <>
-          <Descriptions column={2} size="small" style={{ marginBottom: 16 }}>
+          {record && <Descriptions column={2} size="small" style={{ marginBottom: 16 }}>
             <Descriptions.Item label="范围">
               <Tag color={scopeMeta?.color}>{scopeMeta?.label}</Tag>
               {record.farm_name ? ` ${record.farm_name}` : ""}
@@ -97,9 +112,11 @@ export default function MemoryEditModal({
             <Descriptions.Item label="证据">
               {record.evidence_count} 条
             </Descriptions.Item>
-          </Descriptions>
+          </Descriptions>}
 
           <Form<MemoryEditFormValues> form={form} layout="vertical">
+            {!record && <Form.Item name="scope" label="适用范围"><Select options={[{ value: "user", label: "我的全部农场" }, { value: "user_farm", label: "仅当前农场" }]} /></Form.Item>}
+            <Form.Item name="conditions" label="适用条件（每行一个，可不填）" rules={[{ validator: (_, value: string) => value.split("\n").filter(Boolean).length <= 10 && value.split("\n").every((line) => line.length <= 100) ? Promise.resolve() : Promise.reject(new Error("最多 10 个条件，每个不超过 100 字")) }]}><Input.TextArea rows={2} /></Form.Item>
             <Form.Item
               name="text"
               label="记忆内容"

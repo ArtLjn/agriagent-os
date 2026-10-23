@@ -139,7 +139,7 @@ function TurnReviewCard({
       style={{
         border: `1px solid ${active ? palette.accentStrong : palette.borderSoft}`,
         borderRadius: 8,
-        background: active ? 'rgba(31, 111, 235, 0.12)' : palette.bg,
+        background: active ? palette.accentSoft : palette.bg,
         padding: 12,
       }}
     >
@@ -216,7 +216,7 @@ function MessageBlock({ role, content }: { role: 'user' | 'assistant'; content: 
       style={{
         border: `1px solid ${palette.borderSoft}`,
         borderRadius: 6,
-        background: role === 'user' ? palette.bgPanel : 'rgba(88, 166, 255, 0.08)',
+        background: role === 'user' ? palette.bgPanel : palette.bgSoft,
         padding: '8px 10px',
       }}
     >

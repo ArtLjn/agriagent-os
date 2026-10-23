@@ -184,7 +184,7 @@ function sessionCardStyle(active: boolean): CSSProperties {
     width: '100%',
     border: `1px solid ${active ? palette.accentStrong : palette.borderSoft}`,
     borderRadius: 8,
-    background: active ? 'rgba(31, 111, 235, 0.18)' : palette.bgPanel,
+    background: active ? palette.accentSoft : palette.bgPanel,
     color: palette.text,
     cursor: 'pointer',
     padding: 12,
