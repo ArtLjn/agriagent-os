@@ -675,6 +675,16 @@ async def _run_single_reasoning_step(
 ) -> AsyncGenerator[dict, None]:
     """一次 while 迭代：doom 检测 → LLM → 工具分发。"""
     turn.set_phase(TurnPhase.REASONING)
+    if any(
+        call.get("memory_result_code") == memory_tools.OBSERVATION_ONLY_CODE
+        for call in tracker.calls
+    ):
+        # 本轮已交给后台学习，移除记忆入口；混合请求仍可继续完成业务工具。
+        tools_schema = [
+            tool
+            for tool in tools_schema
+            if tool.get("function", {}).get("name") != memory_tools.TOOL_NAME
+        ]
     # ── Doom Loop 检测（参考 _example/tools/safety.py）──
     doom_msg = verify.detect_doom_loop(tracker.calls)
     if doom_msg:
@@ -1262,7 +1272,16 @@ async def _dispatch_tool_calls(
             )
             turn.emit(started_ev["type"], started_ev["data"])
             yield started_ev
-            result = await memory_tools.execute(turn, tc["arguments"], tool_call_id)
+            observation_closed = any(
+                call.get("memory_result_code") == memory_tools.OBSERVATION_ONLY_CODE
+                for call in tracker.calls
+            )
+            # 即使供应商继续返回已经移除的工具，也不能重复审查或改变本轮处理结论。
+            result = (
+                dict(memory_tools.OBSERVATION_ONLY_RESULT)
+                if observation_closed
+                else await memory_tools.execute(turn, tc["arguments"], tool_call_id)
+            )
             try:
                 args = (
                     _json.loads(tc["arguments"])
@@ -1280,6 +1299,8 @@ async def _dispatch_tool_calls(
                 risk_level="read" if args.get("action") == "list" else "write_confirm",
             )
             tracker.calls[-1]["persisted"] = result.get("persisted") is True
+            tracker.calls[-1]["memory_result_code"] = result.get("code")
+            tracker.calls[-1]["memory_failed"] = result.get("ok") is False
             tracker.record_observation(memory_tools.TOOL_NAME, args, result)
             duration_ms = int((time.perf_counter() - started) * 1000)
             error = (
@@ -1316,6 +1337,21 @@ async def _dispatch_tool_calls(
                 "type": "observation",
                 "data": {"tool_name": memory_tools.TOOL_NAME, "result": result},
             }
+            if error and (
+                not result.get("retryable", False)
+                or sum(call.get("memory_failed", False) for call in tracker.calls)
+                > memory_tools.MAX_REPAIR_ATTEMPTS
+            ):
+                turn.finalization_request = {
+                    **error,
+                    "tool_name": memory_tools.TOOL_NAME,
+                    "result": result,
+                }
+                async for ev in _finalize_requested_error(turn):
+                    yield ev
+                return
+            if observation_closed:
+                turn.finalization_pending = True
             continue
 
         # make_plan 特殊工具：转入 planner 处理
@@ -1359,6 +1395,23 @@ async def _dispatch_tool_calls(
             return
 
     _reorder_parallel_tool_messages(turn, tool_calls)
+    if (
+        any(
+            call.get("memory_result_code") == memory_tools.OBSERVATION_ONLY_CODE
+            for call in tracker.calls
+        )
+        and all(
+            call["skill"] == memory_tools.TOOL_NAME and call.get("persisted") is False
+            for call in tracker.calls
+        )
+        and not turn.committed_operations
+        and turn.committed_result is None
+    ):
+        # 普通偏好在这里正常收尾，Worker 才能投递观察；不能再等模型反复选择写工具。
+        async for ev in _emit_final_answer(
+            turn, memory_tools.PREFERENCE_ACKNOWLEDGEMENT, plan_box["plan"], tracker
+        ):
+            yield ev
 
 
 async def _dispatch_parallel_tool_calls(

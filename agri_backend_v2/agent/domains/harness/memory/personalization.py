@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -95,7 +95,7 @@ class MemoryPatch(BaseModel):
 
 
 def now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def new_document(owner: str) -> dict:
@@ -177,6 +177,8 @@ def context_text(
     selected = []
     for record in records[:MAX_CONTEXT_MEMORIES]:
         item = {
+            "memory_id": record["memory_id"],
+            "revision": record["revision"],
             "text": record["text"],
             "conditions": record["conditions"],
             "source": record["source_type"],

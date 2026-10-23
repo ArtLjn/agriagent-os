@@ -147,7 +147,12 @@ async def create_memory(user_id: str, farm_uid: str, request: MemoryCreate) -> d
 
 
 async def modify_memory(
-    user_id: str, farm_uid: str, memory_id: str, patch: MemoryPatch | None = None
+    user_id: str,
+    farm_uid: str,
+    memory_id: str,
+    patch: MemoryPatch | None = None,
+    *,
+    expected_revision: int | None = None,
 ) -> dict:
     """更新和删除都限定当前可见范围，删除正文仅留下最小重试屏障。"""
     doc = await load(user_id)
@@ -162,6 +167,9 @@ async def modify_memory(
     )
     if record is None:
         raise MemoryError("memory_not_found", "记忆不存在", 404)
+    # 工具的语义核对可能耗时；删除也不能作用于核对之后被其他会话改写的内容。
+    if expected_revision is not None and expected_revision != record["revision"]:
+        raise MemoryError("memory_version_conflict", "记忆已变化，请重新加载")
     if record["status"] == "deleted":
         if patch is None:
             return record
