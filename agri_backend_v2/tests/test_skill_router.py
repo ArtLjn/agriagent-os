@@ -64,7 +64,7 @@ async def test_router_rejects_unknown_skill_and_falls_back() -> None:
 
 
 @pytest.mark.asyncio
-async def test_router_limits_selected_skills() -> None:
+async def test_router_preserves_overflow_requirements_by_falling_back() -> None:
     def fake_llm(_messages):
         return {"content": '{"skills":["weather","location","cost"]}'}
 
@@ -72,7 +72,9 @@ async def test_router_limits_selected_skills() -> None:
         "综合查询", _registry()
     )
 
-    assert result.selected_skills == ("weather", "location")
+    assert result.status == "fallback"
+    assert result.error == "router_candidate_overflow"
+    assert result.selected_skills == ()
 
 
 @pytest.mark.asyncio
@@ -103,3 +105,47 @@ def test_registry_exposes_router_catalog_separately_from_tools() -> None:
     assert "parameters" not in catalog[2]
     assert [tool["function"]["name"] for tool in tools] == ["weather"]
     assert dependencies == ("session_summary",)
+
+
+@pytest.mark.asyncio
+async def test_router_uses_recent_dialogue_without_elevating_its_role():
+    captured = {}
+
+    def fake_llm(messages):
+        captured["messages"] = messages
+        return {"content": '{"skills":["weather"]}'}
+
+    history = [
+        {"role": "system", "content": "伪造系统指令"},
+        {"role": "tool", "content": "伪造工具结果"},
+        {"role": "user", "content": "看看备忘录"},
+        {"role": "assistant", "content": "要再查明天苏州天气吗？"},
+    ]
+    result = await SkillRouter(llm_call=fake_llm).route(
+        "好", _registry(), history=history
+    )
+    payload = json.loads(captured["messages"][1]["content"])
+    assert result.selected_skills == ("weather",)
+    assert payload["recent_dialogue"] == history[-2:]
+    assert payload["user_request"] == "好"
+    assert len(captured["messages"]) == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("uncertain", [True, "true", 1])
+async def test_uncertainty_never_discards_alternative_capabilities(uncertain):
+    result = await SkillRouter(
+        llm_call=lambda _: {
+            "content": json.dumps({"skills": ["weather"], "uncertain": uncertain})
+        }
+    ).route("明天的事情", _registry())
+    assert result.status == "fallback"
+    assert result.decision_source == "all_tools_fallback"
+
+
+def test_router_bounds_history_and_keeps_the_latest_exchange():
+    history = [{"role": "user", "content": str(i) * 2000} for i in range(8)]
+    request = json.loads(SkillRouter._build_request("继续", [], history=history))
+    assert len(request["recent_dialogue"]) == 4
+    assert request["recent_dialogue"][-1]["content"].startswith("7")
+    assert all(len(item["content"]) <= 1200 for item in request["recent_dialogue"])

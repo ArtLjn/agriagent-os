@@ -7,13 +7,67 @@ from unittest.mock import AsyncMock
 
 import httpx
 import pytest
-
 from test_personalization import Collection
+
 from agent.domains.harness.memory import learning, tools
 from agent.domains.harness.memory.long_term import get_personalization_context
 from agent.domains.harness.memory.personalization import MemoryCreate, SettingsPatch
-from agent.platforms.persistence.mongo import personalization_store as store
 from agent.platforms.persistence import memory_index
+from agent.platforms.persistence.mongo import personalization_store as store
+
+_real_assess = tools.assess
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fenced", [False, True])
+async def test_memory_assessment_accepts_strict_json_with_optional_fence(
+    monkeypatch, fenced
+):
+    from agent.platforms.llm import client
+
+    raw = '{"authorized":false,"preference_statement":true}'
+    if fenced:
+        raw = f"```json\n{raw}\n```"
+    monkeypatch.setattr(
+        client._async_client.chat.completions,
+        "create",
+        AsyncMock(
+            return_value=SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content=raw))]
+            )
+        ),
+    )
+    result = await _real_assess("我喜欢吃西瓜")
+    assert result.preference_statement and not result.authorized
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "raw",
+    [
+        '说明：{"authorized":true}',
+        '```json\n{"authorized":"true"}\n```',
+        '```json\n{"authorized":true}\n```后续文字',
+    ],
+)
+async def test_memory_assessment_rejects_mixed_text_and_untyped_authorization(
+    monkeypatch, raw
+):
+    from pydantic import ValidationError
+
+    from agent.platforms.llm import client
+
+    monkeypatch.setattr(
+        client._async_client.chat.completions,
+        "create",
+        AsyncMock(
+            return_value=SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content=raw))]
+            )
+        ),
+    )
+    with pytest.raises(ValidationError):
+        await _real_assess("我喜欢吃西瓜")
 
 
 @pytest.fixture
@@ -267,6 +321,139 @@ def test_old_tool_snapshots_are_removed_after_control_change():
     assert "已删除内容" not in messages[0]["content"]
 
 
+@pytest.mark.parametrize("revision", [None, 1, 2])
+def test_failed_memory_results_keep_original_rejection(revision):
+    result = {
+        "ok": False,
+        "persisted": False,
+        "code": "memory_explicit_intent_required",
+        "message": "普通偏好由自动学习处理",
+    }
+    messages = [
+        {"role": "tool", "name": tools.TOOL_NAME, "content": json.dumps(result)}
+    ]
+    tools.discard_stale_results(messages, revision)
+    assert json.loads(messages[0]["content"]) == result
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("claim", ["claims_persistence", "claims_memory_failure"])
+@pytest.mark.parametrize("attempted", [False, True])
+async def test_ordinary_preference_acknowledges_without_forcing_memory_write(
+    memory_assessment_stub, claim, attempted
+):
+    from agent.domains.harness.runtime import engine, verify
+    from agent.domains.harness.runtime.turn import Turn
+
+    memory_assessment_stub.return_value = tools.MemoryAssessment(
+        preference_statement=True, **{claim: True}
+    )
+    turn = Turn(user_input="我还喜欢草莓葡萄", step_count=1)
+    tracker = verify.CallTracker()
+    if attempted:
+        tracker.record(tools.TOOL_NAME, {}, risk_level="read")
+    events = [
+        event
+        async for event in engine._emit_final_answer(
+            turn, "记忆系统又出错了，稍后再告诉我一次", None, tracker
+        )
+    ]
+    assert turn.status == "completed"
+    assert turn.final_answer == tools.PREFERENCE_ACKNOWLEDGEMENT
+    assert turn.write_guard_attempts == 0
+    assert not turn.messages
+    assert not any(event["type"] in {"error", "tool_started"} for event in events)
+    assert sum(event["type"] == "final_answer" for event in events) == 1
+
+
+@pytest.mark.asyncio
+async def test_ordinary_preference_tool_misroute_never_accesses_persistence(
+    monkeypatch, memory_assessment_stub
+):
+    memory_assessment_stub.return_value = tools.MemoryAssessment(
+        preference_statement=True
+    )
+    load = AsyncMock(side_effect=AssertionError("普通偏好不能触发显式记忆存储"))
+    monkeypatch.setattr(store, "load", load)
+    turn = SimpleNamespace(
+        user_input="我喜欢吃西瓜", temporary=False, turn_id="ordinary"
+    )
+    result = await tools.execute(
+        turn,
+        {"action": "remember", "text": "喜欢西瓜", "evidence": "我喜欢吃西瓜"},
+        "call",
+    )
+    assert result["ok"] and not result["persisted"]
+    assert result["code"] == "memory_observation_only"
+    load.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_unrequested_memory_claim_does_not_instruct_tool_execution(
+    memory_assessment_stub,
+):
+    memory_assessment_stub.return_value = tools.MemoryAssessment(
+        claims_persistence=True
+    )
+    turn = SimpleNamespace(
+        user_input="我喜欢西瓜", messages=[], temporary=False, turn_id="guard"
+    )
+    issue = await tools.completion_guard_issue(turn, "已经长期保存了")
+    assert issue and "撤回保存声明" in issue.message
+    assert "请先调用" not in issue.message
+
+
+@pytest.mark.asyncio
+async def test_explicit_memory_request_is_not_downgraded_to_acknowledgement(
+    memory_assessment_stub,
+):
+    memory_assessment_stub.return_value = tools.MemoryAssessment(
+        preference_statement=True, requests_persistence=True, claims_persistence=True
+    )
+    turn = SimpleNamespace(
+        user_input="请长期记住我喜欢西瓜", messages=[], temporary=False, turn_id="guard"
+    )
+    issue = await tools.completion_guard_issue(turn, "保存好了")
+    assert issue and not issue.can_acknowledge
+    assert "执行已授权" in issue.message
+
+
+@pytest.mark.asyncio
+async def test_historical_memory_failure_is_not_current_tool_evidence(
+    memory_assessment_stub,
+):
+    memory_assessment_stub.return_value = tools.MemoryAssessment(
+        claims_memory_failure=True
+    )
+    turn = SimpleNamespace(
+        user_input="查一下天气", messages=[], temporary=False, turn_id="guard"
+    )
+    issue = await tools.completion_guard_issue(turn, "本轮记忆保存失败了")
+    assert issue and not issue.can_acknowledge
+    assert "本轮没有调用" in issue.message
+
+
+@pytest.mark.asyncio
+async def test_preference_acknowledgement_cannot_hide_other_business_calls(
+    memory_assessment_stub,
+):
+    from agent.domains.harness.runtime import engine, verify
+    from agent.domains.harness.runtime.turn import Turn
+
+    memory_assessment_stub.return_value = tools.MemoryAssessment(
+        preference_statement=True, claims_persistence=True
+    )
+    tracker = verify.CallTracker()
+    tracker.record("get_weather", {}, risk_level="read")
+    turn = Turn(user_input="我喜欢晴天，查一下明天的天气", step_count=1, max_steps=1)
+    _ = [
+        event
+        async for event in engine._emit_final_answer(turn, "记住了", None, tracker)
+    ]
+    assert turn.status == "failed"
+    assert turn.final_answer != tools.PREFERENCE_ACKNOWLEDGEMENT
+
+
 @pytest.mark.asyncio
 async def test_enqueue_rejects_turn_started_before_toggle_or_clear(
     collection, monkeypatch
@@ -288,6 +475,7 @@ async def test_enqueue_rejects_turn_started_before_toggle_or_clear(
 @pytest.mark.asyncio
 async def test_rest_crud_isolation_conflict_and_clear(collection, monkeypatch):
     from fastapi import FastAPI
+
     from agent.api import api_router
     from agent.api import personalization as api
 
@@ -441,6 +629,58 @@ async def test_runtime_dispatch_records_real_memory_write(collection):
     assert verify.has_write_call(tracker)
     assert json.loads(turn.messages[-1]["content"])["ok"]
     assert (await store.load("u"))["memories"][0]["text"] == "先给结论"
+
+
+@pytest.mark.asyncio
+async def test_invalid_preference_tool_call_keeps_error_but_completes_reply(
+    monkeypatch, memory_assessment_stub
+):
+    from agent.domains.harness.runtime import engine, verify
+    from agent.domains.harness.runtime.turn import Turn
+
+    memory_assessment_stub.return_value = tools.MemoryAssessment(
+        preference_statement=True, claims_memory_failure=True
+    )
+    load = AsyncMock(side_effect=AssertionError("错误参数不能触及存储"))
+    monkeypatch.setattr(store, "load", load)
+    turn = Turn(user_input="我还喜欢草莓葡萄", step_count=1, max_steps=1)
+    tracker = verify.CallTracker()
+    events = [
+        event
+        async for event in engine._dispatch_tool_calls(
+            tool_calls=[
+                {
+                    "id": "invalid",
+                    "name": tools.TOOL_NAME,
+                    "arguments": {"action": "remember", "text": ["草莓", "葡萄"]},
+                }
+            ],
+            rationale="普通偏好误调用",
+            skill_index={},
+            skill_ctx=None,
+            approval_waiter=AsyncMock(),
+            turn=turn,
+            tracker=tracker,
+            plan_box={},
+        )
+    ]
+    result = events[-1]["data"]["result"]
+    assert result["code"] == "memory_invalid_arguments"
+    assert result["ok"] is False and result["persisted"] is False
+    tools.discard_stale_results(turn.messages, 1)
+    assert (
+        json.loads(turn.messages[-1]["content"])["code"] == "memory_invalid_arguments"
+    )
+    _ = [
+        event
+        async for event in engine._emit_final_answer(
+            turn, "记忆系统又出错了，请再告诉我一次", None, tracker
+        )
+    ]
+    assert turn.status == "completed"
+    assert turn.final_answer == tools.PREFERENCE_ACKNOWLEDGEMENT
+    assert not verify.has_write_call(tracker)
+    load.assert_not_called()
 
 
 @pytest.mark.asyncio

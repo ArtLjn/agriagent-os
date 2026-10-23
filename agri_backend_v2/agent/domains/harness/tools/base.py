@@ -14,6 +14,12 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar
 
 _REQUIRED_ANY_MARKER = "__required_any__"
+CONTROL_METADATA_FIELDS = ("capability_group", "data_scope", "freshness_requirement")
+ROUTING_FIELDS = {
+    "use_when": "适用请求",
+    "avoid_when": "不适用请求",
+    "examples": "典型表达",
+}
 
 if TYPE_CHECKING:
     from agent.domains.harness.tools.context import SkillContext
@@ -70,6 +76,13 @@ class Skill:
         return tuple(str(item) for item in raw if isinstance(item, str) and item)
 
     @property
+    def routing(self) -> dict[str, list[str]]:
+        """同一份选择边界同时服务主模型与候选路由，操作级字段覆盖聚合级字段。"""
+        source = self._meta.get("routing") or {}
+        operation = getattr(self, "_operation_config_meta", {}).get("routing") or {}
+        return {**source, **operation}
+
+    @property
     def context_dependencies(self) -> tuple[str, ...]:
         """返回 ContextBuilder 可消费的上下文依赖键。"""
         context = self._meta.get("context") or {}
@@ -87,9 +100,7 @@ class Skill:
         """读取语义控制元数据；Operation 配置优先于聚合 Skill 配置。"""
         operation_config = getattr(self, "_operation_config_meta", {})
         value = (
-            operation_config.get(key)
-            if isinstance(operation_config, dict)
-            else None
+            operation_config.get(key) if isinstance(operation_config, dict) else None
         )
         if value is None:
             value = self._meta.get(key)
@@ -313,7 +324,20 @@ class Skill:
 
     def _tool_description(self) -> str:
         """返回面向模型的业务描述，不投影 Business MCP 内部协议。"""
-        return self.description
+        routing = self.routing
+        if hasattr(self, "_operation_config_meta"):
+            # 聚合级用途/示例只在 Router 目录出现一次，避免复制到每个动作并误导读写选择。
+            # 操作本身已有明确描述，仅继承跨能力排除边界，操作级说明按需补充。
+            routing = {
+                "avoid_when": routing.get("avoid_when", []),
+                **(self._operation_config_meta.get("routing") or {}),
+            }
+        guidance = [
+            f"{label}：{'；'.join(routing[field])}"
+            for field, label in ROUTING_FIELDS.items()
+            if routing.get(field)
+        ]
+        return "\n".join([self.description, *guidance])
 
     def operation_skills(self) -> list[OperationSkill]:
         """把聚合 skill 展开为模型可直接选择的单一动作 skill。"""
@@ -389,11 +413,7 @@ class OperationSkill(McpSkill):
                 "finalize_after_success"
             ]
         self._meta["operations"] = {}
-        for metadata_name in (
-            "capability_group",
-            "data_scope",
-            "freshness_requirement",
-        ):
+        for metadata_name in CONTROL_METADATA_FIELDS:
             if metadata_name in source_config:
                 self._meta[metadata_name] = source_config[metadata_name]
         self.kind = source.kind

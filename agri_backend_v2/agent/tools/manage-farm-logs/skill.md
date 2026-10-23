@@ -4,6 +4,10 @@ name: manage_farm_logs
 kind: mcp
 mcp_tool: business.manage_farm_logs
 risk_level: mixed
+routing:
+  use_when: [已经发生的农事、完成日期和参与工人。]
+  avoid_when: [个人提醒和未来待办查备忘录，派工查作业单。历史为空不能证明未来没有安排。]
+  examples: [最近做了哪些农活, 今天浇水了]
 description: |
   管理农事日志。根据用户意图选择 operation：
   - create: 用户要记录农事操作（如「今天施肥」「给1号茬口浇水」「记录打药」）

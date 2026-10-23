@@ -4,7 +4,13 @@ name: manage_memos
 kind: mcp
 mcp_tool: business.manage_memos
 risk_level: mixed
-description: 保存、查找、编辑、置顶和归档个人农场备忘录。适用于“记一下”“保存备忘”“找之前的笔记”。不负责定时提醒、农事记账或长期偏好记忆。
+description: 保存、查询、编辑、置顶和归档用户的备忘录及个人提醒事项，包括“我有什么安排”“之前让我记的事”。不设置定时通知，不代替农事记账或长期偏好记忆。
+routing:
+  use_when:
+    - 用户要查看或记录自己的事情、备忘、提醒、待办，或找之前保存的笔记；未明确为农事作业时先查个人记录。
+  avoid_when:
+    - 天气预报或气象预警用 get_weather；已发生农事用 query_farm_logs；明确派工或作业单用 query_work_orders；长期偏好用 manage_personal_memory。
+  examples: [我明天有啥事情, 我明天有啥提醒, 今天有没有要记着的事, 之前记的采购清单]
 triggers:
 - 备忘录
 - 笔记
@@ -12,7 +18,7 @@ triggers:
 operations:
   query:
     tool_name: query_memos
-    description: 搜索用户在当前农场保存的备忘录，可查询已归档记录。
+    description: 查询用户在当前农场保存的备忘录和提醒事项。查询某天安排时读取未归档记录并按正文日期核对；创建时间不是事项日期。记录可能使用绝对日期或相对日期，不要仅用“明天”作关键词后就断言没有安排。分页未读完时说明结果范围。
     risk_level: read
     parameters:
     - keyword
@@ -20,6 +26,9 @@ operations:
     - limit
     - skip
     required: []
+    routing:
+      use_when: [查看用户已保存的个人事项、安排或提醒；不要求用户必须说出“备忘录”这个功能名。]
+      examples: [我明天有啥提醒, 我后天还有什么要做的, 看看之前让我记下的事]
   create:
     tool_name: create_memo
     description: 保存用户明确要求记录的备忘录，不设置定时通知。
@@ -33,6 +42,9 @@ operations:
     - title
     - content
     - client_request_id
+    routing:
+      use_when: [用户明确要求记下或保存一件事；仅查询安排时不能创建记录。]
+      examples: [提醒我明早打药, 帮我记下周六去买种子]
   update:
     tool_name: update_memo
     description: 编辑已有备忘录标题、正文或置顶状态。
