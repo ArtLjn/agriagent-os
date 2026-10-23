@@ -20,6 +20,12 @@ class McpToolAuthorizationError(Exception):
 
 
 _TOOL_OPERATION_PERMISSIONS = {
+    "manage_memos": {
+        "query": Permission.FARM_READ,
+        "create": Permission.FARM_WRITE,
+        "update": Permission.FARM_WRITE,
+        "archive": Permission.FARM_WRITE,
+    },
     "manage_cost": {
         "query": Permission.FARM_READ,
         "summary": Permission.FARM_READ,

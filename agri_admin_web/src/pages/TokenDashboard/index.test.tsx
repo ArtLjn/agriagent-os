@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -95,4 +95,18 @@ describe('TokenDashboard', () => {
     expect(await screen.findByRole('img', { name: 'Token 用量和请求数时间趋势' })).toBeInTheDocument();
     expect(screen.queryByText('今日暂无可用于趋势图的真实 Token trace')).not.toBeInTheDocument();
   });
+});
+
+ it('个人周月配额使用 Agent 实际消耗而非旧接口零用量', async () => {
+  mockedUsersApi.list.mockResolvedValue({ data: { items: [{ id: 'u', nickname: '测试用户', phone: '123' }], total: 1 } } as unknown as Awaited<ReturnType<typeof usersApi.list>>);
+  mockedUsersApi.getQuota.mockResolvedValue({ data: { monthly_limit: 1000, weekly_limit: 1000, monthly_usage: 0, weekly_usage: 0 } } as unknown as Awaited<ReturnType<typeof usersApi.getQuota>>);
+  mockedGetTokenSummary.mockResolvedValue({ days: 7, by_model: {}, total_tokens: 600, total_requests: 1 });
+  mockedGetDailyTokenStats.mockResolvedValue({ date: '2026-10-23', items: [] });
+  mockedGetHourlyTokenStats.mockResolvedValue({ start_date: '2026-10-01', end_date: '2026-10-23', hours: [], items: [], total_tokens: 600, total_requests: 1 });
+  render(<TokenDashboard />);
+  await waitFor(() => expect(mockedUsersApi.list).toHaveBeenCalled());
+  fireEvent.mouseDown(screen.getAllByRole('combobox')[0]);
+  fireEvent.click(await screen.findByText('测试用户 / 123'));
+  await waitFor(() => expect(screen.getAllByText('600 / 1.0K')).toHaveLength(2));
+  expect(mockedGetHourlyTokenStats).toHaveBeenCalledWith(expect.objectContaining({ user_id: 'u', start_date: expect.stringMatching(/-01$/) }));
 });

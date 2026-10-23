@@ -18,24 +18,31 @@ import uvicorn
 from fastapi import FastAPI
 from starlette.middleware import Middleware
 
-# Import tool registration side-effects (each module decorates @mcp.tool).
-from business.tools import farm, location, logs, user_settings, weather  # noqa: F401
-from business.tools import (  # noqa: F401
-    cost,
-    crop_cycle,
-    crop_templates,
-    debt,
-    planting_plan,
-    planting_units,
-    work_orders,
-    workers,
-)
 from business.api import api_router, install_exception_handlers
 from business.config import settings
 from business.db import check_connection
 from business.mcp_app import mcp
 from business.mcp_auth import McpAuthMiddleware
 from business.services.auth_service import ensure_admin_user
+
+# 导入工具模块以注册 MCP 能力。
+from business.tools import (  # noqa: F401
+    cost,
+    crop_cycle,
+    crop_templates,
+    debt,
+    farm,
+    farm_review,
+    location,
+    logs,
+    memos,
+    planting_plan,
+    planting_units,
+    user_settings,
+    weather,
+    work_orders,
+    workers,
+)
 
 
 def setup_logging() -> None:

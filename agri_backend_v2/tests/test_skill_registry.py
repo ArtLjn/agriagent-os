@@ -13,8 +13,8 @@ def test_from_directory_loads_current_skill_catalog() -> None:
     registry = SkillRegistry.from_directory(skills_dir)
     snapshot = registry.snapshot()
 
-    assert len(registry.all()) == 53
-    assert len(registry.exposed_tools()) == 52
+    assert len(registry.all()) == 59
+    assert len(registry.exposed_tools()) == 58
     assert "get_weather" in snapshot["skill_names"]
     assert "commit_planting_plan" not in snapshot["exposed_tool_names"]
     assert snapshot["risk_levels"] == tuple(sorted(snapshot["risk_levels"]))

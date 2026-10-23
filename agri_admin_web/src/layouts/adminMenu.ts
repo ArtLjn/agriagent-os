@@ -59,15 +59,27 @@ export const menuGroups: AdminMenuGroup[] = [
   {
     key: 'agent-platform',
     icon: 'tool',
-    label: 'Agent 平台',
+    label: 'Agent 开发',
+    children: [
+      { key: '/dev/playground', icon: 'message', label: 'Playground' },
+      { key: '/dev/skills', icon: 'agent', label: 'Skill 注册表' },
+      { key: '/dev/prompts', icon: 'fileSearch', label: 'Prompt 管理' },
+    ],
+  },
+  {
+    key: 'observability',
+    icon: 'chart',
+    label: '运行监控',
     children: [
       { key: '/dev/traces', icon: 'branches', label: '链路追踪' },
       { key: '/dev/tokens', icon: 'chart', label: 'Token 看板' },
-      { key: '/dev/playground', icon: 'message', label: 'Playground' },
-      { key: '/dev/data-flywheel', icon: 'database', label: '数据飞轮' },
-      { key: '/dev/skills', icon: 'agent', label: 'Skill 注册表' },
-      { key: '/dev/prompts', icon: 'fileSearch', label: 'Prompt 检查器' },
-      { key: '/dev/simulation', icon: 'experiment', label: '仿真测试' },
+    ],
+  },
+  {
+    key: 'system-management',
+    icon: 'setting',
+    label: '系统管理',
+    children: [
       { key: '/dev/config', icon: 'setting', label: '配置管理' },
     ],
   },

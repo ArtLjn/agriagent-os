@@ -251,6 +251,8 @@
 .playground-composer { width: 100%; max-width: var(--pg-content-width); margin: 0 auto; border: 1px solid var(--pg-border); border-radius: 14px; padding: 12px 14px 10px; background: var(--pg-surface); transition: border-color 120ms ease, box-shadow 120ms ease; }
 .playground-composer:focus-within { border-color: var(--app-accent); box-shadow: 0 0 0 3px var(--app-focus-ring); }
 .playground-composer textarea.ant-input {
+  /* 焦点由外层 focus-within 标示，避免全局 focus-visible 再绘制直角内框。 */
+  outline: none;
   border: 0 !important;
   border-radius: 0 !important;
   background: transparent !important;

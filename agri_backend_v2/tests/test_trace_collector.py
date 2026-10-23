@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import timezone
+from datetime import UTC
 from types import SimpleNamespace
 
 import pytest
@@ -247,9 +247,9 @@ def test_trace_record_times_are_utc_aware(monkeypatch) -> None:
     collector.record("llm_call", "model", start_time=1.0, end_time=2.0)
     node = collector._queue[-1]
 
-    assert node["start_time"].tzinfo == timezone.utc
-    assert node["end_time"].tzinfo == timezone.utc
-    assert node["created_at"].tzinfo == timezone.utc
+    assert node["start_time"].tzinfo == UTC
+    assert node["end_time"].tzinfo == UTC
+    assert node["created_at"].tzinfo == UTC
     collector._queue.clear()
 
 
@@ -331,6 +331,10 @@ async def test_start_trace_system_initializes_trace_indexes(monkeypatch) -> None
 
     await collector.start_trace_system()
     try:
+        assert any(
+            keys == (("node_type", 1), ("created_at", 1))
+            for keys, _options in trace_coll.indexes
+        )
         event_indexes = {
             (keys, tuple(sorted(options.items())))
             for keys, options in event_coll.indexes

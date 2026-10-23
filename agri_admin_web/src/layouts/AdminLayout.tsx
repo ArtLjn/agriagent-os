@@ -78,10 +78,8 @@ const pageTitles: Record<string, string> = {
   '/dev/traces': '链路追踪',
   '/dev/tokens': 'Token 看板',
   '/dev/playground': 'Playground',
-  '/dev/data-flywheel': '数据飞轮',
   '/dev/skills': 'Skill 注册表',
-  '/dev/prompts': 'Prompt 检查器',
-  '/dev/simulation': '仿真测试',
+  '/dev/prompts': 'Prompt 管理',
   '/dev/config': '配置管理',
 };
 

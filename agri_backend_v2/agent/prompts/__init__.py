@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from pathlib import Path
 from typing import Any
@@ -67,8 +68,27 @@ def reload() -> None:
 
 
 __all__ = [
-    "render_prompt",
-    "render_system_prompt",
+    "inspect_prompts",
     "list_prompts",
     "reload",
+    "render_prompt",
+    "render_system_prompt",
 ]
+
+
+def inspect_prompts() -> list[dict]:
+    """展示实际加载模板及内容指纹，版本随提示词内容变化。"""
+    items = []
+    for name in list_prompts():
+        content = _load_template(name)
+        items.append(
+            {
+                "name": name,
+                "version": hashlib.sha256(content.encode()).hexdigest()[:12],
+                "active": name == "system",
+                "content": content,
+                "content_length": len(content),
+                "source": f"agent/prompts/{name}.md",
+            }
+        )
+    return items

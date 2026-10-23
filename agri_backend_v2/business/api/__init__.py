@@ -15,6 +15,7 @@ from business.api import (
     farms,
     health,
     locations,
+    memos,
     users,
     weather,
     work_orders,
@@ -28,6 +29,7 @@ api_router = APIRouter(prefix="/api/v2")
 
 for router in (
     health.router,
+    memos.router,
     auth.router,
     users.router,
     users.admin_router,

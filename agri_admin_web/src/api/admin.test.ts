@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import apiClient from './client';
-import { getTimeline, getTraceDiagnostics } from './admin';
+import { getTimeline, getTraceDiagnostics, getTokenSummary, getDailyTokenStats, getHourlyTokenStats, listPrompts, reloadPrompts } from './admin';
 
 vi.mock('./client', () => ({
   default: {
     get: vi.fn(),
+    post: vi.fn(),
   },
 }));
 
@@ -98,4 +99,19 @@ describe('admin api', () => {
     expect(mockedApiClient.get).toHaveBeenCalledWith('/agent/traces/req:1/diagnostics');
     expect(result.reflection_checks[0].checks).toEqual(['write_plan_consistency']);
   });
+});
+
+ it('提示词与统计通过 Agent v2 代理访问', async () => {
+  mockedApiClient.get.mockResolvedValue({ data: {} });
+  mockedApiClient.post.mockResolvedValue({ data: {} });
+  await listPrompts();
+  await reloadPrompts();
+  await getTokenSummary({ days: 7, user_id: 'u' });
+  await getDailyTokenStats('2026-10-23');
+  await getHourlyTokenStats({ model: 'a' });
+  expect(mockedApiClient.get).toHaveBeenCalledWith('/agent/admin/prompts');
+  expect(mockedApiClient.post).toHaveBeenCalledWith('/agent/admin/prompts/reload');
+  expect(mockedApiClient.get).toHaveBeenCalledWith('/agent/admin/stats/tokens', { params: { days: 7, user_id: 'u' } });
+  expect(mockedApiClient.get).toHaveBeenCalledWith('/agent/admin/stats/tokens/daily', { params: { date: '2026-10-23' } });
+  expect(mockedApiClient.get).toHaveBeenCalledWith('/agent/admin/stats/tokens/hourly', { params: { model: 'a' } });
 });

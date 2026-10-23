@@ -15,11 +15,9 @@ import Weather from './pages/Weather';
 import TraceMonitor from './pages/TraceMonitor';
 import TokenDashboard from './pages/TokenDashboard';
 import Playground from './pages/Playground';
-import DataFlywheel from './pages/DataFlywheel';
 import SkillRegistry from './pages/SkillRegistry';
 import PromptInspector from './pages/PromptInspector';
 import ConfigKeys from './pages/ConfigKeys';
-import Simulation from './pages/Simulation';
 import Users from './pages/Users';
 import Operations from './pages/Operations';
 import Login from './pages/Login';
@@ -60,11 +58,11 @@ function ThemedApp() {
             <Route path="/dev/traces" element={<AuthGuard><TraceMonitor /></AuthGuard>} />
             <Route path="/dev/tokens" element={<AuthGuard><TokenDashboard /></AuthGuard>} />
             <Route path="/dev/playground" element={<AuthGuard><Playground /></AuthGuard>} />
-            <Route path="/dev/data-flywheel" element={<AuthGuard><DataFlywheel /></AuthGuard>} />
+            <Route path="/dev/data-flywheel" element={<Navigate to="/dev/traces" replace />} />
             <Route path="/dev/skills" element={<AuthGuard><SkillRegistry /></AuthGuard>} />
             <Route path="/dev/prompts" element={<AuthGuard><PromptInspector /></AuthGuard>} />
             <Route path="/dev/config" element={<AuthGuard><ConfigKeys /></AuthGuard>} />
-            <Route path="/dev/simulation" element={<AuthGuard><Simulation /></AuthGuard>} />
+            <Route path="/dev/simulation" element={<Navigate to="/dev/playground" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
