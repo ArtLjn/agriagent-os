@@ -74,6 +74,7 @@ const pageTitles: Record<string, string> = {
   '/assistant-settings': '助手设置',
   '/weather': '天气预报',
   '/users': '用户管理',
+  '/memos': '提醒 / 备忘录',
   '/operations': '业务调试中心',
   '/dev/traces': '链路追踪',
   '/dev/tokens': 'Token 看板',

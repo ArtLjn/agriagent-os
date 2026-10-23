@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 from datetime import UTC, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import or_
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from business.models import Memo
+
+logger = logging.getLogger(__name__)
+MYSQL_TABLE_MISSING = 1146
 
 MAX_RESULTS = 100
 DEFAULT_RESULTS = 20
@@ -23,6 +27,26 @@ class MemoError(ValueError):
     def __init__(self, code: str, message: str, **meta):
         super().__init__(message)
         self.code, self.meta = code, meta
+
+
+def storage_error(exc: SQLAlchemyError, *, operation: str) -> MemoError:
+    """协议边界只返回可行动的错误，避免 SQL 参数中的用户内容外泄。"""
+    original = getattr(exc, "orig", None)
+    args = getattr(original, "args", ())
+    missing = bool(args) and (
+        args[0] == MYSQL_TABLE_MISSING or str(args[0]) == "no such table: memos"
+    )
+    code = "memo_schema_not_ready" if missing else "memo_storage_unavailable"
+    logger.error(
+        "memo_storage_failed",
+        extra={"code": code, "operation": operation, "error_type": type(exc).__name__},
+    )
+    message = (
+        "备忘录数据表尚未初始化，请联系管理员完成数据库迁移后重试"
+        if missing
+        else "备忘录暂时无法保存或读取，请稍后重试"
+    )
+    return MemoError(code, message, operation=operation)
 
 
 class MemoCreate(BaseModel):

@@ -20,6 +20,7 @@ import PromptInspector from './pages/PromptInspector';
 import ConfigKeys from './pages/ConfigKeys';
 import Users from './pages/Users';
 import Operations from './pages/Operations';
+import Memos from './pages/Memos';
 import Login from './pages/Login';
 import { authStore } from './stores/authStore';
 import ThemeProvider from './theme/ThemeProvider';
@@ -45,6 +46,7 @@ function ThemedApp() {
             <Route path="/" element={<AuthGuard><Navigate to="/dashboard" replace /></AuthGuard>} />
             <Route path="/dashboard" element={<AuthGuard><Dashboard /></AuthGuard>} />
             <Route path="/users" element={<AuthGuard><Users /></AuthGuard>} />
+            <Route path="/memos" element={<AuthGuard><Memos /></AuthGuard>} />
             <Route path="/operations" element={<AuthGuard><Operations /></AuthGuard>} />
             <Route path="/crops" element={<AuthGuard><Crops /></AuthGuard>} />
             <Route path="/crops/system" element={<AuthGuard><SystemLibrary /></AuthGuard>} />

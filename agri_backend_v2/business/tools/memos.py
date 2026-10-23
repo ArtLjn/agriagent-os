@@ -1,6 +1,7 @@
 """备忘录 MCP 工具，协议层只做参数适配与权限校验。"""
 
 from pydantic import ValidationError
+from sqlalchemy.exc import SQLAlchemyError
 
 from business.db import session_scope
 from business.mcp_app import mcp
@@ -90,4 +91,12 @@ def manage_memos(
             "code": "validation_error",
             "message": "备忘录参数无效，请检查标题、内容和请求标识",
             "meta": {"operation": operation},
+        }
+    except SQLAlchemyError as exc:
+        error = service.storage_error(exc, operation=operation)
+        return {
+            "error": error.code,
+            "code": error.code,
+            "message": str(error),
+            "meta": error.meta,
         }
