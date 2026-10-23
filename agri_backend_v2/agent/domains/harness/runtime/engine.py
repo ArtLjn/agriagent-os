@@ -48,34 +48,34 @@ from agent.domains.harness.context import summarizer, tokenizer
 from agent.domains.harness.control import approval as hitl
 from agent.domains.harness.memory import service as memory
 from agent.domains.harness.memory import tools as memory_tools
-from agent.domains.harness.runtime import finalization, planner, verify
+from agent.domains.harness.observability.trace import (
+    get_trace,
+    increment_step,
+    trace_approval,
+    trace_catalog_recall,
+    trace_commit_state,
+    trace_context_budget_error,
+    trace_context_build,
+    trace_llm_call,
+    trace_skill_router,
+    trace_summary_compaction,
+    trace_tool_call,
+)
 from agent.domains.harness.router import SkillRoute, SkillRouter
-from agent.domains.harness.runtime.turn import StopReason, Turn, TurnPhase
-from agent.platforms.persistence.redis import sse
+from agent.domains.harness.runtime import finalization, planner, verify
 from agent.domains.harness.runtime.error_policy import (
     LlmStreamError,
     classify_exception,
 )
-from agent.platforms.llm.client import MODEL, chat_stream
-from agent.platforms.logging import log_event
-from agent.platforms.mcp.client import BusinessClient, McpCallError
-from agent.domains.harness.observability.trace import (
-    get_trace,
-    increment_step,
-    trace_commit_state,
-    trace_catalog_recall,
-    trace_context_build,
-    trace_context_budget_error,
-    trace_summary_compaction,
-    trace_approval,
-    trace_llm_call,
-    trace_skill_router,
-    trace_tool_call,
-)
+from agent.domains.harness.runtime.turn import StopReason, Turn, TurnPhase
 from agent.domains.harness.tools import loader as skill_loader
 from agent.domains.harness.tools.base import Skill, SkillResult
 from agent.domains.harness.tools.context import SkillContext
 from agent.domains.harness.tools.registry import SkillRegistry
+from agent.platforms.llm.client import MODEL, chat_stream
+from agent.platforms.logging import log_event
+from agent.platforms.mcp.client import BusinessClient, McpCallError
+from agent.platforms.persistence.redis import sse
 
 logger = logging.getLogger(__name__)
 
@@ -823,10 +823,12 @@ async def _emit_final_answer(
     *,
     complete_step: bool = True,
 ) -> AsyncGenerator[dict, None]:
-    """无 tool_calls 时输出最终回答 + pre-completion checklist。"""
-    guard_issue = await memory_tools.completion_guard_issue(
-        turn, content
-    ) or verify.write_completion_guard_issue(
+    """统一处理答复核验、有限纠错与终态发布。
+
+    保留在同一编排函数，以便核对纠错返回和最终事件互斥，避免收尾后再次进入执行循环。
+    """
+    memory_issue = await memory_tools.completion_guard_issue(turn, content)
+    guard_issue = memory_issue or verify.write_completion_guard_issue(
         user_input=turn.user_input,
         content=content,
         tracker=tracker,
@@ -837,24 +839,50 @@ async def _emit_final_answer(
         warning = sse.verification_warning([guard_issue], step=turn.step_count)
         turn.emit(warning["type"], warning["data"])
         yield warning
-        if turn.write_guard_attempts < 2:
-            # 把无效答复与纠正提示回灌给模型，让它继续完成真实写操作。
+        if (
+            turn.write_guard_attempts < 2
+            and complete_step
+            and not turn.finalization_pending
+            and turn.step_count < turn.max_steps
+        ):
+            # 纠错只能使用剩余决策预算；记忆核验不能否认或重放已提交的业务操作。
             turn.messages.append({"role": "assistant", "content": content})
             turn.messages.append(
                 {
                     "role": "system",
-                    "content": guard_issue + "。" + _WRITE_GUARD_REMINDER,
+                    "content": guard_issue
+                    + "。"
+                    + (
+                        "只核对个人长期记忆请求；备忘录等业务记录不属于个人偏好。"
+                        "已成功的业务操作保持有效，不得重复执行；没有记忆成功证据时不能声称已保存个人偏好。"
+                        if memory_issue
+                        else _WRITE_GUARD_REMINDER
+                    ),
                 }
             )
             turn.set_phase(TurnPhase.REASONING)
             return
         async for ev in _emit_failure_terminal(
             turn,
-            code="write_not_executed",
-            message="模型未实际执行写操作，已阻止伪造的成功答复",
-            answer="我还没有实际执行写入操作，请重新发送请求或补充信息后重试。",
+            code="memory_completion_unverified"
+            if memory_issue
+            else "write_not_executed",
+            message="个人长期记忆答复未通过核验"
+            if memory_issue
+            else "模型未实际执行写操作，已阻止伪造的成功答复",
+            answer=(
+                "本轮未能确认个人长期记忆的保存状态，不能声称已保存个人偏好。"
+                "上方已确认成功的业务记录仍然有效，无需重复创建。"
+                if memory_issue and turn.committed_operations
+                else "本轮未能确认个人长期记忆的保存状态，不能声称已保存个人偏好。"
+                if memory_issue
+                else "我还没有实际执行写入操作，请补充信息后继续处理未完成的部分。"
+            ),
             phase=TurnPhase.FINALIZING,
-            stop_reason=StopReason.TOOL_FAILED,
+            stop_reason=StopReason.LLM_FAILED
+            if memory_issue
+            else StopReason.TOOL_FAILED,
+            complete_step=complete_step,
         ):
             yield ev
         return
@@ -1043,6 +1071,27 @@ async def _handle_llm_error(turn: Turn, exc: Exception) -> AsyncGenerator[dict, 
     if turn.committed_result is not None:
         async for ev in finalization.finalize_committed_with_fallback(
             turn, f"写入已成功，但最终答复生成失败：{exc}"
+        ):
+            yield ev
+        return
+
+    if turn.committed_operations:
+        # 普通写工具不强制整轮结束，但模型后续失败也不能要求重做已提交操作。
+        log_event(
+            logger,
+            logging.WARNING,
+            "committed_reply_fallback",
+            code="llm_reply_failed",
+            data={"turn_id": turn.turn_id, "exception_type": type(exc).__name__},
+        )
+        async for ev in _emit_failure_terminal(
+            turn,
+            code="llm_reply_failed",
+            message="答复生成未完成，保留已确认的业务结果",
+            answer="尚无法确认全部请求已完成。已完成的操作无需重复执行，后续只需继续未完成的部分。",
+            phase=TurnPhase.REASONING,
+            stop_reason=StopReason.LLM_FAILED,
+            status="terminated",
         ):
             yield ev
         return
@@ -2131,6 +2180,7 @@ async def _emit_failure_terminal(
     stop_reason: StopReason,
     tool_name: str = "",
     status: str = "failed",
+    complete_step: bool = True,
 ) -> AsyncGenerator[dict, None]:
     """统一发出失败或受控终止，保证答复和语义终态顺序一致。"""
     if summary := finalization.committed_summary(turn):
@@ -2166,17 +2216,19 @@ async def _emit_failure_terminal(
         yield error_ev
     turn.final_answer = answer
     turn.finalization_request = None
+    turn.finalization_pending = False
     turn.set_phase(TurnPhase.TERMINAL)
-    step_completed_ev = sse.step_completed(
-        turn.turn_id,
-        turn.step_count,
-        status=("rejected" if status == "rejected" else "terminated")
-        if status in {"terminated", "rejected"}
-        else "failed",
-        error=None if status in {"terminated", "rejected"} else error_info,
-    )
-    turn.emit(step_completed_ev["type"], step_completed_ev["data"])
-    yield step_completed_ev
+    if complete_step:
+        step_completed_ev = sse.step_completed(
+            turn.turn_id,
+            turn.step_count,
+            status=("rejected" if status == "rejected" else "terminated")
+            if status in {"terminated", "rejected"}
+            else "failed",
+            error=None if status in {"terminated", "rejected"} else error_info,
+        )
+        turn.emit(step_completed_ev["type"], step_completed_ev["data"])
+        yield step_completed_ev
     yield sse.final_answer_start()
     yield sse.final_answer_delta(answer)
     yield sse.final_answer(answer)
@@ -2941,9 +2993,7 @@ async def _run_finalization(
     """
     turn.set_phase(TurnPhase.FINALIZING)
     requested = turn.finalization_pending and turn.finalization_request is None
-    messages = (
-        turn.messages if requested else finalization.finalization_messages(turn, plan)
-    )
+    messages = finalization.finalization_messages(turn, plan, structured=not requested)
     try:
         result = None
         async with asyncio.timeout(finalization.FINALIZATION_TIMEOUT_SECONDS):
@@ -2972,7 +3022,7 @@ async def _run_finalization(
             committed_result=turn.committed_result,
         ):
             raise ValueError("finalization_write_not_executed")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 -- 单次收尾的故障边界必须保留已有结果，异常类型由结构化日志记录。
         log_event(
             logger,
             logging.WARNING,
@@ -2984,10 +3034,8 @@ async def _run_finalization(
                 "exception_type": type(exc).__name__,
             },
         )
-        fallback = (
-            _handle_llm_error(turn, exc)
-            if requested
-            else finalization.finalize_turn(turn, reason=reason)
+        fallback = finalization.finalize_turn(
+            turn, reason=StopReason.LLM_FAILED if requested else reason
         )
         async for event in fallback:
             yield event

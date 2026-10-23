@@ -38,10 +38,11 @@ async def assess(
     command: dict | None = None,
     reply: str = "",
     known_memories: list[dict] | None = None,
+    business_operations: list[dict] | None = None,
 ) -> MemoryAssessment:
     """不依赖触发词，区分长期操作意图、临时要求、引用和真实成功声明。"""
     from agent.config import memory_runtime
-    from agent.platforms.llm.client import _async_client, MODEL
+    from agent.platforms.llm.client import MODEL, _async_client
 
     response = await _async_client.chat.completions.create(
         model=MODEL,
@@ -59,6 +60,10 @@ async def assess(
                     "requests_persistence 表示直接长期操作请求。command 不为 null 时，仅当整个动作、内容、配置和范围均由原文授权，authorized 才为 true；全量清除必须明确针对全部记忆。"
                     "reply 不为空时仅当声称本轮新完成持久化/修改/遗忘个人记忆，claims_persistence 为 true。"
                     "known_memories 是已存在的真实记忆，复述或继续记得这些内容不算新保存。"
+                    "business_operations 是运行时确认成功的业务操作，不是个人长期记忆。"
+                    "备忘录、提醒事项、工单、账目、农事日志属于业务记录；创建或置顶这些记录不属于保存个人偏好。"
+                    "例如用户说‘提醒我明天早上打药’，回复‘已记下并置顶备忘录’，两个 persistence 字段均为 false。"
+                    "但若同时要求‘以后一直叫我老李’或声称‘已保存你喜欢雨天的长期偏好’，仍须单独判断个人记忆，不能因业务写入成功而豁免。"
                     "询问保存过的偏好属于读取，requests_persistence=false；根据已有记忆回答，或表示仍记得它，claims_persistence=false。"
                     "否定、引用他人的话、仅本轮遵循也不算本轮保存成功。"
                     '仅返回 JSON 对象：{"authorized":false,"requests_persistence":false,"claims_persistence":false}。'
@@ -72,6 +77,7 @@ async def assess(
                         "command": command,
                         "reply": reply,
                         "known_memories": known_memories or [],
+                        "business_operations": business_operations or [],
                     },
                     ensure_ascii=False,
                 ),
@@ -123,8 +129,22 @@ async def completion_guard_issue(turn, content: str) -> str | None:
             if snapshot.get("personalization") and not turn.temporary
             else []
         )
-        assessment = await assess(turn.user_input, reply=content, known_memories=known)
-    except Exception as exc:
+        # 只提供运行时确认的操作类型与编号，不把任意工具返回或备忘录正文当作授权。
+        operations = [
+            {
+                "tool_name": item["tool_name"],
+                "description": item["description"],
+                "record_id": item["result"].get("id"),
+            }
+            for item in getattr(turn, "committed_operations", [])
+        ]
+        assessment = await assess(
+            turn.user_input,
+            reply=content,
+            known_memories=known,
+            business_operations=operations,
+        )
+    except Exception as exc:  # noqa: BLE001 -- 外部语义审查故障必须阻止无证据声明，不能中断业务结果回传。
         logger.warning(
             "memory assessment unavailable code=%s turn_id=%s",
             type(exc).__name__,

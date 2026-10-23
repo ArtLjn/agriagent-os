@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+
 import pytest
 
 from agent.domains.harness.runtime import engine as react
@@ -577,7 +578,9 @@ async def test_requested_read_finalization_failure_is_not_budget_exhaustion(
     _ = [event async for event in react.run_turn(turn, approve)]
     assert turn.step_count == 1
     assert turn.stop_reason == StopReason.LLM_FAILED
-    assert turn.status == "failed"
+    assert turn.status == "terminated"
+    assert "芒果" in turn.final_answer
+    assert "步数上限" not in turn.final_answer
 
 
 @pytest.mark.asyncio
@@ -631,4 +634,7 @@ async def test_plan_with_failed_write_cannot_be_reported_as_completed(monkeypatc
 def isolate_personalization_storage(monkeypatch):
     """预算回归不访问部署环境中的真实用户记忆。"""
     from unittest.mock import AsyncMock
-    monkeypatch.setattr(react.memory, "get_personalization_context", AsyncMock(return_value={}))
+
+    monkeypatch.setattr(
+        react.memory, "get_personalization_context", AsyncMock(return_value={})
+    )

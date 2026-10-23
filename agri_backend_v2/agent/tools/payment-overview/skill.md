@@ -4,7 +4,6 @@ name: get_payment_overview
 kind: mcp
 mcp_tool: business.get_payment_overview
 risk_level: read
-finalize_after_success: true
 description: 同时盘点应收赊账、应付赊账和未结工资，适用于“还有哪些钱没结”“收付款盘点”。
 triggers: [待结款, 收付款盘点, 未结工资]
 operations: {}
@@ -14,6 +13,7 @@ parameters:
 ---
 
 分别展示应收、应付和工资；不能混合收付方向或把工资重复当作新增成本。此能力只读，不代替结算；用户明确要求结算时切换现有结算工具并遵守审批。金额以工具结果为准。
+如果盘点已满足用户请求，直接回答；若还要求明细或后续操作，继续处理未完成的要求，写入仍须遵守对应工具的审批规则。
 
 ## 工具使用方法
 
