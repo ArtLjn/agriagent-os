@@ -1,8 +1,4 @@
-"""Long-term Memory 的检索与 observation 端口。
-
-当前阶段只持久化受控 observation，不自动抽取或写入长期事实；事实写入和
-检索实现将在后续 Memory data governance 阶段接入。
-"""
+"""长期记忆检索、个性化投影与 observation 端口。"""
 
 from __future__ import annotations
 
@@ -19,9 +15,19 @@ async def search(
     scope: str = "farm",
     dependencies: list[str] | None = None,
 ) -> MemorySearchResult:
-    """长期记忆检索端口；当前阶段明确返回空结果。"""
-    del user_id, farm_id, query, scope, dependencies
-    return []
+    """兼容旧调用方的全局个人记忆检索端口。"""
+    from agent.platforms.persistence.mongo import personalization_store
+    from agent.domains.harness.memory.personalization import visible_memories
+
+    # 旧入口没有可信 farm_uid，只允许全局个人记录，不能把旧数字 ID 视作授权。
+    document = await personalization_store.load(user_id)
+    if not document["settings"]["use_saved_memories"]:
+        return []
+    return [
+        record
+        for record in visible_memories(document, "")
+        if record["scope"] == "user" and record["status"] == "active"
+    ]
 
 
 async def observe(
@@ -78,3 +84,41 @@ async def observe(
 
 
 __all__ = ["observe", "search"]
+
+
+async def get_personalization_context(
+    *, user_id: str, farm_uid: str, query: str = "", temporary: bool = False
+) -> dict:
+    """隔离持久化边界，存储故障返回空投影供主对话继续执行。"""
+    import logging
+    import asyncio
+    from agent.config import memory_runtime
+
+    from agent.domains.harness.memory.personalization import MemoryError, context_text
+    from agent.platforms.persistence.mongo import personalization_store
+
+    if temporary:
+        return {}
+    try:
+        async with asyncio.timeout(memory_runtime.context_timeout):
+            doc = await personalization_store.load(user_id)
+            from agent.platforms.persistence.memory_index import retrieve
+
+            ids = (
+                await retrieve(doc, farm_uid, query)
+                if doc["settings"]["use_saved_memories"]
+                else []
+            )
+            # 远程检索期间可能发生删除；以返回后重新读取的版本为准。
+            if ids:
+                doc = await personalization_store.load(user_id)
+            return {
+                "personalization": context_text(doc, farm_uid, query, ids),
+                "personalization_revision": doc["revision"],
+            }
+    except (MemoryError, RuntimeError, TimeoutError) as exc:
+        logging.getLogger(__name__).warning(
+            "personalization unavailable code=%s",
+            getattr(exc, "code", "memory_runtime_unavailable"),
+        )
+        return {}

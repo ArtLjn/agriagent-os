@@ -23,6 +23,7 @@ import {
 } from '../../api/crops';
 import { PageShell, Toolbar } from '../../components/PageShell';
 import TemplateForm from '../../components/TemplateForm';
+import { palette } from '../../styles/theme';
 
 const ALL_CATEGORIES = 'all';
 
@@ -305,7 +306,7 @@ export default function SystemLibrary() {
           </>
         )}
         right={(
-          <span style={{ color: '#8b949e', fontSize: 13 }}>
+          <span style={{ color: palette.textMuted, fontSize: 13 }}>
             <ReadOutlined /> 共 {data.length} 个系统模板
             {selectedRowKeys.length > 0 && (
               <span style={{ marginLeft: 8 }}>

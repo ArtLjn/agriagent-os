@@ -6,7 +6,7 @@ import { listTemplates, createTemplate, updateTemplate, deleteTemplate, parseTem
 import ApiDebugger from '../../components/ApiDebugger';
 import { PageShell, Toolbar } from '../../components/PageShell';
 import TemplateForm from '../../components/TemplateForm';
-import { cardStyle } from '../../styles/theme';
+import { cardStyle, palette } from '../../styles/theme';
 import { buildTemplateFormValues } from '../Operations/smartCreateModel';
 
 type StageFormValue = {
@@ -192,7 +192,7 @@ export default function Crops() {
             <Button icon={<BugOutlined />} onClick={() => setDebugOpen(true)}>调试</Button>
           </>
         )}
-        right={<span style={{ color: '#8b949e', fontSize: 13 }}><ReadOutlined /> 共 {pagination.total} 个模板</span>}
+        right={<span style={{ color: palette.textMuted, fontSize: 13 }}><ReadOutlined /> 共 {pagination.total} 个模板</span>}
       />
       <Table
         rowKey="id"

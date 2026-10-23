@@ -31,6 +31,7 @@ from agent.api import (  # noqa: E402, F401
     conversations,
     health,
     login,
+    personalization,
     reset,
     traces,
     turns,
@@ -65,8 +66,12 @@ async def lifespan(app: FastAPI):
     await check_redis_connection()
     await start_trace_system()
     await start_worker()
+    from agent.domains.harness.memory import learning
+
+    learning.start()
     await start_sweeper()
     yield
+    await learning.stop()
     await stop_worker()
     await stop_sweeper()
     await stop_trace_system()

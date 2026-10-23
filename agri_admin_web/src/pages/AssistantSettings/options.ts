@@ -40,18 +40,18 @@ export const EXECUTION_DETAIL_OPTIONS: ValueOption<ExecutionDetailLevel>[] = [
 ];
 
 export const MEMORY_SCOPE_META: Record<MemoryScope, { label: string; color: string }> = {
-  user: { label: "个人全局", color: "blue" },
-  user_farm: { label: "当前农场", color: "cyan" },
+  user: { label: "个人全局", color: "gold" },
+  user_farm: { label: "当前农场", color: "green" },
 };
 
 export const MEMORY_KIND_META: Record<MemoryKind, { label: string; color: string }> = {
-  preference: { label: "偏好", color: "geekblue" },
+  preference: { label: "偏好", color: "gold" },
   habit: { label: "习惯", color: "purple" },
   episode: { label: "经历", color: "default" },
 };
 
 export const MEMORY_SOURCE_META: Record<MemorySourceType, { label: string; color: string }> = {
-  explicit: { label: "手动保存", color: "blue" },
+  explicit: { label: "手动保存", color: "gold" },
   inferred: { label: "自动学习", color: "purple" },
 };
 

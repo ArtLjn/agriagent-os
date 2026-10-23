@@ -2,6 +2,8 @@ import type { CSSProperties, ReactNode } from 'react';
 import { Card, Empty, Spin } from 'antd';
 import { palette, cardStyle } from '../styles/theme';
 
+const metricAccentStyle = (accent: string) => ({ '--metric-accent': accent }) as CSSProperties;
+
 interface PageShellProps {
   title: string;
   description?: string;
@@ -55,7 +57,7 @@ export function MetricCard({ children, accent = palette.accent }: MetricCardProp
   return (
     <Card
       className="metric-card"
-      style={{ ...cardStyle, borderTop: `2px solid ${accent}` }}
+      style={{ ...cardStyle, ...metricAccentStyle(accent) }}
       styles={{ body: { padding: 16 } }}
     >
       {children}

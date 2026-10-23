@@ -210,6 +210,7 @@ async def save_turn(
             "client_request_id": client_request_id,
             "memory_key": turn.memory_key or "",
             "user_input": turn.user_input,
+            "temporary": "1" if turn.temporary else "0",
             "scope_hash": scope_hash,
             "lease_token": lease_token,
             "status": "queued" if queued else "accepted",
@@ -217,7 +218,7 @@ async def save_turn(
             "queue_kind": queue_kind,
             "queue_entered_at": str(time.time()) if queued else "",
             "version": "1",
-            "created_at": str(time.time()),
+            "created_at": str(turn.accepted_at),
             "updated_at": str(time.time()),
         },
     )

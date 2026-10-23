@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Layout, Menu, Button, Tooltip, Tag } from 'antd';
+import { Layout, Menu, Button, Tooltip } from 'antd';
 import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -21,10 +21,13 @@ import {
   ToolOutlined,
   ControlOutlined,
   DatabaseOutlined,
+  UserOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { authStore } from '../stores/authStore';
 import { layout, palette } from '../styles/theme';
+import { useThemeMode } from '../theme/themeContext';
+import ThemeToggle from '../components/ThemeToggle';
 import { menuGroups, type AdminMenuIcon } from './adminMenu';
 
 const { Sider, Content, Header } = Layout;
@@ -52,7 +55,6 @@ const iconByName: Record<AdminMenuIcon, React.ReactNode> = {
 const menuItems = [
   ...menuGroups.map((group) => ({
     key: group.key,
-    icon: iconByName[group.icon],
     label: group.label,
     children: group.children.map((item) => ({
       ...item,
@@ -86,8 +88,8 @@ const pageTitles: Record<string, string> = {
 const brandLogoSrc = '/logo.png';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const [collapsed, setCollapsed] = useState(false);
-  const [openKeys, setOpenKeys] = useState<string[]>(['user-ops', 'assistant-workbench', 'agent-platform']);
+  const [collapsed, setCollapsed] = useState(() => window.matchMedia('(max-width: 900px)').matches);
+  const { mode } = useThemeMode();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -112,49 +114,50 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       icon: iconByName[item.icon],
     }))
   ), [activeGroup]);
-  const displayedOpenKeys = collapsed
-    ? []
-    : activeParentKey && !openKeys.includes(activeParentKey)
-      ? [...openKeys, activeParentKey]
-      : openKeys;
+  const [menuState, setMenuState] = useState({
+    activeParentKey,
+    openKeys: activeParentKey ? [activeParentKey] : [],
+  });
+  // 仅跨业务分组导航时定位当前入口；同组内的手动收起必须保留。
+  if (menuState.activeParentKey !== activeParentKey) {
+    setMenuState({ activeParentKey, openKeys: activeParentKey ? [activeParentKey] : [] });
+  }
+  const displayedOpenKeys = collapsed ? [] : menuState.openKeys;
   const visibleMenuItems = collapsed ? collapsedMenuItems : menuItems;
 
   return (
-    <Layout className="app-shell" style={{ height: '100vh', background: palette.bg }}>
+    <Layout className="app-shell" style={{ height: '100vh', background: 'transparent' }}>
       <Sider
         width={232}
         collapsedWidth={68}
         collapsed={collapsed}
-        style={{
-          background: palette.bgElevated,
-          borderRight: `1px solid ${palette.border}`,
-          overflow: 'hidden',
-        }}
+        className={`app-sider${collapsed ? ' app-sider--collapsed' : ''}`}
+        style={{ overflow: 'hidden' }}
       >
         <div
+          className="app-sidebar-brand"
           style={{
-            height: layout.headerHeight,
+            height: 80,
             display: 'flex',
             alignItems: 'center',
             justifyContent: collapsed ? 'center' : 'space-between',
             padding: collapsed ? 0 : '0 12px 0 20px',
-            borderBottom: `1px solid ${palette.border}`,
+
             gap: 10,
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
             <div
+              className="app-brand-mark"
               style={{
                 width: 34,
                 height: 34,
                 borderRadius: 10,
-                background: '#fff',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 padding: 3,
                 flexShrink: 0,
-                boxShadow: '0 10px 24px rgba(0, 0, 0, 0.18)',
               }}
             >
               <img
@@ -165,10 +168,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </div>
             {!collapsed && (
               <div style={{ minWidth: 0 }}>
-                <div style={{ color: palette.text, fontSize: 15, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                <div style={{ color: palette.text, fontSize: 20, fontWeight: 700, whiteSpace: 'nowrap' }}>
                   田掌柜
                 </div>
-                <div style={{ color: palette.textMuted, fontSize: 11, marginTop: 2 }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    color: palette.textMuted,
+                    fontSize: 12,
+                    marginTop: 2,
+                  }}
+                >
                   智能种植运营助手
                 </div>
               </div>
@@ -192,7 +204,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           )}
         </div>
 
-        <div className="surface-scroll" style={{ height: `calc(100vh - ${layout.headerHeight + 48}px)`, overflow: 'auto', paddingTop: 6 }}>
+        <div className="surface-scroll app-sidebar-navigation">
           {collapsed ? (
             <nav className="app-sidebar-collapsed-nav" aria-label={`${activeGroup.label}导航`}>
               {collapsedMenuItems.map((item) => (
@@ -212,12 +224,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           ) : (
             <Menu
               className="app-sidebar-menu"
-              theme="dark"
+              theme={mode === 'dark' ? 'dark' : 'light'}
               mode="inline"
               selectedKeys={[selectedKey]}
               openKeys={displayedOpenKeys}
               items={visibleMenuItems}
-              onOpenChange={(keys) => setOpenKeys(keys)}
+              onOpenChange={(keys) => {
+                // 手风琴导航减少长列表滚动，空数组表示用户主动收起全部。
+                const newlyOpened = keys.find((key) => !menuState.openKeys.includes(key));
+                setMenuState({ activeParentKey, openKeys: newlyOpened ? [newlyOpened] : keys });
+              }}
               onClick={({ key }: { key: string }) => {
                 if (key.startsWith('/')) navigate(key);
               }}
@@ -230,21 +246,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           )}
         </div>
 
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: 48,
-            borderTop: `1px solid ${palette.border}`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: collapsed ? 'center' : 'flex-end',
-            padding: collapsed ? 0 : '0 16px',
-            background: palette.bgElevated,
-          }}
-        >
+        <div className="app-sidebar-footer">
+          {!collapsed && (
+            <>
+              <div className="app-sidebar-account">
+                <span className="app-sidebar-account__avatar"><UserOutlined /></span>
+                <div><strong>管理员</strong><span>工作台账户</span></div>
+              </div>
+              <Tooltip title="退出登录">
+                <Button type="text" aria-label="退出登录" icon={<LogoutOutlined />} onClick={() => { authStore.clearToken(); navigate('/login'); }} />
+              </Tooltip>
+            </>
+          )}
           <Tooltip title={collapseLabel} placement="right">
             <Button
               type="text"
@@ -257,34 +270,34 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
       </Sider>
 
-      <Layout style={{ background: palette.bg, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <Layout style={{ background: 'transparent', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <Header
+          className="app-header"
           style={{
-            background: palette.bgElevated,
             height: layout.headerHeight,
             padding: '0 24px',
-            borderBottom: `1px solid ${palette.border}`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             flexShrink: 0,
           }}
         >
-          <span style={{ fontSize: 15, fontWeight: 600, color: palette.text, display: 'flex', alignItems: 'center', gap: 10 }}>
-            <HomeOutlined style={{ color: palette.textMuted }} />
-            {currentTitle}
-            <Tag color="blue" style={{ marginLeft: 2 }}>admin</Tag>
+          <span className="app-header__title-block">
+            <HomeOutlined style={{ color: palette.textMuted, fontSize: 15 }} />
+            <span className="app-header__title-copy">
+              <span className="app-header__eyebrow">工作台 /</span>
+              <span className="app-header__page-title">
+                {currentTitle}
+
+              </span>
+            </span>
           </span>
-          <span style={{ fontSize: 12, color: palette.textMuted }}>
-            {new Date().toLocaleDateString('zh-CN')}
-            <Button
-              type="text"
-              icon={<LogoutOutlined />}
-              onClick={() => { authStore.clearToken(); navigate('/login'); }}
-              style={{ color: palette.textMuted, marginLeft: 16, fontSize: 12 }}
-            >
-              退出登录
-            </Button>
+          <span className="app-header__user">
+            <ThemeToggle />
+            <span className="app-header__date">
+              {new Date().toLocaleDateString('zh-CN')}
+            </span>
+            {collapsed && <Button type="text" aria-label="退出登录" icon={<LogoutOutlined />} onClick={() => { authStore.clearToken(); navigate('/login'); }} />}
           </span>
         </Header>
 
@@ -293,8 +306,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           style={{
             flex: 1,
             minHeight: 0,
-            padding: isFullScreen ? 0 : '20px 24px 56px',
-            background: palette.bg,
+            padding: isFullScreen ? 0 : 'var(--app-content-padding) var(--app-content-padding) 56px',
+            background: 'transparent',
             overflow: isFullScreen ? 'hidden' : 'auto',
           }}
         >

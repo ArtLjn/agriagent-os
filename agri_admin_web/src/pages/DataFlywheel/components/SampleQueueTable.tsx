@@ -171,7 +171,7 @@ export default function SampleQueueTable({
           onClick: () => onSelect(record),
           style: {
             cursor: 'pointer',
-            background: record.sample_id === selectedSampleId ? 'rgba(88, 166, 255, 0.12)' : undefined,
+            background: record.sample_id === selectedSampleId ? palette.bgSoftStrong : undefined,
           },
         })}
         scroll={{ x: 760, y: 'calc(100vh - 312px)' }}

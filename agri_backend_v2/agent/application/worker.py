@@ -199,6 +199,11 @@ async def _persist_session_state(turn: Turn) -> dict:
 
 async def _persist_observation(turn: Turn, *, assistant_answer: str) -> dict:
     """消息和 Session state 成功后提交一次受控 observation 事件。"""
+    if turn.temporary:
+        return {"status": "skipped", "persisted": False}
+    from agent.domains.harness.memory.learning import enqueue
+
+    await enqueue(turn)
     result = await memory.observe(
         user_id=turn.user_id,
         farm_id=turn.farm_id,
@@ -465,6 +470,8 @@ def _turn_from_state(state: dict[str, str]) -> Turn:
         conversation_id=state.get("conversation_id", "default"),
         memory_key=state.get("memory_key") or None,
         user_input=state.get("user_input", ""),
+        temporary=state.get("temporary") == "1",
+        accepted_at=float(state.get("created_at") or 0),
         user_id=state.get("user_id", ""),
         farm_uid=state.get("farm_uid", ""),
         farm_id=int(state.get("farm_id", "1")),

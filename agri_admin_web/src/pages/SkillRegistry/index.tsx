@@ -11,11 +11,12 @@ import {
   type SkillItem,
   type SkillSummary,
 } from '../../api/admin';
+import { palette } from '../../styles/theme';
 
-const CARD_BG = '#161b22';
-const BORDER = '#30363d';
-const TEXT = '#e6edf3';
-const TEXT_DIM = '#8b949e';
+const CARD_BG = palette.bgElevated;
+const BORDER = palette.border;
+const TEXT = palette.text;
+const TEXT_DIM = palette.textMuted;
 const DISABLE_REASON = '管理员手动禁用';
 
 const EMPTY_SUMMARY: SkillSummary = {
@@ -128,9 +129,9 @@ export default function SkillRegistry() {
             }}
           >
             <SummaryCard label="全部 Skill" value={summary.total} />
-            <SummaryCard label="已启用" value={summary.enabled} accent="#2ea043" />
-            <SummaryCard label="已禁用" value={summary.disabled} accent="#f85149" />
-            <SummaryCard label="Admin Only" value={summary.admin_only} accent="#58a6ff" />
+            <SummaryCard label="已启用" value={summary.enabled} accent={palette.success} />
+            <SummaryCard label="已禁用" value={summary.disabled} accent={palette.danger} />
+            <SummaryCard label="Admin Only" value={summary.admin_only} accent={palette.accent} />
           </div>
 
           <section
@@ -247,7 +248,7 @@ export default function SkillRegistry() {
                       <div
                         key={`${candidate.skill}-${candidate.operation ?? 'none'}`}
                         style={{
-                          backgroundColor: '#0d1117',
+                          backgroundColor: palette.codeBg,
                           border: `1px solid ${BORDER}`,
                           borderRadius: 6,
                           padding: 12,
@@ -264,7 +265,7 @@ export default function SkillRegistry() {
                           <Typography.Text strong style={{ color: TEXT }}>
                             #{index + 1} {candidate.skill}
                           </Typography.Text>
-                          <Typography.Text style={{ color: '#58a6ff' }}>
+                          <Typography.Text style={{ color: palette.accent }}>
                             hybrid {candidate.score.toFixed(3)}
                           </Typography.Text>
                         </div>
@@ -293,7 +294,7 @@ export default function SkillRegistry() {
               <details
                 open
                 style={{
-                  backgroundColor: '#0d1117',
+                  backgroundColor: palette.codeBg,
                   border: `1px solid ${BORDER}`,
                   borderRadius: 6,
                   padding: 12,
@@ -375,7 +376,7 @@ export default function SkillRegistry() {
                       <div
                         key={`recall-${failure.case_id}`}
                         style={{
-                          backgroundColor: '#0d1117',
+                          backgroundColor: palette.codeBg,
                           border: `1px solid ${BORDER}`,
                           borderRadius: 6,
                           padding: 12,
@@ -424,7 +425,7 @@ export default function SkillRegistry() {
                       <div
                         key={`router-${failure.case_id}`}
                         style={{
-                          backgroundColor: '#0d1117',
+                          backgroundColor: palette.codeBg,
                           border: `1px solid ${BORDER}`,
                           borderRadius: 6,
                           padding: 12,
@@ -548,7 +549,7 @@ export default function SkillRegistry() {
                 {skill.metadata.disabled_reason && (
                   <div
                     style={{
-                      color: '#f85149',
+                      color: palette.danger,
                       marginBottom: 12,
                       fontSize: 13,
                       lineHeight: 1.5,
@@ -563,7 +564,7 @@ export default function SkillRegistry() {
                 </div>
                 <pre
                   style={{
-                    backgroundColor: '#0d1117',
+                    backgroundColor: palette.codeBg,
                     border: `1px solid ${BORDER}`,
                     borderRadius: 4,
                     padding: 12,
@@ -589,7 +590,7 @@ function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div
       style={{
-        backgroundColor: '#0d1117',
+        backgroundColor: palette.codeBg,
         border: `1px solid ${BORDER}`,
         borderRadius: 6,
         padding: 12,
@@ -616,7 +617,7 @@ function Metric({ label, value }: { label: string; value: string }) {
 function SummaryCard({
   label,
   value,
-  accent = '#8b949e',
+  accent = palette.textMuted,
 }: {
   label: string;
   value: number;

@@ -1,11 +1,12 @@
 import { Button, Space, message } from 'antd';
 import { CopyOutlined } from '@ant-design/icons';
 import { formatTracePayload, hasTracePayload, type TracePayload } from '../../utils/tracePayload';
+import { palette } from '../../styles/theme';
 
-const TEXT = '#e6edf3';
-const TEXT_DIM = '#8b949e';
-const BORDER = '#30363d';
-const BG = '#161b22';
+const TEXT = palette.text;
+const TEXT_DIM = palette.textMuted;
+const BORDER = palette.border;
+const BG = palette.bgElevated;
 
 interface SkillOutputFormatterProps {
   outputData: TracePayload;
@@ -80,7 +81,7 @@ export default function SkillOutputFormatter({ outputData }: SkillOutputFormatte
           </Button>
         </div>
         <div style={{
-          backgroundColor: '#1a2332',
+          backgroundColor: palette.bgSoft,
           padding: 12,
           borderRadius: 6,
           border: `1px solid ${BORDER}`,

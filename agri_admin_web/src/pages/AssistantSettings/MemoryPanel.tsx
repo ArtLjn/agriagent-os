@@ -12,6 +12,7 @@ import {
   type MemoryStatus,
   type PersonalizationSettings,
 } from "../../api/personalization";
+import DemoNotice from "./DemoNotice";
 import MemoryControls from "./MemoryControls";
 import MemoryEditModal from "./MemoryEditModal";
 import MemoryTable from "./MemoryTable";
@@ -36,9 +37,12 @@ export default function MemoryPanel() {
   const [status, setStatus] = useState<MemoryStatus | undefined>();
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
+  const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<MemoryRecord | null>(null);
 
   const fetchPreferences = useCallback(async () => {
+    // 记忆和设置共享聚合版本，重读完成前不能提交旧版本的开关修改。
+    setPreferences(null);
     setSettingsError(null);
     try {
       const data = await personalizationApi.getSettings();
@@ -78,18 +82,18 @@ export default function MemoryPanel() {
     void fetchMemories();
   }, [fetchMemories]);
 
-  const handleToggleSavedMemories = async (checked: boolean) => {
+  const handleToggle = async (key: "use_saved_memories" | "auto_learn_enabled", checked: boolean) => {
     if (!preferences) return;
     setSavingControl(true);
     setSettingsError(null);
     try {
       const updated = await personalizationApi.updateSettings({
         expected_revision: preferences.revision,
-        use_saved_memories: checked,
+        [key]: checked,
       });
       setPreferences(updated);
       setDemo(isPersonalizationDemo());
-      message.success(checked ? "已开启记忆使用" : "已关闭记忆使用");
+      message.success("记忆控制已更新");
     } catch (error) {
       setSettingsError(personalizationErrorMessage(error));
     } finally {
@@ -104,7 +108,7 @@ export default function MemoryPanel() {
         status: "active",
       });
       message.success("已确认，这条记忆将用于后续对话");
-      await fetchMemories();
+      await Promise.all([fetchMemories(), fetchPreferences()]);
     } catch (error) {
       message.error(personalizationErrorMessage(error));
     }
@@ -121,6 +125,7 @@ export default function MemoryPanel() {
         try {
           await personalizationApi.deleteMemory(record.memory_id);
           message.success("记忆已删除");
+          await fetchPreferences();
           if (memories.length === 1 && page > 1) {
             setPage(page - 1);
           } else {
@@ -157,23 +162,47 @@ export default function MemoryPanel() {
   };
 
   const hasFilters = Boolean(scope || kind || status);
+  const activeCount = memories.filter((memory) => memory.status === "active").length;
+  const candidateCount = memories.filter(
+    (memory) => memory.status === "candidate",
+  ).length;
 
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
       {demo && (
-        <Alert
-          type="warning"
-          showIcon
-          message="演示数据"
-          description="后端记忆接口尚未接入，当前展示本地演示数据；修改只在本次页面会话中生效，刷新后恢复。"
-        />
+        <DemoNotice description="后端记忆接口尚未接入，修改只在本次页面会话中生效。" />
       )}
+
+      <div className="memory-summary">
+        <div className="memory-stat">
+          <div className="memory-stat__label">本页生效</div>
+          <div className="memory-stat__value">
+            {activeCount}
+            <span>条</span>
+          </div>
+        </div>
+        <div className="memory-stat">
+          <div className="memory-stat__label">待确认</div>
+          <div className="memory-stat__value">
+            {candidateCount}
+            <span>条</span>
+          </div>
+        </div>
+        <div className="memory-stat">
+          <div className="memory-stat__label">全部记忆</div>
+          <div className="memory-stat__value">
+            {total}
+            <span>条</span>
+          </div>
+        </div>
+      </div>
 
       <MemoryControls
         preferences={preferences}
         settingsError={settingsError}
         savingControl={savingControl}
-        onToggleSavedMemories={(checked) => void handleToggleSavedMemories(checked)}
+        onToggleSavedMemories={(checked) => void handleToggle("use_saved_memories", checked)}
+        onToggleAutoLearn={(checked) => void handleToggle("auto_learn_enabled", checked)}
         onRetrySettings={() => void fetchPreferences()}
       />
 
@@ -231,6 +260,7 @@ export default function MemoryPanel() {
         )}
         right={(
           <Space>
+            <Button type="primary" onClick={() => setCreating(true)}>新增记忆</Button>
             <Button icon={<ReloadOutlined />} onClick={() => void fetchMemories()}>
               刷新
             </Button>
@@ -259,15 +289,18 @@ export default function MemoryPanel() {
         onDelete={handleDelete}
       />
 
-      <MemoryEditModal
-        record={editing}
-        open={editing !== null}
-        onCancel={() => setEditing(null)}
-        onSaved={() => {
-          setEditing(null);
-          void fetchMemories();
-        }}
-      />
+      {(editing || creating) && (
+        <MemoryEditModal
+          record={editing}
+          open
+          onCancel={() => { setEditing(null); setCreating(false); }}
+          onSaved={() => {
+            setEditing(null);
+            setCreating(false);
+            void Promise.all([fetchMemories(), fetchPreferences()]);
+          }}
+        />
+      )}
     </Space>
   );
 }

@@ -34,10 +34,10 @@ describe('GanttTimeline', () => {
     fireEvent.click(screen.getByText('执行阶段 1'));
 
     expect(screen.getByLabelText('轮次汇总 final_prompt 100ms')).toHaveStyle({
-      background: '#1890ff',
+      background: '#4f8cff',
     });
     expect(screen.getByLabelText('轮次汇总 qwen3.6-flash 300ms')).toHaveStyle({
-      background: '#722ed1',
+      background: '#a78bfa',
     });
   });
 

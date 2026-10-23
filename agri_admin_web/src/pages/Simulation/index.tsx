@@ -8,6 +8,7 @@ import {
   CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined,
 } from '@ant-design/icons';
 import apiClient from '../../api/client';
+import { palette } from '../../styles/theme';
 
 const { Text, Title } = Typography;
 const { Panel } = Collapse;
@@ -490,7 +491,7 @@ export default function Simulation() {
       <Row justify="space-between" align="middle" style={{ marginBottom: 24 }}>
         <Col>
           <Space>
-            <ExperimentOutlined style={{ fontSize: 24, color: '#58a6ff' }} />
+            <ExperimentOutlined style={{ fontSize: 24, color: palette.accent }} />
             <Title level={3} style={{ margin: 0 }}>Agent 仿真测试平台</Title>
           </Space>
         </Col>
@@ -522,7 +523,7 @@ export default function Simulation() {
             title={
               <Space>
                 <Text strong>测试用例</Text>
-                <Badge count={selectedCaseIds.size} showZero style={{ backgroundColor: '#58a6ff' }} />
+                <Badge count={selectedCaseIds.size} showZero style={{ backgroundColor: palette.accentFill }} />
                 <Text type="secondary">/ {cases.length}</Text>
               </Space>
             }
@@ -556,7 +557,7 @@ export default function Simulation() {
                     key={c.case_id}
                     style={{
                       padding: '10px 12px',
-                      borderBottom: '1px solid #30363d',
+                      borderBottom: `1px solid ${palette.border}`,
                       display: 'flex',
                       alignItems: 'center',
                       gap: 12,

@@ -239,6 +239,8 @@ void main() {
     await tester.tap(find.byIcon(LucideIcons.plus).first);
     await tester.pumpAndSettle();
 
+    await tester.tap(find.text('普通对话'));
+    await tester.pumpAndSettle();
     expect(find.text('建议傍晚浇水'), findsNothing);
     expect(find.textContaining('想先理清'), findsOneWidget);
   });
@@ -364,6 +366,9 @@ void main() {
 }
 
 class _YayaCopyRepository extends YayaRepository {
+  @override
+  Future<Map<String, dynamic>> loadPersonalization() async => {};
+
   _YayaCopyRepository() : super(ApiClient());
 
   @override
@@ -396,6 +401,7 @@ class _YayaCopyRepository extends YayaRepository {
     String message, {
     int? cycleId,
     String? sessionId,
+    bool temporary = false,
   }) async* {
     yield const YayaStreamEvent(content: '收到');
     yield const YayaStreamEvent(done: true);
@@ -453,6 +459,9 @@ class _SkillsYayaRepository extends _YayaCopyRepository {
 }
 
 class _MarkdownYayaRepository extends YayaRepository {
+  @override
+  Future<Map<String, dynamic>> loadPersonalization() async => {};
+
   _MarkdownYayaRepository() : super(ApiClient());
 
   @override
@@ -465,6 +474,7 @@ class _MarkdownYayaRepository extends YayaRepository {
     String message, {
     int? cycleId,
     String? sessionId,
+    bool temporary = false,
   }) async* {
     yield const YayaStreamEvent(content: '**普通赊账**：130.00 元');
     yield const YayaStreamEvent(done: true);
@@ -472,6 +482,9 @@ class _MarkdownYayaRepository extends YayaRepository {
 }
 
 class _TrackingYayaRepository extends YayaRepository {
+  @override
+  Future<Map<String, dynamic>> loadPersonalization() async => {};
+
   _TrackingYayaRepository() : super(ApiClient());
 
   final List<String> sentMessages = [];
@@ -486,6 +499,7 @@ class _TrackingYayaRepository extends YayaRepository {
     String message, {
     int? cycleId,
     String? sessionId,
+    bool temporary = false,
   }) async* {
     sentMessages.add(message);
     yield const YayaStreamEvent(content: '收到');
@@ -494,6 +508,9 @@ class _TrackingYayaRepository extends YayaRepository {
 }
 
 class _PendingYayaRepository extends YayaRepository {
+  @override
+  Future<Map<String, dynamic>> loadPersonalization() async => {};
+
   _PendingYayaRepository() : super(ApiClient());
 
   final List<String> sentMessages = [];
@@ -508,6 +525,7 @@ class _PendingYayaRepository extends YayaRepository {
     String message, {
     int? cycleId,
     String? sessionId,
+    bool temporary = false,
   }) async* {
     sentMessages.add(message);
     if (message == '确认') {

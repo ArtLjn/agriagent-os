@@ -242,6 +242,13 @@ def build_context_bundle(
             version=memory_snapshot.get("conversation_revision", 0),
         ),
         block(
+            "personalization",
+            memory_snapshot.get("personalization"),
+            ContextSource.MEMORY_RECORDS,
+            priority=40,
+            version=memory_snapshot.get("personalization_revision", 0),
+        ),
+        block(
             "memory_hits",
             memory_snapshot.get("memory_hits")
             if memory_policy.include_long_term
@@ -341,6 +348,10 @@ def bundle_to_messages(bundle: ContextBundle) -> list[dict[str, Any]]:
         }:
             continue
         if item.key == "tool_schema":
+            continue
+        if item.key == "personalization":
+            # 用户偏好不具备系统级权限，保持来源层级以抵抗持久提示注入。
+            messages.append({"role": "user", "content": str(item.content)})
             continue
         if item.key == "latest_exchange" and isinstance(item.content, list):
             history.extend(_dialogue_messages(item.content))

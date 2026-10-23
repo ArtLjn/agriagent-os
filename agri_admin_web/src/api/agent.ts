@@ -574,6 +574,7 @@ export async function* streamChat(
   conversationId?: string,
   userToken?: string | null,
   options: {
+    temporary?: boolean;
     client_request_id?: string;
     after_seq?: number;
     viewerToken?: string | null;
@@ -593,6 +594,7 @@ export async function* streamChat(
       message,
       conversation_id: conversationId,
       client_request_id: options.client_request_id,
+      temporary: options.temporary ?? false,
     }),
   });
   if (!resp.ok || !resp.body) throw new Error(`stream error: ${resp.status}`);

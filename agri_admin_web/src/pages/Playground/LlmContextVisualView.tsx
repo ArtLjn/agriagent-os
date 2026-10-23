@@ -12,9 +12,9 @@ import type {
 const BORDER = palette.border;
 const TEXT = palette.text;
 const TEXT_DIM = palette.textMuted;
-const PRE_BG = '#161b22';
+const PRE_BG = palette.bgSoftStrong;
 const ACCENT = palette.accent;
-const PANEL_BORDER = '#30363d';
+const PANEL_BORDER = palette.border;
 
 interface RuntimeContextSection {
   title: string;
@@ -323,7 +323,7 @@ function ContextBlockList({ snapshot, sections }: {
                     {block.key}
                   </span>
                   <span style={{
-                    color: block.decision === 'selected' ? '#7ee787' : TEXT_DIM,
+                    color: block.decision === 'selected' ? palette.accent : TEXT_DIM,
                     fontFamily: 'monospace',
                     fontSize: 12,
                   }}>
@@ -405,7 +405,7 @@ function RuntimeContextSections({
           >
             <div style={{
               alignItems: 'center',
-              background: '#0d1117',
+              background: palette.codeBg,
               borderBottom: `1px solid ${PANEL_BORDER}`,
               display: 'flex',
               gap: 8,
@@ -471,7 +471,7 @@ function RuntimeContextSections({
           }}
         >
           <div style={{
-            background: '#0d1117',
+            background: palette.codeBg,
             borderBottom: `1px solid ${PANEL_BORDER}`,
             color: ACCENT,
             fontFamily: 'monospace',
@@ -518,9 +518,9 @@ function MessageTimeline({ snapshot }: { snapshot: PlaygroundLlmContextSnapshot 
           <div style={{ alignItems: 'center', display: 'flex', gap: 8, marginBottom: 8 }}>
             <span style={{
               background: message.role === 'tool' ? 'rgba(63,185,80,0.16)' : 'rgba(88,166,255,0.14)',
-              border: `1px solid ${message.role === 'tool' ? '#3fb950' : ACCENT}`,
+              border: `1px solid ${message.role === 'tool' ? palette.success : ACCENT}`,
               borderRadius: 999,
-              color: message.role === 'tool' ? '#7ee787' : ACCENT,
+              color: message.role === 'tool' ? palette.success : ACCENT,
               fontFamily: 'monospace',
               fontSize: 12,
               padding: '2px 8px',
@@ -535,7 +535,7 @@ function MessageTimeline({ snapshot }: { snapshot: PlaygroundLlmContextSnapshot 
               <span style={{
                 border: '1px solid rgba(250,173,20,0.5)',
                 borderRadius: 999,
-                color: '#faad14',
+                color: palette.warning,
                 fontSize: 12,
                 padding: '2px 8px',
               }}>

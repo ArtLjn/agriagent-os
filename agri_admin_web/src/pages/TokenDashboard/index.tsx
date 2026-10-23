@@ -465,7 +465,7 @@ export default function TokenDashboard() {
       </ChartCard>
 
       <ChartCard title="性能走势" legend={[
-        ['平均 Token/请求', '#56d695', 'dot'],
+        ['平均 Token/请求', '#63e6be', 'dot'],
         ['请求数', PURPLE, 'dot'],
       ]}>
         <PerformanceTrendChart hourlyTrend={hourlyTrend} />

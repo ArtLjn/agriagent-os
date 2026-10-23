@@ -17,7 +17,7 @@ function DetailDisclosure({ label, value, tone = TEXT }: { label: string; value:
         <span style={{ color: tone, fontWeight: 600 }}>{label}</span>
         <span style={{ marginLeft: 8 }}>展开查看 · {text.length} 字符</span>
       </summary>
-      <pre style={{ margin: '8px 0 0', padding: '10px 12px', maxHeight: 280, overflow: 'auto', borderRadius: 6, border: `1px solid ${BORDER}`, background: 'rgba(0, 0, 0, 0.2)', color: TEXT, fontSize: 12, lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+      <pre style={{ margin: '8px 0 0', padding: '10px 12px', maxHeight: 280, overflow: 'auto', borderRadius: 6, border: `1px solid ${BORDER}`, background: palette.codeBg, color: TEXT, fontSize: 12, lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
         {text}
       </pre>
     </details>
@@ -33,7 +33,7 @@ function TextDisclosure({ label, text, tone = TEXT }: { label: string; text: str
         <span style={{ color: tone, fontWeight: 600 }}>{label}</span>
         <span style={{ marginLeft: 8 }}>展开查看 · {text.length} 字符</span>
       </summary>
-      <pre style={{ margin: '8px 0 0', padding: '10px 12px', maxHeight: 280, overflow: 'auto', borderRadius: 6, border: `1px solid ${BORDER}`, background: 'rgba(0, 0, 0, 0.2)', color: TEXT, fontSize: 12, lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+      <pre style={{ margin: '8px 0 0', padding: '10px 12px', maxHeight: 280, overflow: 'auto', borderRadius: 6, border: `1px solid ${BORDER}`, background: palette.codeBg, color: TEXT, fontSize: 12, lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
         {text}
       </pre>
     </details>

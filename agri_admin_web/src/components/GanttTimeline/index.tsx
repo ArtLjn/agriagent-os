@@ -1,11 +1,12 @@
 import { useState, useMemo } from 'react';
 import type { GanttNode, GanttTimelineProps } from './types';
 import { getNodeColor } from '../../constants/trace';
+import { palette } from '../../styles/theme';
 
-const BG = '#0d1117';
-const BORDER = '#30363d';
-const TEXT = '#e6edf3';
-const TEXT_DIM = '#8b949e';
+const BG = palette.bgElevated;
+const BORDER = palette.border;
+const TEXT = palette.text;
+const TEXT_DIM = palette.textMuted;
 const BAR_HEIGHT = 20;
 
 interface TimelineSegment {
@@ -93,13 +94,13 @@ function StatsBar({
         总阶段: <strong style={{ color: TEXT }}>{totalPhases}</strong>
       </span>
       <span style={{ color: TEXT_DIM }}>
-        成功: <strong style={{ color: '#52c41a' }}>{success}</strong>
+        成功: <strong style={{ color: palette.success }}>{success}</strong>
       </span>
       <span style={{ color: TEXT_DIM }}>
-        失败: <strong style={{ color: '#ff4d4f' }}>{error}</strong>
+        失败: <strong style={{ color: palette.danger }}>{error}</strong>
       </span>
       <span style={{ color: TEXT_DIM }}>
-        告警: <strong style={{ color: '#faad14' }}>{warning}</strong>
+        告警: <strong style={{ color: palette.warning }}>{warning}</strong>
       </span>
     </div>
   );
@@ -165,7 +166,7 @@ function RoundDivider({
         margin: '8px 0',
         borderTop: `2px solid ${BORDER}`,
         borderBottom: `1px solid ${BORDER}`,
-        background: isExpanded ? '#1a2332' : 'transparent',
+        background: isExpanded ? palette.bgSoft : 'transparent',
         cursor: 'pointer',
         transition: 'background 0.2s',
       }}
@@ -174,8 +175,8 @@ function RoundDivider({
         style={{
           display: 'inline-block',
           padding: '4px 12px',
-          background: isExpanded ? '#2980b9' : '#3498db',
-          color: '#fff',
+          background: isExpanded ? palette.accentFill : palette.bgSoftStrong,
+          color: isExpanded ? '#ffffff' : palette.text,
           borderRadius: 15,
           fontSize: 12,
           fontWeight: 600,
@@ -200,7 +201,7 @@ function RoundDivider({
       <span style={{ marginLeft: 'auto', fontSize: 12, color: TEXT_DIM }}>
         {nodeCount} 节点 | {roundDuration}ms | ✓{successCount} ✗{errorCount} !{warningCount}
       </span>
-      <span style={{ marginLeft: 10, fontSize: 11, color: '#8b949e' }}>
+      <span style={{ marginLeft: 10, fontSize: 11, color: palette.textMuted }}>
         {isExpanded ? '点击收起 ▲' : '点击展开 ▼'}
       </span>
     </div>
@@ -226,7 +227,7 @@ function CompactRoundBar({ nodes }: { nodes: GanttNode[] }) {
           textAlign: 'right',
           paddingRight: 15,
           fontSize: 12,
-          color: '#3498db',
+          color: palette.accent,
         }}
       >
         点击查看详情 →
@@ -236,11 +237,11 @@ function CompactRoundBar({ nodes }: { nodes: GanttNode[] }) {
           flex: 1,
           height: 16,
           position: 'relative',
-          background: '#21262d',
+          background: palette.bgSoftStrong,
           borderRadius: 4,
           overflow: 'hidden',
           marginRight: 10,
-          boxShadow: 'inset 0 0 0 1px rgba(230, 237, 243, 0.04)',
+          boxShadow: `inset 0 0 0 1px ${palette.borderSoft}`,
         }}
       >
         {segments.map((seg, i) => (
@@ -275,7 +276,7 @@ function RoundSummaryBar({ nodes }: { nodes: GanttNode[] }) {
         alignItems: 'center',
         padding: '8px 16px',
         height: 36,
-        background: '#161b22',
+        background: palette.bgElevated,
         borderBottom: `1px solid ${BORDER}`,
       }}
     >
@@ -295,11 +296,11 @@ function RoundSummaryBar({ nodes }: { nodes: GanttNode[] }) {
           flex: 1,
           height: 16,
           position: 'relative',
-          background: '#21262d',
+          background: palette.bgSoftStrong,
           borderRadius: 4,
           overflow: 'hidden',
           marginRight: 10,
-          boxShadow: 'inset 0 0 0 1px rgba(230, 237, 243, 0.04)',
+          boxShadow: `inset 0 0 0 1px ${palette.borderSoft}`,
         }}
       >
         {segments.map((seg, i) => (
@@ -350,7 +351,7 @@ function NodeRow({
         transition: 'background 0.15s',
       }}
       onMouseEnter={(e) => {
-        (e.currentTarget as HTMLDivElement).style.background = '#1a2332';
+        (e.currentTarget as HTMLDivElement).style.background = palette.bgSoft;
       }}
       onMouseLeave={(e) => {
         (e.currentTarget as HTMLDivElement).style.background = 'transparent';
@@ -403,8 +404,8 @@ function NodeRow({
             borderRadius: 10,
             fontSize: 11,
             fontWeight: 500,
-            background: node.status === 'success' ? '#1a3a1a' : '#3a1a1a',
-            color: node.status === 'success' ? '#52c41a' : '#ff4d4f',
+            background: node.status === 'success' ? 'var(--app-success-bg)' : 'var(--app-danger-bg)',
+            color: node.status === 'success' ? palette.success : palette.danger,
           }}
         >
           {node.status}
@@ -420,10 +421,10 @@ function NodeRow({
             width: '100%',
             height: 16,
             top: 2,
-            background: '#21262d',
+            background: palette.bgSoftStrong,
             borderRadius: 4,
             overflow: 'hidden',
-            boxShadow: 'inset 0 0 0 1px rgba(230, 237, 243, 0.04)',
+            boxShadow: `inset 0 0 0 1px ${palette.borderSoft}`,
           }}
         />
         {segment && (

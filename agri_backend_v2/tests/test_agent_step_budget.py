@@ -625,3 +625,10 @@ async def test_plan_with_failed_write_cannot_be_reported_as_completed(monkeypatc
     assert "42" in turn.final_answer
     plan_events = [event for event in events if event["type"] == "plan_step_done"]
     assert [event["data"]["status"] for event in plan_events] == ["done", "failed"]
+
+
+@pytest.fixture(autouse=True)
+def isolate_personalization_storage(monkeypatch):
+    """预算回归不访问部署环境中的真实用户记忆。"""
+    from unittest.mock import AsyncMock
+    monkeypatch.setattr(react.memory, "get_personalization_context", AsyncMock(return_value={}))

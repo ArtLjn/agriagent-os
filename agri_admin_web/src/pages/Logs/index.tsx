@@ -6,6 +6,7 @@ import { listLogs, createLog, updateLog, deleteLog, type FarmLog } from '../../a
 import { listCycles, type CropCycleListItem } from '../../api/cycles';
 import ApiDebugger from '../../components/ApiDebugger';
 import { PageShell, Toolbar } from '../../components/PageShell';
+import { palette } from '../../styles/theme';
 
 export default function Logs() {
   const [data, setData] = useState<FarmLog[]>([]);
@@ -127,7 +128,7 @@ export default function Logs() {
             <Button icon={<BugOutlined />} onClick={() => setDebugOpen(true)}>调试</Button>
           </>
         )}
-        right={<span style={{ color: '#8b949e', fontSize: 13 }}><FormOutlined /> 共 {pagination.total} 条日志</span>}
+        right={<span style={{ color: palette.textMuted, fontSize: 13 }}><FormOutlined /> 共 {pagination.total} 条日志</span>}
       />
       <Table
         rowKey="id"

@@ -230,6 +230,9 @@ void main() {
 }
 
 class FakeStreamingYayaRepository extends YayaRepository {
+  @override
+  Future<Map<String, dynamic>> loadPersonalization() async => {};
+
   FakeStreamingYayaRepository(this.events) : super(ApiClient());
 
   final List<YayaStreamEvent> events;
@@ -242,6 +245,7 @@ class FakeStreamingYayaRepository extends YayaRepository {
     String message, {
     int? cycleId,
     String? sessionId,
+    bool temporary = false,
   }) async* {
     sentMessages.add(message);
     sentSessionIds.add(sessionId);
@@ -284,6 +288,9 @@ class RetryApprovalYayaRepository extends FakeStreamingYayaRepository {
 }
 
 class DelayedStreamingYayaRepository extends YayaRepository {
+  @override
+  Future<Map<String, dynamic>> loadPersonalization() async => {};
+
   DelayedStreamingYayaRepository() : super(ApiClient());
 
   final _controller = StreamController<YayaStreamEvent>();
@@ -300,6 +307,7 @@ class DelayedStreamingYayaRepository extends YayaRepository {
     String message, {
     int? cycleId,
     String? sessionId,
+    bool temporary = false,
   }) {
     return _controller.stream;
   }

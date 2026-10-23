@@ -36,13 +36,14 @@ import {
   normalizeTracePayload,
   sanitizeTracePayload,
 } from '../../utils/tracePayload';
+import { palette } from '../../styles/theme';
 
-const CARD = '#161b22';
-const BORDER = '#30363d';
-const TEXT = '#e6edf3';
-const TEXT_DIM = '#8b949e';
-const ACCENT = '#58a6ff';
-const PANEL_BG = '#0d1117';
+const CARD = palette.bgElevated;
+const BORDER = palette.border;
+const TEXT = palette.text;
+const TEXT_DIM = palette.textMuted;
+const ACCENT = palette.accent;
+const PANEL_BG = palette.codeBg;
 
 interface TraceItem {
   request_id: string;
@@ -252,8 +253,8 @@ function TraceRequestOverview({ item }: { item: TraceItem }) {
 
 function TraceRootErrorPanel({ rootError }: { rootError: TraceRootError }) {
   return (
-    <section style={{ ...summaryPanelStyle, borderColor: '#7c2d12', background: '#1f130c' }}>
-      <div style={{ ...sectionTitleStyle, color: '#ffb86c' }}>根因</div>
+    <section style={{ ...summaryPanelStyle, borderColor: 'var(--app-warning-border)', background: 'var(--app-warning-bg)' }}>
+      <div style={{ ...sectionTitleStyle, color: 'var(--app-orange)' }}>根因</div>
       <div style={metricGridStyle}>
         <Metric label="code" value={rootError.code} />
         <Metric label="node" value={rootError.node_name} />
@@ -261,7 +262,7 @@ function TraceRootErrorPanel({ rootError }: { rootError: TraceRootError }) {
         <Metric label="node_id" value={rootError.node_id} />
       </div>
       {rootError.message && (
-        <div style={{ ...previewStyle, marginTop: 10, borderColor: '#7c2d12' }}>
+        <div style={{ ...previewStyle, marginTop: 10, borderColor: 'var(--app-warning-border)' }}>
           {rootError.message}
         </div>
       )}
@@ -610,8 +611,8 @@ function RecallSignal({
   return (
     <div style={{
       ...recallSignalStyle,
-      borderColor: active ? '#1f6feb' : BORDER,
-      background: active ? 'rgba(31, 111, 235, 0.12)' : '#111923',
+      borderColor: active ? ACCENT : BORDER,
+      background: active ? palette.accentSoft : palette.bgSoftStrong,
     }}>
       <div style={{ color: TEXT_DIM, fontSize: 11 }}>{label}</div>
       <div style={{
@@ -881,9 +882,9 @@ function scoreEntries(value: unknown): Array<[string, number]> {
 }
 
 function scoreColor(percent: number): string {
-  if (percent >= 80) return '#2ea043';
-  if (percent >= 50) return '#d29922';
-  return '#f85149';
+  if (percent >= 80) return 'var(--app-green)';
+  if (percent >= 50) return 'var(--app-orange)';
+  return 'var(--app-red)';
 }
 
 function candidateTagColor(tone: 'selected' | 'rejected' | 'matched'): string {
@@ -1049,7 +1050,7 @@ function NodeHeader({ node }: { node: TraceNodeDetail }) {
         <Metric label="layer" value={node.layer} />
       </div>
       {node.error_message && (
-        <div style={{ ...previewStyle, marginTop: 12, borderColor: '#7c2d12', background: '#1f130c', color: '#ffb86c' }}>
+        <div style={{ ...previewStyle, marginTop: 12, borderColor: 'var(--app-warning-border)', background: 'var(--app-warning-bg)', color: 'var(--app-orange)' }}>
           {node.error_message}
         </div>
       )}
@@ -1165,7 +1166,7 @@ function LlmTraceSummary({ outputData }: { outputData: Record<string, unknown> }
           ))}
         </div>
       )}
-      {error && <div style={{ ...previewStyle, marginTop: 10, borderColor: '#7c2d12' }}>{displayValue(error.message)}</div>}
+      {error && <div style={{ ...previewStyle, marginTop: 10, borderColor: 'var(--app-warning-border)' }}>{displayValue(error.message)}</div>}
     </section>
   );
 }
@@ -1255,7 +1256,7 @@ function SkillCallTraceSummary({ outputData }: { outputData: Record<string, unkn
       {hasTracePayload(outputData.reply_preview) && (
         <div style={{ ...previewStyle, marginTop: 10 }}>{displayValue(outputData.reply_preview)}</div>
       )}
-      {error && <div style={{ ...previewStyle, marginTop: 10, borderColor: '#7c2d12' }}>{displayValue(error.message)}</div>}
+      {error && <div style={{ ...previewStyle, marginTop: 10, borderColor: 'var(--app-warning-border)' }}>{displayValue(error.message)}</div>}
     </section>
   );
 }
@@ -1660,7 +1661,7 @@ const blockStyle: CSSProperties = {
 };
 
 const nestedPanelStyle: CSSProperties = {
-  background: '#111923',
+  background: palette.bgSoftStrong,
   border: `1px solid ${BORDER}`,
   borderRadius: 6,
   padding: 10,
@@ -1673,7 +1674,7 @@ const sourceCardStyle: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   gap: 8,
-  background: '#0f1720',
+  background: palette.codeBg,
   border: `1px solid ${BORDER}`,
   borderRadius: 6,
   padding: 10,
@@ -1724,7 +1725,7 @@ const formulaStyle: CSSProperties = {
   gap: 10,
   alignItems: 'center',
   flexWrap: 'wrap',
-  background: '#111923',
+  background: palette.bgSoftStrong,
   border: `1px solid ${BORDER}`,
   borderRadius: 6,
   padding: '8px 10px',
@@ -1735,7 +1736,7 @@ const formulaStyle: CSSProperties = {
 const scoreTrackStyle: CSSProperties = {
   height: 7,
   width: '100%',
-  background: '#21262d',
+  background: palette.bgSoftStrong,
   borderRadius: 999,
   overflow: 'hidden',
 };
@@ -1748,7 +1749,7 @@ const scoreFillStyle: CSSProperties = {
 
 const previewStyle: CSSProperties = {
   color: TEXT,
-  background: '#111923',
+  background: palette.bgSoftStrong,
   border: `1px solid ${BORDER}`,
   borderRadius: 6,
   padding: 8,
@@ -1773,7 +1774,7 @@ const sourceStyle: CSSProperties = {
 };
 
 const nodeHeroStyle: CSSProperties = {
-  background: 'linear-gradient(180deg, #111923 0%, #0d1117 100%)',
+  background: `linear-gradient(180deg, var(--app-fill) 0%, ${palette.codeBg} 100%)`,
   border: `1px solid ${BORDER}`,
   borderRadius: 8,
   padding: 14,
@@ -2106,7 +2107,7 @@ export default function TraceMonitor() {
                 fontSize: 13,
                 color: TEXT_DIM,
                 borderLeft: `3px solid ${ACCENT}`,
-                background: '#0d1117',
+                background: palette.codeBg,
               }}
             >
               <span style={{ color: TEXT, fontWeight: 600 }}>

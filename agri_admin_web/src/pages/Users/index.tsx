@@ -44,10 +44,10 @@ import {
   type UserRole,
 } from "../../constants/roles";
 
-const BG_CARD = "#21262d";
-const BORDER = "#30363d";
-const TEXT_SECONDARY = "#8b949e";
-const ACCENT = "#58a6ff";
+const BG_CARD = palette.bgSoftStrong;
+const BORDER = palette.border;
+const TEXT_SECONDARY = palette.textMuted;
+const ACCENT = palette.accent;
 const DEFAULT_MONTHLY_LIMIT = 200000;
 const DEFAULT_WEEKLY_LIMIT = 50000;
 
@@ -420,7 +420,7 @@ export default function Users() {
               title={<span style={{ color: TEXT_SECONDARY }}>当前页活跃</span>}
               value={activeCount}
               prefix={<CheckCircleOutlined />}
-              valueStyle={{ color: "#3fb950" }}
+              valueStyle={{ color: palette.success }}
             />
           </MetricCard>
         </Col>
@@ -430,7 +430,7 @@ export default function Users() {
               title={<span style={{ color: TEXT_SECONDARY }}>当前页禁用</span>}
               value={disabledCount}
               prefix={<StopOutlined />}
-              valueStyle={{ color: "#f85149" }}
+              valueStyle={{ color: palette.danger }}
             />
           </MetricCard>
         </Col>
@@ -613,13 +613,13 @@ export default function Users() {
                         padding: "10px 12px",
                         textAlign: "left",
                         cursor: "pointer",
-                        color: active ? "#e6edf3" : TEXT_SECONDARY,
-                        background: active ? "rgba(47,129,247,0.16)" : palette.bgElevated,
+                        color: active ? palette.accentStrong : TEXT_SECONDARY,
+                        background: active ? palette.accentSoft : palette.bgElevated,
                         border: `1px solid ${active ? ACCENT : BORDER}`,
                         borderRadius: 8,
                       }}
                     >
-                      <div style={{ color: active ? ACCENT : "#e6edf3", fontWeight: 700 }}>
+                      <div style={{ color: active ? ACCENT : palette.text, fontWeight: 700 }}>
                         {preset.label}
                       </div>
                       <div style={{ fontSize: 12, marginTop: 4 }}>{preset.description}</div>

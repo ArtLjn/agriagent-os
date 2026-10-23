@@ -237,7 +237,7 @@ function turnCardStyle(role: string): CSSProperties {
     border: `1px solid ${color}`,
     borderRadius: 8,
     padding: 12,
-    background: role === 'unrelated' ? 'rgba(33, 38, 45, 0.46)' : palette.bgPanel,
+    background: role === 'unrelated' ? palette.bgSoft : palette.bgPanel,
     opacity: role === 'unrelated' ? 0.66 : 1,
   };
 }

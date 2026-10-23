@@ -13,6 +13,8 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_text_styles.dart';
 import 'profile_controller.dart';
+import '../../data/api/api_client.dart';
+import 'assistant_settings_screen.dart';
 
 part 'profile_header_widgets.dart';
 part 'profile_settings_widgets.dart';
@@ -24,9 +26,11 @@ class ProfileScreen extends StatefulWidget {
     this.locations,
     this.location,
     this.onLogout,
+    this.agentClient,
   });
 
   final ProfileRepository repository;
+  final ApiClient? agentClient;
   final LocationRepository? locations;
   final LocationService? location;
   final Future<void> Function()? onLogout;
@@ -103,14 +107,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       location: widget.location,
                       onUpdated: _reloadProfile),
                   const Divider(height: 1),
-                  _AiPreferenceCard(
-                      model: model,
-                      repository: widget.repository,
-                      onUpdated: _reloadProfile),
+                  if (widget.agentClient == null)
+                    _AiPreferenceCard(
+                        model: model,
+                        repository: widget.repository,
+                        onUpdated: _reloadProfile),
                 ])),
             const SizedBox(height: 24),
             const Text('应用', style: AppTextStyles.small),
             const SizedBox(height: 12),
+            if (widget.agentClient != null)
+              CardPanel(
+                  child: ListTile(
+                leading: const Icon(Icons.psychology_outlined),
+                title: const Text('个性化与记忆'),
+                onTap: () => Navigator.of(context).push<void>(MaterialPageRoute(
+                    builder: (_) =>
+                        AssistantSettingsScreen(client: widget.agentClient!))),
+              )),
             const _SystemSettingsCard(),
             if (widget.onLogout != null) ...[
               const SizedBox(height: 32),
@@ -141,6 +155,7 @@ class _LocationWeatherCard extends StatelessWidget {
 
   final ProfileViewModel model;
   final ProfileRepository repository;
+
   final LocationRepository? locations;
   final LocationService? location;
   final VoidCallback onUpdated;
@@ -207,6 +222,7 @@ class _AiPreferenceCard extends StatelessWidget {
 
   final ProfileViewModel model;
   final ProfileRepository repository;
+
   final VoidCallback onUpdated;
 
   @override

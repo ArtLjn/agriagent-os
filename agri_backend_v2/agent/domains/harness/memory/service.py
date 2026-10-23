@@ -13,7 +13,11 @@
 
 from __future__ import annotations
 
-from agent.domains.harness.memory.long_term import observe, search
+from agent.domains.harness.memory.long_term import (
+    get_personalization_context,
+    observe,
+    search,
+)
 from agent.domains.harness.memory.models import (
     MemoryHit,
     MemoryHitStatus,
@@ -54,6 +58,7 @@ __all__ = [
     "complete_turns",
     "empty_session_view",
     "get_session_view",
+    "get_personalization_context",
     "observe",
     "persist_session_turn",
     "prepare_pending_action",

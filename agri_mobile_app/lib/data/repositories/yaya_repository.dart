@@ -11,10 +11,14 @@ class YayaRepository {
 
   final ApiClient client;
 
+  Future<Map<String, dynamic>> loadPersonalization() =>
+      client.getMap('/me/personalization');
+
   Stream<YayaStreamEvent> streamMessage(
     String message, {
     int? cycleId,
     String? sessionId,
+    bool temporary = false,
   }) async* {
     final conversationId =
         sessionId ?? 'app-${DateTime.now().microsecondsSinceEpoch}';
@@ -22,6 +26,7 @@ class YayaRepository {
       '/chat',
       data: {
         'message': message,
+        'temporary': temporary,
         'conversation_id': conversationId,
         'client_request_id': 'mobile-${DateTime.now().microsecondsSinceEpoch}',
       },
@@ -188,6 +193,7 @@ class YayaStreamEvent {
     this.turnId,
     this.conversationId,
     this.status,
+    this.progress,
   });
 
   factory YayaStreamEvent.fromJson(
@@ -223,6 +229,12 @@ class YayaStreamEvent {
         ? '${merged['message'] ?? merged['error'] ?? '芽芽处理失败'}'
         : json['error'] as String?;
     return YayaStreamEvent(
+      progress: switch (type) {
+        'progress' => merged['message'] as String?,
+        'tool_started' => '正在执行：${merged['tool_name'] ?? '操作'}',
+        'tool_finished' => merged['error'] == null ? '操作已完成' : '操作未完成，请查看回复',
+        _ => null,
+      },
       content: content?.isEmpty == true ? null : content,
       skills: (json['skills'] as List<dynamic>? ?? [])
           .map((value) => '$value')
@@ -250,4 +262,5 @@ class YayaStreamEvent {
   final String? turnId;
   final String? conversationId;
   final String? status;
+  final String? progress;
 }

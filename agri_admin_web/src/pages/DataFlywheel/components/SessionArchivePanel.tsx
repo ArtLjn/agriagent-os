@@ -289,7 +289,7 @@ function archiveButtonStyle(active: boolean, horizontal: boolean): CSSProperties
     padding: '10px 12px',
     border: `1px solid ${active ? palette.accentStrong : palette.borderSoft}`,
     borderRadius: 8,
-    background: active ? 'rgba(31, 111, 235, 0.2)' : palette.bg,
+    background: active ? palette.accentSoft : palette.bg,
     color: palette.text,
     cursor: 'pointer',
     textAlign: 'left',
@@ -317,7 +317,7 @@ const customScrollbarTrackStyle: CSSProperties = {
   position: 'relative',
   height: 10,
   borderRadius: 999,
-  background: 'rgba(139, 148, 158, 0.16)',
+  background: palette.border,
   cursor: 'pointer',
   flexShrink: 0,
 };
