@@ -10,11 +10,10 @@ from types import SimpleNamespace
 import pytest
 
 from agent.config import settings
-from agent.domains.harness.runtime import engine as react
-from agent.domains.harness.router import SkillRoute
-from agent.domains.harness.runtime.turn import StopReason, Turn, TurnPhase
-from agent.platforms.persistence.redis import sse, turn_store
 from agent.domains.harness.observability import trace as trace_infra
+from agent.domains.harness.router import SkillRoute
+from agent.domains.harness.runtime import engine as react
+from agent.domains.harness.runtime.turn import StopReason, Turn, TurnPhase
 from agent.domains.harness.tools.base import (
     McpSkill,
     OperationSkill,
@@ -22,6 +21,7 @@ from agent.domains.harness.tools.base import (
     SkillResult,
 )
 from agent.domains.harness.tools.registry import SkillRegistry, SkillRegistryError
+from agent.platforms.persistence.redis import sse, turn_store
 
 
 class _ReadSkill(Skill):
@@ -76,6 +76,8 @@ async def test_read_finalization_disables_tools_and_returns_model_answer(
     choices = []
 
     async def answer(messages, tools, **kwargs):
+        assert tools == []
+        assert any("禁止再调用工具" in msg.get("content", "") for msg in messages)
         choices.append(kwargs.get("tool_choice"))
         yield react._LlmResult(full_content="今天建议检查土壤湿度")
 
@@ -111,7 +113,7 @@ def test_commit_fallback_requires_real_planting_entities() -> None:
 
 
 @pytest.mark.asyncio
-async def test_read_finalization_tool_request_fails_without_write_success(
+async def test_read_finalization_tool_request_preserves_result_without_execution(
     monkeypatch,
 ) -> None:
     async def answer(messages, tools, **kwargs):
@@ -122,6 +124,9 @@ async def test_read_finalization_tool_request_fails_without_write_success(
     monkeypatch.setattr(react, "_call_llm_stream", answer)
     turn = Turn(user_input="今天适合干什么")
     turn.finalization_pending = True
+    turn.emit(
+        "tool_finished", {"tool_call_id": "read-1", "result": {"active_cycles": 4}}
+    )
     events = [
         event
         async for event in react._run_finalization(
@@ -130,8 +135,13 @@ async def test_read_finalization_tool_request_fails_without_write_success(
             plan=None,
         )
     ]
-    assert turn.status == "failed"
+    assert turn.status == "terminated"
+    assert turn.stop_reason == StopReason.LLM_FAILED
+    assert '"active_cycles": 4' in turn.final_answer
+    assert not turn.finalization_pending
     assert "提交成功" not in turn.final_answer
+    assert not any(event["type"] == "tool_started" for event in events)
+    assert sum(event["type"] == "final_answer" for event in events) == 1
     assert not any(event["type"] == "operation_committed" for event in events)
 
 
@@ -1580,7 +1590,7 @@ async def test_estimate_turn_budget_reads_model_prediction(monkeypatch) -> None:
 def test_setup_keeps_hard_limit_and_records_estimate(
     monkeypatch, hard_limit, estimate, resolved
 ) -> None:
-    monkeypatch.setattr(react.skill_loader, "load_all", lambda: [])
+    monkeypatch.setattr(react.skill_loader, "load_all", list)
     turn = Turn(user_input="1", max_steps=hard_limit)
 
     react._setup_turn_runtime(

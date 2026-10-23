@@ -4,7 +4,6 @@ name: get_farm_review
 kind: mcp
 mcp_tool: business.get_farm_review
 risk_level: read
-finalize_after_success: true
 description: 回顾最近若干天的农事记录，统计各类作业次数并列出近期明细，适用于农事周报与近期工作总结。
 triggers: [农事回顾, 农事周报, 工作总结]
 operations: {}
@@ -19,6 +18,7 @@ parameters:
 ---
 
 按返回的起止日期总结；分类统计是全量，recent_logs 仅为最多 20 条预览，不能把预览条数当总量。没有记录时如实说明，不能推断没有干活。不得把建议描述为已执行的任务。
+如果回顾已满足用户请求，直接回答；复合请求仍有未查信息时，继续调用对应工具补齐证据，不因本次查询成功而提前结束整轮。
 
 ## 工具使用方法
 

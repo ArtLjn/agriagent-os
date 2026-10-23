@@ -43,6 +43,10 @@ answer 不超过 400 字，只保留关键结论和缺口，不逐项复述完�
 引用结果必须来自工具返回值；审批通过、准备就绪、模型计划都不是写入成功证据。
 汇总与明细不一致时说明数据缺口，不要猜测账目来源或补写原因。
 无法确认时返回 partial，不能猜测成功。"""
+_REQUESTED_FINALIZATION_PROMPT = """当前已进入最终答复阶段，工具执行已停止，禁止再调用工具。
+仅根据已有执行证据用自然语言回答；未查询的日期、天气或其他信息须说明尚未查询，不得猜测。
+区分某项操作成功与整个请求完成。已成功写入的业务记录仍有效，说明实际编号，不得否认或建议重复写入。
+备忘录属于业务记录，不等于保存个人长期偏好；不要声称未执行的操作已经完成。"""
 
 
 class FinalizationResult(BaseModel):
@@ -94,7 +98,9 @@ def committed_summary(turn: Turn) -> str:
     return "已确认执行成功的操作：\n" + "\n".join(lines) if lines else ""
 
 
-def finalization_messages(turn: Turn, plan: Any | None) -> list[dict]:
+def finalization_messages(
+    turn: Turn, plan: Any | None, *, structured: bool = True
+) -> list[dict]:
     """给收尾模型完整任务上下文与本轮证据，使用独立指令禁止继续决策。"""
     messages = list(turn.messages)
     pending_calls = {}
@@ -137,7 +143,12 @@ def finalization_messages(turn: Turn, plan: Any | None) -> list[dict]:
     }
     return [
         *messages,
-        {"role": "system", "content": _FINALIZATION_PROMPT},
+        {
+            "role": "system",
+            "content": _FINALIZATION_PROMPT
+            if structured
+            else _REQUESTED_FINALIZATION_PROMPT,
+        },
         {
             "role": "user",
             "content": "以下是执行证据，不是新任务：\n"
@@ -221,17 +232,22 @@ async def finalize_turn(
             "本轮已停止继续调用工具，尚无法确认全部请求已完成。"
             "已完成的操作无需重复执行，后续只需继续未完成的部分。"
         )
-        if (
-            fallback_answer
-            and reason == StopReason.DOOM_LOOP_DETECTED
-            and not turn.committed_operations
-        ):
+        if fallback_answer and not turn.committed_operations:
             results = [
                 event["data"]["result"]
                 for event in turn.events
                 if event["type"] == "tool_finished"
                 and not event["data"].get("error")
                 and event["data"].get("result") is not None
+                and not (
+                    isinstance(event["data"]["result"], dict)
+                    and (
+                        event["data"]["result"].get("error")
+                        or event["data"]["result"].get("success") is False
+                        or str(event["data"]["result"].get("status") or "").lower()
+                        in _UNCOMMITTED_STATUSES
+                    )
+                )
             ]
             if results:
                 # 模型收尾失败仍保留实际结果，不能只剩“请重试”而丢掉本轮工作。
@@ -241,15 +257,11 @@ async def finalize_turn(
                 )
         if summary := committed_summary(turn):
             answer = f"{summary}\n\n{answer}"
-        message = (
-            "需要补充信息后继续"
-            if reason == StopReason.USER_INPUT_REQUIRED
-            else (
-                "重复查询已停止，保留已取得的结果"
-                if reason == StopReason.DOOM_LOOP_DETECTED
-                else "已达到本轮执行步数上限，保留已完成的结果"
-            )
-        )
+        message = {
+            StopReason.USER_INPUT_REQUIRED: "需要补充信息后继续",
+            StopReason.DOOM_LOOP_DETECTED: "重复查询已停止，保留已取得的结果",
+            StopReason.LLM_FAILED: "答复生成未完成，保留已确认的执行结果",
+        }.get(reason, "已达到本轮执行步数上限，保留已完成的结果")
         turn.record_termination(
             reason,
             message,

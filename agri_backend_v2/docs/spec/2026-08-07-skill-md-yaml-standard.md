@@ -59,7 +59,7 @@ parameters:
 ## 字段约束
 
 - `name`、`mcp_tool` 表示内部 Business 适配关系，不作为模型工具名。
-- `finalize_after_success` 默认为 `false`；仅当一次成功调用的结果已经足以回答该 Skill 的典型用户请求时设为 `true`。Runtime 会在下一轮撤掉 tools，只生成最终回答。
+- `finalize_after_success` 默认为 `false`；普通查询即使足以回答单一概览问题，也可能只是复合请求的前置步骤，不能默认设为 `true`。仅用于明确需要结束工具执行的协议边界（例如原子提交完成）；Runtime 会在下一轮撤掉 tools，附带停止执行指令与证据生成最终回答。
 - `operations.<op>.tool_name` 是模型实际调用的稳定工具名，使用 snake_case。
 - 每个模型工具只代表一个动作，不再要求模型填写 `operation`。
 - `description` 使用用户业务语言，不写 MCP、内部枚举或代码流程。
