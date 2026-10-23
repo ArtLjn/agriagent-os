@@ -25,7 +25,7 @@ function createSettings(): PersonalizationSettings {
     custom_instructions: "",
     loading_greeting_enabled: true,
     execution_detail_level: "concise",
-    auto_learn_enabled: false,
+    auto_learn_enabled: true,
     use_saved_memories: true,
     memory_generation: 1,
     revision: 3,
@@ -173,6 +173,7 @@ export const personalizationDemoStore = {
       if (memory.status === "deleted") return false;
       if (params.scope && memory.scope !== params.scope) return false;
       if (params.kind && memory.kind !== params.kind) return false;
+      if (params.category && (memory.category ?? "general") !== params.category) return false;
       if (params.status && memory.status !== params.status) return false;
       return true;
     });

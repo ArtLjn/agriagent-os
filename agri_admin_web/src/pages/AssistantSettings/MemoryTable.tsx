@@ -6,6 +6,7 @@ import { palette } from "../../styles/theme";
 import type { MemoryRecord } from "../../api/personalization";
 import {
   MEMORY_KIND_META,
+  MEMORY_CATEGORY_LABELS,
   MEMORY_SCOPE_META,
   MEMORY_SOURCE_META,
   MEMORY_STATUS_META,
@@ -50,6 +51,7 @@ export default function MemoryTable({
       render: (_: unknown, record: MemoryRecord) => (
         <div style={{ maxWidth: 380 }}>
           <div>{record.text}</div>
+          <Tag bordered={false}>{MEMORY_CATEGORY_LABELS[record.category ?? "general"]}</Tag>
           {record.review_reason && (
             <div style={captionStyle}>{record.review_reason}</div>
           )}
@@ -152,7 +154,7 @@ export default function MemoryTable({
                 icon={<CheckOutlined />}
                 onClick={() => onConfirm(record)}
               >
-                确认
+                启用
               </Button>
             )}
             <Button
@@ -183,7 +185,7 @@ export default function MemoryTable({
             description={
               hasFilters
                 ? "没有符合筛选条件的记忆"
-                : "还没有长期记忆。你可以在对话中说“记住……”来添加。"
+                : "还没有长期记忆。开启自动学习后，助手会从日常对话中积累偏好；你也可以主动添加。"
             }
           />
         ),

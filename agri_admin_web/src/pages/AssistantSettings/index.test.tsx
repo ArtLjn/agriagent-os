@@ -48,6 +48,7 @@ const activeMemory: MemoryRecord = {
   memory_id: "memory-1",
   scope: "user",
   kind: "preference",
+  category: "response",
   key: "response.cost_report",
   text: "看成本报表时先给一句话结论，再列出明细。",
   conditions: ["成本报表"],
@@ -130,7 +131,7 @@ describe("AssistantSettings", () => {
     expect(await screen.findByText("设置已保存，下一轮对话生效")).toBeInTheDocument();
   });
 
-  it("展示记忆列表并支持确认候选记忆", async () => {
+  it("展示自动学习分类并兼容启用旧版候选", async () => {
     const user = userEvent.setup();
 
     render(
@@ -146,10 +147,13 @@ describe("AssistantSettings", () => {
       await screen.findByText("看成本报表时先给一句话结论，再列出明细。"),
     ).toBeInTheDocument();
     expect(screen.getByText("每天早上先看农事排班，再处理其他事项。")).toBeInTheDocument();
+    expect(screen.getByText(/无需逐条确认/)).toBeInTheDocument();
+    expect(screen.getByText("本页自动学习")).toBeInTheDocument();
+    expect(screen.getByText("交流方式")).toBeInTheDocument();
     expect(screen.getByText("出现相反证据，暂停自动使用，等待用户确认")).toBeInTheDocument();
     expect(screen.getByText("与已有记忆不一致，请核对")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /确\s*认/ }));
+    await user.click(screen.getByRole("button", { name: /启\s*用/ }));
 
     await waitFor(() => {
       expect(mockedApi.updateMemory).toHaveBeenCalledWith("memory-2", {
@@ -157,7 +161,7 @@ describe("AssistantSettings", () => {
         status: "active",
       });
     });
-    expect(await screen.findByText("已确认，这条记忆将用于后续对话")).toBeInTheDocument();
+    expect(await screen.findByText("已启用，这条记忆将用于后续对话")).toBeInTheDocument();
   });
   it("开启自动学习持久化控制，失败不伪装成功", async () => {
     const user = userEvent.setup();
@@ -191,8 +195,8 @@ describe("AssistantSettings", () => {
     const toggle = await screen.findByRole("switch", { name: "使用已保存记忆" });
     await waitFor(() => expect(toggle).toBeEnabled());
     mockedApi.getSettings.mockResolvedValue({ ...settings, revision: 4 });
-    await user.click(screen.getByRole("button", { name: /确\s*认/ }));
-    await screen.findByText("已确认，这条记忆将用于后续对话");
+    await user.click(screen.getByRole("button", { name: /启\s*用/ }));
+    await screen.findByText("已启用，这条记忆将用于后续对话");
     await waitFor(() => expect(mockedApi.getSettings).toHaveBeenCalledTimes(3));
     await waitFor(() => expect(toggle).toBeEnabled());
     await user.click(toggle);

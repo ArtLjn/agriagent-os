@@ -397,6 +397,279 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v2/me/personalization:
+    get:
+      summary: Get Settings
+      operationId: get_settings_api_v2_me_personalization_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      description: 自动学习默认开启；旧文档未显式选择时采用新默认，用户明确关闭仍保留。读取不执行迁移写入。
+    patch:
+      summary: Patch Settings
+      operationId: patch_settings_api_v2_me_personalization_patch
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettingsPatch'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v2/me/memories:
+    get:
+      summary: List Memories
+      description: 按认证用户和农场隔离，支持 category 分类筛选；缺少 category 的旧记录视为 general。自动学习的新记录直接
+        active，无需逐条确认。
+      operationId: list_memories_api_v2_me_memories_get
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Page Size
+      - name: scope
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - user
+            - user_farm
+            type: string
+          - type: 'null'
+          title: Scope
+      - name: kind
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - preference
+            - habit
+            - episode
+            type: string
+          - type: 'null'
+          title: Kind
+      - name: category
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - profile
+            - preference
+            - work
+            - response
+            - general
+            type: string
+          - type: 'null'
+          title: Category
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - candidate
+            - active
+            - superseded
+            - expired
+            - deleted
+            type: string
+          - type: 'null'
+          title: Status
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      summary: Create Memory
+      operationId: create_memory_api_v2_me_memories_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemoryCreate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v2/me/memories/{memory_id}:
+    patch:
+      summary: Patch Memory
+      operationId: patch_memory_api_v2_me_memories__memory_id__patch
+      parameters:
+      - name: memory_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Memory Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemoryPatch'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      summary: Delete Memory
+      operationId: delete_memory_api_v2_me_memories__memory_id__delete
+      parameters:
+      - name: memory_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Memory Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v2/me/memories/clear:
+    post:
+      summary: Clear Memories
+      operationId: clear_memories_api_v2_me_memories_clear_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
 components:
   schemas:
     HTTPValidationError:
@@ -542,3 +815,165 @@ components:
       - items
       - mode
       title: RecommendationResponse
+    MemoryCreate:
+      properties:
+        memory_id:
+          type: string
+          pattern: ^[a-zA-Z0-9_-]{1,64}$
+          title: Memory Id
+        scope:
+          type: string
+          enum:
+          - user
+          - user_farm
+          title: Scope
+          default: user
+        kind:
+          type: string
+          enum:
+          - preference
+          - habit
+          - episode
+          title: Kind
+          default: preference
+        category:
+          type: string
+          enum:
+          - profile
+          - preference
+          - work
+          - response
+          - general
+          title: Category
+          default: general
+        key:
+          type: string
+          maxLength: 100
+          minLength: 1
+          title: Key
+        text:
+          type: string
+          maxLength: 500
+          minLength: 1
+          title: Text
+        conditions:
+          items:
+            type: string
+            maxLength: 100
+            minLength: 1
+          type: array
+          maxItems: 10
+          title: Conditions
+      additionalProperties: false
+      type: object
+      required:
+      - memory_id
+      - key
+      - text
+      title: MemoryCreate
+    MemoryPatch:
+      properties:
+        expected_revision:
+          type: integer
+          minimum: 1.0
+          title: Expected Revision
+        text:
+          anyOf:
+          - type: string
+            maxLength: 500
+            minLength: 1
+          - type: 'null'
+          title: Text
+        status:
+          anyOf:
+          - type: string
+            enum:
+            - active
+            - expired
+          - type: 'null'
+          title: Status
+        conditions:
+          anyOf:
+          - items:
+              type: string
+              maxLength: 100
+              minLength: 1
+            type: array
+            maxItems: 10
+          - type: 'null'
+          title: Conditions
+      additionalProperties: false
+      type: object
+      required:
+      - expected_revision
+      title: MemoryPatch
+    SettingsPatch:
+      properties:
+        nickname:
+          type: string
+          maxLength: 20
+          title: Nickname
+          default: ''
+        assistant_name:
+          type: string
+          maxLength: 20
+          title: Assistant Name
+          default: 田掌柜
+        reply_style:
+          type: string
+          enum:
+          - default
+          - friendly
+          - professional
+          - efficient
+          title: Reply Style
+          default: default
+        detail_level:
+          type: string
+          enum:
+          - concise
+          - balanced
+          - detailed
+          title: Detail Level
+          default: balanced
+        display_format:
+          type: string
+          enum:
+          - auto
+          - table
+          - list
+          title: Display Format
+          default: auto
+        custom_instructions:
+          type: string
+          maxLength: 500
+          title: Custom Instructions
+          default: ''
+        loading_greeting_enabled:
+          type: boolean
+          title: Loading Greeting Enabled
+          default: true
+        execution_detail_level:
+          type: string
+          enum:
+          - concise
+          - detailed
+          title: Execution Detail Level
+          default: concise
+        auto_learn_enabled:
+          type: boolean
+          title: Auto Learn Enabled
+          default: true
+        use_saved_memories:
+          type: boolean
+          title: Use Saved Memories
+          default: true
+        expected_revision:
+          type: integer
+          minimum: 0.0
+          title: Expected Revision
+      additionalProperties: false
+      type: object
+      required:
+      - expected_revision
+      title: SettingsPatch

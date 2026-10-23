@@ -7,6 +7,7 @@ import {
   personalizationApi,
   personalizationErrorMessage,
   type MemoryKind,
+  type MemoryCategory,
   type MemoryRecord,
   type MemoryScope,
   type MemoryStatus,
@@ -18,6 +19,7 @@ import MemoryEditModal from "./MemoryEditModal";
 import MemoryTable from "./MemoryTable";
 import {
   MEMORY_KIND_FILTERS,
+  MEMORY_CATEGORY_FILTERS,
   MEMORY_SCOPE_FILTERS,
   MEMORY_STATUS_FILTERS,
 } from "./options";
@@ -34,6 +36,7 @@ export default function MemoryPanel() {
   const [savingControl, setSavingControl] = useState(false);
   const [scope, setScope] = useState<MemoryScope | undefined>();
   const [kind, setKind] = useState<MemoryKind | undefined>();
+  const [category, setCategory] = useState<MemoryCategory | undefined>();
   const [status, setStatus] = useState<MemoryStatus | undefined>();
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
@@ -62,6 +65,7 @@ export default function MemoryPanel() {
         page_size: pageSize,
         scope,
         kind,
+        category,
         status,
       });
       setMemories(data.items);
@@ -72,7 +76,7 @@ export default function MemoryPanel() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, scope, kind, status]);
+  }, [page, pageSize, scope, kind, category, status]);
 
   useEffect(() => {
     void fetchPreferences();
@@ -107,7 +111,7 @@ export default function MemoryPanel() {
         expected_revision: record.revision,
         status: "active",
       });
-      message.success("已确认，这条记忆将用于后续对话");
+      message.success("已启用，这条记忆将用于后续对话");
       await Promise.all([fetchMemories(), fetchPreferences()]);
     } catch (error) {
       message.error(personalizationErrorMessage(error));
@@ -161,10 +165,10 @@ export default function MemoryPanel() {
     });
   };
 
-  const hasFilters = Boolean(scope || kind || status);
+  const hasFilters = Boolean(scope || kind || category || status);
   const activeCount = memories.filter((memory) => memory.status === "active").length;
-  const candidateCount = memories.filter(
-    (memory) => memory.status === "candidate",
+  const learnedCount = memories.filter(
+    (memory) => memory.source_type === "inferred" && memory.status === "active",
   ).length;
 
   return (
@@ -182,9 +186,9 @@ export default function MemoryPanel() {
           </div>
         </div>
         <div className="memory-stat">
-          <div className="memory-stat__label">待确认</div>
+          <div className="memory-stat__label">本页自动学习</div>
           <div className="memory-stat__value">
-            {candidateCount}
+            {learnedCount}
             <span>条</span>
           </div>
         </div>
@@ -223,6 +227,11 @@ export default function MemoryPanel() {
       <Toolbar
         left={(
           <Space wrap>
+            <Select<MemoryCategory>
+              allowClear placeholder="全部分类" style={{ width: 140 }} value={category}
+              options={MEMORY_CATEGORY_FILTERS}
+              onChange={(value) => { setCategory(value); setPage(1); }}
+            />
             <Select<MemoryScope>
               allowClear
               placeholder="全部范围"

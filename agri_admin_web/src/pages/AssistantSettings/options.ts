@@ -3,6 +3,7 @@ import type {
   DisplayFormat,
   ExecutionDetailLevel,
   MemoryKind,
+  MemoryCategory,
   MemoryScope,
   MemorySourceType,
   MemoryStatus,
@@ -50,6 +51,13 @@ export const MEMORY_KIND_META: Record<MemoryKind, { label: string; color: string
   episode: { label: "经历", color: "default" },
 };
 
+export const MEMORY_CATEGORY_LABELS: Record<MemoryCategory, string> = {
+  profile: "个人背景", preference: "兴趣偏好", work: "工作习惯",
+  response: "交流方式", general: "其他",
+};
+export const MEMORY_CATEGORY_FILTERS = Object.entries(MEMORY_CATEGORY_LABELS)
+  .map(([value, label]) => ({ value, label }));
+
 export const MEMORY_SOURCE_META: Record<MemorySourceType, { label: string; color: string }> = {
   explicit: { label: "手动保存", color: "gold" },
   inferred: { label: "自动学习", color: "purple" },
@@ -57,7 +65,7 @@ export const MEMORY_SOURCE_META: Record<MemorySourceType, { label: string; color
 
 export const MEMORY_STATUS_META: Record<MemoryStatus, { label: string; color: string }> = {
   active: { label: "生效中", color: "green" },
-  candidate: { label: "待确认", color: "gold" },
+  candidate: { label: "旧版候选", color: "gold" },
   superseded: { label: "已替代", color: "default" },
   expired: { label: "已过期", color: "default" },
   deleted: { label: "已删除", color: "red" },
@@ -76,6 +84,6 @@ export const MEMORY_KIND_FILTERS = [
 
 export const MEMORY_STATUS_FILTERS = [
   { value: "active", label: "生效中" },
-  { value: "candidate", label: "待确认" },
+  { value: "candidate", label: "旧版候选" },
   { value: "expired", label: "已过期" },
 ];

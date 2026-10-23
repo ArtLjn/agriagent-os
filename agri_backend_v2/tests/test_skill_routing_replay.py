@@ -146,7 +146,7 @@ async def test_live_main_agent_selects_correct_sources(
                 )
                 # 错误参数仍应被拒绝；测试最终答复恢复，不把工具层拒绝伪装成成功。
                 assert result.get("persisted") is False
-                assert not verify.has_write_call(tracker)
+                assert all(not item["persisted"] for item in tracker.calls)
                 messages.append(turn.messages[-1])
                 continue
             if call.function.name == "make_plan":

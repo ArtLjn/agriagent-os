@@ -12,6 +12,7 @@ from agent.application.question_recommendations import (
 )
 from agent.auth import parse_identity, require_identity_permission
 from agent.domains.harness.memory.personalization import (
+    MemoryCategory,
     MemoryCreate,
     MemoryError,
     MemoryPatch,
@@ -65,6 +66,7 @@ async def list_memories(
     page_size: int = Query(default=20, ge=1, le=100),
     scope: Literal["user", "user_farm"] | None = None,
     kind: Literal["preference", "habit", "episode"] | None = None,
+    category: MemoryCategory | None = None,
     status: Literal["candidate", "active", "superseded", "expired", "deleted"]
     | None = None,
 ):
@@ -75,6 +77,7 @@ async def list_memories(
         for m in records
         if (scope is None or m["scope"] == scope)
         and (kind is None or m["kind"] == kind)
+        and (category is None or m.get("category", "general") == category)
         and (status is None or m["status"] == status)
     ]
     records.sort(key=lambda item: item["updated_at"], reverse=True)

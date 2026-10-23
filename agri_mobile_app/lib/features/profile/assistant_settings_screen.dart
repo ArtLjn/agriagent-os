@@ -281,6 +281,9 @@ class _AssistantSettingsState extends State<AssistantSettingsScreen> {
                     }.entries)
                       SwitchListTile(
                           title: Text(entry.value),
+                          subtitle: entry.key == 'auto_learn_enabled'
+                              ? const Text('稳定偏好自动归类合并并生效，无需逐条确认；不准确时可编辑或删除。')
+                              : null,
                           value: _settings![entry.key] == true,
                           onChanged: _busy
                               ? null
@@ -308,7 +311,7 @@ class _AssistantSettingsState extends State<AssistantSettingsScreen> {
                           child: ListTile(
                         title: Text('${record['text']}'),
                         subtitle: Text(
-                            '${record['source_type'] == 'explicit' ? '手动保存' : '自动学习'} · ${record['status'] == 'candidate' ? '待确认' : '生效'} · ${record['scope'] == 'user' ? '个人' : '当前农场'}'),
+                            '${record['source_type'] == 'explicit' ? '手动保存' : '自动学习'} · ${record['status'] == 'candidate' ? '旧版候选' : '生效'} · ${record['scope'] == 'user' ? '个人' : '当前农场'}'),
                         onTap: () => _editMemory(record),
                         trailing:
                             Row(mainAxisSize: MainAxisSize.min, children: [

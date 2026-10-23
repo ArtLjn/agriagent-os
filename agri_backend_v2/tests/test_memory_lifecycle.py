@@ -137,13 +137,12 @@ async def test_learning_requires_independent_evidence_and_never_recreates_delete
         key="response.detail_level",
         text="喜欢简洁回答",
         evidence="简洁",
-        presentation_only=True,
     )
     first = task(doc)
     await learning.apply_candidates(first, [candidate])
     await learning.apply_candidates(first, [candidate])
     record = (await store.load("u"))["memories"][0]
-    assert record["evidence_count"] == 1 and record["status"] == "candidate"
+    assert record["evidence_count"] == 1 and record["status"] == "active"
     await learning.apply_candidates(task(doc, "2", "b"), [candidate])
     await learning.apply_candidates(task(doc, "3", "b"), [candidate])
     record = (await store.load("u"))["memories"][0]
@@ -190,7 +189,6 @@ async def test_explicit_setting_blocks_inferred_counterpart(collection):
                 key="response.detail_level",
                 text="简洁",
                 evidence="简洁",
-                presentation_only=True,
             )
         ],
     )
@@ -351,7 +349,8 @@ async def test_ordinary_preference_acknowledges_without_forcing_memory_write(
     turn = Turn(user_input="我还喜欢草莓葡萄", step_count=1)
     tracker = verify.CallTracker()
     if attempted:
-        tracker.record(tools.TOOL_NAME, {}, risk_level="read")
+        tracker.record(tools.TOOL_NAME, {}, risk_level="write_confirm")
+        tracker.calls[-1]["persisted"] = False
     events = [
         event
         async for event in engine._emit_final_answer(
@@ -679,7 +678,8 @@ async def test_invalid_preference_tool_call_keeps_error_but_completes_reply(
     ]
     assert turn.status == "completed"
     assert turn.final_answer == tools.PREFERENCE_ACKNOWLEDGEMENT
-    assert not verify.has_write_call(tracker)
+    assert verify.has_write_call(tracker)
+    assert tracker.calls[-1]["persisted"] is False
     load.assert_not_called()
 
 
@@ -697,7 +697,6 @@ async def test_extraction_accepts_provider_envelope_and_normalizes_values(
             "key": "response.detail_level",
             "text": "模型的随机表述",
             "evidence": "我一向喜欢简短回答",
-            "presentation_only": True,
             "value": "concise",
         }
     ]
@@ -729,7 +728,6 @@ async def test_extraction_rejects_fabricated_evidence_and_uncontrolled_presentat
                     "key": "work.weather_preference",
                     "text": "喜欢雨天干活",
                     "evidence": "喜欢雨天干活",
-                    "presentation_only": True,
                 },
                 {
                     "key": "response.format",
@@ -752,7 +750,7 @@ async def test_extraction_rejects_fabricated_evidence_and_uncontrolled_presentat
     )
     result = await learning.extract("我喜欢雨天干活")
     assert len(result) == 1
-    assert result[0].presentation_only is False
+    assert result[0].key == "work.weather_preference"
 
 
 @pytest.mark.asyncio
@@ -874,7 +872,7 @@ async def test_semantic_authorization_accepts_intent_without_trigger_words(colle
 
 
 @pytest.mark.asyncio
-async def test_semantic_reinforcement_merges_paraphrases_and_conflicts_suspend_inference(
+async def test_semantic_reinforcement_merges_paraphrases_and_corrections_update_inference(
     collection,
 ):
     doc = await enable_learning()
@@ -898,7 +896,7 @@ async def test_semantic_reinforcement_merges_paraphrases_and_conflicts_suspend_i
     current = (await store.load("u"))["memories"]
     assert len(current) == 1 and current[0]["evidence_count"] == 2
     assert current[0]["confidence"] > memory["confidence"]
-    # 相反反馈降低可信度并生成待确认替代项，不静默改写旧事实。
+    # 新的明确纠正原地更新，旧偏好不继续注入，也不要求逐条确认。
     await learning.apply_candidates(
         task(doc, "3", "c"),
         [
@@ -912,11 +910,9 @@ async def test_semantic_reinforcement_merges_paraphrases_and_conflicts_suspend_i
         ],
     )
     records = (await store.load("u"))["memories"]
-    assert len(records) == 2
-    assert records[0]["text"] == "清早巡视田块"
-    assert records[0]["confidence"] == learning.memory_runtime.conflict_confidence
-    assert all(m["status"] == "candidate" for m in records)
-    assert records[1]["conflicts_with"] == memory["memory_id"]
+    assert len(records) == 1
+    assert records[0]["text"] == "傍晚巡视田块"
+    assert records[0]["status"] == "active"
 
 
 @pytest.mark.asyncio
