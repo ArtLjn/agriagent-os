@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { isAxiosError } from 'axios';
 import { Input, Button, Space, Tooltip, message, Select } from 'antd';
+import type { TextAreaRef } from 'antd/es/input/TextArea';
 import { SendOutlined, DeleteOutlined, CopyOutlined, PlusOutlined, MenuFoldOutlined, MenuUnfoldOutlined, LoadingOutlined, LinkOutlined, ProfileOutlined, ExperimentOutlined } from '@ant-design/icons';
 import { listTraces, getTimeline, type TraceTimeline } from '../../api/admin';
 import {
@@ -179,6 +180,7 @@ export default function Playground() {
     [sessionId]: emptySessionState(),
   }));
   const [input, setInput] = useState('');
+  const composerRef = useRef<TextAreaRef>(null);
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [devUsers, setDevUsers] = useState<DevUser[]>([]);
   const [selectedDevUser, setSelectedDevUser] = useState<DevUser | null>(null);
@@ -930,10 +932,12 @@ export default function Playground() {
               <div className="pg-empty__badge"><ExperimentOutlined /></div>
               <div className="pg-empty__title">田掌柜 Agent Playground</div>
               <div className="pg-empty__hint">
-                选择下方场景快速发起对话，或直接输入问题；执行过程、工具调用与上下文会实时呈现在对话里
+                从感兴趣的问题开始，或直接说说你想了解什么
               </div>
               <QuickPrompts
-                onSelect={(prompt) => { void handleSend(prompt); }}
+                key={selectedDevUser?.user_id ?? 'self'}
+                userToken={activeUserToken}
+                onSelect={(prompt) => { setInput(prompt); composerRef.current?.focus(); }}
                 disabled={loading}
               />
             </div>
@@ -1071,6 +1075,7 @@ export default function Playground() {
           {/* 输入区域 */}
           <div className="playground-composer">
             <Input.TextArea
+              ref={composerRef}
               value={input}
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={(event) => {
