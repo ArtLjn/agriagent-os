@@ -29,14 +29,14 @@ import asyncio
 import logging
 import time
 from collections import deque
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from agent.config import settings
 from agent.domains.harness.observability.trace.context import (
     current_parent_span_id,
-    get_trace,
     get_step_index,
+    get_trace,
     new_span_id,
 )
 from agent.domains.harness.observability.trace.safety import (
@@ -75,7 +75,9 @@ def _get_collection():
     """Lazy-init MongoDB collection for trace records."""
     if not settings.mongodb.enabled:
         return None
-    from agent.platforms.persistence.mongo.chat_store import get_collection as _get_chat_collection
+    from agent.platforms.persistence.mongo.chat_store import (
+        get_collection as _get_chat_collection,
+    )
 
     # 复用 chat_store 的 MongoDB 连接（同一个 client + database）。
     chat_coll = _get_chat_collection()
@@ -88,7 +90,9 @@ def _get_summary_collection():
     """Lazy-init MongoDB collection for trace request summaries."""
     if not settings.mongodb.enabled:
         return None
-    from agent.platforms.persistence.mongo.chat_store import get_collection as _get_chat_collection
+    from agent.platforms.persistence.mongo.chat_store import (
+        get_collection as _get_chat_collection,
+    )
 
     chat_coll = _get_chat_collection()
     if chat_coll is None:
@@ -100,7 +104,9 @@ def _get_event_collection():
     """延迟初始化持久化 SSE 事件集合。"""
     if not settings.mongodb.enabled:
         return None
-    from agent.platforms.persistence.mongo.chat_store import get_collection as _get_chat_collection
+    from agent.platforms.persistence.mongo.chat_store import (
+        get_collection as _get_chat_collection,
+    )
 
     chat_coll = _get_chat_collection()
     if chat_coll is None:
@@ -176,8 +182,8 @@ def record(
         "output_data": _truncate(output_data) if output_data is not None else None,
         # Trace 节点和 SSE 事件必须共享 UTC 时间基准，否则合并时间线会把
         # 本地无时区时间与 UTC 时间按字面值比较，导致真实执行顺序错乱。
-        "start_time": datetime.fromtimestamp(start_time, tz=timezone.utc),
-        "end_time": datetime.fromtimestamp(end_time, tz=timezone.utc),
+        "start_time": datetime.fromtimestamp(start_time, tz=UTC),
+        "end_time": datetime.fromtimestamp(end_time, tz=UTC),
         "duration_ms": duration_ms,
         "token_usage": safe_token_usage(token_usage),
         "status": status or ("error" if error_message else "success"),
@@ -188,7 +194,7 @@ def record(
             "level": int(getattr(trace, "sampling_level", 1)),
             "redacted": True,
         },
-        "created_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(UTC),
     }
     _queue.append(trace_data)
 
@@ -237,7 +243,7 @@ def record_event(event: dict[str, Any]) -> dict[str, Any]:
         "occurred_at": event.get("occurred_at"),
         "data": _truncate(event.get("data") or {}),
         "projection_status": "queued",
-        "created_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(UTC),
     }
     queue_was_full = (
         _event_queue.maxlen is not None and len(_event_queue) >= _event_queue.maxlen
@@ -371,7 +377,9 @@ async def _refresh_summaries(new_items: list[dict[str, Any]]) -> None:
             if summary is None:
                 continue
             # Add node_breakdown
-            from agent.domains.harness.observability.trace.store import _build_node_breakdown
+            from agent.domains.harness.observability.trace.store import (
+                _build_node_breakdown,
+            )
 
             summary["node_breakdown"] = _build_node_breakdown(nodes)
             doc = summary_to_mongo_doc(summary)
@@ -380,8 +388,8 @@ async def _refresh_summaries(new_items: list[dict[str, Any]]) -> None:
                 doc,
                 upsert=True,
             )
-    except Exception as exc:
-        logger.warning("trace summary refresh failed (non-fatal): %s", exc)
+    except Exception:
+        logger.warning("Trace 摘要刷新失败，保留原始记录供后续恢复", exc_info=True)
 
 
 async def _flush_loop() -> None:
@@ -402,6 +410,13 @@ async def start_trace_system() -> None:
     """启动 trace 后台 flush worker。"""
     global _flush_task, _running
     index_specs = [
+        # 看板按节点类型与时间范围聚合，避免每次刷新扫描全部 Trace 内容。
+        (
+            _get_collection(),
+            _collection_name(),
+            [("node_type", 1), ("created_at", 1)],
+            {},
+        ),
         (
             _get_collection(),
             _collection_name(),
@@ -471,7 +486,7 @@ async def start_trace_system() -> None:
 
 async def stop_trace_system() -> None:
     """停止 trace 系统，flush 剩余数据。"""
-    global _running, _flush_task
+    global _running
     _running = False
     if _flush_task:
         _flush_task.cancel()

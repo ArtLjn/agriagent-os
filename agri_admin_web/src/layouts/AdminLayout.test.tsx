@@ -39,7 +39,7 @@ describe('AdminLayout 菜单信息架构', () => {
 describe('AdminLayout 侧边栏折叠', () => {
   it('当前 Agent 分组可以收起，页面重渲染不会强制展开', async () => {
     const view = render(<MemoryRouter initialEntries={['/dev/playground']}><AdminLayout><div>工作区</div></AdminLayout></MemoryRouter>);
-    const group = await screen.findByRole('menuitem', { name: 'Agent 平台' });
+    const group = await screen.findByRole('menuitem', { name: 'Agent 开发' });
     expect(group).toHaveAttribute('aria-expanded', 'true');
     fireEvent.click(group);
     await waitFor(() => expect(group).toHaveAttribute('aria-expanded', 'false'));
@@ -54,9 +54,9 @@ describe('AdminLayout 侧边栏折叠', () => {
 
   it('通过品牌栏按钮收起和展开侧边栏', async () => {
     render(
-      <MemoryRouter initialEntries={['/dev/data-flywheel']}>
+      <MemoryRouter initialEntries={['/dev/traces']}>
         <AdminLayout>
-          <div>数据飞轮内容</div>
+          <div>链路追踪内容</div>
         </AdminLayout>
       </MemoryRouter>,
     );
@@ -82,9 +82,9 @@ describe('AdminLayout 侧边栏折叠', () => {
 
   it('折叠后直接显示具体导航入口', async () => {
     render(
-      <MemoryRouter initialEntries={['/dev/data-flywheel']}>
+      <MemoryRouter initialEntries={['/dev/traces']}>
         <AdminLayout>
-          <div>数据飞轮内容</div>
+          <div>链路追踪内容</div>
         </AdminLayout>
       </MemoryRouter>,
     );
@@ -92,10 +92,12 @@ describe('AdminLayout 侧边栏折叠', () => {
     fireEvent.click(screen.getByRole('button', { name: '折叠侧边栏' }));
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: '数据飞轮' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Prompt 检查器' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '链路追踪' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '数据飞轮' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Token 看板' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Prompt 管理' })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: '仪表盘' })).not.toBeInTheDocument();
-      expect(screen.queryByText('Agent 平台')).not.toBeInTheDocument();
+      expect(screen.queryByText('Agent 开发')).not.toBeInTheDocument();
       expect(screen.queryByText('Playground')).not.toBeInTheDocument();
     });
   }, 10000);
@@ -118,4 +120,11 @@ describe('AdminLayout 侧边栏折叠', () => {
       expect(screen.queryByRole('button', { name: '仪表盘' })).not.toBeInTheDocument();
     });
   }, 10000);
+});
+
+ it('导航按开发、监控、系统分类且关闭仿真和数据飞轮入口', () => {
+  expect(groupByLabel('Agent 开发')).toEqual(['/dev/playground', '/dev/skills', '/dev/prompts']);
+  expect(groupByLabel('运行监控')).toEqual(['/dev/traces', '/dev/tokens']);
+  expect(groupByLabel('系统管理')).toEqual(['/dev/config']);
+  expect(menuGroups.flatMap(group => group.children).some(item => ['/dev/simulation', '/dev/data-flywheel'].includes(item.key))).toBe(false);
 });

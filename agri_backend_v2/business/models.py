@@ -15,13 +15,14 @@
 from __future__ import annotations
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     Column,
     Date,
     DateTime,
     Float,
     ForeignKey,
-    JSON,
+    Index,
     Integer,
     Numeric,
     String,
@@ -36,8 +37,6 @@ from shared.roles import UserRole
 
 class Base(DeclarativeBase):
     """Shared declarative base."""
-
-    pass
 
 
 # ─────────────────────────────────────────────────────────────
@@ -542,3 +541,28 @@ class CostRecord(Base):
         if self.source_type == "labor_entry":
             return "来自工资记录"
         return None
+
+
+class Memo(Base):
+    """用户在当前农场的备忘录，归档保留原始内容。"""
+
+    __tablename__ = "memos"
+    __table_args__ = (
+        UniqueConstraint(
+            "farm_id", "user_id", "client_request_id", name="uq_memo_request"
+        ),
+        Index(
+            "idx_memo_list", "farm_id", "user_id", "archived", "pinned", "updated_at"
+        ),
+    )
+    id = Column(Integer, primary_key=True)
+    farm_id = Column(Integer, ForeignKey("farms.id"), nullable=False)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    title = Column(String(200), nullable=False)
+    content = Column(Text, nullable=False)
+    pinned = Column(Boolean, nullable=False, default=False)
+    archived = Column(Boolean, nullable=False, default=False)
+    client_request_id = Column(String(100), nullable=False)
+    request_fingerprint = Column(String(64), nullable=False)
+    created_at = Column(DateTime, nullable=False)
+    updated_at = Column(DateTime, nullable=False)

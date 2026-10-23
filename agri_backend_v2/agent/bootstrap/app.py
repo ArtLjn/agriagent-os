@@ -20,12 +20,12 @@ _PACKAGE_ROOT = str(Path(__file__).resolve().parents[2])
 if _PACKAGE_ROOT not in sys.path:
     sys.path.insert(0, _PACKAGE_ROOT)
 
-from fastapi import FastAPI  # noqa: E402
-from fastapi.responses import FileResponse  # noqa: E402
-from fastapi.staticfiles import StaticFiles  # noqa: E402
+from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
-from agent.api import api_router  # noqa: E402
-from agent.api import (  # noqa: E402, F401
+from agent.api import (  # noqa: F401
+    api_router,
     approve,
     chat,
     conversations,
@@ -36,23 +36,29 @@ from agent.api import (  # noqa: E402, F401
     traces,
     turns,
 )  # register routes
-from agent.config import settings  # noqa: E402
-from agent.platforms.persistence.mongo.chat_store import check_connection, close  # noqa: E402
-from agent.platforms.persistence.redis.redis_store import (  # noqa: E402
-    check_connection as check_redis_connection,
-    close as close_redis,
-)
-from agent.application.worker import start as start_worker, stop as stop_worker  # noqa: E402
-from agent.application.sweeper import start as start_sweeper, stop as stop_sweeper  # noqa: E402
-from agent.platforms.logging import get_logger, setup_logging  # noqa: E402
-from agent.domains.harness.observability.trace import (  # noqa: E402
+from agent.application.sweeper import start as start_sweeper
+from agent.application.sweeper import stop as stop_sweeper
+from agent.application.worker import start as start_worker
+from agent.application.worker import stop as stop_worker
+from agent.config import settings
+from agent.domains.harness.observability.trace import (
     start_trace_system,
     stop_trace_system,
 )
-from shared.api_response import install_api_exception_handlers  # noqa: E402
+from agent.platforms.logging import get_logger, setup_logging
+from agent.platforms.persistence.mongo.chat_store import check_connection, close
+from agent.platforms.persistence.redis.redis_store import (
+    check_connection as check_redis_connection,
+)
+from agent.platforms.persistence.redis.redis_store import (
+    close as close_redis,
+)
+from shared.api_response import install_api_exception_handlers
 
 # 导入模块以注册管理端 Skill 路由；其余 API 模块沿用下方的显式导入方式。
 importlib.import_module("agent.api.admin_skills")
+importlib.import_module("agent.api.admin_prompts")
+importlib.import_module("agent.api.admin_tokens")
 
 setup_logging(app_name="agent")
 logger = get_logger(__name__)

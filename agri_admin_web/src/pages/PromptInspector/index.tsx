@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
+  Alert,
+  Input,
   Typography,
   Button,
   Table,
@@ -19,7 +21,9 @@ const BORDER = palette.border;
 const TEXT = palette.text;
 const TEXT_DIM = palette.textMuted;
 
-export default function PromptInspector() {
+export default function PromptManagement() {
+  const [keyword, setKeyword] = useState('');
+  const [loadFailed, setLoadFailed] = useState(false);
   const [prompts, setPrompts] = useState<PromptItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [reloadLoading, setReloadLoading] = useState(false);
@@ -28,11 +32,12 @@ export default function PromptInspector() {
 
   const fetchData = async () => {
     setLoading(true);
+    setLoadFailed(false);
     try {
       const res = await listPrompts();
       setPrompts(res.items);
     } catch {
-      // 错误已在 api client 中处理
+      setLoadFailed(true);
     } finally {
       setLoading(false);
     }
@@ -77,7 +82,7 @@ export default function PromptInspector() {
       dataIndex: 'active',
       width: 100,
       render: (v: boolean) => (
-        <Tag color={v ? 'success' : 'default'}>{v ? '启用' : '禁用'}</Tag>
+        <Tag color={v ? 'success' : 'default'}>{v ? '系统使用' : '可用模板'}</Tag>
       ),
     },
     {
@@ -94,7 +99,7 @@ export default function PromptInspector() {
       width: 100,
       render: (_: unknown, record: PromptItem) => (
         <Button type="link" onClick={() => handlePreview(record)}>
-          预览
+          查看内容
         </Button>
       ),
     },
@@ -112,7 +117,7 @@ export default function PromptInspector() {
       >
         <Typography.Title level={4} style={{ color: TEXT, margin: 0 }}>
           <FileSearchOutlined style={{ marginRight: 8 }} />
-          Prompt 检查器
+          Prompt 管理
         </Typography.Title>
         <Button
           type="primary"
@@ -124,6 +129,9 @@ export default function PromptInspector() {
         </Button>
       </div>
 
+      <Alert type="info" showIcon message="查看当前运行模板；内容版本随模板变化。修改由源文件版本控制管理，重新加载仅作用于当前 Agent 进程的新建上下文。" style={{ marginBottom: 16 }} />
+      <Input.Search aria-label="搜索提示词" placeholder="搜索名称或内容" value={keyword} onChange={(event) => setKeyword(event.target.value)} style={{ marginBottom: 16, maxWidth: 400 }} />
+      {loadFailed && <Alert type="error" message="提示词加载失败" action={<Button onClick={fetchData}>重试</Button>} />}
       {loading ? (
         <div style={{ textAlign: 'center', padding: 64 }}>
           <Spin size="large" />
@@ -133,7 +141,7 @@ export default function PromptInspector() {
       ) : (
         <Table
           rowKey="name"
-          dataSource={prompts}
+          dataSource={prompts.filter((item) => `${item.name} ${item.content}`.toLowerCase().includes(keyword.toLowerCase()))}
           columns={columns}
           pagination={false}
           style={{
@@ -145,11 +153,11 @@ export default function PromptInspector() {
       )}
 
       <Modal
-        title="Prompt 预览"
+        title="系统提示词内容"
         open={previewModalOpen}
         onCancel={() => setPreviewModalOpen(false)}
         footer={null}
-        width={520}
+        width={880}
         styles={{
           content: { backgroundColor: CARD_BG },
           header: {
@@ -170,12 +178,13 @@ export default function PromptInspector() {
               <Descriptions.Item label="名称">
                 {previewPrompt.name}
               </Descriptions.Item>
+              <Descriptions.Item label="源文件">{previewPrompt.source}</Descriptions.Item>
               <Descriptions.Item label="版本">
                 {previewPrompt.version}
               </Descriptions.Item>
               <Descriptions.Item label="状态">
                 <Tag color={previewPrompt.active ? 'success' : 'default'}>
-                  {previewPrompt.active ? '启用' : '禁用'}
+                  {previewPrompt.active ? '系统使用' : '可用模板'}
                 </Tag>
               </Descriptions.Item>
               <Descriptions.Item label="内容长度">

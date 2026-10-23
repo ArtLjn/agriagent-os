@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button, Card, Progress, Row, Col, Select, Segmented, Space, Statistic, Tag } from 'antd';
+import { Alert, Button, Card, Progress, Row, Col, Select, Segmented, Space, Statistic, Tag } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import {
   getDailyTokenStats,
@@ -78,12 +78,10 @@ export default function TokenDashboard() {
   const [lastLoadedAt, setLastLoadedAt] = useState<Date | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
 
-  const todayStr = useMemo(() => {
-    return formatDateKey(new Date());
-  }, []);
+  const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 
   const range = useMemo(() => {
-    const today = new Date();
+    const today = new Date(`${todayStr}T12:00:00`);
     const start = rangeMode === 'day'
       ? today
       : rangeMode === 'week'
@@ -97,7 +95,7 @@ export default function TokenDashboard() {
       endDate: formatDateKey(today),
       label: rangeMode === 'day' ? '当日' : rangeMode === 'week' ? '近 7 天' : '本月',
     };
-  }, [rangeMode]);
+  }, [rangeMode, todayStr]);
 
   useEffect(() => {
     let cancelled = false;
@@ -148,24 +146,32 @@ export default function TokenDashboard() {
   useEffect(() => {
     let cancelled = false;
     if (!selectedUserId) {
-      void Promise.resolve().then(() => setUserQuota(null));
+      void Promise.resolve().then(() => { setUserQuota(null); setQuotaLoading(false); });
       return () => { cancelled = true; };
     }
 
     void Promise.resolve().then(() => {
       setQuotaLoading(true);
-      return usersApi.getQuota(selectedUserId)
-        .then((res) => {
-          if (!cancelled) setUserQuota(res.data);
+      const today = new Date(`${todayStr}T12:00:00`);
+      const monthStart = `${todayStr.slice(0, 7)}-01`;
+      const weekStart = formatDateKey(addDays(today, -((today.getDay() + 6) % 7)));
+      // Business 提供配额上限；实际消耗来自 Agent，不能使用旧接口固定的零用量。
+      return Promise.all([
+        usersApi.getQuota(selectedUserId),
+        getHourlyTokenStats({ user_id: selectedUserId, start_date: monthStart, end_date: todayStr }),
+        getHourlyTokenStats({ user_id: selectedUserId, start_date: weekStart, end_date: todayStr }),
+      ])
+        .then(([res, monthly, weekly]) => {
+          if (!cancelled) setUserQuota({ ...res.data, monthly_usage: monthly.total_tokens, weekly_usage: weekly.total_tokens });
         })
         .catch(() => {
           if (!cancelled) setUserQuota(null);
         })
-        .finally(() => setQuotaLoading(false));
+        .finally(() => { if (!cancelled) setQuotaLoading(false); });
     });
 
     return () => { cancelled = true; };
-  }, [selectedUserId]);
+  }, [selectedUserId, todayStr, refreshKey]);
 
   const selectedUser = useMemo(
     () => users.find((user) => user.id === selectedUserId),
@@ -268,7 +274,7 @@ export default function TokenDashboard() {
   const userHeatmapRows = useMemo<HeatmapRow[]>(() => {
     const rows = new Map<string, HeatmapRow>();
     hourlyItems.forEach((item) => {
-      const id = item.user_id || `farm-${item.farm_id}`;
+      const id = item.user_id || (item.farm_id ? `farm-${item.farm_id}` : '未知用户');
       const user = users.find((candidate) => candidate.id === item.user_id);
       const row = rows.get(id) ?? {
         id,
@@ -351,12 +357,13 @@ export default function TokenDashboard() {
           <span style={{ color: TEXT_DIM, fontSize: 13 }}>最后刷新：{formatTime(lastLoadedAt)}</span>
         </Space>
         <div style={{ color: TEXT_DIM, fontSize: 13, marginTop: 8 }}>
-          provider usage 入账 · {range.label} · {range.startDate} 至 {range.endDate}
+          已持久化模型用量 · 北京时间 · 请求数为模型调用次数 · {range.label} · {range.startDate} 至 {range.endDate}
           {selectedUser ? `，当前用户：${selectedUser.nickname || selectedUser.phone}` : '，当前范围：全部用户'}
           {selectedModel ? `，模型：${selectedModel}` : ''}
         </div>
       </div>
 
+      {loadFailed && <Alert type="error" showIcon message="部分统计加载失败，缺失数据不能视为零用量，请刷新重试。" style={{ marginBottom: 12 }} />}
       <Card style={{ ...panelStyle, marginBottom: 12 }} bodyStyle={{ padding: 12 }}>
         <Row gutter={[14, 14]} align="bottom">
           <Col xs={24} sm={12} xl={6}>
@@ -471,9 +478,9 @@ export default function TokenDashboard() {
         <PerformanceTrendChart hourlyTrend={hourlyTrend} />
       </ChartCard>
 
-      <HeatmapSection title="部门 × 小时分布" rows={allHeatmapRows} hint="当前接口暂无部门维度，按当前范围汇总" maxHeatmapTokens={maxHeatmapTokens} />
+      <HeatmapSection title="总体 × 小时分布" rows={allHeatmapRows} hint="按当前筛选范围汇总" maxHeatmapTokens={maxHeatmapTokens} />
       <HeatmapSection title="用户 × 小时分布" rows={userHeatmapRows} hint="看不同用户的使用时段" maxHeatmapTokens={maxHeatmapTokens} />
-      <HeatmapSection title="工作日 × 小时" rows={dayHeatmapRows} hint="按自然日展示小时分布" maxHeatmapTokens={maxHeatmapTokens} />
+      <HeatmapSection title="日期 × 小时" rows={dayHeatmapRows} hint="按自然日展示小时分布" maxHeatmapTokens={maxHeatmapTokens} />
       <HeatmapSection title="模型 × 小时" rows={modelHeatmapRows} hint="看不同模型的使用时段" maxHeatmapTokens={maxHeatmapTokens} />
 
       <Card title={<span style={{ color: TEXT }}>模型用量</span>} extra={<span style={{ color: TEXT_DIM, fontSize: 12 }}>按模型聚合</span>} style={panelStyle} bodyStyle={{ padding: 20 }}>

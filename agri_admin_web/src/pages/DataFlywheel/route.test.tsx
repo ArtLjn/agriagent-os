@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import AdminLayout from '../../layouts/AdminLayout';
 
 describe('DataFlywheel 路由布局', () => {
-  it('在 Agent 平台菜单和页头显示数据飞轮', () => {
+  it('关闭后导航和页头不再显示数据飞轮', () => {
     render(
       <MemoryRouter initialEntries={['/dev/data-flywheel']}>
         <AdminLayout>
@@ -14,6 +14,6 @@ describe('DataFlywheel 路由布局', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getAllByText('数据飞轮').length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText('数据飞轮')).not.toBeInTheDocument();
   });
 });

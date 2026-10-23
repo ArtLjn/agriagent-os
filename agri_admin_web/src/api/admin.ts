@@ -352,7 +352,7 @@ export interface HourlyTokenItem {
   date: string;
   hour: string;
   user_id?: string | null;
-  farm_id: number;
+  farm_id?: number;
   model: string;
   prompt_tokens: number;
   completion_tokens: number;
@@ -379,7 +379,7 @@ export interface TokenStatsParams {
 }
 
 export async function getTokenSummary(params: TokenStatsParams = {}): Promise<TokenSummary> {
-  const res = await apiClient.get<TokenSummary>('/admin/stats/tokens', { params });
+  const res = await apiClient.get<TokenSummary>('/agent/admin/stats/tokens', { params });
   return res.data;
 }
 
@@ -387,7 +387,7 @@ export async function getDailyTokenStats(
   date: string,
   params: Omit<TokenStatsParams, 'days'> = {}
 ): Promise<DailyTokenStats> {
-  const res = await apiClient.get<DailyTokenStats>('/admin/stats/tokens/daily', {
+  const res = await apiClient.get<DailyTokenStats>('/agent/admin/stats/tokens/daily', {
     params: { date, ...params },
   });
   return res.data;
@@ -396,7 +396,7 @@ export async function getDailyTokenStats(
 export async function getHourlyTokenStats(
   params: Pick<TokenStatsParams, 'user_id' | 'farm_id' | 'model' | 'start_date' | 'end_date'> = {}
 ): Promise<HourlyTokenStats> {
-  const res = await apiClient.get<HourlyTokenStats>('/admin/stats/tokens/hourly', { params });
+  const res = await apiClient.get<HourlyTokenStats>('/agent/admin/stats/tokens/hourly', { params });
   return res.data;
 }
 
@@ -596,6 +596,7 @@ export async function evaluateSkillRouteRecallDataset(
 // ─── Prompts API ─────────────────────────────────────────────────────────────
 
 export interface PromptItem {
+  source?: string;
   name: string;
   version: string;
   active: boolean;
@@ -614,12 +615,12 @@ export interface ReloadPromptsResponse {
 }
 
 export async function listPrompts(): Promise<ListPromptsResponse> {
-  const res = await apiClient.get<ListPromptsResponse>('/admin/prompts');
+  const res = await apiClient.get<ListPromptsResponse>('/agent/admin/prompts');
   return res.data;
 }
 
 export async function reloadPrompts(): Promise<ReloadPromptsResponse> {
-  const res = await apiClient.post<ReloadPromptsResponse>('/admin/prompts/reload');
+  const res = await apiClient.post<ReloadPromptsResponse>('/agent/admin/prompts/reload');
   return res.data;
 }
 
