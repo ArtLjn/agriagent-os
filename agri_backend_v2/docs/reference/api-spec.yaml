@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
-  title: Business 备忘录 API
-  description: 备忘录模块接口；完整业务接口以运行服务 /openapi.json 为准。所有请求需要 Bearer JWT。
+  title: Business 与 Agent 增量接口
+  description: 备忘录、管理监控与个性化推荐接口；完整接口以对应运行服务 /openapi.json 为准。所有请求需要 Bearer JWT。
   version: 2.0.0
 paths:
   /api/v2/memos:
@@ -358,6 +358,39 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v2/me/question-recommendations:
+    post:
+      summary: Question Recommendations
+      description: 按 JWT 当前用户推荐；不允许请求体指定用户或农场身份。
+      operationId: question_recommendations_api_v2_me_question_recommendations_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecommendationRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecommendationResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
 components:
   schemas:
     HTTPValidationError:
@@ -452,3 +485,54 @@ components:
       - msg
       - type
       title: ValidationError
+    RecommendationItem:
+      properties:
+        id:
+          type: string
+          title: Id
+        question:
+          type: string
+          title: Question
+        basis:
+          type: string
+          enum:
+          - memory
+          - explore
+          title: Basis
+      type: object
+      required:
+      - id
+      - question
+      - basis
+      title: RecommendationItem
+    RecommendationRequest:
+      properties:
+        exclude:
+          items:
+            type: string
+            maxLength: 100
+            minLength: 1
+          type: array
+          maxItems: 18
+          title: Exclude
+      additionalProperties: false
+      type: object
+      title: RecommendationRequest
+    RecommendationResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/RecommendationItem'
+          type: array
+          title: Items
+        mode:
+          type: string
+          enum:
+          - personalized
+          - explore
+          title: Mode
+      type: object
+      required:
+      - items
+      - mode
+      title: RecommendationResponse

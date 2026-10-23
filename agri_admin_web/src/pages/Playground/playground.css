@@ -163,7 +163,7 @@
 .pg-stat__value { color: var(--pg-text); font-family: monospace; font-variant-numeric: tabular-nums; }
 
 /* ── 空状态 ── */
-.pg-empty { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--pg-muted); text-align: center; padding: 16px 24px; }
+.pg-empty { min-height: 100%; height: auto; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--pg-muted); text-align: center; padding: 16px 24px; }
 .pg-empty__badge { width: 56px; height: 56px; border-radius: 16px; display: flex; align-items: center; justify-content: center; background: var(--app-fill); border: 1px solid var(--app-border); color: var(--pg-accent); font-size: 24px; margin-bottom: 18px; }
 .pg-empty__title { font-size: 17px; margin-bottom: 6px; color: var(--pg-text); font-weight: 600; }
 .pg-empty__hint { font-size: 13px; max-width: 420px; line-height: 1.6; }
@@ -192,14 +192,46 @@
 .pg-approval-cancel { background: var(--pg-border); color: var(--pg-muted); }
 .pg-approval-cancel:hover:not(:disabled) { background: var(--pg-surface-2); color: var(--pg-text); }
 
-/* ── 快捷提示词 ── */
-.pg-prompts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; max-width: 720px; width: 100%; margin-top: 24px; }
-.pg-prompt { text-align: left; background: var(--pg-surface); border: 1px solid var(--pg-border); border-radius: 10px; padding: 12px 14px; cursor: pointer; color: var(--pg-text); transition: border-color 120ms ease, background 120ms ease, transform 120ms ease; }
-.pg-prompt:hover:not(:disabled) { border-color: var(--app-border); background: var(--app-fill-soft); transform: translateY(-1px); }
+/* ── 推荐问题：问题为主，来源用图标轻提示 ── */
+.pg-recommendations { width: 100%; max-width: 740px; margin-top: 32px; text-align: left; }
+.pg-recommendations__header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.pg-recommendations__header h2 { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 17px; font-weight: 600; color: var(--pg-text); }
+.pg-recommendations__spark { color: var(--pg-accent); font-size: 15px; }
+.pg-recommendations__header p, .pg-recommendations__note { margin: 0; font-size: 12px; line-height: 1.6; color: var(--pg-muted); }
+.pg-recommendations__refresh, .pg-recommendations__status button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; background: transparent; border: 1px solid transparent; border-radius: var(--app-radius); padding: 6px 10px; color: var(--pg-muted); font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; transition: color 160ms ease, background 160ms ease; }
+.pg-recommendations__refresh:hover:not(:disabled), .pg-recommendations__status button:hover:not(:disabled) { color: var(--pg-text); background: var(--app-fill); }
+.pg-recommendations__refresh:disabled, .pg-recommendations__status button:disabled { opacity: 0.5; cursor: not-allowed; }
+.pg-recommendations__status { min-height: 120px; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 12px; color: var(--pg-muted); font-size: 13px; background: var(--app-fill-soft); border-radius: calc(var(--app-radius) * 2); padding: 20px; }
+.pg-recommendations__status button { color: var(--pg-accent); }
+.pg-recommendations__note { margin-top: 16px; text-align: center; }
+.pg-prompts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; width: 100%; margin: 0; padding: 0; list-style: none; }
+.pg-prompts > li { min-width: 0; }
+.pg-prompt { box-sizing: border-box; position: relative; width: 100%; height: 100%; min-height: 96px; display: flex; align-items: center; gap: 14px; text-align: left; background: var(--app-fill-soft); border: 1px solid var(--pg-border-soft); border-radius: calc(var(--app-radius) * 2); padding: 18px; cursor: pointer; color: var(--pg-text); transition: border-color 160ms ease, background 160ms ease; }
+.pg-prompt:hover:not(:disabled), .pg-prompt:focus-visible { border-color: var(--pg-accent); background: var(--pg-surface); }
 .pg-prompt:disabled { cursor: not-allowed; opacity: 0.5; }
-.pg-prompt__icon { width: 26px; height: 26px; border-radius: 7px; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
-.pg-prompt__title { font-size: 13px; font-weight: 500; color: var(--pg-text); }
-.pg-prompt__desc { font-size: 12px; color: var(--pg-muted); line-height: 1.5; }
+.pg-recommendations button:focus-visible { outline: 2px solid var(--pg-accent); outline-offset: 3px; }
+.pg-prompt__icon { width: 32px; height: 32px; flex: 0 0 32px; display: grid; place-items: center; border-radius: 10px; background: var(--app-fill); color: var(--pg-muted); font-size: 17px; }
+.pg-prompt--memory .pg-prompt__icon { background: var(--app-accent-soft); color: var(--pg-accent); }
+.pg-prompt__title { flex: 1; min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-size: 14px; line-height: 1.65; font-weight: 400; color: var(--pg-text); overflow-wrap: anywhere; }
+.pg-prompt__arrow { flex: 0 0 auto; color: var(--pg-muted); font-size: 12px; transition: color 160ms ease, transform 160ms ease; }
+.pg-prompt:hover:not(:disabled) .pg-prompt__arrow, .pg-prompt:focus-visible .pg-prompt__arrow { color: var(--pg-accent); transform: translateX(3px); }
+.pg-prompt--skeleton { cursor: default; pointer-events: none; }
+.pg-prompt--skeleton .pg-prompt__icon, .pg-prompt__skeleton-lines i { background: var(--app-fill-strong); animation: pg-recommendation-pulse 1.8s ease-in-out infinite; }
+.pg-prompt__skeleton-lines { display: flex; flex: 1; flex-direction: column; gap: 10px; }
+.pg-prompt__skeleton-lines i { display: block; height: 10px; border-radius: 4px; }
+.pg-prompt__skeleton-lines i:last-child { width: 65%; }
+.pg-recommendations__sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+@keyframes pg-recommendation-pulse { 50% { opacity: 0.35; } }
+@container (max-width: 620px) {
+  .pg-recommendations { margin-top: 24px; }
+  .pg-prompts { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .pg-prompt { min-height: 76px; padding: 14px 16px; }
+  .pg-recommendations__header { gap: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pg-recommendations *, .pg-recommendations *::before { animation: none !important; transition: none !important; }
+  .pg-prompt:hover:not(:disabled) .pg-prompt__arrow, .pg-prompt:focus-visible .pg-prompt__arrow { transform: none; }
+}
 
 /* ── 执行过程（内联步骤流，作为回答卡片的头部） ── */
 .execution-inline { display: flex; flex-direction: column; gap: 4px; }

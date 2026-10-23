@@ -15,6 +15,13 @@ vi.mock('../../api/agent', () => ({
   getConversationTurnDetail: vi.fn(),
 }));
 vi.mock('../../api/admin', () => ({ listTraces: vi.fn().mockResolvedValue({ items: [] }), getTimeline: vi.fn() }));
+vi.mock('../../api/questionRecommendations', () => ({
+  RECOMMENDATION_HISTORY_LIMIT: 18,
+  getQuestionRecommendations: vi.fn().mockResolvedValue({
+    mode: 'personalized',
+    items: [{ id: 'tomato', question: '番茄采收前需要注意什么？', basis: 'memory' }],
+  }),
+}));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -30,6 +37,17 @@ beforeEach(() => {
 });
 
 describe('Playground 执行界面交互', () => {
+  it('点击推荐填入输入框并聚焦，用户发送前不调用 Agent', async () => {
+    render(<Playground />);
+    fireEvent.click(await screen.findByRole('button', { name: /番茄采收前/ }));
+    const input = screen.getByRole('textbox', { name: '对话输入' });
+    expect(input).toHaveValue('番茄采收前需要注意什么？');
+    expect(input).toHaveFocus();
+    expect(api.streamChat).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: '发送' }));
+    await waitFor(() => expect(api.streamChat).toHaveBeenCalled());
+  });
+
   it('发送后在对话内联展示执行步骤，新会话不保留旧记录', async () => {
     render(<Playground />);
     fireEvent.change(screen.getByRole('textbox', { name: '对话输入' }), { target: { value: '查询天气' } });
