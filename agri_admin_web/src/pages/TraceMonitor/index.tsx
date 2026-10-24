@@ -1,3 +1,4 @@
+import { PageShell } from '../../components/PageShell';
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import type { CSSProperties, KeyboardEvent } from 'react';
 import {
@@ -8,7 +9,6 @@ import {
   Modal,
   Drawer,
   DatePicker,
-  Typography,
   Tag,
   Pagination,
   Tooltip,
@@ -2065,10 +2065,7 @@ export default function TraceMonitor() {
   };
 
   return (
-    <div className="trace-monitor">
-      <Typography.Title level={4} style={{ color: TEXT, marginBottom: 16 }}>
-        链路追踪
-      </Typography.Title>
+    <PageShell className="trace-monitor" title="链路追踪" description="检索请求链路，查看执行节点、耗时与异常。">
 
       {/* 筛选区 */}
       <Space style={{ marginBottom: 16 }} wrap>
@@ -2368,6 +2365,6 @@ export default function TraceMonitor() {
           <NodeTraceVisualization node={nodeDetail} />
         ) : null}
       </Drawer>
-    </div>
+    </PageShell>
   );
 }

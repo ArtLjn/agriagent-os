@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button, Modal, Tooltip, message } from 'antd';
-import { CopyOutlined, DeleteOutlined, InboxOutlined, LinkOutlined, LoadingOutlined, MenuFoldOutlined, MenuUnfoldOutlined, ProfileOutlined, RollbackOutlined } from '@ant-design/icons';
+import { Button, Dropdown, Modal, message } from 'antd';
+import { CopyOutlined, DeleteOutlined, InboxOutlined, LinkOutlined, LoadingOutlined, MenuFoldOutlined, MenuUnfoldOutlined, MoreOutlined, ProfileOutlined, RollbackOutlined } from '@ant-design/icons';
 import { archiveConversation, deleteConversation, listConversations, type ConversationItem } from '../../api/agent';
 import { buildConversationRows } from './conversationRows';
 
@@ -96,17 +96,17 @@ export function ConversationSidebar(props: Props) {
     <aside className={`pg-sidebar${collapsed ? ' pg-sidebar--collapsed' : ''}`} aria-label="会话列表">
       <div className="pg-sidebar__header">
         {!collapsed && <span>{archived ? '草稿箱' : '会话'} <span className="pg-sidebar__count">{rows.length}</span></span>}
-        <Button type="text" aria-label={collapsed ? '展开侧边栏' : '折叠侧边栏'}
+        <Button type="text" aria-label={collapsed ? '展开会话列表' : '收起会话列表'}
           icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} onClick={props.onCollapse} />
       </div>
       {!collapsed && <div className="pg-sidebar__tabs" role="tablist" aria-label="会话分类">
         <button type="button" role="tab" aria-selected={!archived} disabled={Boolean(busy)} onClick={() => { if (archived) changeTab(false); }}>会话</button>
-        <button type="button" role="tab" aria-selected={archived} disabled={Boolean(busy)} onClick={() => { if (!archived) changeTab(true); }}><InboxOutlined /> 草稿箱</button>
+        <button type="button" role="tab" aria-selected={archived} disabled={Boolean(busy)} onClick={() => { if (!archived) changeTab(true); }}><InboxOutlined aria-hidden /> 草稿箱</button>
       </div>}
       {archived && !collapsed && <p className="pg-sidebar__hint">已归档的会话，可恢复或删除</p>}
       {actionError && !deleteTarget && <p className="pg-sidebar__hint" role="alert">{actionError}</p>}
       <div className="pg-sidebar__list surface-scroll" aria-busy={loading}>
-        {rows.map((item) => {
+        {!collapsed && rows.map((item) => {
           const id = item.conversation_id;
           const local = 'local' in item && item.local;
           const running = Boolean(sessions[id]?.loading);
@@ -114,22 +114,22 @@ export function ConversationSidebar(props: Props) {
           return <div key={id} className={`pg-session${id === props.sessionId ? ' pg-session--active' : ''}`}>
             <button type="button" className="pg-session__select" title={title} aria-label={`查看会话：${title}`}
               disabled={Boolean(busy)} onClick={() => props.onSelect(id, archived)}>
-              {collapsed ? <span className="pg-session__dot">{id.slice(-2)}</span> : <>
-                <span className="pg-session__title">{running && <LoadingOutlined />} {title}</span>
-                <span className="pg-session__meta">{new Date(item.last_at).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} · {item.message_count} 条</span>
-              </>}
+              <span className="pg-session__title">{running && <LoadingOutlined />} {title}</span>
+              <span className="pg-session__meta">{new Date(item.last_at).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} · {item.message_count} 条</span>
             </button>
-            {!collapsed && <div className="pg-session__actions">
-              {archived ? <>
-                <Tooltip title="恢复会话"><Button type="text" size="small" aria-label="恢复会话" icon={<RollbackOutlined />} disabled={Boolean(busy) || running} onClick={() => void mutate(item)} /></Tooltip>
-                <Tooltip title="删除会话"><Button type="text" size="small" danger aria-label="删除会话" icon={<DeleteOutlined />} disabled={Boolean(busy) || running} onClick={() => setDeleteTarget(item)} /></Tooltip>
-              </> : <>
-                <Tooltip title="复制 Session ID"><Button type="text" size="small" aria-label="复制 Session ID" icon={<CopyOutlined />} onClick={() => props.onCopyId(id)} /></Tooltip>
-                <Tooltip title="跳转链路追踪"><Button type="text" size="small" aria-label="跳转链路追踪" icon={<LinkOutlined />} onClick={() => props.onTrace(id)} /></Tooltip>
-                <Tooltip title="复制调试 JSON"><Button type="text" size="small" aria-label="复制调试 JSON" icon={<ProfileOutlined />} onClick={() => props.onCopyJson(id)} /></Tooltip>
-                <Tooltip title={running ? '生成结束后可归档' : '归档到草稿箱'}><Button type="text" size="small" aria-label="归档到草稿箱" icon={<InboxOutlined />} loading={busy === id} disabled={Boolean(busy) || running || Boolean(local)} onClick={() => void mutate(item)} /></Tooltip>
-              </>}
-            </div>}
+            <Dropdown trigger={['click']} placement="bottomRight" autoFocus menu={{ 'aria-label': '会话操作', items: archived ? [
+              { key: 'restore', label: '恢复会话', icon: <RollbackOutlined aria-hidden />, disabled: Boolean(busy) || running, onClick: () => void mutate(item) },
+              { key: 'delete', label: '删除会话', icon: <DeleteOutlined aria-hidden />, danger: true, disabled: Boolean(busy) || running, onClick: () => setDeleteTarget(item) },
+            ] : [
+              { key: 'copy', label: '复制 Session ID', icon: <CopyOutlined aria-hidden />, onClick: () => props.onCopyId(id) },
+              { key: 'trace', label: '跳转链路追踪', icon: <LinkOutlined aria-hidden />, onClick: () => props.onTrace(id) },
+              { key: 'json', label: '复制调试 JSON', icon: <ProfileOutlined aria-hidden />, onClick: () => props.onCopyJson(id) },
+              { type: 'divider' },
+              { key: 'archive', label: '归档到草稿箱', icon: <InboxOutlined aria-hidden />, disabled: Boolean(busy) || running || Boolean(local), onClick: () => void mutate(item) },
+            ] }}>
+              <Button type="text" className="pg-session__actions" aria-label={`会话操作：${title}`}
+                aria-haspopup="menu" icon={<MoreOutlined aria-hidden />} loading={busy === id} />
+            </Dropdown>
           </div>;
         })}
         {!collapsed && loading && <p className="pg-sidebar__hint" role="status">加载中…</p>}

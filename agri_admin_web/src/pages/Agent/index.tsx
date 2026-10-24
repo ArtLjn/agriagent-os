@@ -4,6 +4,7 @@ import { SendOutlined, BulbOutlined, FileTextOutlined, HistoryOutlined } from '@
 import { approveTurn, streamChat, type PendingAction } from '../../api/agent';
 import { personalizationApi, type PersonalizationSettings } from '../../api/personalization';
 import { listCycles, type CropCycleListItem } from '../../api/cycles';
+import { PageShell } from '../../components/PageShell';
 import { MarkdownContent } from '../../components/MarkdownContent';
 import { palette } from '../../styles/theme';
 
@@ -28,7 +29,7 @@ export default function Agent() {
   }, []);
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <PageShell title="AI 助手" description="围绕种植、农事和经营数据，与田掌柜协作。">
       <Tabs
         style={{ flex: 1 }}
         items={[
@@ -38,7 +39,7 @@ export default function Agent() {
           { key: 'history', label: <span><HistoryOutlined /> 历史</span>, children: <HistoryTab cycleId={selectedCycle} /> },
         ]}
       />
-    </div>
+    </PageShell>
   );
 }
 
@@ -159,7 +160,7 @@ function ChatTab({ cycles, selectedCycle, setSelectedCycle }: { cycles: CropCycl
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 180px)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: 'clamp(360px, calc(100dvh - 260px), 760px)' }}>
       <div style={{ marginBottom: 12 }}>
         <Space style={{ marginRight: 16 }}><Switch aria-label="临时对话" checked={temporary} disabled={loading} onChange={(value) => { setTemporary(value); setSessionId(generateSessionId()); setMessages([]); }} />临时对话</Space>
         <Select placeholder="关联茬口（可选）" allowClear style={{ width: 220 }}
@@ -212,7 +213,7 @@ function ChatTab({ cycles, selectedCycle, setSelectedCycle }: { cycles: CropCycl
 /* agri_backend_v2 当前只提供 Agent 对话和审批流；每日建议、报告、历史接口尚未纳入 agri_backend_v2。 */
 function V2Unavailable({ title }: { title: string }) {
   return (
-    <div style={{ height: 'calc(100vh - 220px)', display: 'grid', placeItems: 'center', color: TEXT_DIM }}>
+    <div style={{ minHeight: 320, display: 'grid', placeItems: 'center', color: TEXT_DIM }}>
       <Typography.Text style={{ color: TEXT_DIM }}>{title}暂未接入 v2 Agent 接口</Typography.Text>
     </div>
   );

@@ -20,8 +20,7 @@ import LoginScene from './LoginScene';
 import type { LoginTheme } from './LoginScene';
 import './login.css';
 
-const FONT_FAMILY =
-  "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', Inter, ui-sans-serif, system-ui, sans-serif";
+const FONT_FAMILY = 'var(--app-font-sans)';
 
 const loginThemes: Record<LoginTheme, ThemeConfig> = {
   light: {

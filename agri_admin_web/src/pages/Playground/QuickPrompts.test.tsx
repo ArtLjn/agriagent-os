@@ -13,6 +13,23 @@ const data: QuestionRecommendations = {
 beforeEach(() => { vi.clearAllMocks(); api.mockResolvedValue(data); });
 
 describe('个性化推荐问题', () => {
+  it('首屏只显示三条建议，展开后可选其余问题，刷新恢复紧凑状态', async () => {
+    const items = Array.from({ length: 6 }, (_, index) => ({ id: `q-${index}`, question: `问题 ${index + 1}`, basis: 'explore' as const }));
+    api.mockResolvedValue({ mode: 'explore', items });
+    const select = vi.fn();
+    render(<QuickPrompts onSelect={select} />);
+    await screen.findByRole('button', { name: '问题 1' });
+    expect(screen.getAllByRole('button', { name: /^问题/ })).toHaveLength(3);
+    fireEvent.click(screen.getByRole('button', { name: '更多建议' }));
+    expect(screen.getAllByRole('button', { name: /^问题/ })).toHaveLength(6);
+    expect(screen.getByRole('button', { name: '收起建议' })).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(screen.getByRole('button', { name: '问题 6' }));
+    expect(select).toHaveBeenCalledWith('问题 6');
+    fireEvent.click(screen.getByRole('button', { name: '换一批' }));
+    await screen.findByRole('button', { name: '更多建议' });
+    expect(screen.getAllByRole('button', { name: /^问题/ })).toHaveLength(3);
+  });
+
   it('展示动态问题，点击只交给输入框回调', async () => {
     const select = vi.fn();
     render(<QuickPrompts onSelect={select} userToken="user-a" />);

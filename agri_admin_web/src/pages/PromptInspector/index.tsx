@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import {
   Alert,
   Input,
-  Typography,
   Button,
   Table,
   Tag,
@@ -12,9 +11,10 @@ import {
   Descriptions,
   message,
 } from 'antd';
-import { FileSearchOutlined, ReloadOutlined } from '@ant-design/icons';
+import { ReloadOutlined } from '@ant-design/icons';
 import { listPrompts, reloadPrompts, type PromptItem } from '../../api/admin';
 import { palette } from '../../styles/theme';
+import { PageShell } from '../../components/PageShell';
 
 const CARD_BG = palette.bgElevated;
 const BORDER = palette.border;
@@ -106,19 +106,10 @@ export default function PromptManagement() {
   ];
 
   return (
-    <div>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: 16,
-        }}
-      >
-        <Typography.Title level={4} style={{ color: TEXT, margin: 0 }}>
-          <FileSearchOutlined style={{ marginRight: 8 }} />
-          Prompt 管理
-        </Typography.Title>
+    <PageShell
+      title="Prompt 管理"
+      description="查看和检索当前运行的提示词模板。"
+      actions={
         <Button
           type="primary"
           icon={<ReloadOutlined />}
@@ -127,7 +118,8 @@ export default function PromptManagement() {
         >
           重新加载模板
         </Button>
-      </div>
+      }
+    >
 
       <Alert type="info" showIcon message="查看当前运行模板；内容版本随模板变化。修改由源文件版本控制管理，重新加载仅作用于当前 Agent 进程的新建上下文。" style={{ marginBottom: 16 }} />
       <Input.Search aria-label="搜索提示词" placeholder="搜索名称或内容" value={keyword} onChange={(event) => setKeyword(event.target.value)} style={{ marginBottom: 16, maxWidth: 400 }} />
@@ -219,6 +211,6 @@ export default function PromptManagement() {
           </div>
         )}
       </Modal>
-    </div>
+    </PageShell>
   );
 }

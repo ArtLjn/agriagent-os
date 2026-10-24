@@ -172,7 +172,7 @@ export default function MemoryPanel() {
   ).length;
 
   return (
-    <Space direction="vertical" size={16} style={{ width: "100%" }}>
+    <div className="settings-stack memory-panel">
       {demo && (
         <DemoNotice description="后端记忆接口尚未接入，修改只在本次页面会话中生效。" />
       )}
@@ -268,7 +268,7 @@ export default function MemoryPanel() {
           </Space>
         )}
         right={(
-          <Space>
+          <Space wrap>
             <Button type="primary" onClick={() => setCreating(true)}>新增记忆</Button>
             <Button icon={<ReloadOutlined />} onClick={() => void fetchMemories()}>
               刷新
@@ -310,6 +310,6 @@ export default function MemoryPanel() {
           }}
         />
       )}
-    </Space>
+    </div>
   );
 }
