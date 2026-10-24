@@ -168,6 +168,32 @@ def test_semantic_fusion_and_diversity_do_not_rewrite_negative_facts():
     assert len(result) <= memory_runtime.context_card_limit and records == original
 
 
+def test_fusion_protects_recent_lexical_evidence_without_injecting_unrelated_records():
+    records = [
+        {
+            "memory_id": str(i),
+            "text": "休息时喜欢看喜剧片",
+            "key": "休闲",
+            "last_observed_at": i,
+        }
+        for i in range(30)
+    ]
+    records.append(
+        {
+            "memory_id": "unrelated",
+            "text": "工作时检查蓝莓棚",
+            "key": "工作",
+            "last_observed_at": 100,
+        }
+    )
+    result = rank_context_records(
+        records, [str(i) for i in range(30)], [str(i) for i in range(24)]
+    )
+    ids = {m["memory_id"] for m in result}
+    assert {"28", "29"} <= ids and "unrelated" not in ids
+    assert len(result) <= memory_runtime.context_card_limit
+
+
 def test_fast_render_budget_never_splits_positive_and_negative(monkeypatch):
     doc = new_document("u")
     selected = [

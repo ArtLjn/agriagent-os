@@ -38,6 +38,8 @@ QuillRAG 使用 Cloudflare BGE-M3 时，配置 `EMBEDDING_PROVIDER=openai`、`EM
 
 回答前固定运行主动记忆检索，默认 `MEMORY_CONTEXT_MODE=retrieve`：Mongo 词项召回与 QuillRAG 语义召回并行，经 RRF、多样性排序及权威版本回查，将原子事实放在当前问题之前，由主模型判断条件、否定与用途。此路径没有额外的记忆阅读模型调用；需要对照旧阅读器时可设置 `MEMORY_CONTEXT_MODE=read`，总时限仍由 `MEMORY_CONTEXT_COMPILE_TIMEOUT=12` 控制。
 
+主动检索的词项窗口按实际观察时间取样，避免数据库自然次序反复只取旧记录。融合在本次词项命中的有效候选中，最多保护两张最近观察的卡片；仍沿用 12 张总预算、权限过滤与最终正文预算，不注入无关最近消息，不把后台迁移时间视作新事实。
+
 `MEMORY_CONTEXT_TIMEOUT=3` 控制单次存储准备边界，`MEMORY_RETRIEVE_TIMEOUT=2` 控制语义请求（包括两种权限范围）；语义故障降级词项召回，Trace 明确记录 timeout/unavailable/lexical_fallback。每路最多 24 个语义候选、融合最多 12 张卡片；仍限制 60 条原子事实、12KB 阅读材料和最终 3000 字符/保守 token 双预算。整张卡片必须同时满足预算，避免只留下喜欢而截掉禁忌。
 
 配置样例默认 `context.skill_router_mode=llm_router`、`tool_schema_mode=candidate`、路由超时 5 秒。旧部署的显式配置不会自动覆盖，升级时同步修改配置并重启。路由与记忆检索并行，普通闲聊允许空业务工具集；路由故障仍回全目录。`context.estimate_steps=false`（或 `CONTEXT__ESTIMATE_STEPS=false`）跳过额外步数预估调用，运行时硬步数与工具结果预算继续生效。

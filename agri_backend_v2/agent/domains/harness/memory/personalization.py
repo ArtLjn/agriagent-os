@@ -292,6 +292,18 @@ def rank_context_records(
         next((identifier for identifier in ids if identifier in remaining), None)
         for ids in (lexical_ids, semantic_ids)
     } - {None}
+    # 只在本次词项命中的有效候选中保护最近观察，避免大量旧泛化向量
+    # 把刚学到的事实全部挤掉；不拉入无关最近消息，也不扩大最终卡片预算。
+    recent = sorted(
+        (
+            remaining[i]
+            for i in lexical_ids
+            if i in remaining and remaining[i].get("last_observed_at", 0) > 0
+        ),
+        key=lambda m: m["last_observed_at"],
+        reverse=True,
+    )[: memory_runtime.context_recent_limit]
+    leaders.update(m["memory_id"] for m in recent)
     for identifier in sorted(leaders, key=lambda key: (-scores[key], key)):
         if len(selected) >= memory_runtime.context_card_limit:
             break

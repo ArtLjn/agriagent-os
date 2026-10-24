@@ -160,6 +160,7 @@ async def hydrate(
                     *(
                         records.find({**where, "terms": term}, {"record": 1})
                         .hint([("owner", 1), ("terms", 1)])
+                        .sort("record.last_observed_at", -1)
                         .limit(per_term)
                         .to_list(length=per_term)
                         for _, term in ranked_terms

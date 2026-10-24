@@ -578,6 +578,7 @@ class MemoryRuntimeCfg:
     retrieval_limit: int = 24
     fusion_rank_constant: int = 60
     context_card_limit: int = 12
+    context_recent_limit: int = 2
     duplicate_similarity: float = 0.85
     context_compile_timeout: float = field(
         default_factory=lambda: float(os.getenv("MEMORY_CONTEXT_COMPILE_TIMEOUT", "12"))
