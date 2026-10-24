@@ -565,6 +565,13 @@ class MemoryRuntimeCfg:
     context_timeout: float = field(
         default_factory=lambda: float(os.getenv("MEMORY_CONTEXT_TIMEOUT", "1.5"))
     )
+    context_compile_timeout: float = field(
+        default_factory=lambda: float(os.getenv("MEMORY_CONTEXT_COMPILE_TIMEOUT", "12"))
+    )
+    context_fact_limit: int = 60
+    context_selection_limit: int = 8
+    context_search_limit: int = 2
+    context_history_chars: int = 1500
     index_batch_size: int = 3
     assessment_timeout: float = field(
         default_factory=lambda: float(os.getenv("MEMORY_ASSESSMENT_TIMEOUT", "15"))
@@ -612,6 +619,7 @@ class MemoryRuntimeCfg:
         for name in (
             "assessment_timeout",
             "context_timeout",
+            "context_compile_timeout",
             "retrieve_timeout",
             "index_timeout",
             "poll_seconds",

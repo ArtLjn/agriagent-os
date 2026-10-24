@@ -45,6 +45,7 @@ async def load(
     keys=(),
     slots=(),
     limit=60,
+    diversify: bool = False,
 ) -> dict:
     """存储故障必须与没有配置区分，禁止将故障伪装为空记录。"""
     try:
@@ -67,6 +68,7 @@ async def load(
                     keys=keys,
                     slots=slots,
                     limit=limit,
+                    diversify=diversify,
                 )
                 latest = await coll.find_one({"_id": owner}, {"revision": 1})
                 if latest and latest["revision"] == doc["revision"]:

@@ -340,6 +340,7 @@ def bundle_to_messages(bundle: ContextBundle) -> list[dict[str, Any]]:
     """先放系统上下文，再按原角色放历史，最后放当前输入，保留对话续接关系。"""
     messages: list[dict[str, Any]] = []
     history: list[dict[str, Any]] = []
+    personalization: list[dict[str, Any]] = []
     current_input: list[dict[str, Any]] = []
     for item in bundle.blocks:
         if item.status not in {
@@ -351,7 +352,7 @@ def bundle_to_messages(bundle: ContextBundle) -> list[dict[str, Any]]:
             continue
         if item.key == "personalization":
             # 用户偏好不具备系统级权限，保持来源层级以抵抗持久提示注入。
-            messages.append({"role": "user", "content": str(item.content)})
+            personalization.append({"role": "user", "content": str(item.content)})
             continue
         if item.key == "latest_exchange" and isinstance(item.content, list):
             history.extend(_dialogue_messages(item.content))
@@ -367,7 +368,7 @@ def bundle_to_messages(bundle: ContextBundle) -> list[dict[str, Any]]:
                 else json.dumps(item.content, ensure_ascii=False)
             )
             messages.append({"role": "system", "content": content})
-    return messages + history + current_input
+    return messages + history + personalization + current_input
 
 
 def build_initial_messages(

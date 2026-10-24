@@ -152,6 +152,37 @@ async def test_generated_text_is_never_user_evidence(role, memory_assessment_stu
     memory_assessment_stub.assert_not_called()
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "authorized,supported", [(True, True), (False, True), (True, False)]
+)
+async def test_missing_evidence_uses_current_input_without_bypassing_delete_checks(
+    collection, memory_assessment_stub, grounding_stub, authorized, supported
+):
+    from agent.domains.harness.memory.personalization import MemoryCreate
+
+    await store.create_memory(
+        "u",
+        "f",
+        MemoryCreate(memory_id="puzzle", key="puzzle", text="拼图选400片，不买1000片"),
+    )
+    memory_assessment_stub.return_value = tools.MemoryAssessment(
+        authorized=authorized, requests_persistence=authorized
+    )
+    grounding_stub.return_value = supported
+    turn = Turn(user_id="u", farm_uid="f", user_input="请删除整条拼图片数长期记忆")
+    result = await tools.execute(
+        turn, {"action": "forget", "memory_id": "puzzle"}, "delete"
+    )
+    assert result.get("persisted") is (authorized and supported)
+    assert (
+        memory_assessment_stub.call_args.kwargs["command"]["evidence"]
+        == turn.user_input
+    )
+    record = (await store.load("u"))["memories"][0]
+    assert record["status"] == ("deleted" if authorized and supported else "active")
+
+
 def test_authorization_history_is_bounded_and_uses_only_original_snapshot():
     turn = Turn(
         memory_snapshot={

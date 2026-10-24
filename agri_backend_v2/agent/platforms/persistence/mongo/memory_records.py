@@ -80,6 +80,7 @@ async def hydrate(
     keys=(),
     slots=(),
     limit=RETRIEVAL_LIMIT,
+    diversify=False,
 ):
     """查询仅能命中已发布版本；按条件过滤后在数据库中排序和限制返回量。"""
     references = document.get("memory_refs")
@@ -151,7 +152,23 @@ async def hydrate(
             rare = [
                 term for count, term in ranked_terms if count <= ranked_terms[0][0] * 2
             ][:3]
-            if rare:
+            if diversify and ranked_terms:
+                # 任务阅读的补查需要覆盖不同线索，不能让低频噪声挤掉“在家”等场景词。
+                # 每个非空词项均分同一候选预算，仍走 owner/terms 索引并回查已发布版本。
+                per_term = max(1, limit // len(ranked_terms))
+                windows = await asyncio.gather(
+                    *(
+                        records.find({**where, "terms": term}, {"record": 1})
+                        .hint([("owner", 1), ("terms", 1)])
+                        .limit(per_term)
+                        .to_list(length=per_term)
+                        for _, term in ranked_terms
+                    )
+                )
+                found = list(
+                    {r["_id"]: r for window in windows for r in window}.values()
+                )
+            elif rare:
                 found = (
                     await records.find({**where, "terms": {"$in": rare}}, {"record": 1})
                     .hint([("owner", 1), ("terms", 1)])
