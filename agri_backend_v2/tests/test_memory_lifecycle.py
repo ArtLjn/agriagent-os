@@ -698,6 +698,7 @@ async def test_extraction_accepts_provider_envelope_and_normalizes_values(
 ):
     from agent.platforms.llm import client
 
+    monkeypatch.setattr(learning, "verify_extraction", AsyncMock())
     candidates = [
         {
             "key": "response.detail_level",
@@ -971,6 +972,7 @@ async def test_temporary_observation_is_filtered_before_existing_memory_alignmen
 ):
     from agent.platforms.llm import client
 
+    monkeypatch.setattr(learning, "verify_extraction", AsyncMock())
     create = AsyncMock(
         return_value=SimpleNamespace(
             choices=[

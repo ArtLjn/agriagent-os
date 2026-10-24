@@ -58,6 +58,8 @@ logger = logging.getLogger(__name__)
 
 # 默认 farm_id（与 business 一致，archive 的 farms 表第 1 行）。
 _DEFAULT_FARM_ID = 1
+# 更换事实协议时同时更换事件字段，旧消费者只扫描旧字段，不能抢走新版任务。
+MEMORY_LEARNING_EVENT = "memoryLearningV2"
 
 
 _client: AsyncIOMotorClient | None = None
@@ -356,9 +358,11 @@ async def ensure_indexes() -> None:
             name="idx_messages_turn_created",
         )
         await coll.create_index(
-            [("memoryLearning.status", 1), ("createdAt", 1)],
-            name="idx_messages_memory_outbox",
-            partialFilterExpression={"memoryLearning.status": {"$exists": True}},
+            [(f"{MEMORY_LEARNING_EVENT}.status", 1), ("createdAt", 1)],
+            name="idx_messages_memory_outbox_v2",
+            partialFilterExpression={
+                f"{MEMORY_LEARNING_EVENT}.status": {"$exists": True}
+            },
         )
         await coll.create_index(
             [("farmId", 1), ("conversationId", 1), ("idempotencyKey", 1)],
@@ -478,7 +482,7 @@ async def append_message(
             doc["idempotencyKey"] = idempotency_key
         if learning_event and role == "user" and normalized_kind == "prompt":
             # 与原文同一文档提交，进程在派发前退出也不会丢失学习事件。
-            doc["memoryLearning"] = learning_event
+            doc[MEMORY_LEARNING_EVENT] = learning_event
         result = await coll.insert_one(doc)
         return str(result.inserted_id)
     except Exception as exc:  # noqa: BLE001

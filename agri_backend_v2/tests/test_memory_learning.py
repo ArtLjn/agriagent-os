@@ -337,6 +337,7 @@ async def test_extraction_cannot_supply_a_merged_text_before_alignment(monkeypat
     from agent.platforms.llm import client
 
     payload = {"candidates": [fruit(merged_text="模型虚构内容").model_dump()]}
+    monkeypatch.setattr(learning, "verify_extraction", AsyncMock())
     monkeypatch.setattr(
         client._async_client.chat.completions,
         "create",
