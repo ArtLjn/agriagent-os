@@ -10,7 +10,7 @@ from pathlib import Path
 from fastapi import HTTPException
 
 from agent.api import api_router
-from agent.config import settings
+from agent.config import memory_runtime, settings
 from agent.deps import pending_approvals
 from agent.platforms.persistence.mongo import chat_store
 from agent.platforms.persistence.redis.redis_store import (
@@ -45,7 +45,15 @@ async def health() -> dict:
         "active_turns": await _active_turn_count(),
         "redis": redis,
         "mongo": mongo,
-        "runtime": {"started_at": _STARTED_AT, "memory_build": _MEMORY_BUILD},
+        "runtime": {
+            "started_at": _STARTED_AT,
+            "memory_build": _MEMORY_BUILD,
+            "memory_mode": memory_runtime.context_mode,
+            "memory_semantic_configured": bool(
+                memory_runtime.rag_url and memory_runtime.rag_api_key
+            ),
+            "skill_router_mode": settings.context.skill_router_mode,
+        },
     }
 
 

@@ -86,21 +86,26 @@ async def observe(
 __all__ = ["observe", "search"]
 
 
-async def _load_context_candidates(user_id: str, farm_uid: str, query: str) -> dict:
+async def _load_context_candidates(
+    user_id: str, farm_uid: str, query: str, control: dict | None = None
+) -> dict:
     """有界检索与远程语义补充同受存储超时约束，随后校验发布版本。"""
     import asyncio
 
     from agent.config import memory_runtime
+    from agent.domains.harness.memory.personalization import rank_context_records
     from agent.platforms.persistence.memory_index import retrieve
     from agent.platforms.persistence.mongo import personalization_store as store
 
     async with asyncio.timeout(memory_runtime.context_timeout):
-        doc = await store.load(user_id, query=query, farm_uid=farm_uid)
-        ids = (
-            await retrieve(doc, farm_uid, query)
-            if doc["settings"]["use_saved_memories"]
-            else []
+        control = control or await store.load(user_id, memory_ids=[])
+        diagnostics = {}
+        # 词项和语义是互补候选，远程超时仍保留词项结果，不阻塞正常对话。
+        doc, ids = await asyncio.gather(
+            store.load(user_id, query=query, farm_uid=farm_uid, diversify=True),
+            retrieve(control, farm_uid, query, diagnostics=diagnostics),
         )
+        lexical_ids = [m["memory_id"] for m in doc["memories"]]
         if ids:
             extra = await store.load(user_id, memory_ids=ids)
             if extra["revision"] != doc["revision"]:
@@ -109,6 +114,8 @@ async def _load_context_candidates(user_id: str, farm_uid: str, query: str) -> d
             doc["memories"].extend(
                 m for m in extra["memories"] if m["memory_id"] not in known
             )
+        doc["memories"] = rank_context_records(doc["memories"], lexical_ids, ids)
+        doc["_retrieval"] = diagnostics
         return doc
 
 
@@ -216,12 +223,23 @@ async def get_personalization_context(
     if temporary:
         return {}
     started = time.monotonic()
+    # 短追问仍携带最近的用户话题；助手建议不能当作用户偏好或扩大检索主题。
+    recent_user_text = " ".join(
+        str(message.get("content", ""))
+        for message in (history or [])[-4:]
+        if message.get("role") == "user" and message.get("content") != query
+    )[-memory_runtime.retrieval_history_chars :]
+    retrieval_query = query[: memory_runtime.retrieval_query_chars]
+    if recent_user_text:
+        retrieval_query += "\n最近用户话题：" + recent_user_text
     key = [user_id, farm_uid, query]
     cached = (previous or {}).get("_personalization_cache", {})
     try:
         async with asyncio.timeout(memory_runtime.context_timeout):
             control = await store.load(user_id, memory_ids=[])
         hit = cached.get("key") == key and cached.get("revision") == control["revision"]
+        hit = hit and cached.get("retrieval_query") == retrieval_query
+        hit = hit and cached.get("mode") == memory_runtime.context_mode
         if not control["settings"]["use_saved_memories"]:
             plan = {"selected": [], "candidate_count": 0, "status": "disabled"}
         elif hit:
@@ -236,11 +254,21 @@ async def get_personalization_context(
             plan = {"selected": [], "candidate_count": 0, "status": "unavailable"}
             try:
                 async with asyncio.timeout(memory_runtime.context_compile_timeout):
-                    doc = await _load_context_candidates(user_id, farm_uid, query)
-                    control = doc
-                    plan = await _compile_context(
-                        doc, user_id, farm_uid, query, history or []
+                    doc = await _load_context_candidates(
+                        user_id, farm_uid, retrieval_query, control
                     )
+                    control = doc
+                    if memory_runtime.context_mode == "read":
+                        plan = await _compile_context(
+                            doc, user_id, farm_uid, query, history or []
+                        )
+                    else:
+                        from agent.domains.harness.memory.personalization import (
+                            proactive_context,
+                        )
+
+                        plan = proactive_context(doc, farm_uid, query)
+                    plan["retrieval"] = doc.get("_retrieval", {})
             except (
                 APIError,
                 ValueError,
@@ -252,7 +280,12 @@ async def get_personalization_context(
                     "memory context compilation unavailable code=%s",
                     getattr(exc, "code", "memory_context_compile_failed"),
                 )
-        return await _publish_context(key, control, plan, hit, started)
+        # 查询和模式属于本轮缓存签名，不能跨话题或部署模式复用旧候选。
+        result = await _publish_context(key, control, plan, hit, started)
+        result["_personalization_cache"].update(
+            retrieval_query=retrieval_query, mode=memory_runtime.context_mode
+        )
+        return result
     except (MemoryError, RuntimeError, TimeoutError) as exc:
         logging.getLogger(__name__).warning(
             "personalization unavailable code=%s",
@@ -309,6 +342,8 @@ async def _publish_context(
         "searches": plan.get("searches", []),
         "chars": len(text),
         "elapsed_ms": round((time.monotonic() - started) * 1000),
+        "mode": memory_runtime.context_mode,
+        "retrieval": plan.get("retrieval", {}),
     }
     trace_record(
         node_type="memory",

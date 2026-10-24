@@ -231,7 +231,7 @@ def record(index):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("size", [1000, 10000])
+@pytest.mark.parametrize("size", [1000, 3000, 10000])
 async def test_real_mongo_scale_cas_delete_and_bounded_retrieval(isolated_mongo, size):
     doc = new_document(store.owner_key("u"))
     doc["memories"] = [record(i) for i in range(size)]
@@ -621,6 +621,7 @@ async def test_life_memory_reading_budget_and_cached_concurrency(
             ]
         )
 
+    monkeypatch.setattr(memory_runtime, "context_mode", "read")
     reader = AsyncMock(side_effect=read)
     monkeypatch.setattr(inference, "read_context", reader)
     monkeypatch.setattr(

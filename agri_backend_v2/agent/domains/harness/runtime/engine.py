@@ -197,8 +197,9 @@ async def _prepare_turn_runtime(
 ) -> _TurnRuntime:
     """准备路由、Skill Registry、上下文和 ReAct 所需的运行时状态。"""
     turn.memory_snapshot.pop("personalization", None)
-    turn.memory_snapshot.update(
-        await memory.get_personalization_context(
+    # 工具路由不依赖个人偏好；并行准备避免每轮串行增加两次等待。
+    personalization, route_result = await asyncio.gather(
+        memory.get_personalization_context(
             user_id=turn.user_id,
             farm_uid=turn.farm_uid,
             query=turn.user_input,
@@ -206,10 +207,15 @@ async def _prepare_turn_runtime(
             history=turn.memory_snapshot.get("messages")
             or turn.memory_snapshot.get("recent_turns")
             or [],
-        )
+        ),
+        _route_turn_skills(turn),
     )
-    route_result = await _route_turn_skills(turn)
-    estimated_steps, confidence = await _estimate_turn_budget(turn)
+    turn.memory_snapshot.update(personalization)
+    estimated_steps, confidence = (
+        await _estimate_turn_budget(turn)
+        if settings.context.estimate_steps
+        else (None, None)
+    )
     if route_result is None:
         runtime = _setup_turn_runtime(
             turn,
