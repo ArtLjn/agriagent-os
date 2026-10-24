@@ -11,6 +11,7 @@ from test_agent_step_budget import _ReadSkill, _runtime, _tool
 from test_personalization import Collection
 
 from agent.domains.harness.memory import learning, tools
+from agent.domains.harness.memory.facts import AtomicFact, initialize_atoms
 from agent.domains.harness.memory.personalization import (
     MemoryCreate,
     MemoryPatch,
@@ -19,6 +20,8 @@ from agent.domains.harness.memory.personalization import (
 from agent.domains.harness.runtime import engine
 from agent.domains.harness.runtime.turn import StopReason, Turn
 from agent.platforms.persistence.mongo import personalization_store as store
+
+pytestmark = pytest.mark.usefixtures("memory_writer_stub")
 
 _assess, _grounded = tools.assess, tools.content_is_grounded
 _llm_stream = engine._call_llm_stream
@@ -163,6 +166,15 @@ async def test_new_correction_can_update_explicit_fact_but_other_observation_can
         "expected_revision": doc["revision"],
         "observed_at": timestamp,
         "text": "我不喜欢吃葡萄了",
+        "normalized_atoms": {
+            memory["memory_id"]: initialize_atoms(
+                memory,
+                [
+                    AtomicFact(slot=fruit, text="喜欢" + fruit, evidence=fruit)
+                    for fruit in ("西瓜", "芒果", "葡萄", "草莓")
+                ],
+            )
+        },
     }
     candidate = learning.Candidate(
         key="fruit",
@@ -171,13 +183,17 @@ async def test_new_correction_can_update_explicit_fact_but_other_observation_can
         category="preference",
         relation=relation,
         target_memory_id=memory["memory_id"],
-        merged_text=CORRECTED,
+        slot="葡萄",
+        target_slot="葡萄",
+        scope="user",
     )
     await learning.apply_candidates(task, [candidate])
     records = (await store.load("u"))["memories"]
-    assert len(records) == 1 and records[0]["text"] == (
-        CORRECTED if updated else ORIGINAL
-    )
+    assert len(records) == 1
+    if updated:
+        assert records[0]["text"] == "喜欢西瓜；喜欢芒果；不喜欢葡萄；喜欢草莓"
+    else:
+        assert records[0]["text"] == ORIGINAL
     assert records[0]["source_type"] == ("inferred" if updated else "explicit")
 
 
@@ -308,8 +324,8 @@ async def test_mixed_request_continues_business_and_does_not_reopen_memory(monke
 @pytest.mark.parametrize(
     "action,text,user_input,allowed",
     [
-        ("update", CORRECTED, "我不喜欢吃葡萄了", True),
-        ("update", "喜欢西瓜、芒果和草莓", "我不喜欢吃葡萄了", True),
+        ("update", CORRECTED, "我不喜欢吃葡萄了", False),
+        ("update", "喜欢西瓜、芒果和草莓", "我不喜欢吃葡萄了", False),
         ("update", "喜欢香蕉和草莓", "我不喜欢吃葡萄了", False),
         ("forget", None, "我不喜欢吃葡萄了", False),
         ("forget", None, "忘掉整条水果偏好记忆", True),
@@ -395,6 +411,9 @@ async def test_live_correction_from_model_routing_through_learning(memory, monke
             "expected_revision": doc["revision"],
             "generation": doc["memory_generation"],
             "learning_generation": doc["learning_generation"],
+            "normalized_atoms": {
+                m["memory_id"]: m["atoms"] for m in doc["memories"] if "atoms" in m
+            },
         },
         candidates,
     )

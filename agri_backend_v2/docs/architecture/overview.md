@@ -1,13 +1,17 @@
 ---
 status: implemented-local
-last_updated: 2026-10-23
+last_updated: 2026-10-24
 ---
 # 运行架构与配置补充
 
-主链路与存储布局见 [系统设计](../design.md)。个人记忆由 Agent Worker 在成功普通 Turn 后投递，Mongo 保存权威记录，独立消费者抽取和归并，QuillRAG 索引可重建。学习故障不阻塞正常对话，任务有限重试后清除原文。
+主链路与存储布局见 [系统设计](../design.md)。普通用户消息与学习事件在同一 Mongo 文档原子写入，后台消费者恢复投递并抽取归并，不依赖主对话成败。Mongo 保存权威原子事实，QuillRAG 索引可重建。学习故障不阻塞正常对话，任务有限重试后清除原文。
 
 本次自动学习默认开启，保留用户显式关闭设置。稳定观察直接生效，移除已无用途的 `MEMORY_MIN_TURNS`、`MEMORY_MIN_CONVERSATIONS`、`MEMORY_CANDIDATE_DAYS`，部署中旧值不再控制晋升或有效期。历史候选已有 expires_at 继续有效，新自动记忆没有候选审批和到期门槛。
 
 沿用 `MEMORY_POLL_SECONDS=5`、`MEMORY_LEASE_SECONDS=120`、`MEMORY_ATTEMPTS=3`，读取预算 `MEMORY_CONTEXT_CHARS=3000`、原文上限 `MEMORY_EXTRACTION_CHARS=12000`。显式记忆审查预算由 `MEMORY_ASSESSMENT_TIMEOUT=15` 控制。无需新增服务或数据库迁移，需要发布并重启 Agent 消费者。
 
 数据兼容与边界见 [自动学习与归并](../design/self-learning-memory.md)，完整既有配置见 [长期记忆实施记录](../spec/2026-10-20-agent-personalization-long-term-memory-plan.md)。
+
+`MONGODB__DATABASE` 可覆盖 Agent 数据库名称，与已有 `REDIS__KEY_PREFIX` 配合隔离集成测试；常规部署不设置则继续使用 config.yaml。真实回归使用随机专属库并精确销毁，不指向用户库。
+
+发布后核对 `/api/v2/health.runtime.started_at` 与 `memory_build`（启动时计算的记忆模块源码指纹）；入口没有热重载，修改代码后必须重启。旧消息缺少学习事件时不自动补学，旧复合记忆仅在涉及更新时无损拆分，不需要全库迁移。

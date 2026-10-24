@@ -160,15 +160,25 @@ def context_text(
         settings["reply_style"]
     ]
     records = []
-    terms = set(re.findall(r"[a-zA-Z]+|[\u4e00-\u9fff]{2}", query))
+    from agent.domains.harness.memory.facts import query_terms
+
+    terms = query_terms(query)
     if settings["use_saved_memories"]:
         records = [
-            m for m in visible_memories(document, farm_uid) if m["status"] == "active"
+            m
+            for m in visible_memories(document, farm_uid)
+            if m["status"] == "active"
+            and (
+                not query
+                or m["memory_id"] in (semantic_ids or [])
+                or bool(terms & query_terms(m["text"]))
+                or m.get("category") == "response"
+            )
         ]
         records.sort(
             key=lambda m: (
                 m["memory_id"] in (semantic_ids or []),
-                sum(term in m["text"] for term in terms),
+                len(terms & query_terms(m["text"])),
                 m["source_type"] == "explicit",
                 m["updated_at"],
             ),

@@ -13,6 +13,8 @@ from agent.domains.harness.runtime import engine, verify
 from agent.domains.harness.runtime.turn import Turn
 from agent.platforms.persistence.mongo import personalization_store as store
 
+pytestmark = pytest.mark.usefixtures("memory_writer_stub")
+
 _assess = tools.assess
 _grounded = tools.content_is_grounded
 _CONTENT = "我喜欢吃西瓜芒果葡萄草莓"

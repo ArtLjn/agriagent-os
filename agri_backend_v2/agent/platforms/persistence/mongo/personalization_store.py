@@ -8,6 +8,7 @@ from copy import deepcopy
 from pymongo.errors import DuplicateKeyError, PyMongoError
 
 from agent.config import settings
+from agent.domains.harness.memory.facts import erase_memory
 from agent.domains.harness.memory.personalization import (
     COLLECTION_NAME,
     MAX_MEMORIES,
@@ -177,9 +178,7 @@ async def modify_memory(
     if patch is None:
         doc["memory_generation"] += 1
         doc["memory_control_changed_at"] = time.time()
-        record.update(
-            status="deleted", text="", conditions=[], key="", source_message_ids=[]
-        )
+        erase_memory(record)
     else:
         if patch.expected_revision != record["revision"]:
             raise MemoryError("memory_version_conflict", "记忆已变化，请重新加载")
@@ -188,6 +187,12 @@ async def modify_memory(
         )
         reject_sensitive_text(record["text"] + " " + " ".join(record["conditions"]))
         record["source_type"] = "explicit"
+        if "text" in patch.model_fields_set:
+            # 编辑器提交的是整条权威新正文，旧原子事实不能继续作为有效来源。
+            record.pop("atoms", None)
+            record["evidence_turns"] = []
+            record["source_message_ids"] = []
+            record["evidence_count"] = 1
         record["expires_at"] = None
         if "text" in patch.model_fields_set and "status" not in patch.model_fields_set:
             record["status"] = "active"
@@ -201,6 +206,7 @@ async def clear_memories(user_id: str, farm_uid: str) -> dict:
     doc = await load(user_id)
     records = [m for m in doc["memories"] if m["status"] != "deleted"]
     for record in records:
+        erase_memory(record)
         record.update(
             status="deleted",
             text="",

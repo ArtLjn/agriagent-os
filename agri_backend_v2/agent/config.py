@@ -386,6 +386,8 @@ def _build_settings() -> Settings:
     )
     if env := os.getenv("MONGODB__URI"):
         settings.mongodb.uri = env
+    if env := os.getenv("MONGODB__DATABASE"):
+        settings.mongodb.database = env
     if env := os.getenv("SERVER__HOST"):
         settings.server.host = env
     if env := os.getenv("SERVER__PORT"):

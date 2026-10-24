@@ -2,24 +2,34 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import time
+from pathlib import Path
 
 from fastapi import HTTPException
 
 from agent.api import api_router
 from agent.config import settings
 from agent.deps import pending_approvals
+from agent.platforms.persistence.mongo import chat_store
 from agent.platforms.persistence.redis.redis_store import (
     get_client,
     key,
+)
+from agent.platforms.persistence.redis.redis_store import (
     status as redis_status,
 )
 from agent.platforms.persistence.redis.turn_store import pending_approval_count
-from agent.platforms.persistence.mongo import chat_store
 from shared.roles import UserRole
 
 logger = logging.getLogger(__name__)
+_STARTED_AT = time.time()
+_MEMORY_SOURCE = Path(__file__).resolve().parents[1] / "domains/harness/memory"
+# 启动时固定指纹，不能每次请求读磁盘，否则旧进程会假装已加载新代码。
+_MEMORY_BUILD = hashlib.sha256(
+    b"".join(path.read_bytes() for path in sorted(_MEMORY_SOURCE.glob("*.py")))
+).hexdigest()[:16]
 
 
 @api_router.get("/health")
@@ -35,6 +45,7 @@ async def health() -> dict:
         "active_turns": await _active_turn_count(),
         "redis": redis,
         "mongo": mongo,
+        "runtime": {"started_at": _STARTED_AT, "memory_build": _MEMORY_BUILD},
     }
 
 
@@ -119,6 +130,6 @@ def dev_users() -> dict:
                 )
 
             return {"users": users, "total": len(users)}
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 -- 开发账号查询的数据库边界统一转成 HTTP 错误。
         logger.warning("dev-users query failed: %s", exc)
         raise HTTPException(500, f"Failed to list users: {exc}")

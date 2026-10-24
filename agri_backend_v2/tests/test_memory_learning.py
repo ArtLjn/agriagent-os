@@ -42,6 +42,7 @@ def fruit(**changes):
     return learning.Candidate.model_validate(
         {
             "key": "food.fruit",
+            "slot": "watermelon",
             "text": "喜欢西瓜",
             "evidence": "我喜欢西瓜",
             "category": "preference",
@@ -98,15 +99,17 @@ async def test_complements_merge_and_correction_replaces_only_conflicting_detail
         [
             fruit(
                 text="喜欢草莓",
+                slot="strawberry",
                 evidence="也喜欢草莓",
                 relation="merge",
                 target_memory_id=memory_id,
-                merged_text="喜欢西瓜和草莓",
             )
         ],
     )
     doc = await store.load("u")
-    assert len(doc["memories"]) == 1 and doc["memories"][0]["text"] == "喜欢西瓜和草莓"
+    assert (
+        len(doc["memories"]) == 1 and doc["memories"][0]["text"] == "喜欢西瓜；喜欢草莓"
+    )
     await learning.apply_candidates(
         task(doc, "three", 3),
         [
@@ -115,15 +118,16 @@ async def test_complements_merge_and_correction_replaces_only_conflicting_detail
                 evidence="现在不喜欢西瓜了",
                 relation="contradict",
                 target_memory_id=memory_id,
-                merged_text="喜欢草莓，不再喜欢西瓜",
+                target_slot="watermelon",
             )
         ],
     )
     doc = await store.load("u")
     assert len(doc["memories"]) == 1
     record = doc["memories"][0]
-    assert record["status"] == "active" and record["text"] == "喜欢草莓，不再喜欢西瓜"
-    assert record["source_message_ids"] == ["turn:one", "turn:two", "turn:three"]
+    assert record["status"] == "active" and record["text"] == "不再喜欢西瓜；喜欢草莓"
+    assert set(record["source_message_ids"]) == {"turn:two", "turn:three"}
+    assert record["atoms"][0]["evidence_count"] == 1
     # 任务晚到也不能覆盖最新纠正。
     await learning.apply_candidates(
         task(doc, "late", 1.5),
@@ -131,7 +135,7 @@ async def test_complements_merge_and_correction_replaces_only_conflicting_detail
             fruit(
                 relation="contradict",
                 target_memory_id=memory_id,
-                merged_text="喜欢西瓜",
+                target_slot="watermelon",
             )
         ],
     )
@@ -153,7 +157,8 @@ async def test_same_key_without_semantic_relation_does_not_drop_distinct_facts(
     collection,
 ):
     await learning.apply_candidates(
-        task(await store.load("u")), [fruit(), fruit(text="常种番茄")]
+        task(await store.load("u")),
+        [fruit(), fruit(key="work.crop", slot="tomato", text="常种番茄")],
     )
     records = (await store.load("u"))["memories"]
     assert {m["text"] for m in records} == {"喜欢西瓜", "常种番茄"}
@@ -175,11 +180,25 @@ async def test_deleted_or_user_edited_memory_cannot_be_learned_back(collection):
     )
     doc = await store.load("u")
     await learning.apply_candidates(
-        task(doc, "two", 2),
+        {
+            **task(doc, "two", 2),
+            "normalized_atoms": {
+                record["memory_id"]: [
+                    {
+                        "slot": "mango",
+                        "text": "喜欢芒果",
+                        "source_type": "explicit",
+                        "revision": 1,
+                        "updated_at": doc["memories"][0]["updated_at"],
+                    }
+                ]
+            },
+        },
         [
             fruit(
                 relation="contradict",
                 target_memory_id=record["memory_id"],
+                target_slot="mango",
             )
         ],
     )
@@ -232,6 +251,7 @@ async def test_merge_prefers_category_even_when_related_memory_is_older(monkeypa
             "category": "preference",
             "text": "喜欢西瓜",
             "key": "old.fruit",
+            "atoms": [{"slot": "watermelon", "text": "喜欢西瓜"}],
         }
     )
     response = {
@@ -240,7 +260,7 @@ async def test_merge_prefers_category_even_when_related_memory_is_older(monkeypa
                 "candidate_index": 0,
                 "target_memory_id": "fruit",
                 "relation": "merge",
-                "merged_text": "喜欢西瓜和葡萄",
+                "merged_text": None,
             }
         ]
     }
@@ -262,14 +282,14 @@ async def test_merge_prefers_category_even_when_related_memory_is_older(monkeypa
     assert (
         len(payload["existing_memories"]) == learning.memory_runtime.review_memory_limit
     )
-    assert result[0].merged_text == "喜欢西瓜和葡萄"
+    assert result[0].target_memory_id == "fruit" and result[0].merged_text is None
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "alignments",
     [
-        [{"candidate_index": 0, "target_memory_id": "fruit", "relation": "merge"}],
+        [{"candidate_index": 0, "target_memory_id": "fruit", "relation": "contradict"}],
         [
             {
                 "candidate_index": 0,
@@ -300,7 +320,15 @@ async def test_invalid_alignment_does_not_silently_overwrite(monkeypatch, alignm
     )
     with pytest.raises(ValueError, match="memory_alignment"):
         await learning.align_candidates(
-            [fruit()], [{"memory_id": "fruit", "key": "food.fruit", "text": "喜欢西瓜"}]
+            [fruit()],
+            [
+                {
+                    "memory_id": "fruit",
+                    "key": "food.fruit",
+                    "text": "喜欢西瓜",
+                    "atoms": [{"slot": "watermelon", "text": "喜欢西瓜"}],
+                }
+            ],
         )
 
 
@@ -336,13 +364,13 @@ async def test_multiple_candidates_cannot_lose_each_others_merge(
     await learning.apply_candidates(task(await store.load("u")), [fruit()])
     doc = await store.load("u")
     record = doc["memories"][0]
-    merged = "喜欢西瓜、草莓和葡萄"
+    merged = "喜欢西瓜；喜欢草莓；喜欢葡萄"
     alignments = [
         {
             "candidate_index": i,
             "target_memory_id": record["memory_id"],
             "relation": "merge",
-            "merged_text": merged if consistent or i == 0 else "只喜欢葡萄",
+            "merged_text": None if consistent else "只喜欢葡萄",
         }
         for i in range(2)
     ]
@@ -361,9 +389,12 @@ async def test_multiple_candidates_cannot_lose_each_others_merge(
             )
         ),
     )
-    candidates = [fruit(text="喜欢草莓"), fruit(text="喜欢葡萄")]
+    candidates = [
+        fruit(slot="strawberry", text="喜欢草莓"),
+        fruit(slot="grape", text="喜欢葡萄"),
+    ]
     if not consistent:
-        with pytest.raises(ValueError, match="inconsistent_group"):
+        with pytest.raises(ValueError, match="whole_text_forbidden"):
             await learning.align_candidates(candidates, [record])
         return
     aligned = await learning.align_candidates(candidates, [record])
@@ -415,7 +446,7 @@ async def test_live_auto_learning_consolidates_fruit_without_confirmation(collec
             {**task(doc, str(index), index), "text": text}, candidates
         )
     records = (await store.load("u"))["memories"]
-    assert len(records) == 1, records
+    assert len(records) == 1, json.dumps(records, ensure_ascii=False)
     assert records[0]["status"] == "active"
     assert records[0]["category"] == "preference"
     assert all(word in records[0]["text"] for word in ["草莓", "葡萄"]), records
@@ -427,7 +458,13 @@ async def test_live_auto_learning_consolidates_fruit_without_confirmation(collec
 )
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "text", ["这次请用表格回答就好", "帮我翻译：小王喜欢西瓜", "明天提醒我打药"]
+    "text",
+    [
+        "这次请用表格回答就好",
+        "帮我翻译：小王喜欢西瓜",
+        "明天提醒我打药",
+        "上次系统说保存失败了，请先回复收到。",
+    ],
 )
 async def test_live_learning_does_not_turn_temporary_tasks_into_profile(text):
     assert await learning.extract(text) == []
