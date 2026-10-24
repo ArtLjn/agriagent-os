@@ -545,13 +545,25 @@ def test_memory_budget_environment_rejects_invalid_limits(name, monkeypatch):
 
 @pytest.mark.parametrize(
     "reply",
-    ["根据已保存的记忆，你喝拿铁不加糖。", "从已经保存的长期记忆中读取：偏好燕麦奶。"],
+    [
+        "根据已保存的记忆，你喝拿铁不加糖。",
+        "从已经保存的长期记忆中读取：偏好燕麦奶。",
+        "根据我目前能读取到的已保存记忆，没有找到相关记录。",
+        "根据我目前能读取到的已保存的记忆，没有找到相关记录。",
+    ],
 )
 def test_recalling_saved_memories_is_not_a_new_write_claim(reply):
-    from agent.domains.harness.runtime.verify import claims_write_completion
+    from agent.domains.harness.runtime.verify import (
+        claims_write_completion,
+        looks_like_write_request,
+    )
 
     assert not claims_write_completion(reply)
     assert claims_write_completion(reply + "我已经为你创建工单。")
+    assert claims_write_completion("根据你的要求，我已保存记忆。")
+    assert claims_write_completion("我已保存的记忆已更新。")
+    assert not looks_like_write_request("只根据已保存的记忆回答，不要猜。")
+    assert looks_like_write_request("请删除已保存的长期记忆。")
 
 
 def test_random_life_samples_are_natural_unique_and_reproducible():
@@ -564,3 +576,110 @@ def test_random_life_samples_are_natural_unique_and_reproducible():
     assert len({r["key"].split(".")[0] for r in rows}) >= 10
     assert all("回归样本" not in r["text"] and len(r["text"]) <= 500 for r in rows)
     assert sum(r["temporal_scope"] == "historical" for r in rows) == 300
+
+
+@pytest.mark.asyncio
+async def test_life_memory_reading_budget_and_cached_concurrency(
+    isolated_mongo, monkeypatch
+):
+    """真实 3000 条生活记忆存储压测；阅读器替身只用于测确定性的预算与缓存开销。"""
+    from memory_life_samples import life_samples
+
+    from agent.domains.harness.memory import inference, long_term
+
+    doc = new_document(store.owner_key("u"))
+    doc["memories"] = []
+    for index, sample in enumerate(life_samples()):
+        row = record(index)
+        row.update(
+            key=sample["key"], text=sample["text"], conditions=sample["conditions"]
+        )
+        row["atoms"] = [
+            {
+                "slot": str(index),
+                "text": sample["text"],
+                "conditions": sample["conditions"],
+                "state": "active",
+                "temporal_scope": sample["temporal_scope"],
+            }
+        ]
+        doc["memories"].append(row)
+    await store.save(doc, 0)
+    counts = []
+
+    async def read(query, facts, history, **kwargs):
+        counts.append(len(facts))
+        return inference.ContextReading(
+            selections=[
+                inference.ContextSelection(
+                    ref=f["ref"],
+                    use="recommend",
+                    applicability="conditional",
+                    aspect=str(f["ref"]),
+                )
+                for f in facts[:4]
+            ]
+        )
+
+    reader = AsyncMock(side_effect=read)
+    monkeypatch.setattr(inference, "read_context", reader)
+    monkeypatch.setattr(
+        "agent.platforms.persistence.memory_index.retrieve", AsyncMock(return_value=[])
+    )
+    first = await long_term.get_personalization_context(
+        user_id="u", farm_uid="f", query="在家休闲"
+    )
+    assert first["personalization_diagnostics"]["status"] == "ready", first
+    times = []
+
+    async def reuse():
+        start = time.monotonic()
+        result = await long_term.get_personalization_context(
+            user_id="u", farm_uid="f", query="在家休闲", previous=first
+        )
+        times.append(time.monotonic() - start)
+        assert result["personalization_diagnostics"]["cached"]
+        assert result["personalization_diagnostics"]["injected_count"] > 0
+        assert (
+            tokenizer.count_tokens(result["personalization"])
+            <= memory_runtime.context_tokens
+        )
+
+    await asyncio.gather(*(reuse() for _ in range(12)))
+    assert reader.await_count == 1 and max(counts) <= memory_runtime.context_fact_limit
+    p95 = sorted(times)[int((len(times) - 1) * 0.95)]
+    assert p95 < 5
+    append_benchmark(
+        {
+            "kind": "reading_cache",
+            "size": 3000,
+            "cached_concurrency": 12,
+            "cached_p95_seconds": p95,
+            "candidate_count": max(counts),
+            "model": "stub_not_quality_evaluation",
+            "cleanup": "fixture_finally",
+        }
+    )
+
+
+@pytest.mark.asyncio
+async def test_supplementary_coverage_does_not_only_return_rare_distractions(
+    isolated_mongo,
+):
+    """罕见的舒适鞋不能让常见居家事实完全失去进入阅读阶段的机会。"""
+    doc = new_document(store.owner_key("u"))
+    doc["memories"] = [record(i) for i in range(220)]
+    for row in doc["memories"]:
+        row.update(text="在家休闲时喜欢听轻音乐", key="休闲.居家")
+        row["atoms"][0]["text"] = row["text"]
+    doc["memories"][0]["text"] = "登山时喜欢舒服的鞋"
+    doc["memories"][0]["atoms"][0]["text"] = "登山时喜欢舒服的鞋"
+    await store.save(doc, 0)
+    focused = await store.load("u", farm_uid="f", query="舒服在家休闲")
+    assert len(focused["memories"]) == 1
+    broad = await store.load("u", farm_uid="f", query="舒服在家休闲", diversify=True)
+    assert len(broad["memories"]) <= memory_records.RETRIEVAL_LIMIT
+    assert any("轻音乐" in m["text"] for m in broad["memories"])
+    assert not (
+        await store.load("another", farm_uid="f", query="在家", diversify=True)
+    )["memories"]

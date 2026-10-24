@@ -38,9 +38,12 @@ _WRITE_CLAIM_PATTERNS = (
     ),
 )
 
-# 已保存的记忆是读取来源，不是本轮保存成功；只移除该引用短语，其他写声明仍独立核验。
+# “已保存的记忆”是名词短语，不是本轮保存完成谓语；前方可有任意读取修饰语。
+# 只移除该短语，后面的“已创建工单”等独立写声明仍须核验。
 _MEMORY_READ_REFERENCE_PATTERN = re.compile(
-    r"(?:根据|依据|按照|查看|查询|读取|从)(?:你|您|我)?(?:已|已经)(?:保存|记录|存储)的(?:个人|长期)?记忆"
+    r"(?:已|已经)(?:保存|记录|存储)的(?:个人|长期)?记忆"
+    r"|(?:根据|依据|按照|从|(?:读取|检索|查阅|查询)(?:到)?的)"
+    r"(?:已|已经)(?:保存|记录|存储)(?:的)?(?:个人|长期)?记忆"
 )
 
 # ─── ProgressLedger ──────────────────────────────────────────
@@ -517,7 +520,9 @@ def pre_completion_checklist(
 
 def looks_like_write_request(text: str) -> bool:
     """判断当前用户请求是否表达写操作意图。"""
-    return bool(_WRITE_REQUEST_PATTERN.search(text or ""))
+    # 请求“根据已保存的记忆回答”是读取；真正的删除/修改动词仍保留在引用之外。
+    normalized = _MEMORY_READ_REFERENCE_PATTERN.sub("", text or "")
+    return bool(_WRITE_REQUEST_PATTERN.search(normalized))
 
 
 def claims_write_completion(content: str) -> bool:

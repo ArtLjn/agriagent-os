@@ -21,7 +21,13 @@ from agent.platforms.persistence.mongo import personalization_store as store
 TOOL_NAME = "manage_personal_memory"
 logger = logging.getLogger(__name__)
 PREFERENCE_ACKNOWLEDGEMENT = "了解，我会在当前对话中参考你刚才说的偏好。"
+# 语义审查偶尔把简短完成式当作礼貌回应；只兜底普通偏好答复开头的明确完成声明。
+# 不用于判断用户授权，也不匹配“记住了什么”等查询或引用。
+_UNVERIFIED_MEMORY_ACK = re.compile(
+    r"^(?:好的[，,。]\s*)?(?:我)?(?:已经|已)?记住了[，,。！!：:]"
+)
 _AUTHORIZATION_HISTORY_MESSAGES = 6
+MAX_COMMAND_EVIDENCE_CHARS = 500
 MAX_REPAIR_ATTEMPTS = 1
 RECOVERABLE_ERROR_CODES = frozenset(
     {
@@ -161,7 +167,18 @@ class MemoryCommand(BaseModel):
     memory_id: str | None = None
     scope: Literal["user", "user_farm"] = "user"
     preferences: dict | None = None
-    evidence: str | None = Field(default=None, min_length=1, max_length=500)
+    query: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=200,
+        description="list 时的主题检索词；省略时使用本轮问题。重复相同查询不会翻页。",
+    )
+    evidence: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=MAX_COMMAND_EVIDENCE_CHARS,
+        description="逐字引用用户原文；省略时服务端仅使用长度允许的本轮用户原文，仍核验操作意图和范围。",
+    )
 
 
 async def content_is_grounded(
@@ -217,14 +234,16 @@ TOOL_SCHEMA = {
     "type": "function",
     "function": {
         "name": TOOL_NAME,
-        "description": "查询或按明确要求管理长期记忆。普通新增、补充和纠正偏好都由后台自动学习，无需调用本工具或询问确认。用户明确要求立即保存才 remember/update；删除和配置按明确对象执行。memory_id 来自上下文或 list。evidence 引用用户原文；跨轮确认可承接前文。只有 persisted=true 才表示保存成功。",
+        "description": "查询或按明确要求管理长期记忆。list 用 query 检索当前主题，返回有界候选而非全库；重复查询不会翻页。普通新增、补充和纠正偏好都由后台自动学习，无需调用本工具或询问确认。用户明确要求立即保存才 remember/update；删除和配置按明确对象执行。memory_id 来自上下文或 list。evidence 引用用户原文；跨轮确认可承接前文。只有 persisted=true 才表示保存成功。",
         "parameters": MemoryCommand.model_json_schema(),
     },
 }
 
 
-async def completion_guard_issue(turn, content: str) -> MemoryCompletionIssue | None:
-    """语义审查成功声明与未执行的明确请求，不以关键词触发记忆写入。"""
+async def completion_guard_issue(
+    turn, content: str, *, claims_write: bool = False
+) -> MemoryCompletionIssue | None:
+    """在同一收尾边界核对意图与成功声明，防止分支复用助手草稿作为写授权。"""
     attempted = False
     for message in turn.messages:
         if message.get("role") != "tool" or message.get("name") != TOOL_NAME:
@@ -265,6 +284,14 @@ async def completion_guard_issue(turn, content: str) -> MemoryCompletionIssue | 
             business_operations=operations,
             recent_dialogue=authorization_dialogue(turn),
         )
+        if assessment.requests_persistence:
+            # 助手草稿可能声称“已更新”；不能让这句话反向制造用户的长期写入请求。
+            # 只有需要促使 Agent 补执行时才独立核对原始意图，普通读取无需额外调用。
+            intent = await assess(
+                turn.user_input, recent_dialogue=authorization_dialogue(turn)
+            )
+            assessment.requests_persistence = intent.requests_persistence
+            assessment.preference_statement = intent.preference_statement
     except Exception as exc:  # noqa: BLE001 -- 外部语义审查故障必须阻止无证据声明，不能中断业务结果回传。
         logger.warning(
             "memory assessment unavailable code=%s turn_id=%s",
@@ -277,7 +304,12 @@ async def completion_guard_issue(turn, content: str) -> MemoryCompletionIssue | 
     if (
         assessment.preference_statement
         and not assessment.requests_persistence
-        and (assessment.claims_persistence or assessment.claims_memory_failure)
+        and (
+            assessment.claims_persistence
+            or assessment.claims_memory_failure
+            or _UNVERIFIED_MEMORY_ACK.search(content.strip())
+            or claims_write
+        )
     ):
         return MemoryCompletionIssue(
             "本轮只是普通偏好陈述，没有授权显式保存。只回应当前偏好，不得调用记忆工具补救、承诺长期保存或沿用历史报错。",
@@ -299,7 +331,9 @@ async def completion_guard_issue(turn, content: str) -> MemoryCompletionIssue | 
 
 
 async def execute(turn, arguments: dict | str, call_id: str) -> dict:
-    """内容可来自本会话近期用户原文，写入仍须本轮授权；临时会话拒绝全部记忆访问。"""
+    """集中呈现身份、原文、意图、范围、落库的先后约束，便于审计授权先于副作用。"""
+    from agent.config import memory_runtime
+
     try:
         if turn.temporary:
             raise MemoryError(
@@ -313,6 +347,14 @@ async def execute(turn, arguments: dict | str, call_id: str) -> dict:
             *(item["content"] for item in dialogue if item["role"] == "user"),
             turn.user_input,
         ]
+        # 工具漏填引用不能使明确删除陷入重试；只补可信输入，不补助手生成内容。
+        # 仍经过下方独立意图、对象范围和内容核对；不截断长输入中的否定条件。
+        if (
+            command.action != "list"
+            and command.evidence is None
+            and 0 < len(turn.user_input) <= MAX_COMMAND_EVIDENCE_CHARS
+        ):
+            command.evidence = turn.user_input
         if command.action != "list" and not (
             command.evidence
             and any(command.evidence in text for text in evidence_sources)
@@ -412,9 +454,12 @@ async def execute(turn, arguments: dict | str, call_id: str) -> dict:
             if doc is not None
             else await store.load(
                 turn.user_id,
-                query="" if command.action == "list" else None,
+                query=(command.query or turn.user_input)
+                if command.action == "list"
+                else None,
                 memory_ids=None if command.action == "list" else [],
                 farm_uid=turn.farm_uid,
+                limit=memory_runtime.context_selection_limit,
             )
         )
         if command.action == "list":
@@ -422,8 +467,8 @@ async def execute(turn, arguments: dict | str, call_id: str) -> dict:
                 "ok": True,
                 "memory_revision": doc["revision"],
                 "settings": public_settings(doc),
-                "has_more": doc.get("active_memory_count", len(doc["memories"]))
-                > len(doc["memories"]),
+                "query": command.query or turn.user_input,
+                "coverage": "仅本次匹配候选，不是全库。相同 query 重复调用不会取得下一页；无相关依据就说明本次未找到，不猜测。",
                 "memories": [
                     {
                         k: m[k]

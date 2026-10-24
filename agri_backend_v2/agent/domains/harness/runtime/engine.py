@@ -203,6 +203,9 @@ async def _prepare_turn_runtime(
             farm_uid=turn.farm_uid,
             query=turn.user_input,
             temporary=turn.temporary,
+            history=turn.memory_snapshot.get("messages")
+            or turn.memory_snapshot.get("recent_turns")
+            or [],
         )
     )
     route_result = await _route_turn_skills(turn)
@@ -622,6 +625,7 @@ async def _try_compress_context(turn: Turn) -> AsyncGenerator[dict, None]:
             turn, force=True, reason="hard_threshold"
         )
         if summary_result.summary:
+            previous_memory = turn.memory_snapshot
             turn.memory_snapshot = await memory.get_session_view(
                 turn.conversation_id,
                 user_id=turn.user_id,
@@ -633,6 +637,10 @@ async def _try_compress_context(turn: Turn) -> AsyncGenerator[dict, None]:
                     farm_uid=turn.farm_uid,
                     query=turn.user_input,
                     temporary=turn.temporary,
+                    previous=previous_memory,
+                    history=turn.memory_snapshot.get("messages")
+                    or turn.memory_snapshot.get("recent_turns")
+                    or [],
                 )
             )
             turn.context_bundle = context.build_context_bundle(
@@ -723,6 +731,10 @@ async def _run_single_reasoning_step(
         farm_uid=turn.farm_uid,
         query=turn.user_input,
         temporary=turn.temporary,
+        previous=turn.memory_snapshot,
+        history=turn.memory_snapshot.get("messages")
+        or turn.memory_snapshot.get("recent_turns")
+        or [],
     )
     turn.memory_snapshot.pop("personalization", None)
     turn.memory_snapshot.update(fresh)
@@ -738,7 +750,14 @@ async def _run_single_reasoning_step(
         turn.messages, fresh.get("personalization_revision")
     )
     if fresh.get("personalization"):
-        turn.messages.insert(1, {"role": "user", "content": fresh["personalization"]})
+        # 依据靠近当前问题，避免埋在历史与工具目录之间；仍保持用户数据权限。
+        current_input = max(
+            (i for i, m in enumerate(turn.messages) if m.get("role") == "user"),
+            default=len(turn.messages),
+        )
+        turn.messages.insert(
+            current_input, {"role": "user", "content": fresh["personalization"]}
+        )
     llm_messages = context.append_reminder(turn.messages, turn.step_count)
 
     # ── 流式 LLM 调用 ──
@@ -844,7 +863,9 @@ async def _emit_final_answer(
 
     保留在同一编排函数，以便核对纠错返回和最终事件互斥，避免收尾后再次进入执行循环。
     """
-    memory_issue = await memory_tools.completion_guard_issue(turn, content)
+    memory_issue = await memory_tools.completion_guard_issue(
+        turn, content, claims_write=verify.claims_write_completion(content)
+    )
     if (
         memory_issue
         and memory_issue.can_acknowledge
@@ -986,6 +1007,10 @@ async def _call_llm_stream(
         phase="reasoning",
         input_data={"message_count": len(llm_messages)},
         output_data={
+            "memory_context_included": any(
+                str(m.get("content", "")).startswith("<user-personalization>")
+                for m in llm_messages
+            ),
             "messages": llm_messages,
             "tools": tools_schema,
             "system_prompt": "\n\n".join(

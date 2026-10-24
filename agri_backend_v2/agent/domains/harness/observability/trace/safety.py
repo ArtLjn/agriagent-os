@@ -40,6 +40,7 @@ def sanitize_payload(
             "__trace_truncated": True,
             "original_message_count": len(messages),
             "budget": sanitized.get("budget", {}),
+            "memory_context_included": sanitized.get("memory_context_included"),
             "messages": [],
         }
         remaining = max_chars - len(json.dumps(snapshot, ensure_ascii=False))

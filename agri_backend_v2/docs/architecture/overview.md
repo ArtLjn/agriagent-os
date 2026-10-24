@@ -19,3 +19,5 @@ last_updated: 2026-10-24
 发布后核对 `/api/v2/health.runtime.started_at` 与 `memory_build`（启动时计算的记忆模块源码指纹）；入口没有热重载，修改代码后必须重启。旧消息缺少学习事件时不自动补学，旧复合记忆仅在涉及更新时无损拆分，不需要全库迁移。
 
 规模配置新增 `MEMORY_CONTEXT_TOKENS=3000`（保守字节计量）和 `MEMORY_REVIEW_BYTES=12000`；完整请求工作预算由 `CONTEXT__MODEL_CONTEXT_TOKENS` 覆盖。用户根文档发布 V3 正文引用，正文集合 `agentMemoryRecordsV3`，最多 10000 张有效卡片。升级及回滚约束见自动学习设计文档。
+
+回答阶段使用任务相关的记忆依据整理：最多阅读 60 条原子事实/12KB，输出最多 8 条带用途和条件的原文引用；必要时只补查一轮。`MEMORY_CONTEXT_COMPILE_TIMEOUT=12` 限制整个整理过程，同轮按账号、农场、问题和版本复用，发布前仍读取权威记录以处理删除、过期与关闭。记忆块放在当前问题之前，整块仍遵守 3000 字符与 token 双预算。`answer_memory_context` 与 `final_llm_context.memory_context_included` 分别观察实际渲染和最终发送，使用效果另以最终回答验证。详见设计文档的“面向回答的记忆阅读与注入”。

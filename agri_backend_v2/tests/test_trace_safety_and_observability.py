@@ -44,6 +44,7 @@ def test_trace_token_usage_keeps_only_numeric_usage_fields() -> None:
 def test_large_context_trace_preserves_budget_and_marks_preview() -> None:
     original = {
         "budget": {"total_tokens": 40000, "max_tokens": 64000},
+        "memory_context_included": True,
         "messages": [
             {"role": "system", "content": "约束" * 20000},
             {"role": "user", "content": "拿铁用什么奶？", "api_key": "private"},
@@ -52,6 +53,7 @@ def test_large_context_trace_preserves_budget_and_marks_preview() -> None:
     result = sanitize_payload(original, max_chars=2000, preserve_context=True)
     assert len(json.dumps(result, ensure_ascii=False)) <= 2000
     assert result["budget"] == original["budget"]
+    assert result["memory_context_included"] is True
     assert result["__trace_truncated"] is True
     assert len(result["messages"]) == 2
     assert all(m["status"] == "trace_preview" for m in result["messages"])
