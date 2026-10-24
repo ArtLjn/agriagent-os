@@ -6,6 +6,9 @@ from typing import Any
 
 from agent.domains.harness.memory.models import MemorySearchResult
 
+_DIAGNOSTIC_TEXT_CHARS = 160
+_DIAGNOSTIC_CONTEXT_CHARS = 4000
+
 
 async def search(
     *,
@@ -111,12 +114,41 @@ async def load_context_candidates(
         if ids:
             extra = await store.load(user_id, memory_ids=ids)
             if extra["revision"] != doc["revision"]:
-                return await store.load(user_id, query=query, farm_uid=farm_uid)
-            known = {m["memory_id"] for m in doc["memories"]}
-            doc["memories"].extend(
-                m for m in extra["memories"] if m["memory_id"] not in known
-            )
+                doc = await store.load(user_id, query=query, farm_uid=farm_uid)
+                lexical_ids = [m["memory_id"] for m in doc["memories"]]
+                ids = []
+                diagnostics.update(status="version_changed", hit_count=0)
+            else:
+                known = {m["memory_id"] for m in doc["memories"]}
+                doc["memories"].extend(
+                    m for m in extra["memories"] if m["memory_id"] not in known
+                )
+        union_count = len(doc["memories"])
         doc["memories"] = rank_context_records(doc["memories"], lexical_ids, ids)
+        diagnostics.update(
+            query=query,
+            collection=memory_runtime.rag_collection,
+            configured=bool(memory_runtime.rag_url and memory_runtime.rag_api_key),
+            lexical_count=len(lexical_ids),
+            union_count=union_count,
+            fused_count=len(doc["memories"]),
+            fusion_dropped_count=union_count - len(doc["memories"]),
+            cards=[
+                {
+                    "memory_id": record["memory_id"],
+                    "revision": record["revision"],
+                    "text": record["text"][:_DIAGNOSTIC_TEXT_CHARS],
+                    "truncated": len(record["text"]) > _DIAGNOSTIC_TEXT_CHARS,
+                    "lexical_rank": lexical_ids.index(record["memory_id"]) + 1
+                    if record["memory_id"] in lexical_ids
+                    else None,
+                    "semantic_rank": ids.index(record["memory_id"]) + 1
+                    if record["memory_id"] in ids
+                    else None,
+                }
+                for record in doc["memories"]
+            ],
+        )
         doc["_retrieval"] = diagnostics
         return doc
 
@@ -278,11 +310,17 @@ async def get_personalization_context(
                 RuntimeError,
                 TimeoutError,
             ) as exc:
+                plan["code"] = getattr(exc, "code", type(exc).__name__)
                 logging.getLogger(__name__).warning(
                     "memory context compilation unavailable code=%s",
                     getattr(exc, "code", "memory_context_compile_failed"),
                 )
         # 查询和模式属于本轮缓存签名，不能跨话题或部署模式复用旧候选。
+        plan.setdefault("retrieval", {}).update(
+            query=retrieval_query,
+            configured=bool(memory_runtime.rag_url and memory_runtime.rag_api_key),
+            collection=memory_runtime.rag_collection,
+        )
         result = await _publish_context(key, control, plan, hit, started)
         result["_personalization_cache"].update(
             retrieval_query=retrieval_query, mode=memory_runtime.context_mode
@@ -293,13 +331,19 @@ async def get_personalization_context(
             "personalization unavailable code=%s",
             getattr(exc, "code", "memory_runtime_unavailable"),
         )
-        return {}
+        return {
+            "personalization_diagnostics": {
+                "status": "unavailable",
+                "code": getattr(exc, "code", type(exc).__name__),
+                "mode": memory_runtime.context_mode,
+            }
+        }
 
 
 async def _publish_context(
     key: list, control: dict, plan: dict, hit: bool, started: float
 ) -> dict:
-    """独立发布边界：版本和有效期复查后渲染，并记录实际注入而非仅模型选中数量。"""
+    """版本和有效期复查后准备记忆块；最终请求还需核对二次预算裁剪。"""
     import asyncio
     import time
 
@@ -318,21 +362,28 @@ async def _publish_context(
             user_id,
             memory_ids=list({s["fact"]["memory_id"] for s in plan["selected"]}),
         )
+    selected_count = len(plan["selected"])
     if live["revision"] != control["revision"]:
         plan = {
+            **plan,
             "selected": [],
-            "candidate_count": 0,
             "status": "changed_during_read",
         }
     current = context_candidates(live, farm_uid, query)
     valid = [s for s in plan["selected"] if s["fact"] in current]
     text, injected = answer_context(live, valid, plan["status"])
     diagnostics = {
+        "stage": "prepared",
         "status": plan["status"],
+        "reading_enabled": live["settings"]["use_saved_memories"],
         "cached": hit,
         "candidate_count": plan["candidate_count"],
         "selected_count": len(valid),
         "injected_count": len(injected),
+        "validation_dropped_count": selected_count - len(valid),
+        "budget_dropped_count": len(valid) - len(injected),
+        "code": plan.get("code"),
+        "revision": live["revision"],
         "sources": [
             {
                 "memory_id": s["fact"]["memory_id"],
@@ -361,5 +412,52 @@ async def _publish_context(
             "key": key,
             "revision": control["revision"],
             "plan": plan,
+        },
+    }
+
+
+def injection_diagnostics(
+    snapshot: dict, messages: list[dict], *, before_budget: list[dict] | None = None
+) -> dict:
+    """以预算裁剪后的真实请求核对记忆块；准备成功不能冒充已发送。"""
+    diagnostics = dict(snapshot.get("personalization_diagnostics") or {})
+    expected = snapshot.get("personalization", "")
+    actual = "\n".join(
+        message["content"]
+        for message in messages
+        if message.get("role") == "user"
+        and isinstance(message.get("content"), str)
+        and message["content"].startswith("<user-personalization>")
+    )
+    prepared_count = diagnostics.get("injected_count")
+    if actual and actual == expected:
+        status = "included"
+    elif actual:
+        status = "modified"
+    elif expected:
+        status = (
+            "budget_omitted"
+            if any(m.get("content") == expected for m in before_budget or [])
+            else "not_in_request"
+        )
+    else:
+        status = "not_prepared"
+    return {
+        **diagnostics,
+        "stage": "complete",
+        "status": diagnostics.get("status", "not_recorded"),
+        "prepared_count": prepared_count,
+        # 内容被二次裁剪时不猜测剩余事实数；完整请求文本预览仍可核查。
+        "injected_count": prepared_count
+        if status == "included"
+        else None
+        if status == "modified"
+        else 0,
+        "sources": diagnostics.get("sources", []) if status == "included" else [],
+        "injection": {
+            "status": status,
+            "chars": len(actual),
+            "text": actual[:_DIAGNOSTIC_CONTEXT_CHARS],
+            "truncated": len(actual) > _DIAGNOSTIC_CONTEXT_CHARS,
         },
     }

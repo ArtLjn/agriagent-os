@@ -2,7 +2,8 @@
 
 from typing import Annotated, Literal
 
-from fastapi import Depends, Header, HTTPException, Query, Response
+from fastapi import Depends, Header, HTTPException, Path, Query, Response
+from pymongo.errors import PyMongoError
 
 from agent.api import api_router
 from agent.application.question_recommendations import (
@@ -80,6 +81,22 @@ async def list_memories(
         category=category,
         status=status,
     )
+
+
+@api_router.get("/me/memory-learning/{turn_id}")
+async def get_memory_learning_status(
+    turn_id: Annotated[str, Path(min_length=1, max_length=128)],
+    user: CurrentUser,
+    response: Response,
+):
+    """后台学习可能晚于聊天 SSE 完成，独立查询真实提交结果且禁止共享缓存。"""
+    from agent.domains.harness.memory.learning import learning_status
+
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        return await learning_status(user["user_id"], user["farm_uid"], turn_id)
+    except PyMongoError as exc:
+        raise MemoryError("memory_status_unavailable", "学习状态暂不可用", 503) from exc
 
 
 @api_router.post("/me/memories")

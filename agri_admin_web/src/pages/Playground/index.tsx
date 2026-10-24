@@ -37,7 +37,7 @@ import { LlmContextInspector, LlmContextTriggerButton } from './LlmContextInspec
 import { QuickPrompts } from './QuickPrompts';
 import { ChatBubble } from './ChatBubble';
 import './playground.css';
-import { appendExecutionEvent, executionEventFromChunk, type ExecutionEvent } from './executionEvents';
+import { appendExecutionEvent, executionEventFromChunk, memoryEventsFromTimeline, type ExecutionEvent } from './executionEvents';
 import { formatDuration } from './executionTimelineModel';
 import { authStore } from '../../stores/authStore';
 import { getSsePresentationProfile, roleLabel, USER_ROLES } from '../../constants/roles';
@@ -456,7 +456,13 @@ export default function Playground() {
         turnDetailLoading: false,
       }));
       if (detail.trace_id) {
-        await refreshSessionTimeline(sid, detail.trace_id);
+        const timeline = await refreshSessionTimeline(sid, detail.trace_id);
+        const memoryEvents = memoryEventsFromTimeline(timeline);
+        if (memoryEvents.length) updateSession(sid, (state) => ({
+          ...state,
+          messages: state.messages.map((item) => item.turn_id === turnId && item.role === 'assistant'
+            ? { ...item, events: memoryEvents.reduce(appendExecutionEvent, item.events ?? []) } : item),
+        }));
       }
     } catch {
       updateSession(sid, (state) => ({ ...state, turnDetailLoading: false }));
@@ -571,7 +577,16 @@ export default function Playground() {
       })) {
         if (chunk.type === 'meta') {
           streamedTrace = chunk.data;
-          updateSession(targetSessionId, (state) => ({ ...state, trace: chunk.data }));
+          // 学习可在回答流结束前启动，收到真实轮次后即可查询，不等待历史回填。
+          updateSession(targetSessionId, (state) => ({
+            ...state,
+            trace: chunk.data,
+            messages: state.messages.map((item) => (
+              item.id === assistantMessage.id || item.id === userMessage.id
+                ? { ...item, turn_id: chunk.data.turn_id, trace_id: chunk.data.trace_id }
+                : item
+            )),
+          }));
         }
         const executionEvent = executionEventFromChunk(chunk);
         if (executionEvent) {
@@ -951,6 +966,8 @@ export default function Playground() {
               skills={m.skills}
               turnId={m.turn_id}
               traceId={m.trace_id}
+              learningUserToken={activeUserToken}
+              watchLearning={m.id === messages[messages.length - 1]?.id}
               loading={loading && m.id === messages[messages.length - 1]?.id}
               pendingAction={m.pendingAction}
               pendingPlan={m.pendingPlan}

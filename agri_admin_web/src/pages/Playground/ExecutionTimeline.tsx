@@ -14,6 +14,7 @@ import {
   type ToolTimelineItem,
 } from './executionTimelineModel';
 import { EventBody } from './ExecutionEventDetails';
+import { MemoryContextDetails } from '../../components/MemoryContextDetails';
 import './playground.css';
 
 export function ExecutionStateIcon({ status }: { status: TimelineStatus }) {
@@ -161,6 +162,9 @@ export function ExecutionTimeline({ events, loading, approvalState }: {
   const chain = buildExecutionChain(items);
   const stepCount = chain.filter((group) => group.stepIndex !== undefined).length;
   const progress = [...events].reverse().find((event) => event.type === 'progress');
+  const memoryEvents = events.filter((event) => event.type === 'memory_context');
+  const requests = memoryEvents.filter((event) => event.details.stage === 'complete');
+  const visibleMemory = requests.length ? requests : memoryEvents.slice(-1);
   // 调试噪音不展示，异常和审批提示仍保留在对话中，避免隐藏业务阻塞。
   const notices = events.filter((event) => [
     'approval_required', 'approval_result', 'doom_loop_warning', 'verification_warning',
@@ -194,6 +198,10 @@ export function ExecutionTimeline({ events, loading, approvalState }: {
           ))}
         </div>
       )}
+      {visibleMemory.map((event, index) => (
+        <MemoryContextDetails key={event.event_id ?? index} data={event.details} loading={status.running}
+          title={requests.length > 1 ? `长时记忆 · 第 ${index + 1} 次模型请求` : '长时记忆'} />
+      ))}
       {!hasRows && plan && <div className="execution-plan"><EventBody event={plan} /></div>}
       {!hasRows && !plan && !status.running && <div className="execution-card__subtitle">{status.label === '已完成' ? '本次回答无需调用工具' : '暂无步骤记录'}</div>}
       {notices.map((event, index) => <div className="execution-notice" key={event.event_id ?? index}><EventBody event={event} /></div>)}

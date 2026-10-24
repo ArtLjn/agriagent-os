@@ -6,6 +6,7 @@ import { palette } from '../../styles/theme';
 import { canConfirmAssistantMessage, hasPendingConfirmationControls, type PendingResolution } from './pendingPlanControls';
 import type { ExecutionEvent } from './executionEvents';
 import { ExecutionTimeline } from './ExecutionTimeline';
+import { MemoryLearningNotice } from './MemoryLearningNotice';
 import { jsonText } from './executionTimelineModel';
 
 const TEXT = palette.text;
@@ -52,6 +53,7 @@ function ExecutionStatus({ skills, events, loading, pendingAction, pendingPlan, 
 export function ChatBubble({
   role, content, events, skills, loading, pendingAction, pendingPlan, pendingResolution,
   turnId, traceId, onAction, onViewDetails,
+  learningUserToken, watchLearning = false,
 }: {
   role: 'user' | 'assistant';
   content: string;
@@ -65,6 +67,8 @@ export function ChatBubble({
   traceId?: string | null;
   onAction?: (action: string) => void;
   onViewDetails?: (turnId: string) => void;
+  learningUserToken?: string | null;
+  watchLearning?: boolean;
 }) {
   const isUser = role === 'user';
   const hasConfirmationControls = hasPendingConfirmationControls({ role, content, pendingAction, pendingPlan, pendingResolution });
@@ -145,6 +149,8 @@ export function ChatBubble({
                 </div>
               )}
             </div>
+            {turnId && <MemoryLearningNotice key={`${turnId}:${learningUserToken ?? 'self'}`}
+              turnId={turnId} userToken={learningUserToken} watch={watchLearning} />}
             {hasConfirmationControls && (
               <div className="pg-approval" role="group" aria-label="待确认操作">
                 <div className="pg-approval__head">

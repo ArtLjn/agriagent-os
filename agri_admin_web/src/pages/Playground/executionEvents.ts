@@ -1,8 +1,10 @@
 import type { StreamChunk } from '../../api/agent';
+import type { TraceTimeline } from '../../api/admin';
 
 type ExecutionEventMetadata = { event_id?: string; seq?: number };
 
 type ExecutionEventPayload =
+  | { type: 'memory_context'; details: Record<string, unknown> }
   | { type: 'thought'; content: string }
   | { type: 'plan'; goal?: string; steps: unknown[] }
   | { type: 'plan_step_done'; step_index: number; skill: string; status: string }
@@ -32,6 +34,20 @@ type ExecutionEventPayload =
 
 export type ExecutionEvent = ExecutionEventMetadata & ExecutionEventPayload;
 
+/** 历史回答按该轮 Trace 恢复注入证据，旧准备节点不能冒充最终请求。 */
+export function memoryEventsFromTimeline(timeline: TraceTimeline | null): ExecutionEvent[] {
+  const nodes = timeline?.rounds.flatMap((round) => round.nodes) ?? [];
+  const final = nodes.filter((node) => node.node_name === 'memory_context');
+  return (final.length ? final : nodes.filter((node) => node.node_name === 'answer_memory_context')).flatMap((node, index) => {
+    let payload: unknown = node.output_data;
+    if (typeof payload === 'string') {
+      try { payload = JSON.parse(payload); } catch { return []; }
+    }
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return [];
+    return [{ type: 'memory_context' as const, details: payload as Record<string, unknown>, event_id: `memory:${node.span_id ?? node.id ?? index}` }];
+  });
+}
+
 export function executionEventFromChunk(chunk: StreamChunk): ExecutionEvent | null {
   const event = executionEventFromChunkBase(chunk);
   if (!event) return null;
@@ -45,6 +61,8 @@ export function executionEventFromChunk(chunk: StreamChunk): ExecutionEvent | nu
 
 function executionEventFromChunkBase(chunk: StreamChunk): ExecutionEventPayload | null {
   switch (chunk.type) {
+    case 'memory_context':
+      return { type: 'memory_context', details: chunk.data };
     case 'thought':
       return { type: 'thought', content: chunk.data };
     case 'plan':

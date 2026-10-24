@@ -28,6 +28,7 @@ import {
 } from '../../api/admin';
 import { useLocation } from 'react-router-dom';
 import GanttTimeline from '../../components/GanttTimeline';
+import { MemoryContextDetails } from '../../components/MemoryContextDetails';
 import type { GanttNode } from '../../components/GanttTimeline/types';
 import { getNodeLabel } from '../../constants/trace';
 import {
@@ -1084,6 +1085,9 @@ function TracePayloadSummary({
     if (isContextInputPayload(payload)) return <ContextInputSummary inputData={payload} />;
     if (nodeType === 'llm_call') return <LlmInputSummary inputData={payload} />;
     return <GenericPayloadSummary title={title} payload={payload} />;
+  }
+  if (nodeName === 'memory_context' || nodeName === 'answer_memory_context') {
+    return <MemoryContextDetails data={payload} />;
   }
   if (isContextTracePayload(payload)) return <ContextTraceSummary outputData={payload} showRaw={false} />;
   if (isRouterTracePayload(payload)) return <RouterTraceSummary outputData={payload} showRaw={false} />;

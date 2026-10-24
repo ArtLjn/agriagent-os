@@ -61,6 +61,15 @@ async def test_ordinary_message_recalls_semantic_facts_without_reader(
     )
     assert "燕麦奶" in first["personalization"] and "不加糖" in first["personalization"]
     assert first["personalization_diagnostics"]["retrieval"]["status"] == "ready"
+    diagnostic = first["personalization_diagnostics"]
+    assert diagnostic["stage"] == "prepared"
+    assert diagnostic["retrieval"]["query"] == "下午提提神，帮我点一杯吧"
+    assert diagnostic["retrieval"]["cards"][0]["semantic_rank"] == 1
+    cached = await long_term.get_personalization_context(
+        user_id="u", farm_uid="f", query="下午提提神，帮我点一杯吧", previous=first
+    )
+    assert cached["personalization_diagnostics"]["cached"] is True
+    assert cached["personalization_diagnostics"]["retrieval"] == diagnostic["retrieval"]
     reader.assert_not_called()
     await store.modify_memory("u", "f", "coffee")
     after = await long_term.get_personalization_context(
@@ -172,6 +181,56 @@ def test_fast_render_budget_never_splits_positive_and_negative(monkeypatch):
     monkeypatch.setattr(memory_runtime, "context_chars", 850)
     rendered, injected = answer_context(doc, selected, "ready")
     assert not injected and "喜欢拿铁" not in rendered
+
+
+@pytest.mark.parametrize(
+    "actual,expected_status,expected_count",
+    [
+        ("<user-personalization>完整依据", "included", 2),
+        ("<user-personalization>裁剪过", "modified", None),
+        ("", "budget_omitted", 0),
+    ],
+)
+def test_injection_evidence_uses_final_request(actual, expected_status, expected_count):
+    prepared = "<user-personalization>完整依据"
+    snapshot = {
+        "personalization": prepared,
+        "personalization_diagnostics": {
+            "status": "ready",
+            "injected_count": 2,
+            "sources": [{"memory_id": "one"}],
+        },
+    }
+    data = long_term.injection_diagnostics(
+        snapshot,
+        [{"role": "user", "content": actual}],
+        before_budget=[{"role": "user", "content": prepared}],
+    )
+    assert data["injection"]["status"] == expected_status
+    assert data["injection"]["text"] == actual
+    assert data["injected_count"] == expected_count
+    assert bool(data["sources"]) is (expected_status == "included")
+
+
+def test_missing_or_legacy_evidence_never_claims_injection():
+    data = long_term.injection_diagnostics({}, [])
+    assert data["status"] == "not_recorded" and data["injected_count"] == 0
+    data = long_term.injection_diagnostics({"personalization": "准备过的记忆"}, [])
+    assert data["injection"]["status"] == "not_in_request"
+
+
+@pytest.mark.asyncio
+async def test_unconfigured_retrieval_explains_lexical_fallback(memory):
+    await store.create_memory(
+        "u", "f", MemoryCreate(memory_id="film", key="电影", text="看电影喜欢喜剧")
+    )
+    data = await long_term.get_personalization_context(
+        user_id="u", farm_uid="f", query="看电影"
+    )
+    retrieval = data["personalization_diagnostics"]["retrieval"]
+    assert retrieval["status"] == "not_configured"
+    assert retrieval["configured"] is False and retrieval["lexical_count"] == 1
+    assert retrieval["cards"][0]["lexical_rank"] == 1
 
 
 @pytest.mark.asyncio

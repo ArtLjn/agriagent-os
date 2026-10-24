@@ -17,6 +17,18 @@ const completedEvents: ExecutionEvent[] = [
 ];
 
 describe('ExecutionTimeline', () => {
+  it('无工具调用也能看到记忆流程，并保留每次模型请求证据', () => {
+    render(<ExecutionTimeline loading={false} events={[
+      { type: 'memory_context', details: { stage: 'start' } },
+      { type: 'memory_context', details: { stage: 'complete', status: 'ready', injected_count: 2, injection: { status: 'included' } } },
+      { type: 'memory_context', details: { stage: 'complete', status: 'ready', injected_count: 0, injection: { status: 'budget_omitted' } } },
+      { type: 'turn.completed', status: 'completed' },
+    ]} />);
+    expect(screen.getByText('长时记忆 · 第 1 次模型请求')).toBeInTheDocument();
+    expect(screen.getByText('长时记忆 · 第 2 次模型请求')).toBeInTheDocument();
+    expect(screen.getByText('2 条依据已进入模型请求')).toBeInTheDocument();
+    expect(screen.queryByText('正在检索与整理…')).not.toBeInTheDocument();
+  });
   it('内联展示合并后的工具步骤，调试噪音不占用对话空间', () => {
     const { container } = render(<ExecutionTimeline loading={false} events={completedEvents} />);
     expect(screen.getByLabelText('执行过程')).toBeInTheDocument();

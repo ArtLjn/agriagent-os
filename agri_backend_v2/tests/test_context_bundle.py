@@ -246,6 +246,61 @@ def test_budget_preserves_latest_exchange_when_older_history_is_dropped(
     assert context.bundle_to_messages(bundle)[-3:-1] == latest
 
 
+def test_recent_user_facts_survive_old_history_compaction_and_conflicting_memory(
+    monkeypatch,
+):
+    from agent import config
+    from agent.domains.harness.context.budget import prepare_request
+
+    monkeypatch.setattr(context, "render_system_prompt", lambda: "优先用户近期原话")
+    monkeypatch.setattr(context.tokenizer, "get_model_context", lambda _: 2400)
+    monkeypatch.setattr(config.settings.context, "response_reserve_tokens", 100)
+    monkeypatch.setattr(config.settings.context, "safety_margin_tokens", 50)
+    original = "我喜欢打王者荣耀，下午我先健健身，再炒个青椒鸡胸"
+    bundle = context.build_context_bundle(
+        "我刚才说喜欢什么游戏",
+        {
+            "messages": [
+                {"role": "user", "content": original},
+                {"role": "assistant", "content": "错误旧回答：神恶魔" * 500},
+                {"role": "user", "content": "看电影吧"},
+                {"role": "assistant", "content": "看哪种电影？"},
+            ],
+            "personalization": "<user-personalization>旧偏好：周末玩桌游</user-personalization>",
+        },
+    )
+    blocks = {b.key: b for b in bundle.blocks}
+    assert blocks["recent_turns"].status == ContextBlockStatus.DROPPED
+    assert blocks["recent_user_statements"].required
+    messages, _ = prepare_request(context.bundle_to_messages(bundle), [])
+    quotes = next(
+        m for m in messages if m["content"].startswith("<recent-user-statements>")
+    )
+    assert quotes["role"] == "user" and original in quotes["content"]
+    assert "神恶魔" not in quotes["content"]
+    assert messages[-1]["content"].startswith("我刚才说喜欢什么游戏")
+
+
+def test_recent_user_evidence_is_bounded_and_never_cuts_a_statement():
+    huge = "不能拆开条件和否定" * 1000
+    bundle = context.build_context_bundle(
+        "继续",
+        {
+            "messages": [
+                {"role": "user", "content": huge},
+                {"role": "assistant", "content": "好"},
+                {"role": "user", "content": "后来不喜欢甜的了"},
+                {"role": "assistant", "content": "明白"},
+                {"role": "user", "content": "现在喝点什么"},
+                {"role": "assistant", "content": "茶或咖啡？"},
+            ]
+        },
+    )
+    quotes = next(b for b in bundle.blocks if b.key == "recent_user_statements")
+    assert "后来不喜欢甜的了" in quotes.content and huge not in quotes.content
+    assert quotes.estimated_tokens < context.RECENT_USER_STATEMENT_TOKEN_BUDGET
+
+
 def test_budget_reports_exceeded_instead_of_losing_immediate_context(
     monkeypatch,
 ) -> None:

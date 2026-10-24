@@ -1,0 +1,19 @@
+.memory-context { margin-top: 12px; border: 1px solid var(--app-border-soft); border-radius: 10px; background: var(--app-fill); color: var(--app-text); font-size: 13px; }
+.memory-context__summary { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 12px 14px; cursor: pointer; color: var(--app-secondary); }
+.memory-context__summary strong { color: var(--app-text); }
+.memory-context__toggle { margin-left: auto; color: var(--app-accent); font-size: 12px; }
+.memory-context__success { color: var(--app-green); }
+.memory-context__warning { color: var(--app-orange); font-size: 12px; }
+.memory-context__evidence { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--app-border-soft); }
+.memory-context__evidence > summary { cursor: pointer; color: var(--app-accent); }
+.memory-context__body { padding: 0 14px 14px; overflow-wrap: anywhere; }
+.memory-context__body p { color: var(--app-secondary); font-size: 12px; margin: 10px 0; }
+.memory-context__flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin: 4px 0 12px; }
+.memory-context__flow > div { display: grid; gap: 6px; padding: 10px; background: var(--app-surface); border-radius: 8px; }
+.memory-context__flow b { color: var(--app-accent); }
+.memory-context__flow span, .memory-context__card-meta { color: var(--app-secondary); font-size: 12px; }
+.memory-context__body pre { max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--app-code-bg); padding: 10px; border-radius: 6px; font-size: 12px; }
+.memory-context__cards { display: grid; gap: 8px; margin: 16px 0; }
+.memory-context__card { display: grid; gap: 6px; padding: 10px; border: 1px solid var(--app-border-soft); border-radius: 8px; }
+.memory-context__card-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; }
+.memory-context__card small { color: var(--app-tertiary); }

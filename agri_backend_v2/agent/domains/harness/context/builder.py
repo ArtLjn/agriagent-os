@@ -35,7 +35,10 @@ from agent.domains.harness.context.models import (
     TokenBudget,
 )
 from agent.domains.harness.memory.policy import resolve_memory_policy
-from agent.prompts import render_system_prompt
+from agent.prompts import render_prompt, render_system_prompt
+
+# 仅保留近期用户的逐字陈述；不让长助手答复或工具目录挤掉尚未完成学习的事实。
+RECENT_USER_STATEMENT_TOKEN_BUDGET = 1600
 
 
 def _format_memory(long_term: dict[str, Any]) -> str:
@@ -125,6 +128,16 @@ def build_context_bundle(
     history = _dialogue_messages(
         memory_snapshot.get("messages") or memory_snapshot.get("recent_turns") or []
     )
+    recent_statements, statement_tokens = [], 0
+    statement_source = memory_snapshot.get("recent_user_statements")
+    if statement_source is None:
+        statement_source = [m["content"] for m in history[:-2] if m["role"] == "user"]
+    for statement in reversed(statement_source):
+        cost = tokenizer.count_tokens(json.dumps(statement, ensure_ascii=False))
+        if statement_tokens + cost > RECENT_USER_STATEMENT_TOKEN_BUDGET:
+            break
+        recent_statements.insert(0, statement)
+        statement_tokens += cost
     # 更早的答复作为背景，防止模型模仿旧结果而跳过本轮查询；最近问答保留
     # 原生对话角色，使“要”“第几个”等回复有明确的承接对象。
     earlier_history = (
@@ -241,6 +254,22 @@ def build_context_bundle(
             version=memory_snapshot.get("conversation_revision", 0),
         ),
         block(
+            "recent_user_statements",
+            render_prompt(
+                "recent_user_statements",
+                statements=json.dumps(recent_statements, ensure_ascii=False).replace(
+                    "<", "\\u003c"
+                ),
+            )
+            if recent_statements
+            else None,
+            ContextSource.CONVERSATION_MESSAGES,
+            priority=90,
+            required=True,
+            compressible=False,
+            version=memory_snapshot.get("conversation_revision", 0),
+        ),
+        block(
             "personalization",
             memory_snapshot.get("personalization"),
             ContextSource.MEMORY_RECORDS,
@@ -340,6 +369,7 @@ def bundle_to_messages(bundle: ContextBundle) -> list[dict[str, Any]]:
     """先放系统上下文，再按原角色放历史，最后放当前输入，保留对话续接关系。"""
     messages: list[dict[str, Any]] = []
     history: list[dict[str, Any]] = []
+    statements: list[dict[str, Any]] = []
     personalization: list[dict[str, Any]] = []
     current_input: list[dict[str, Any]] = []
     for item in bundle.blocks:
@@ -353,6 +383,10 @@ def bundle_to_messages(bundle: ContextBundle) -> list[dict[str, Any]]:
         if item.key == "personalization":
             # 用户偏好不具备系统级权限，保持来源层级以抵抗持久提示注入。
             personalization.append({"role": "user", "content": str(item.content)})
+            continue
+        if item.key == "recent_user_statements":
+            # 原话仍是用户数据，不升级成系统指令，也不重放为新的待执行请求。
+            statements.append({"role": "user", "content": str(item.content)})
             continue
         if item.key == "latest_exchange" and isinstance(item.content, list):
             history.extend(_dialogue_messages(item.content))
@@ -368,7 +402,7 @@ def bundle_to_messages(bundle: ContextBundle) -> list[dict[str, Any]]:
                 else json.dumps(item.content, ensure_ascii=False)
             )
             messages.append({"role": "system", "content": content})
-    return messages + history + personalization + current_input
+    return messages + statements + history + personalization + current_input
 
 
 def build_initial_messages(

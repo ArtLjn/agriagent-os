@@ -163,6 +163,40 @@ async def test_api_auth_validation_and_failure(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_learning_status_api_uses_authenticated_identity(monkeypatch):
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+    from agent.api import api_router, personalization as api
+    from agent.domains.harness.memory import learning
+
+    app = FastAPI()
+    app.include_router(api_router)
+    status = AsyncMock(return_value={"status": "done", "applied_count": 1})
+    monkeypatch.setattr(learning, "learning_status", status)
+    async with AsyncClient(
+        transport=ASGITransport(app), base_url="http://test"
+    ) as client:
+        assert (await client.get("/api/v2/me/memory-learning/t")).status_code in (
+            401,
+            503,
+        )
+        monkeypatch.setattr(
+            api, "parse_identity", lambda _: {"user_id": "a", "farm_uid": "f"}
+        )
+        monkeypatch.setattr(
+            api, "require_identity_permission", lambda principal, _: principal
+        )
+        response = await client.get(
+            "/api/v2/me/memory-learning/t?user_id=b&farm_uid=other"
+        )
+        assert (
+            response.status_code == 200
+            and response.headers["Cache-Control"] == "no-store"
+        )
+        status.assert_awaited_once_with("a", "f", "t")
+
+
+@pytest.mark.asyncio
 async def test_duplicate_key_and_storage_failure(collection, monkeypatch):
     from pymongo.errors import ServerSelectionTimeoutError
 
@@ -180,7 +214,9 @@ async def test_duplicate_key_and_storage_failure(collection, monkeypatch):
     with pytest.raises(MemoryError) as error:
         await store.load("a")
     assert error.value.status == 503
-    assert await get_personalization_context(user_id="a", farm_uid="farm") == {}
+    result = await get_personalization_context(user_id="a", farm_uid="farm")
+    assert not result.get("personalization")
+    assert result["personalization_diagnostics"]["code"] == "memory_storage_unavailable"
 
 
 def test_memory_patch_cannot_clear_required_values():

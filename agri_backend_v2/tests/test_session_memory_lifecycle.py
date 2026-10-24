@@ -119,6 +119,7 @@ async def test_short_history_rolls_into_summary_before_leaving_window(
     assert first["summary"] == "地块 A"
     assert len(first["messages"]) == 12
     assert first["messages"][0]["turn_id"] == "turn-1"
+    assert first["recent_user_statements"][0] == "user-0"
     await short_term.get_session_view("rolling", **SCOPE)
     assert len(calls) == 1
     # 下一轮摘要合并上一份摘要，只处理新滑出的轮次。
@@ -128,6 +129,24 @@ async def test_short_history_rolls_into_summary_before_leaving_window(
     assert "地块 A" in calls[-1][-1]["content"]
     assert "user-1" in calls[-1][-1]["content"]
     assert "user-0" not in calls[-1][-1]["content"]
+
+
+@pytest.mark.asyncio
+async def test_user_evidence_survives_six_turn_window_and_is_bounded(memory_store):
+    messages = memory_store[1]
+    messages[:] = history(14)
+    messages[6]["content"] = "我喜欢打王者荣耀，下午健身再做饭"
+    view = await short_term.get_session_view("user-evidence", **SCOPE)
+    assert all("王者荣耀" not in m["content"] for m in view["messages"])
+    assert "我喜欢打王者荣耀，下午健身再做饭" in view["recent_user_statements"]
+    assert (
+        len(view["recent_user_statements"])
+        == short_term.SESSION_USER_EVIDENCE_TURN_LIMIT - 1
+    )
+    assert "user-0" not in view["recent_user_statements"]
+    assert all(
+        not text.startswith("assistant") for text in view["recent_user_statements"]
+    )
 
 
 @pytest.mark.asyncio
