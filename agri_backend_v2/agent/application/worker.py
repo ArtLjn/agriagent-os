@@ -201,9 +201,7 @@ async def _persist_observation(turn: Turn, *, assistant_answer: str) -> dict:
     """消息和 Session state 成功后提交一次受控 observation 事件。"""
     if turn.temporary:
         return {"status": "skipped", "persisted": False}
-    from agent.domains.harness.memory.learning import enqueue
-
-    await enqueue(turn)
+    # 长期学习由用户消息的持久事件驱动，助手失败或无法落库不应丢掉用户事实。
     result = await memory.observe(
         user_id=turn.user_id,
         farm_id=turn.farm_id,

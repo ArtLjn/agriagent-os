@@ -11,9 +11,15 @@ from test_personalization import Collection
 
 from agent.domains.harness.memory import learning, tools
 from agent.domains.harness.memory.long_term import get_personalization_context
-from agent.domains.harness.memory.personalization import MemoryCreate, SettingsPatch
+from agent.domains.harness.memory.personalization import (
+    MemoryCreate,
+    MemoryError,
+    SettingsPatch,
+)
 from agent.platforms.persistence import memory_index
 from agent.platforms.persistence.mongo import personalization_store as store
+
+pytestmark = pytest.mark.usefixtures("memory_writer_stub")
 
 _real_assess = tools.assess
 
@@ -748,9 +754,9 @@ async def test_extraction_rejects_fabricated_evidence_and_uncontrolled_presentat
             )
         ),
     )
-    result = await learning.extract("我喜欢雨天干活")
-    assert len(result) == 1
-    assert result[0].key == "work.weather_preference"
+    # 任一伪造证据使整批重试，不能把丢失部分事实伪装成成功。
+    with pytest.raises(MemoryError, match="证据"):
+        await learning.extract("我喜欢雨天干活")
 
 
 @pytest.mark.asyncio
@@ -886,6 +892,7 @@ async def test_semantic_reinforcement_merges_paraphrases_and_corrections_update_
         [
             learning.Candidate(
                 key="different_key",
+                target_slot="work.timing",
                 text="每天晨间巡田",
                 evidence="早晨先绕地走走",
                 relation="reinforce",
@@ -895,7 +902,9 @@ async def test_semantic_reinforcement_merges_paraphrases_and_corrections_update_
     )
     current = (await store.load("u"))["memories"]
     assert len(current) == 1 and current[0]["evidence_count"] == 2
-    assert current[0]["confidence"] > memory["confidence"]
+    assert (
+        current[0]["atoms"][0]["evidence_count"] > memory["atoms"][0]["evidence_count"]
+    )
     # 新的明确纠正原地更新，旧偏好不继续注入，也不要求逐条确认。
     await learning.apply_candidates(
         task(doc, "3", "c"),
@@ -903,6 +912,7 @@ async def test_semantic_reinforcement_merges_paraphrases_and_corrections_update_
             learning.Candidate(
                 key="work.timing",
                 text="傍晚巡视田块",
+                target_slot="work.timing",
                 evidence="现在傍晚巡田",
                 relation="contradict",
                 target_memory_id=memory["memory_id"],
@@ -938,6 +948,18 @@ async def test_semantic_targets_do_not_cross_farms_or_modify_explicit_memory(
     assert len((await store.load("u"))["memories"]) == 1
     same_farm = task(doc, "2")
     same_farm["farm_uid"] = "elsewhere"
+    same_farm["normalized_atoms"] = {
+        explicit["memory_id"]: [
+            {
+                "slot": "work.timing",
+                "text": explicit["text"],
+                "source_type": "explicit",
+                "revision": 1,
+                "updated_at": explicit["updated_at"],
+            }
+        ]
+    }
+    candidate.target_slot = "work.timing"
     await learning.apply_candidates(same_farm, [candidate])
     assert len((await store.load("u"))["memories"]) == 1
     assert (await store.load("u"))["memories"][0]["text"] == "清早巡视"

@@ -1,6 +1,6 @@
 ---
 spec_id: 2026-10-20-agent-personalization-long-term-memory-plan
-last_updated: 2026-10-23
+last_updated: 2026-10-24
 status: implemented-local
 ---
 
@@ -10,7 +10,13 @@ status: implemented-local
 
 采用“MongoDB 保存结构化主数据、QuillRAG 提供可重建语义索引”的架构。第一期交付个性化设置与明确记忆闭环，第二期增加自动习惯学习，第三期接入语义召回。各期独立验收，第一期不依赖向量服务。
 
-## 2026-10-23 实施结果与部署
+## 2026-10-24 统一学习更新
+
+本节覆盖下方 10 月 23 日记录中已被替代的实现：观察改为用户消息内原子 outbox，不依赖普通 Turn 成功；普通新增与纠正走后台，明确保存与后台共用原子抽取、对齐及 CAS 提交。旧复合正文无损拆为 atoms 后按 slot 更新，禁止模型整段 merged_text 替换。来源与时序按事实维护，纠正重置该值证据，取消累加的伪置信度；其余事实不变。删除同时抹除 atoms、证据和归并说明。
+
+读取先过滤无关记忆再排序。任务记录 applied_count/reason/memory_ids，健康接口返回固定启动指纹；MONGODB__DATABASE 可隔离测试数据。详细数据字段、来源保护、失败语义与验证边界以 [当前设计](../design/self-learning-memory.md) 为准。本地验证不代表生产部署，线上 RAG 验收仍单列。
+
+## 2026-10-23 实施结果与部署（历史记录）
 
 已在 `codex/agent-personalization-memory` 实现完整功能链：Web 和 Flutter 配置入口、对话明确记忆工具、临时模式、候选学习、独立 QuillRAG 索引、版本回查与删除屏障。下文保留原始方案，**本节说明最终实现与取舍，优先于原始分期设想**。本地实现完成不代表生产已部署。
 

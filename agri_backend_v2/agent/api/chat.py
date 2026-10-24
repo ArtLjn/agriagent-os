@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import hashlib
-import uuid
 import logging
+import uuid
 
 from fastapi import Header, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -16,12 +16,13 @@ from agent.auth import (
     parse_identity,
     require_identity_permission,
 )
-from agent.domains.harness.runtime.turn import Turn
+from agent.domains.harness.observability.trace.context import trace_id_for_turn
 from agent.domains.harness.runtime.projection import (
     ProjectionPermissionError,
     project_event,
     resolve_presentation_profile,
 )
+from agent.domains.harness.runtime.turn import Turn
 from agent.platforms.persistence.mongo.chat_store import append_message
 from agent.platforms.persistence.redis.coordination import (
     CoordinationError,
@@ -31,7 +32,6 @@ from agent.platforms.persistence.redis.coordination import (
     scope_hash,
 )
 from agent.platforms.persistence.redis.sse import sse_event
-from agent.domains.harness.observability.trace.context import trace_id_for_turn
 from agent.platforms.persistence.redis.turn_store import (
     claim_idempotency,
     dispatch_turn,
@@ -41,8 +41,7 @@ from agent.platforms.persistence.redis.turn_store import (
     stream_events,
     update_turn,
 )
-from shared.roles import Permission
-from shared.roles import UserRole, is_admin_role
+from shared.roles import Permission, UserRole, is_admin_role
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +98,7 @@ async def chat(
     scope = scope_hash(identity["user_id"], identity["farm_id"], conv_id)
     request_id = req.client_request_id or uuid.uuid4().hex
     request_fingerprint = hashlib.sha256(
-        f"{conv_id}|{req.message}".encode("utf-8")
+        f"{conv_id}|{req.message}".encode()
     ).hexdigest()
     turn = Turn(
         conversation_id=conv_id,
@@ -169,6 +168,13 @@ async def chat(
                 user_id=identity["user_id"],
                 farm_id=identity["farm_id"],
                 idempotency_key=f"turn:{turn.turn_id}:user:prompt",
+                learning_event=None
+                if turn.temporary
+                else {
+                    "status": "pending",
+                    "farm_uid": turn.farm_uid,
+                    "observed_at": turn.accepted_at,
+                },
             )
             if not prompt_message_id:
                 await update_turn(

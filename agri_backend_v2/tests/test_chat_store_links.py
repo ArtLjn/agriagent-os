@@ -85,7 +85,7 @@ async def test_conversation_messages_expose_turn_and_trace_links(monkeypatch) ->
             "meta": {"source": "agent_chat"},
         }
     ]
-    assert len(collection.indexes) == 3
+    assert (("memoryLearning.status", 1), ("createdAt", 1)) in collection.indexes
 
 
 @pytest.mark.asyncio

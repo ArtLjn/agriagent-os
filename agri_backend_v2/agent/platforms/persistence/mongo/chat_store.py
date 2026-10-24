@@ -35,22 +35,22 @@ from agent.platforms.persistence.mongo.conversation_state import (
     _unavailable_result,
 )
 from agent.platforms.persistence.mongo.conversation_state import (
-    claim_summary_generation as claim_summary_generation,
+    claim_summary_generation as claim_summary_generation,  # noqa: PLC0414 -- 保留现有调用方使用的显式重导出。
 )
 from agent.platforms.persistence.mongo.conversation_state import (
-    clear_expired_session_state as clear_expired_session_state,
+    clear_expired_session_state as clear_expired_session_state,  # noqa: PLC0414 -- 保留现有调用方使用的显式重导出。
 )
 from agent.platforms.persistence.mongo.conversation_state import (
-    get_conversation_state as get_conversation_state,
+    get_conversation_state as get_conversation_state,  # noqa: PLC0414 -- 保留现有调用方使用的显式重导出。
 )
 from agent.platforms.persistence.mongo.conversation_state import (
-    reset_conversation_state as reset_conversation_state,
+    reset_conversation_state as reset_conversation_state,  # noqa: PLC0414 -- 保留现有调用方使用的显式重导出。
 )
 from agent.platforms.persistence.mongo.conversation_state import (
-    save_conversation_state as save_conversation_state,
+    save_conversation_state as save_conversation_state,  # noqa: PLC0414 -- 保留现有调用方使用的显式重导出。
 )
 from agent.platforms.persistence.mongo.conversation_state import (
-    save_summary_result as save_summary_result,
+    save_summary_result as save_summary_result,  # noqa: PLC0414 -- 保留现有调用方使用的显式重导出。
 )
 
 logger = logging.getLogger(__name__)
@@ -356,6 +356,11 @@ async def ensure_indexes() -> None:
             name="idx_messages_turn_created",
         )
         await coll.create_index(
+            [("memoryLearning.status", 1), ("createdAt", 1)],
+            name="idx_messages_memory_outbox",
+            partialFilterExpression={"memoryLearning.status": {"$exists": True}},
+        )
+        await coll.create_index(
             [("farmId", 1), ("conversationId", 1), ("idempotencyKey", 1)],
             name="uniq_message_idempotency_key",
             unique=True,
@@ -428,6 +433,7 @@ async def append_message(
     user_id: str | None = None,
     farm_id: int | None = None,
     idempotency_key: str | None = None,
+    learning_event: dict[str, Any] | None = None,
 ) -> str | None:
     """幂等追加用户可见消息，返回 MongoDB _id；不可用时返回 None。"""
     coll = get_collection()
@@ -470,6 +476,9 @@ async def append_message(
             doc["meta"] = safe_meta
         if idempotency_key:
             doc["idempotencyKey"] = idempotency_key
+        if learning_event and role == "user" and normalized_kind == "prompt":
+            # 与原文同一文档提交，进程在派发前退出也不会丢失学习事件。
+            doc["memoryLearning"] = learning_event
         result = await coll.insert_one(doc)
         return str(result.inserted_id)
     except Exception as exc:  # noqa: BLE001
@@ -604,7 +613,7 @@ async def load_recent(
             }
             for d in docs
         ]
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning("mongo load_recent failed (non-fatal): %s", exc)
         if strict:
             raise RuntimeError("conversation_messages_unavailable") from exc
