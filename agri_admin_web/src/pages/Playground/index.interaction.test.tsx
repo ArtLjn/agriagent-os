@@ -72,17 +72,18 @@ describe('Playground 执行界面交互', () => {
     render(<Playground />);
     fireEvent.click(await screen.findByRole('button', { name: '查看会话：用于归档的会话' }));
     await waitFor(() => expect(screen.getByRole('textbox', { name: '对话输入' })).toBeEnabled());
-    fireEvent.click(screen.getByRole('button', { name: '归档到草稿箱' }));
+    fireEvent.click(screen.getByRole('button', { name: '会话操作：用于归档的会话' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: '归档到草稿箱' }));
     await waitFor(() => expect(screen.queryByRole('button', { name: '查看会话：用于归档的会话' })).not.toBeInTheDocument());
     expect(screen.getByRole('textbox', { name: '对话输入' })).toBeEnabled();
     fireEvent.click(screen.getByRole('tab', { name: /草稿箱/ }));
     fireEvent.click(await screen.findByRole('button', { name: '查看会话：用于归档的会话' }));
     await screen.findByText('此会话已归档。请在草稿箱恢复后继续聊天。');
     expect(screen.queryByRole('textbox', { name: '对话输入' })).not.toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole('button', { name: '恢复会话' })).toBeEnabled());
-    fireEvent.click(screen.getByRole('button', { name: '恢复会话' }));
+    fireEvent.click(screen.getByRole('button', { name: '会话操作：用于归档的会话' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: '恢复会话' }));
     await waitFor(() => expect(screen.getByRole('textbox', { name: '对话输入' })).toBeEnabled());
-    fireEvent.click(screen.getByRole('tab', { name: '会话', exact: true }));
+    fireEvent.click(screen.getByRole('tab', { name: '会话' }));
     expect(await screen.findByRole('button', { name: '查看会话：用于归档的会话' })).toBeInTheDocument();
   });
 
@@ -132,6 +133,7 @@ describe('Playground 执行界面交互', () => {
     fireEvent.click(screen.getByRole('button', { name: '新建会话' }));
     expect(screen.queryByLabelText('执行过程')).not.toBeInTheDocument();
     expect(screen.queryByText('天气查询完成')).not.toBeInTheDocument();
+    await screen.findByRole('button', { name: /番茄采收前/ });
   });
 
   it('输入法选词和 Shift+Enter 不发送，Enter 发送完整多行内容', async () => {
@@ -145,6 +147,12 @@ describe('Playground 执行界面交互', () => {
     await screen.findByText('天气查询完成');
     expect(api.streamChat.mock.calls[0][0]).toBe('查询天气\n给出建议');
     await waitFor(() => expect(input).toBeEnabled());
+    expect(screen.getByRole('textbox', { name: '对话输入' })).toBe(input);
+    expect(screen.queryByRole('heading', { name: '今天，想一起探索什么？' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '新建会话' }));
+    expect(screen.getByRole('textbox', { name: '对话输入' })).toBe(input);
+    expect(screen.getByRole('heading', { name: '今天，想一起探索什么？' })).toBeInTheDocument();
+    await screen.findByRole('button', { name: /番茄采收前/ });
   });
   it.each([['确认', true], ['取消', false]] as const)('保留%s审批操作并同步详情状态', async (action, approved) => {
     api.streamChat.mockImplementation(async function* (): AsyncGenerator<StreamChunk> {

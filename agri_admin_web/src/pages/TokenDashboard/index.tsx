@@ -1,3 +1,4 @@
+import { PageShell } from '../../components/PageShell';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Card, Progress, Row, Col, Select, Segmented, Space, Statistic, Tag } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
@@ -349,19 +350,16 @@ export default function TokenDashboard() {
   const refresh = () => setRefreshKey((key) => key + 1);
 
   return (
-    <div style={{ padding: '14px 20px 64px', background: BG, minHeight: '100vh' }}>
-      <div style={{ marginBottom: 12 }}>
-        <Space align="center" size={12} wrap>
-          <h2 style={{ color: TEXT, margin: 0 }}>Token 监控看板</h2>
+    <PageShell
+      title="Token 监控看板"
+      description={`已持久化模型用量 · 北京时间 · 请求数为模型调用次数 · ${range.label} · ${range.startDate} 至 ${range.endDate}${selectedUser ? `，当前用户：${selectedUser.nickname || selectedUser.phone}` : '，当前范围：全部用户'}${selectedModel ? `，模型：${selectedModel}` : ''}`}
+      actions={
+        <Space size={8} wrap>
           <Tag color={loadFailed ? 'error' : 'success'}>{loadedText}</Tag>
-          <span style={{ color: TEXT_DIM, fontSize: 13 }}>最后刷新：{formatTime(lastLoadedAt)}</span>
+          <span style={{ color: TEXT_DIM, fontSize: 12 }}>最后刷新：{formatTime(lastLoadedAt)}</span>
         </Space>
-        <div style={{ color: TEXT_DIM, fontSize: 13, marginTop: 8 }}>
-          已持久化模型用量 · 北京时间 · 请求数为模型调用次数 · {range.label} · {range.startDate} 至 {range.endDate}
-          {selectedUser ? `，当前用户：${selectedUser.nickname || selectedUser.phone}` : '，当前范围：全部用户'}
-          {selectedModel ? `，模型：${selectedModel}` : ''}
-        </div>
-      </div>
+      }
+    >
 
       {loadFailed && <Alert type="error" showIcon message="部分统计加载失败，缺失数据不能视为零用量，请刷新重试。" style={{ marginBottom: 12 }} />}
       <Card style={{ ...panelStyle, marginBottom: 12 }} bodyStyle={{ padding: 12 }}>
@@ -490,7 +488,7 @@ export default function TokenDashboard() {
         </Space>
         <ModelUsageRows modelStats={modelStats} maxModelTokens={maxModelTokens} />
       </Card>
-    </div>
+    </PageShell>
   );
 }
 

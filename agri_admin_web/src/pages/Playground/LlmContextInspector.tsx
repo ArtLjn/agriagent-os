@@ -65,6 +65,7 @@ export function LlmContextTriggerButton({
   return (
     <Tooltip title="查看最终送入模型的 LLM Context" placement="top">
       <Button
+        aria-label="LLM Context"
         type="default"
         icon={<FileSearchOutlined />}
         loading={loading}
@@ -82,7 +83,7 @@ export function LlmContextTriggerButton({
           fontWeight: 500,
         }}
       >
-        LLM Context
+        <span className="pg-toolbar-label">LLM Context</span>
       </Button>
     </Tooltip>
   );

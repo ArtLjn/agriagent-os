@@ -38,8 +38,27 @@ describe('AdminLayout 菜单信息架构', () => {
 });
 
 describe('AdminLayout 侧边栏折叠', () => {
+  it('从其他页面进入 Playground 时收起导航，手动展开后保持选择', async () => {
+    render(<MemoryRouter initialEntries={['/dev/traces']}><AdminLayout><div>工作区</div></AdminLayout></MemoryRouter>);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Agent 开发' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Playground/ }));
+    expect(await screen.findByRole('button', { name: 'Playground' })).toHaveAttribute('aria-current', 'page');
+    fireEvent.click(screen.getByRole('button', { name: '展开侧边栏' }));
+    expect(await screen.findByRole('menuitem', { name: 'Agent 开发' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('Playground 默认收起全局导航，用户仍可展开访问完整菜单', async () => {
+    render(<MemoryRouter initialEntries={['/dev/playground']}><AdminLayout><div>工作区</div></AdminLayout></MemoryRouter>);
+    expect(screen.getByRole('button', { name: 'Playground' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryByRole('menuitem', { name: '业务运营' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '展开侧边栏' }));
+    expect(await screen.findByRole('menuitem', { name: '业务运营' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Agent 开发' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
   it('当前 Agent 分组可以收起，页面重渲染不会强制展开', async () => {
     const view = render(<MemoryRouter initialEntries={['/dev/playground']}><AdminLayout><div>工作区</div></AdminLayout></MemoryRouter>);
+    fireEvent.click(screen.getByRole('button', { name: '展开侧边栏' }));
     const group = await screen.findByRole('menuitem', { name: 'Agent 开发' });
     expect(group).toHaveAttribute('aria-expanded', 'true');
     fireEvent.click(group);

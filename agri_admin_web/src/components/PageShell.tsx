@@ -6,6 +6,7 @@ const metricAccentStyle = (accent: string) => ({ '--metric-accent': accent }) as
 
 interface PageShellProps {
   title: string;
+  className?: string;
   description?: string;
   actions?: ReactNode;
   children: ReactNode;
@@ -29,15 +30,15 @@ interface StateBlockProps {
   children: ReactNode;
 }
 
-export function PageShell({ title, description, actions, children }: PageShellProps) {
+export function PageShell({ title, description, actions, children, className }: PageShellProps) {
   return (
-    <section className="page-shell">
+    <section className={className ? `page-shell ${className}` : 'page-shell'}>
       <header className="page-shell__header">
         <div>
           <h1 className="page-shell__title">{title}</h1>
           {description && <div className="page-shell__description">{description}</div>}
         </div>
-        {actions && <div>{actions}</div>}
+        {actions && <div className="page-shell__actions">{actions}</div>}
       </header>
       {children}
     </section>

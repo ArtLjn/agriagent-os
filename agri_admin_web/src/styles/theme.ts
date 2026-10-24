@@ -23,10 +23,10 @@ export const palette = {
 };
 
 export const layout = {
-  contentMaxWidth: 1480,
+  contentMaxWidth: 1440,
   radius: 8,
   radiusLg: 8,
-  headerHeight: 68,
+  headerHeight: 56,
 };
 
 const glassBlur = 'none';

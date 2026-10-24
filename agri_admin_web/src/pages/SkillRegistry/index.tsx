@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Typography, Tag, Empty, Spin, Switch, message, Input, Button } from 'antd';
-import { AppstoreOutlined, ExperimentOutlined, SearchOutlined } from '@ant-design/icons';
+import { ExperimentOutlined, SearchOutlined } from '@ant-design/icons';
 import {
   evaluateSkillRouteRecallDataset,
   listSkills,
@@ -12,6 +12,7 @@ import {
   type SkillSummary,
 } from '../../api/admin';
 import { palette } from '../../styles/theme';
+import { PageShell } from '../../components/PageShell';
 
 const CARD_BG = palette.bgElevated;
 const BORDER = palette.border;
@@ -106,11 +107,7 @@ export default function SkillRegistry() {
   };
 
   return (
-    <div>
-      <Typography.Title level={4} style={{ color: TEXT, marginBottom: 16 }}>
-        <AppstoreOutlined style={{ marginRight: 8 }} />
-        Skill 注册表
-      </Typography.Title>
+    <PageShell title="Skill 注册表" description="管理技能启用状态，检查路由召回与评估结果。">
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: 64 }}>
@@ -582,7 +579,7 @@ export default function SkillRegistry() {
           </div>
         </>
       )}
-    </div>
+    </PageShell>
   );
 }
 
@@ -636,7 +633,7 @@ function SummaryCard({
       <div style={{ color: TEXT_DIM, fontSize: 13, marginBottom: 8 }}>
         {label}
       </div>
-      <div style={{ color: TEXT, fontSize: 26, fontWeight: 700 }}>
+      <div style={{ color: TEXT, fontSize: 24, fontWeight: 600 }}>
         {value}
       </div>
     </div>

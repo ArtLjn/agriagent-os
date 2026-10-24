@@ -1,5 +1,6 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
 import { ConversationSidebar } from './ConversationSidebar';
 import { archiveConversation, deleteConversation, listConversations } from '../../api/agent';
 
@@ -7,6 +8,11 @@ vi.mock('../../api/agent', () => ({
   listConversations: vi.fn(), archiveConversation: vi.fn(), deleteConversation: vi.fn(),
 }));
 const item = { conversation_id: 'c1', last_message: '聊聊番茄', last_role: 'user', last_at: '2026-10-24T10:00:00Z', message_count: 2 };
+async function openActions(title = '聊聊番茄') {
+  fireEvent.click(await screen.findByRole('button', { name: `会话操作：${title}` }));
+  return screen.findByRole('menu');
+}
+
 const props = () => ({ userToken: 'owner', sessionId: 'new', sessions: {}, refreshVersion: 0, collapsed: false,
   onCollapse: vi.fn(), onSelect: vi.fn(), onRemove: vi.fn(), onCopyId: vi.fn(), onCopyJson: vi.fn(), onTrace: vi.fn() });
 
@@ -18,10 +24,39 @@ beforeEach(() => {
 });
 
 describe('会话草稿箱', () => {
+  it('收起时隐藏会话内容，展开后保留列表和当前选择', async () => {
+    const callbacks = props();
+    const view = render(<ConversationSidebar {...callbacks} collapsed sessionId="c1" />);
+    await waitFor(() => expect(listConversations).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: '查看会话：聊聊番茄' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '展开会话列表' }));
+    expect(callbacks.onCollapse).toHaveBeenCalledOnce();
+    view.rerender(<ConversationSidebar {...callbacks} sessionId="c1" />);
+    fireEvent.click(await screen.findByRole('button', { name: '查看会话：聊聊番茄' }));
+    expect(callbacks.onSelect).toHaveBeenCalledWith('c1', false);
+    expect(listConversations).toHaveBeenCalledOnce();
+  });
+
+  it('键盘可以打开行尾菜单并复制编号，不会切换会话', async () => {
+    const user = userEvent.setup();
+    const callbacks = props();
+    render(<ConversationSidebar {...callbacks} />);
+    const trigger = await screen.findByRole('button', { name: '会话操作：聊聊番茄' });
+    trigger.focus();
+    await user.keyboard('{Enter}');
+    const copy = await screen.findByRole('menuitem', { name: '复制 Session ID' });
+    act(() => copy.focus());
+    // rc-menu 使用旧版 which 判断回车；jsdom 的 userEvent 不生成该字段。
+    fireEvent.keyDown(copy, { key: 'Enter', code: 'Enter', which: 13, keyCode: 13 });
+    expect(callbacks.onCopyId).toHaveBeenCalledExactlyOnceWith('c1');
+    expect(callbacks.onSelect).not.toHaveBeenCalled();
+  });
+
   it('归档后移出会话列表，使用当前身份操作且不触发打开', async () => {
     const callbacks = props();
     render(<ConversationSidebar {...callbacks} />);
-    const archive = await screen.findByRole('button', { name: '归档到草稿箱' });
+    await openActions();
+    const archive = await screen.findByRole('menuitem', { name: '归档到草稿箱' });
     vi.mocked(listConversations).mockResolvedValue({ items: [], has_more: false });
     fireEvent.click(archive);
     await waitFor(() => expect(callbacks.onRemove).toHaveBeenCalledWith('c1'));
@@ -33,24 +68,27 @@ describe('会话草稿箱', () => {
   it('草稿箱打开历史使用只读标志，支持恢复', async () => {
     const callbacks = props();
     render(<ConversationSidebar {...callbacks} />);
-    await screen.findByRole('button', { name: '归档到草稿箱' });
+    await screen.findByRole('button', { name: '会话操作：聊聊番茄' });
     fireEvent.click(screen.getByRole('tab', { name: /草稿箱/ }));
     fireEvent.click(await screen.findByRole('button', { name: '查看会话：聊聊番茄' }));
     expect(callbacks.onSelect).toHaveBeenCalledWith('c1', true);
     expect(listConversations).toHaveBeenLastCalledWith(50, 'owner', { archived: true });
-    fireEvent.click(screen.getByRole('button', { name: '恢复会话' }));
+    await openActions();
+    fireEvent.click(await screen.findByRole('menuitem', { name: '恢复会话' }));
     await waitFor(() => expect(archiveConversation).toHaveBeenCalledWith('c1', false, 'owner'));
   });
 
   it('删除必须确认，失败保留会话和确认框以便重试', async () => {
     render(<ConversationSidebar {...props()} />);
     fireEvent.click(screen.getByRole('tab', { name: /草稿箱/ }));
-    fireEvent.click(await screen.findByRole('button', { name: '删除会话' }));
+    await openActions();
+    fireEvent.click(await screen.findByRole('menuitem', { name: '删除会话' }));
     const dialog = await screen.findByRole('dialog');
     expect(deleteConversation).not.toHaveBeenCalled();
     fireEvent.click(within(dialog).getByRole('button', { name: '取 消' }));
     expect(deleteConversation).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: '删除会话' }));
+    await openActions();
+    fireEvent.click(await screen.findByRole('menuitem', { name: '删除会话' }));
     vi.mocked(deleteConversation).mockRejectedValueOnce(new Error('离线'));
     fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '确认删除' }));
     await screen.findByText('删除失败，请重试');
@@ -65,10 +103,11 @@ describe('会话草稿箱', () => {
   it('生成中的会话不可归档，归档失败不会移除会话', async () => {
     const callbacks = props();
     const view = render(<ConversationSidebar {...callbacks} sessions={{ c1: { messages: [], loading: true, traceLoading: false } }} />);
-    expect(await screen.findByRole('button', { name: '归档到草稿箱' })).toBeDisabled();
+    await openActions();
+    expect(await screen.findByRole('menuitem', { name: '归档到草稿箱' })).toHaveAttribute('aria-disabled', 'true');
     view.rerender(<ConversationSidebar {...callbacks} />);
     vi.mocked(archiveConversation).mockRejectedValueOnce(new Error('离线'));
-    fireEvent.click(screen.getByRole('button', { name: '归档到草稿箱' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '归档到草稿箱' }));
     await screen.findByText('会话操作失败，请重试');
     expect(callbacks.onRemove).not.toHaveBeenCalled();
   });
@@ -79,7 +118,7 @@ describe('会话草稿箱', () => {
     render(<ConversationSidebar {...props()} />);
     vi.mocked(listConversations).mockResolvedValueOnce({ items: [item], next_cursor: 'c1', has_more: true });
     fireEvent.click(screen.getByRole('tab', { name: /草稿箱/ }));
-    await screen.findByRole('button', { name: '删除会话' });
+    await screen.findByRole('button', { name: '查看会话：聊聊番茄' });
     resolve({ items: [{ ...item, last_message: '过期响应' }], has_more: false });
     vi.mocked(listConversations).mockResolvedValueOnce({ items: [{ ...item, conversation_id: 'c2', last_message: '更早会话' }], has_more: false });
     fireEvent.click(screen.getByRole('button', { name: '加载更多' }));
@@ -94,7 +133,8 @@ describe('会话草稿箱', () => {
     const old = props();
     const view = render(<ConversationSidebar key="owner" {...old} />);
     fireEvent.click(screen.getByRole('tab', { name: /草稿箱/ }));
-    fireEvent.click(await screen.findByRole('button', { name: '删除会话' }));
+    await openActions();
+    fireEvent.click(await screen.findByRole('menuitem', { name: '删除会话' }));
     vi.mocked(deleteConversation).mockReturnValueOnce(new Promise((done) => { resolve = done; }));
     fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '确认删除' }));
     vi.mocked(listConversations).mockResolvedValue({ items: [], has_more: false });

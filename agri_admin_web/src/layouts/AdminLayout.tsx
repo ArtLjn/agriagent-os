@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Layout, Menu, Button, Tooltip } from 'antd';
 import {
   MenuFoldOutlined,
@@ -85,17 +85,34 @@ const pageTitles: Record<string, string> = {
 };
 
 const brandLogoSrc = '/logo.png';
+// 窄屏自动收为图标栏，把宽度让给内容区；用户仍可手动展开。
+const SIDEBAR_COLLAPSE_QUERY = '(max-width: 1200px)';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const [collapsed, setCollapsed] = useState(() => window.matchMedia('(max-width: 900px)').matches);
+  const location = useLocation();
+  const isFullScreen = location.pathname === '/dev/playground';
+  const headerHeight = isFullScreen ? 52 : layout.headerHeight;
+  const [sidebarState, setSidebarState] = useState(() => ({
+    workspace: isFullScreen,
+    collapsed: isFullScreen || window.matchMedia(SIDEBAR_COLLAPSE_QUERY).matches,
+  }));
+  // 进入工作区时采用紧凑导航；同一路由内保留用户手动展开的选择。
+  if (sidebarState.workspace !== isFullScreen) {
+    setSidebarState({ workspace: isFullScreen, collapsed: isFullScreen || window.matchMedia(SIDEBAR_COLLAPSE_QUERY).matches });
+  }
+  const { collapsed } = sidebarState;
+  useEffect(() => {
+    const query = window.matchMedia(SIDEBAR_COLLAPSE_QUERY);
+    const sync = (event: MediaQueryListEvent) => setSidebarState({ workspace: isFullScreen, collapsed: event.matches || isFullScreen });
+    query.addEventListener('change', sync);
+    return () => query.removeEventListener('change', sync);
+  }, [isFullScreen]);
   const { mode } = useThemeMode();
   const navigate = useNavigate();
-  const location = useLocation();
 
   const currentTitle = pageTitles[location.pathname] || '田掌柜';
-  const isFullScreen = location.pathname === '/dev/playground';
   const collapseLabel = collapsed ? '展开侧边栏' : '折叠侧边栏';
-  const toggleSidebar = () => setCollapsed((current) => !current);
+  const toggleSidebar = () => setSidebarState((current) => ({ ...current, collapsed: !current.collapsed }));
   const selectedKey = useMemo(() => {
     if (location.pathname.startsWith('/cycles/')) return '/cycles';
     if (location.pathname.startsWith('/crops/system')) return '/crops/system';
@@ -125,7 +142,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const visibleMenuItems = collapsed ? collapsedMenuItems : menuItems;
 
   return (
-    <Layout className="app-shell" style={{ height: '100vh', background: 'transparent' }}>
+    <Layout className={`app-shell${isFullScreen ? ' app-shell--playground' : ''}`} style={{ height: '100dvh', background: 'transparent' }}>
       <Sider
         width={232}
         collapsedWidth={68}
@@ -136,11 +153,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div
           className="app-sidebar-brand"
           style={{
-            height: 80,
+            // 与全局 header 同高，避免左侧品牌区与右侧顶栏出现横线错位。
+            height: headerHeight,
             display: 'flex',
             alignItems: 'center',
             justifyContent: collapsed ? 'center' : 'space-between',
-            padding: collapsed ? 0 : '0 12px 0 20px',
+            padding: collapsed ? 0 : '0 12px 0 16px',
 
             gap: 10,
           }}
@@ -149,8 +167,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <div
               className="app-brand-mark"
               style={{
-                width: 34,
-                height: 34,
+                width: 32,
+                height: 32,
                 borderRadius: 10,
                 display: 'flex',
                 alignItems: 'center',
@@ -166,22 +184,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               />
             </div>
             {!collapsed && (
-              <div style={{ minWidth: 0 }}>
-                <div style={{ color: palette.text, fontSize: 20, fontWeight: 700, whiteSpace: 'nowrap' }}>
-                  田掌柜
-                </div>
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    color: palette.textMuted,
-                    fontSize: 12,
-                    marginTop: 2,
-                  }}
-                >
-                  智能种植运营助手
-                </div>
+              <div className="app-brand-copy">
+                <div className="app-brand-name">田掌柜</div>
+                <div className="app-brand-tagline">智能种植运营助手</div>
               </div>
             )}
           </div>
@@ -273,7 +278,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <Header
           className="app-header"
           style={{
-            height: layout.headerHeight,
+            height: headerHeight,
             padding: '0 24px',
             display: 'flex',
             alignItems: 'center',
@@ -292,10 +297,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </span>
           </span>
           <span className="app-header__user">
-            <ThemeToggle />
-            <span className="app-header__date">
+            <ThemeToggle compact={isFullScreen} />
+            {!isFullScreen && <span className="app-header__date">
               {new Date().toLocaleDateString('zh-CN')}
-            </span>
+            </span>}
             {collapsed && <Button type="text" aria-label="退出登录" icon={<LogoutOutlined />} onClick={() => { authStore.clearToken(); navigate('/login'); }} />}
           </span>
         </Header>

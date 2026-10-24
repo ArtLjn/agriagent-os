@@ -43,6 +43,7 @@ import { getSsePresentationProfile, roleLabel, USER_ROLES } from '../../constant
 const CARD = palette.bgElevated;
 const TEXT_DIM = palette.textMuted;
 const ACCENT = palette.accent;
+const CONVERSATION_SIDEBAR_QUERY = '(max-width: 840px)';
 
 interface Message {
   id: string;
@@ -183,9 +184,9 @@ export default function Playground() {
   const [devUsers, setDevUsers] = useState<DevUser[]>([]);
   const [selectedDevUser, setSelectedDevUser] = useState<DevUser | null>(null);
   // 窄屏默认收起会话列表，避免两级导航挤占聊天宽度。
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.matchMedia('(max-width: 1100px)').matches);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.matchMedia(CONVERSATION_SIDEBAR_QUERY).matches);
   useEffect(() => {
-    const query = window.matchMedia('(max-width: 1100px)');
+    const query = window.matchMedia(CONVERSATION_SIDEBAR_QUERY);
     const sync = (event: MediaQueryListEvent) => setSidebarCollapsed(event.matches);
     query.addEventListener('change', sync);
     return () => query.removeEventListener('change', sync);
@@ -685,6 +686,7 @@ export default function Playground() {
 
   const lastMessage = messages[messages.length - 1];
   const isThinking = loading && Boolean(lastMessage) && lastMessage.content === '' && !lastMessage.events?.length;
+  const isWelcome = messages.length === 0 && !loading && !activeSession.archived;
 
   return (
     <div className="playground-workspace">
@@ -710,6 +712,8 @@ export default function Playground() {
           <div className="playground-toolbar__inner">
             <div className="playground-toolbar__main">
               <Select
+                aria-label="对话身份"
+                variant="borderless"
                 placeholder="选择用户"
                 value={selectedDevUser?.user_id ?? ''}
                 onChange={(value) => {
@@ -728,30 +732,29 @@ export default function Playground() {
                 className="playground-user-select"
                 styles={{ popup: { root: { background: CARD } } }}
                 options={[
-                  { value: '', label: '默认用户（admin 自身）' },
+                  { value: '', label: '管理员本人' },
                   ...devUsers.map((u) => ({
                     value: u.user_id,
                     label: `${u.nickname || u.phone} (farm:${u.farm_id}, ${u.role})`,
                   })),
                 ]}
               />
-              <div
-                className="playground-identity"
-                title={`viewer: admin · acting_as: ${selectedDevUser?.user_id ?? 'admin'} · presentation: ${selectedDevUser ? 'user' : 'debug'}`}
-              >
-                <span className={`pg-chip ${presentationProfile === 'user' ? 'pg-chip--accent' : 'pg-chip--muted'}`}>
-                  {presentationProfile === 'user' ? `${roleLabel(executionRole)}视图` : '管理员视图'}
-                </span>
-                {selectedDevUser && (
+              {selectedDevUser && (
+                <div
+                  className="playground-identity"
+                  title={`viewer: admin · acting_as: ${selectedDevUser.user_id} · presentation: user`}
+                >
+                  <span className="pg-chip pg-chip--accent">{`${roleLabel(executionRole)}视图`}</span>
                   <span className="playground-identity__acting-as">
                     acting_as: {selectedDevUser.user_id}
                   </span>
-                )}
-              </div>
+                </div>
+              )}
               <Tooltip title={`${sessionId}（点击复制）`}>
                 <button
                   type="button"
                   className="playground-session-id"
+                  aria-label="复制当前会话编号"
                   onClick={() => void copySessionId(sessionId)}
                 >
                   <span>{sessionId}</span>
@@ -780,16 +783,14 @@ export default function Playground() {
                   style={{
                     color: TEXT_DIM,
                     height: 32,
-                    paddingInline: 10,
+                    paddingInline: 9,
                     borderRadius: 8,
                     fontSize: 13,
                   }}
-                >
-                  <span className="pg-toolbar-label">清空</span>
-                </Button>
+                />
               </Tooltip>
               <Button
-                type="primary"
+                type="default"
                 icon={<PlusOutlined />}
                 aria-label="新建会话"
                 onClick={createNewSession}
@@ -808,6 +809,8 @@ export default function Playground() {
           </div>
         </div>
 
+        {/* 输入框保持同一挂载位置，切换空态与对话态时保留焦点和输入法状态。 */}
+        <div className={`playground-stage${isWelcome ? ' playground-stage--welcome' : ''}`}>
         {/* 消息区域 */}
         <div
           className="playground-messages surface-scroll"
@@ -823,21 +826,16 @@ export default function Playground() {
             if (container.scrollTop <= 48) void loadOlderMessages();
           }}
         >
-          {messages.length === 0 && (
+          {isWelcome && (
             <div className="pg-empty">
-              <div className="pg-empty__badge"><ExperimentOutlined /></div>
-              <div className="pg-empty__title">田掌柜 Agent Playground</div>
+              <div className="pg-empty__badge"><ExperimentOutlined aria-hidden />田掌柜 · Playground</div>
+              <h1 className="pg-empty__title">今天，想一起探索什么？</h1>
               <div className="pg-empty__hint">
                 从感兴趣的问题开始，或直接说说你想了解什么
               </div>
-              <QuickPrompts
-                key={selectedDevUser?.user_id ?? 'self'}
-                userToken={activeUserToken}
-                onSelect={(prompt) => { setInput(prompt); composerRef.current?.focus(); }}
-                disabled={loading}
-              />
             </div>
           )}
+          {loading && messages.length === 0 && <div className="pg-history-loading" role="status">正在加载会话…</div>}
           {messages.map((m) => (
             <ChatBubble
               key={m.id}
@@ -1002,6 +1000,13 @@ export default function Playground() {
               </Button>
             </div>
           </div>}
+        </div>
+        {isWelcome && <QuickPrompts
+          key={selectedDevUser?.user_id ?? 'self'}
+          userToken={activeUserToken}
+          onSelect={(prompt) => { setInput(prompt); composerRef.current?.focus(); }}
+          disabled={loading}
+        />}
         </div>
       </div>
     </div>

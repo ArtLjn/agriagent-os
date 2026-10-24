@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import {
-  Typography,
   Button,
   Card,
   Descriptions,
@@ -10,9 +9,10 @@ import {
   Spin,
   Empty,
 } from 'antd';
-import { SettingOutlined, ClearOutlined } from '@ant-design/icons';
+import { ClearOutlined } from '@ant-design/icons';
 import { getConfig, clearCache, type AdminConfig } from '../../api/admin';
 import { palette } from '../../styles/theme';
+import { PageShell } from '../../components/PageShell';
 
 const CARD_BG = palette.bgElevated;
 const BORDER = palette.border;
@@ -82,19 +82,10 @@ export default function ConfigKeys() {
   };
 
   return (
-    <div>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: 16,
-        }}
-      >
-        <Typography.Title level={4} style={{ color: TEXT, margin: 0 }}>
-          <SettingOutlined style={{ marginRight: 8 }} />
-          配置管理
-        </Typography.Title>
+    <PageShell
+      title="配置管理"
+      description="查看服务配置与缓存状态。"
+      actions={
         <Button
           danger
           icon={<ClearOutlined />}
@@ -103,7 +94,8 @@ export default function ConfigKeys() {
         >
           清空缓存
         </Button>
-      </div>
+      }
+    >
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: 64 }}>
@@ -226,6 +218,6 @@ export default function ConfigKeys() {
           </div>
         </>
       )}
-    </div>
+    </PageShell>
   );
 }

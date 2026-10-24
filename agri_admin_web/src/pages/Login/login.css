@@ -54,9 +54,7 @@
   background: var(--login-paper);
   color: var(--login-ink);
   color-scheme: light;
-  font-family:
-    -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
-    "Helvetica Neue", Inter, ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--app-font-sans);
 }
 
 .login-page[data-theme="dark"] {
@@ -213,7 +211,7 @@
 
 .login-brand__name {
   color: var(--login-brand-name);
-  font-size: 19px;
+  font-size: 17px;
   font-weight: 600;
   letter-spacing: 0.02em;
   line-height: 1.2;
