@@ -8,6 +8,7 @@ import pytest
 from pydantic import ValidationError
 from pymongo.errors import DuplicateKeyError
 
+from agent.domains.harness.context import builder
 from agent.domains.harness.memory.personalization import (
     MemoryCreate,
     MemoryError,
@@ -17,14 +18,13 @@ from agent.domains.harness.memory.personalization import (
     visible_memories,
 )
 from agent.platforms.persistence.mongo import personalization_store as store
-from agent.domains.harness.context import builder
 
 
 class Collection:
     def __init__(self):
         self.docs = {}
 
-    async def find_one(self, query):
+    async def find_one(self, query, projection=None):
         return deepcopy(self.docs.get(query["_id"]))
 
     async def insert_one(self, doc):
@@ -129,6 +129,7 @@ def test_invalid_settings_rejected(payload):
 async def test_api_auth_validation_and_failure(monkeypatch):
     from fastapi import FastAPI
     from httpx import ASGITransport, AsyncClient
+
     from agent.api import api_router
     from agent.api import personalization as api
 
@@ -164,6 +165,7 @@ async def test_api_auth_validation_and_failure(monkeypatch):
 @pytest.mark.asyncio
 async def test_duplicate_key_and_storage_failure(collection, monkeypatch):
     from pymongo.errors import ServerSelectionTimeoutError
+
     from agent.domains.harness.memory.long_term import get_personalization_context
 
     await store.create_memory(

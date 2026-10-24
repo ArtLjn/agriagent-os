@@ -81,6 +81,7 @@ def service(tmp_path):
             base_url=f"http://127.0.0.1:{port}/api/v2",
             headers={"Authorization": "Bearer " + token},
             timeout=120,
+            trust_env=False,
         ) as http,
     ):
 
@@ -193,7 +194,7 @@ def chat(http, message, conversation):
 def learned(db, turn_id):
     """实际任务必须完成，不能将无候选、入队成功或主对话完成当作记忆生效。"""
     for _ in range(240):
-        job = db.agentMemoryLearningTasksV2.find_one({"turn_id": turn_id})
+        job = db.agentMemoryLearningTasksV3.find_one({"turn_id": turn_id})
         if job and job["status"] in {"done", "failed"}:
             assert job["status"] == "done", {
                 k: job.get(k) for k in ("status", "error_code", "attempts")
@@ -278,7 +279,7 @@ def test_real_message_outbox_survives_assistant_failure_and_restart(service):
             "messageKind": "prompt",
             "content": "我一直偏好简洁的回答",
             "createdAt": "2026-10-24 10:00:00",
-            "memoryLearningV2": {
+            "memoryLearningV3": {
                 "status": "pending",
                 "farm_uid": farm_uid,
                 "observed_at": time.time(),
@@ -287,7 +288,9 @@ def test_real_message_outbox_survives_assistant_failure_and_restart(service):
     )
     restart()
     result = learned(db, identifier)
-    assert result["applied_count"] == 1
+    assert result["applied_count"] == 1, {
+        k: result.get(k) for k in ("candidate_count", "applied_count", "reason")
+    }
     assert "简洁" in str(http.get("/me/memories").json()["items"])
 
 
@@ -303,3 +306,34 @@ def test_real_explicit_save_and_background_share_facts(service):
     atoms = records[0]["atoms"]
     assert len(atoms) == 4 and all(a["source_type"] == "explicit" for a in atoms), atoms
     assert all(a["evidence_count"] == 1 for a in atoms), atoms
+
+
+def test_real_historical_preference_cannot_override_current(service):
+    http, db, _user_id, _farm_uid, restart = service
+    current = chat(http, "在星潮贴纸个人项目里，我现在不喜欢银色了。", "current")
+    assert learned(db, turn_id(current))["applied_count"] == 1
+    history = chat(
+        http,
+        "去年在星潮贴纸个人项目里，我喜欢银色。这只是去年的情况，不代表现在仍然喜欢。",
+        "history",
+    )
+    assert learned(db, turn_id(history))["applied_count"] == 1
+    records = http.get("/me/memories").json()["items"]
+    atoms = [a for m in records for a in m["atoms"]]
+    assert any(
+        a["temporal_scope"] == "historical" and "去年" in a["time_evidence"]
+        for a in atoms
+    )
+    active = [a for a in atoms if a["temporal_scope"] == "current"]
+    assert len(active) == 1 and "不喜欢" in active[0]["text"]
+    restart()
+    recall = chat(
+        http, "在星潮贴纸项目里我现在喜欢银色吗？仅依据记忆回答，不要猜测。", "recall"
+    )
+    answer = "".join(
+        e["data"].get("text", "") for e in recall if e["type"] == "final_answer"
+    )
+    assert "银色" in answer and "不喜欢" in answer, answer
+    for record in records:
+        assert http.delete("/me/memories/" + record["memory_id"]).status_code == 200
+    assert http.get("/me/memories").json()["total"] == 0

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from agent.domains.harness.memory.service import source_divergence
 from agent.domains.harness.observability.trace.safety import (
     safe_token_usage,
@@ -37,6 +39,24 @@ def test_trace_token_usage_keeps_only_numeric_usage_fields() -> None:
             "raw_response": "must not be persisted",
         }
     ) == {"prompt_tokens": 10, "completion_tokens": 3, "total_tokens": 13}
+
+
+def test_large_context_trace_preserves_budget_and_marks_preview() -> None:
+    original = {
+        "budget": {"total_tokens": 40000, "max_tokens": 64000},
+        "messages": [
+            {"role": "system", "content": "约束" * 20000},
+            {"role": "user", "content": "拿铁用什么奶？", "api_key": "private"},
+        ],
+    }
+    result = sanitize_payload(original, max_chars=2000, preserve_context=True)
+    assert len(json.dumps(result, ensure_ascii=False)) <= 2000
+    assert result["budget"] == original["budget"]
+    assert result["__trace_truncated"] is True
+    assert len(result["messages"]) == 2
+    assert all(m["status"] == "trace_preview" for m in result["messages"])
+    assert "private" not in json.dumps(result)
+    assert original["messages"][1]["api_key"] == "private"
 
 
 def test_source_divergence_is_structured_and_not_treated_as_empty() -> None:

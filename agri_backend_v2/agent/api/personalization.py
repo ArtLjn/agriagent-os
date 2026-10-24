@@ -18,7 +18,6 @@ from agent.domains.harness.memory.personalization import (
     MemoryPatch,
     SettingsPatch,
     public_settings,
-    visible_memories,
 )
 from agent.platforms.persistence.mongo import personalization_store as store
 from shared.roles import Permission
@@ -42,7 +41,7 @@ CurrentUser = Annotated[dict, Depends(identity)]
 
 @api_router.get("/me/personalization")
 async def get_settings(user: CurrentUser):
-    return public_settings(await store.load(user["user_id"]))
+    return public_settings(await store.load(user["user_id"], memory_ids=[]))
 
 
 @api_router.post("/me/question-recommendations", response_model=RecommendationResponse)
@@ -71,23 +70,16 @@ async def list_memories(
     | None = None,
 ):
     """分页前执行可信范围过滤，删除记录不作为可读内容返回。"""
-    records = visible_memories(await store.load(user["user_id"]), user["farm_uid"])
-    records = [
-        m
-        for m in records
-        if (scope is None or m["scope"] == scope)
-        and (kind is None or m["kind"] == kind)
-        and (category is None or m.get("category", "general") == category)
-        and (status is None or m["status"] == status)
-    ]
-    records.sort(key=lambda item: item["updated_at"], reverse=True)
-    start = (page - 1) * page_size
-    return {
-        "items": records[start : start + page_size],
-        "total": len(records),
-        "page": page,
-        "page_size": page_size,
-    }
+    return await store.page_memories(
+        user["user_id"],
+        user["farm_uid"],
+        page=page,
+        page_size=page_size,
+        scope=scope,
+        kind=kind,
+        category=category,
+        status=status,
+    )
 
 
 @api_router.post("/me/memories")

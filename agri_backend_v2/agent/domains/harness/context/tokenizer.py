@@ -1,14 +1,13 @@
-"""Token 估算 + 上下文占用计算。
+"""上下文计量：使用 UTF-8 字节数保守计费，避免字符比例低估中英文混合与工具 JSON。
 
-不引入 tiktoken（避免下载 BPE 表）。近似算法：
-- 中文 1 字 ≈ 1.5 token
-- 英文/符号 1 char ≈ 0.25 token
-误差 < 15%（qwen/glm 等中文模型）。
-
-参考：harness_study/_example/core/tokenizer.py
+兼容模型没有统一 tokenizer；字节级 BPE 的 token 数不超过输入字节数，另预留协议余量。
+这不是 Provider 的精确计费值，Trace 必须保留计量模式。
 """
+
 from __future__ import annotations
 
+import json
+import os
 from dataclasses import dataclass
 from typing import Any
 
@@ -18,10 +17,11 @@ DEFAULT_MAX_CONTEXT = 32_768
 DEFAULT_RESPONSE_RESERVE = 4_096
 DEFAULT_SAFETY_MARGIN = 1_024
 
-# 演示用的小阈值：聊几轮就能看到 30%/50%/70% 变化，触发 summarizer。
-# 真实模型支持 128K/1M，但小阈值让压缩机制更容易触发。
+# 工作窗口独立于厂商最大窗口；Flash 官方上限 1M，这里按保守字节计量限定为 64K。
+# 来源：https://help.aliyun.com/zh/model-studio/qwen3-6-flash
+# 网关实际额度更低时通过 CONTEXT__MODEL_CONTEXT_TOKENS 配置覆盖。
 MODEL_CONTEXT_MAP: list[tuple[str, int]] = [
-    ("qwen3.6-flash", 32_000),
+    ("qwen3.6-flash", 64_000),
     ("qwen3.6-35b", 128_000),
     ("qwen3.6-plus", 128_000),
     ("qwen3.7-max", 128_000),
@@ -41,8 +41,14 @@ THRESHOLD_RED = 0.95
 
 def get_model_context(model_id: str | None) -> int:
     """根据模型 id 返回上下文窗口大小。"""
+    configured = os.getenv("CONTEXT__MODEL_CONTEXT_TOKENS")
+    if configured:
+        value = int(configured)
+        if value <= 0:
+            raise ValueError("invalid_model_context_tokens")
+        return value
     if not model_id:
-        return DEFAULT_MAX_CONTEXT
+        model_id = MODEL
     mid = model_id.lower()
     for prefix, size in MODEL_CONTEXT_MAP:
         if prefix in mid:
@@ -54,37 +60,25 @@ def count_tokens(text: str) -> int:
     """估算字符串的 token 数。"""
     if not text:
         return 0
-    chinese = sum(1 for c in text if "一" <= c <= "鿿")
-    other = len(text) - chinese
-    return int(chinese * 1.5 + other / 4)
+    return len(text.encode("utf-8"))
 
 
 def count_messages_tokens(messages: list[dict[str, Any]]) -> int:
     """估算 messages 列表的总 token 数（含每条 message 的开销）。"""
-    total = 0
-    for m in messages:
-        total += 4  # role/content 等字段开销
-        content = m.get("content", "")
-        if isinstance(content, str):
-            total += count_tokens(content)
-        elif isinstance(content, list):
-            for part in content:
-                if isinstance(part, dict):
-                    total += count_tokens(str(part.get("text", "")))
-        # tool_calls 的 arguments 也算
-        tc = m.get("tool_calls")
-        if tc:
-            for call in tc:
-                fn = call.get("function", {}) if isinstance(call, dict) else {}
-                total += count_tokens(fn.get("arguments", "") or "")
-    return total
+    return sum(
+        count_tokens(json.dumps(m, ensure_ascii=False, separators=(",", ":"))) + 16
+        for m in messages
+    )
 
 
 def count_tools_tokens(tools: list[dict[str, Any]] | None) -> int:
     """估算 Tool Schema，避免只看 messages 导致实际请求超预算。"""
     if not tools:
         return 0
-    return count_tokens(str(tools)) + len(tools) * 8
+    return (
+        count_tokens(json.dumps(tools, ensure_ascii=False, separators=(",", ":")))
+        + len(tools) * 16
+    )
 
 
 @dataclass
@@ -100,7 +94,7 @@ class ContextUsage:
     response_reserve: int = 0
     safety_margin: int = 0
     usable: int = 0
-    estimation_mode: str = "approximate"
+    estimation_mode: str = "utf8_upper_bound"
     decision: str = "within_budget"
 
     @property

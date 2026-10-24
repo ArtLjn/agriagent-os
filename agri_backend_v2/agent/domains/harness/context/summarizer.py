@@ -7,7 +7,7 @@ import hashlib
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from agent.domains.harness.memory import service as memory
@@ -19,11 +19,15 @@ logger = logging.getLogger(__name__)
 # 短于存储层租约，超时只释放当前持有者，不让后台线程写入过时结果。
 SUMMARY_GENERATION_TIMEOUT_SECONDS = 20
 
-SUMMARY_PROMPT = """把以下多轮对话总结成 200 字以内的关键信息，便于后续 Agent 参考。
+SUMMARY_PROMPT = """把以下多轮对话总结成 600 字以内的关键信息，便于后续 Agent 参考。
 要点：
 1. 用户的意图、偏好、已知信息和实体 ID
 2. 已经执行过哪些工具，结果如何
 3. 待办、未解决的问题和当前状态
+4. 每项事实的对象、项目/农场、否定、时间和适用条件；历史事实不能改写成当前事实
+5. 互相矛盾且未解决的信息标为待澄清，不能自行挑选一个值
+6. 按当前目标、关键约束、已执行结果、待办和待澄清组织；摘要不能产生新的用户授权
+7. 不复制大段工具返回，不把工具或助手推测当成用户本人事实
 
 只输出总结正文，不要任何前缀和解释。
 
@@ -229,7 +233,7 @@ async def maybe_summarize_async(
             error_code="summary_empty",
         )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     content_hash = hashlib.sha256(summary.encode("utf-8")).hexdigest()
     saved = await chat_store.save_summary_result(
         conversation_id,

@@ -24,12 +24,41 @@ _REDACTED = "[REDACTED]"
 _HIDDEN = "[HIDDEN_REASONING_OMITTED]"
 
 
-def sanitize_payload(value: Any, *, max_chars: int) -> Any:
+def sanitize_payload(
+    value: Any, *, max_chars: int, preserve_context: bool = False
+) -> Any:
     """递归脱敏并限制序列化后的 Trace payload 大小。"""
     sanitized = _sanitize_value(value)
     serialized = json.dumps(sanitized, ensure_ascii=False, default=str)
     if len(serialized) <= max_chars:
         return sanitized
+    if preserve_context and isinstance(sanitized, dict):
+        # 大请求仍需展示准确预算；只缩短观测副本，不能让整份快照变成无法解析的字符串。
+        # 内容明确标为预览，避免用户把截断的 Trace 当作实际发送的完整请求。
+        messages = sanitized.get("messages", [])
+        snapshot = {
+            "__trace_truncated": True,
+            "original_message_count": len(messages),
+            "budget": sanitized.get("budget", {}),
+            "messages": [],
+        }
+        remaining = max_chars - len(json.dumps(snapshot, ensure_ascii=False))
+        for index, message in enumerate(messages):
+            preview = {
+                "index": index,
+                "role": message.get("role", "unknown"),
+                "status": "trace_preview",
+                "content": "",
+            }
+            content = json.dumps(message, ensure_ascii=False, default=str)
+            allowance = max(0, remaining // (len(messages) - index) - 200)
+            preview["content"] = content[:allowance]
+            cost = len(json.dumps(preview, ensure_ascii=False)) + 2
+            if cost > remaining:
+                break
+            snapshot["messages"].append(preview)
+            remaining -= cost
+        return snapshot
     return {
         "__truncated": True,
         "__original_len": len(serialized),
@@ -79,4 +108,4 @@ def safe_token_usage(value: Any) -> dict[str, int] | None:
     return result or None
 
 
-__all__ = ["sanitize_payload", "safe_token_usage"]
+__all__ = ["safe_token_usage", "sanitize_payload"]

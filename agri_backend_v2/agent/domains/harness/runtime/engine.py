@@ -61,6 +61,9 @@ from agent.domains.harness.observability.trace import (
     trace_summary_compaction,
     trace_tool_call,
 )
+from agent.domains.harness.observability.trace import (
+    record as trace_record,
+)
 from agent.domains.harness.router import SkillRoute, SkillRouter
 from agent.domains.harness.runtime import finalization, planner, verify
 from agent.domains.harness.runtime.error_policy import (
@@ -970,6 +973,39 @@ async def _call_llm_stream(
 ) -> AsyncGenerator[dict | _LlmResult, None]:
     """流式 LLM 调用，同时转发增量和等待心跳。"""
     _llm_start = time.time()
+    from agent.domains.harness.context.budget import prepare_request
+
+    original_messages = llm_messages
+    llm_messages, final_usage = prepare_request(
+        llm_messages, tools_schema, max_tokens=max_tokens
+    )
+    # 观测面板必须读取裁剪后的真实请求，不能拿初始估算冒充最终预算。
+    trace_record(
+        node_type="prompt_budget",
+        node_name="final_llm_context",
+        phase="reasoning",
+        input_data={"message_count": len(llm_messages)},
+        output_data={
+            "messages": llm_messages,
+            "tools": tools_schema,
+            "system_prompt": "\n\n".join(
+                m["content"]
+                for m in llm_messages
+                if m.get("role") == "system" and isinstance(m.get("content"), str)
+            ),
+            "budget": {
+                **vars(final_usage),
+                "total_tokens": final_usage.used,
+                "max_tokens": final_usage.total,
+                "actions": ["compact_to_budget"]
+                if original_messages != llm_messages
+                else [],
+            },
+        },
+    )
+    yield sse.context_usage(
+        final_usage.used, final_usage.total, final_usage.percent, final_usage.level
+    )
     full_content = ""
     tool_calls: list[dict] = []
     token_usage: dict | None = None

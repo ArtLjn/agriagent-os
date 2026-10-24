@@ -24,7 +24,7 @@ import json
 from datetime import datetime
 from typing import Any
 
-
+from agent.domains.harness.context import tokenizer
 from agent.domains.harness.context.models import (
     BudgetDecision,
     ContextBlock,
@@ -34,9 +34,8 @@ from agent.domains.harness.context.models import (
     SourceStatus,
     TokenBudget,
 )
-from agent.prompts import render_system_prompt
-from agent.domains.harness.context import tokenizer
 from agent.domains.harness.memory.policy import resolve_memory_policy
+from agent.prompts import render_system_prompt
 
 
 def _format_memory(long_term: dict[str, Any]) -> str:
@@ -316,6 +315,7 @@ def build_context_bundle(
         tool_schema_tokens=tool_tokens,
         used_tokens=used,
         decision=decision,
+        estimation_mode="utf8_upper_bound",
     )
     return ContextBundle(
         conversation_id=str(memory_snapshot.get("conversation_id", "default")),

@@ -9,7 +9,7 @@ import httpx
 import pytest
 from test_personalization import Collection
 
-from agent.domains.harness.memory import learning, tools
+from agent.domains.harness.memory import inference, learning, tools
 from agent.domains.harness.memory.long_term import get_personalization_context
 from agent.domains.harness.memory.personalization import (
     MemoryCreate,
@@ -698,7 +698,7 @@ async def test_extraction_accepts_provider_envelope_and_normalizes_values(
 ):
     from agent.platforms.llm import client
 
-    monkeypatch.setattr(learning, "verify_extraction", AsyncMock())
+    monkeypatch.setattr(inference, "verify_extraction", AsyncMock())
     candidates = [
         {
             "key": "response.detail_level",
@@ -972,7 +972,7 @@ async def test_temporary_observation_is_filtered_before_existing_memory_alignmen
 ):
     from agent.platforms.llm import client
 
-    monkeypatch.setattr(learning, "verify_extraction", AsyncMock())
+    monkeypatch.setattr(inference, "verify_extraction", AsyncMock())
     create = AsyncMock(
         return_value=SimpleNamespace(
             choices=[
@@ -982,7 +982,7 @@ async def test_temporary_observation_is_filtered_before_existing_memory_alignmen
     )
     monkeypatch.setattr(client._async_client.chat.completions, "create", create)
     align = AsyncMock()
-    monkeypatch.setattr(learning, "align_candidates", align)
+    monkeypatch.setattr(inference, "align_candidates", align)
     assert await learning.extract("这一次三句话就行", [{"text": "偏好简洁回答"}]) == []
     align.assert_not_called()
     assert "偏好简洁回答" not in create.call_args.kwargs["messages"][-1]["content"]

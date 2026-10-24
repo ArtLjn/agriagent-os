@@ -1718,8 +1718,10 @@ async def _reject(_: str) -> tuple[bool, str]:
 @pytest.mark.asyncio
 async def test_llm_stream_forwards_deltas_and_final_result(monkeypatch) -> None:
     trace_calls = []
+    snapshots = []
 
     async def fake_stream(messages, tools):
+        assert messages == snapshots[0]["output_data"]["messages"]
         yield {
             "type": "retrying",
             "data": {"code": "llm_retrying", "attempt": 1, "delay_ms": 1000},
@@ -1744,9 +1746,19 @@ async def test_llm_stream_forwards_deltas_and_final_result(monkeypatch) -> None:
 
     monkeypatch.setattr(react, "chat_stream", fake_stream)
     monkeypatch.setattr(
+        react, "trace_record", lambda **kwargs: snapshots.append(kwargs)
+    )
+    monkeypatch.setattr(
         react, "trace_llm_call", lambda **kwargs: trace_calls.append(kwargs)
     )
     items = [item async for item in react._call_llm_stream([], [])]
+    assert items[0]["type"] == "context_usage"
+    assert snapshots[0]["node_name"] == "final_llm_context"
+    assert (
+        snapshots[0]["output_data"]["budget"]["total_tokens"]
+        == items[0]["data"]["used"]
+    )
+    items = items[1:]
 
     assert items[0] == {
         "type": "retrying",
