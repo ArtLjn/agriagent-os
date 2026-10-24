@@ -177,7 +177,7 @@ function summaryFromTimeline(
   const completedOutcome = nodes.some((node) => {
     if (node.node_type !== 'turn') return false;
     const output = node.output_data;
-    return Boolean(output && typeof output === 'object' && output.status === 'completed');
+    return Boolean(output && typeof output === 'object' && 'status' in output && output.status === 'completed');
   });
   const isPartial = Boolean(finalizationWarning && completedOutcome);
   const rootNode = nodes.find(

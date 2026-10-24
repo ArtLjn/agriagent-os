@@ -85,4 +85,13 @@ backend/var/mongodb-cleanup/
 output/
 agri_admin_web/dist/
 agri_home_index/app/dist/
-archive
+# 归档默认忽略，仅收录 README 使用的规范命名截图。
+/archive/*
+!/archive/docs/
+/archive/docs/*
+!/archive/docs/assets/
+/archive/docs/assets/*
+!/archive/docs/assets/screenshots/
+/archive/docs/assets/screenshots/*
+!/archive/docs/assets/screenshots/admin-*.png
+!/archive/docs/assets/screenshots/mobile-*.png

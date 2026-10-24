@@ -474,7 +474,7 @@ wheels = [
 
 [[package]]
 name = "farm-manager-agent"
-version = "0.1.0"
+version = "2.0.0"
 source = { editable = "agent" }
 dependencies = [
     { name = "fastapi" },
@@ -507,7 +507,7 @@ requires-dist = [
 
 [[package]]
 name = "farm-manager-business"
-version = "0.1.0"
+version = "2.0.0"
 source = { editable = "business" }
 dependencies = [
     { name = "bcrypt" },
@@ -536,7 +536,7 @@ requires-dist = [
 
 [[package]]
 name = "farm-manager-v2"
-version = "0.1.0"
+version = "2.0.0"
 source = { virtual = "." }
 
 [[package]]

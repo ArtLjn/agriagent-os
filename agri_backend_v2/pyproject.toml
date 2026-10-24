@@ -1,6 +1,6 @@
 [project]
 name = "farm-manager-v2"
-version = "0.1.0"
+version = "2.0.0"
 description = "farm-manager v2: business + agent split via MCP"
 requires-python = ">=3.11"
 

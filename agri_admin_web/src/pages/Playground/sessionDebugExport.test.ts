@@ -116,7 +116,7 @@ describe('buildSessionDebugExport', () => {
     ]);
   });
 
-  it('从 timeline 导出 skill calls、router diagnostics 和 pending plans', () => {
+  it.each([undefined, null])('从 timeline 导出执行证据并兼容错误字段 %s', (errorMessage) => {
     const timeline: TraceTimeline = {
       request_id: 'request-1',
       rounds: [
@@ -141,7 +141,7 @@ describe('buildSessionDebugExport', () => {
               status: 'success',
               token_usage: null,
               start_time: null,
-              error_message: null,
+              error_message: errorMessage,
               input_data: { farm_id: 1 },
               output_data: { active_crops: ['水稻'] },
             },

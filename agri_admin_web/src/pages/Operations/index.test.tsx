@@ -92,7 +92,7 @@ describe('Operations 页面查询参数', () => {
       total: 1,
     });
     vi.mocked(operationsApi.listUnits).mockResolvedValue(
-      axiosResponse([
+      [
         {
           id: 11,
           farm_id: 1,
@@ -101,12 +101,12 @@ describe('Operations 页面查询参数', () => {
           area_mu: '1.5',
           status: 'active',
         },
-      ]),
+      ],
     );
-    vi.mocked(operationsApi.listWorkers).mockResolvedValue(axiosResponse([]));
+    vi.mocked(operationsApi.listWorkers).mockResolvedValue([]);
     vi.mocked(operationsApi.listWorkOrders).mockResolvedValue(axiosResponse({ items: [], total: 0 }));
-    vi.mocked(operationsApi.listRecentOperations).mockResolvedValue(axiosResponse([]));
-    vi.mocked(operationsApi.listOperationTypes).mockResolvedValue(axiosResponse([]));
+    vi.mocked(operationsApi.listRecentOperations).mockResolvedValue([]);
+    vi.mocked(operationsApi.listOperationTypes).mockResolvedValue([]);
     vi.mocked(operationsApi.listWorkerSummaries).mockResolvedValue(axiosResponse({ items: [], total: 0 }));
     vi.mocked(operationsApi.getUnsettledLaborSummary).mockResolvedValue(axiosResponse({}));
     vi.mocked(usersApi.getCurrent).mockResolvedValue(axiosResponse({
@@ -205,7 +205,7 @@ describe('Operations 页面查询参数', () => {
 
   it('工人用工表格展示工人默认单价', async () => {
     vi.mocked(operationsApi.listWorkers).mockResolvedValue(
-      axiosResponse([
+      [
         {
           id: 5,
           farm_id: 1,
@@ -215,7 +215,7 @@ describe('Operations 页面查询参数', () => {
           default_unit_price: '100.00',
           status: 'active',
         },
-      ]),
+      ],
     );
     vi.mocked(operationsApi.listWorkerSummaries).mockResolvedValue(
       axiosResponse({

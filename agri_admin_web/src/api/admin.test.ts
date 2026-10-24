@@ -66,38 +66,13 @@ describe('admin api', () => {
     expect(result.events?.[0].event_id).toBe('evt-1');
   });
 
-  it('通过已有 diagnostics 接口读取 Reflection 诊断', async () => {
-    mockedApiClient.get.mockResolvedValueOnce({
-      data: {
-        request_id: 'req:1',
-        reflection_checks: [
-          {
-            trigger: 'pre_write_plan',
-            decision: 'block_write',
-            reason: '确认文案不一致',
-            checks: ['write_plan_consistency'],
-            issues: [
-              {
-                code: 'confirmation_param_mismatch',
-                severity: 'blocker',
-                message: '确认文案中的对象与参数不一致',
-              },
-            ],
-            input: { tool_name: 'create_cost_record' },
-          },
-        ],
-        reflection_diagnostic: {
-          blocked: true,
-          decisions: ['block_write'],
-          issue_codes: ['confirmation_param_mismatch'],
-        },
-      },
-    });
+  it('v2 未提供独立 Reflection 诊断时返回明确失败且不发送请求', async () => {
+    mockedApiClient.get.mockClear();
 
-    const result = await getTraceDiagnostics('req:1');
-
-    expect(mockedApiClient.get).toHaveBeenCalledWith('/agent/traces/req:1/diagnostics');
-    expect(result.reflection_checks[0].checks).toEqual(['write_plan_consistency']);
+    await expect(getTraceDiagnostics('req:1')).rejects.toThrow(
+      'trace diagnostics endpoint is not available',
+    );
+    expect(mockedApiClient.get).not.toHaveBeenCalled();
   });
 });
 
