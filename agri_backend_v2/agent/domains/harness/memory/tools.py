@@ -416,20 +416,20 @@ async def execute(turn, arguments: dict | str, call_id: str) -> dict:
                     "该操作未获得本轮用户的明确长期授权；普通偏好由自动学习处理",
                     422,
                 )
-        doc = (
-            doc
-            if doc is not None
-            else await store.load(
-                turn.user_id,
-                query=(command.query or turn.user_input)
-                if command.action == "list"
-                else None,
-                memory_ids=None if command.action == "list" else [],
-                farm_uid=turn.farm_uid,
-                limit=memory_runtime.context_selection_limit,
-            )
-        )
         if command.action == "list":
+            from agent.domains.harness.memory.long_term import load_context_candidates
+
+            try:
+                # 补查与主动注入必须使用相同候选源，不能因词项窗口遗漏而否定语义命中。
+                doc = await load_context_candidates(
+                    turn.user_id, turn.farm_uid, command.query or turn.user_input
+                )
+            except TimeoutError as exc:
+                raise MemoryError(
+                    "memory_retrieve_timeout",
+                    "记忆检索超时，不能据此认定没有相关记忆",
+                    503,
+                ) from exc
             return {
                 "ok": True,
                 "memory_revision": doc["revision"],
@@ -449,11 +449,14 @@ async def execute(turn, arguments: dict | str, call_id: str) -> dict:
                         )
                         if k in m
                     }
-                    for m in visible_memories(doc, turn.farm_uid)
+                    for m in visible_memories(doc, turn.farm_uid)[
+                        : memory_runtime.context_selection_limit
+                    ]
                 ]
                 if doc["settings"]["use_saved_memories"]
                 else [],
             }
+        doc = doc if doc is not None else await store.load(turn.user_id, memory_ids=[])
         if command.action == "configure":
             patch = SettingsPatch.model_validate(
                 {**(command.preferences or {}), "expected_revision": doc["revision"]}

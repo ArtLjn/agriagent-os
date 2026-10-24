@@ -83,10 +83,10 @@ async def observe(
     }
 
 
-__all__ = ["observe", "search"]
+__all__ = ["load_context_candidates", "observe", "search"]
 
 
-async def _load_context_candidates(
+async def load_context_candidates(
     user_id: str, farm_uid: str, query: str, control: dict | None = None
 ) -> dict:
     """有界检索与远程语义补充同受存储超时约束，随后校验发布版本。"""
@@ -99,6 +99,8 @@ async def _load_context_candidates(
 
     async with asyncio.timeout(memory_runtime.context_timeout):
         control = control or await store.load(user_id, memory_ids=[])
+        if not control["settings"]["use_saved_memories"]:
+            return control
         diagnostics = {}
         # 词项和语义是互补候选，远程超时仍保留词项结果，不阻塞正常对话。
         doc, ids = await asyncio.gather(
@@ -254,7 +256,7 @@ async def get_personalization_context(
             plan = {"selected": [], "candidate_count": 0, "status": "unavailable"}
             try:
                 async with asyncio.timeout(memory_runtime.context_compile_timeout):
-                    doc = await _load_context_candidates(
+                    doc = await load_context_candidates(
                         user_id, farm_uid, retrieval_query, control
                     )
                     control = doc
