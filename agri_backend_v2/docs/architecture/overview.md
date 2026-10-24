@@ -20,4 +20,14 @@ last_updated: 2026-10-24
 
 规模配置新增 `MEMORY_CONTEXT_TOKENS=3000`（保守字节计量）和 `MEMORY_REVIEW_BYTES=12000`；完整请求工作预算由 `CONTEXT__MODEL_CONTEXT_TOKENS` 覆盖。用户根文档发布 V3 正文引用，正文集合 `agentMemoryRecordsV3`，最多 10000 张有效卡片。升级及回滚约束见自动学习设计文档。
 
-回答阶段使用任务相关的记忆依据整理：最多阅读 60 条原子事实/12KB，输出最多 8 条带用途和条件的原文引用；必要时只补查一轮。`MEMORY_CONTEXT_COMPILE_TIMEOUT=12` 限制整个整理过程，同轮按账号、农场、问题和版本复用，发布前仍读取权威记录以处理删除、过期与关闭。记忆块放在当前问题之前，整块仍遵守 3000 字符与 token 双预算。`answer_memory_context` 与 `final_llm_context.memory_context_included` 分别观察实际渲染和最终发送，使用效果另以最终回答验证。详见设计文档的“面向回答的记忆阅读与注入”。
+回答前固定运行主动记忆检索，默认 `MEMORY_CONTEXT_MODE=retrieve`：Mongo 词项召回与 QuillRAG 语义召回并行，经 RRF、多样性排序及权威版本回查，将原子事实放在当前问题之前，由主模型判断条件、否定与用途。此路径没有额外的记忆阅读模型调用；需要对照旧阅读器时可设置 `MEMORY_CONTEXT_MODE=read`，总时限仍由 `MEMORY_CONTEXT_COMPILE_TIMEOUT=12` 控制。
+
+`MEMORY_CONTEXT_TIMEOUT=3` 控制单次存储准备边界，`MEMORY_RETRIEVE_TIMEOUT=2` 控制语义请求（包括两种权限范围）；语义故障降级词项召回，Trace 明确记录 timeout/unavailable/lexical_fallback。每路最多 24 个语义候选、融合最多 12 张卡片；仍限制 60 条原子事实、12KB 阅读材料和最终 3000 字符/保守 token 双预算。整张卡片必须同时满足预算，避免只留下喜欢而截掉禁忌。
+
+配置样例默认 `context.skill_router_mode=llm_router`、`tool_schema_mode=candidate`、路由超时 5 秒。旧部署的显式配置不会自动覆盖，升级时同步修改配置并重启。路由与记忆检索并行，普通闲聊允许空业务工具集；路由故障仍回全目录。`context.estimate_steps=false`（或 `CONTEXT__ESTIMATE_STEPS=false`）跳过额外步数预估调用，运行时硬步数与工具结果预算继续生效。
+
+语义服务通过 `MEMORY_RAG_URL`、`MEMORY_RAG_API_KEY`、`MEMORY_RAG_COLLECTION` 注入，不把服务凭证提交到仓库。Ollama 可由 QuillRAG 的 OpenAI embedding 适配接入：provider=openai，base URL 为可达的 Ollama 根地址，model 与 dim 必须匹配实测结果。模型只负责向量化，主模型负责回答。索引与查询必须使用同一模型及维度；切模型必须启用新集合并重新标记账号 `index_pending=true,index_available_at=0`，待清单确认全量完成后切查询。生产建议蓝绿服务切换，不能在旧集合内混写不同维度。
+
+索引清单以 `collection:doc_id` 唯一标识，保存 collection/doc_id/owner/version；每批最多 48 条、4 个并发上传。旧无 collection 清单不视为新集合已就绪；默认集合仍兼容清理旧清单，更换服务或集合时须在旧端单独清理。清理每批 100 条但同用户只回查一次主数据，已删除/旧版本永远不能凭向量结果复活。根文档版本条件更新避免索引任务把新变更误标完成。若索引失败，只完成成功条目，剩余条目有限并发重试。
+
+`health.runtime.memory_semantic_configured` 仅表示已配置，不代表向量服务可用；以真实 `/retrieve` 返回的 actual_mode 和 Trace retrieval.status 验证。`answer_memory_context` 记录模式、候选、实际注入与检索耗时；`final_llm_context.memory_context_included` 检查最终请求是否仍含记忆。注入命中和回答是否遵守偏好须分别验收。

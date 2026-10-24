@@ -149,3 +149,29 @@ def test_router_bounds_history_and_keeps_the_latest_exchange():
     assert len(request["recent_dialogue"]) == 4
     assert request["recent_dialogue"][-1]["content"].startswith("7")
     assert all(len(item["content"]) <= 1200 for item in request["recent_dialogue"])
+
+
+@pytest.mark.asyncio
+async def test_personal_advice_can_route_without_business_tools():
+    result = await SkillRouter(
+        llm_call=lambda _: {"content": '{"skills":[],"uncertain":false}'}
+    ).route("下午放松一下，给我出个主意", _registry())
+    assert result.selected_skills == ()
+    assert result.status == "selected"
+    assert result.decision_source != "all_tools_fallback"
+
+
+def test_empty_route_keeps_memory_tool_and_avoids_full_business_catalog(monkeypatch):
+    from agent.domains.harness.router import SkillRoute
+    from agent.domains.harness.runtime import engine
+    from agent.domains.harness.runtime.turn import Turn
+
+    monkeypatch.setattr(engine.skill_loader, "load_all", lambda: _registry().all())
+    turn = Turn(user_id="u", farm_uid="f", user_input="下午放松一下")
+    runtime = engine._setup_turn_runtime(
+        turn, route_result=SkillRoute(selected_skills=(), status="selected")
+    )
+    names = {tool["function"]["name"] for tool in runtime.tools_schema}
+    assert names == {"make_plan", "manage_personal_memory"}
+    assert turn.context_bundle.tool_schema_mode == "candidate"
+    assert turn.step_budget["hard_limit"] == turn.max_steps

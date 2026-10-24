@@ -271,6 +271,59 @@ def context_candidates(document: dict, farm_uid: str, query: str) -> list[dict]:
     return result
 
 
+def rank_context_records(
+    records: list[dict], lexical_ids: list[str], semantic_ids: list[str]
+) -> list[dict]:
+    """融合两个召回次序并分散近重复主题；原始事实及其否定条件不作摘要改写。"""
+    from agent.config import memory_runtime
+    from agent.domains.harness.memory.facts import query_terms, searchable_text
+
+    scores = {}
+    for ids, weight in ((lexical_ids, 0.3), (semantic_ids, 0.7)):
+        for rank, identifier in enumerate(ids):
+            scores[identifier] = scores.get(identifier, 0) + weight / (
+                memory_runtime.fusion_rank_constant + rank + 1
+            )
+    remaining = {m["memory_id"]: m for m in records}
+    terms = {key: query_terms(searchable_text(m)) for key, m in remaining.items()}
+    selected = []
+    while remaining and len(selected) < memory_runtime.context_card_limit:
+
+        def score(identifier):
+            overlap = max(
+                (
+                    len(terms[identifier] & terms[m["memory_id"]])
+                    / max(1, len(terms[identifier] | terms[m["memory_id"]]))
+                    for m in selected
+                ),
+                default=0,
+            )
+            return scores.get(identifier, 0) * (
+                1 - memory_runtime.duplicate_similarity * overlap
+            )
+
+        identifier = max(remaining, key=score)
+        selected.append(remaining.pop(identifier))
+    return selected
+
+
+def proactive_context(document: dict, farm_uid: str, query: str) -> dict:
+    """每轮提前提供有界证据，条件判断与语言组织交给主模型，避免额外串行模型调用。"""
+    facts = context_candidates(document, farm_uid, query)
+    return {
+        "selected": [
+            {
+                "fact": fact,
+                "use": "clarify" if fact.get("state") == "conflicted" else "context",
+                "applicability": "conditional",
+            }
+            for fact in facts
+        ],
+        "candidate_count": len(facts),
+        "status": "ready" if facts else "no_relevant_evidence",
+    }
+
+
 def answer_context(
     document: dict, selected: list[dict], status: str
 ) -> tuple[str, list[dict]]:
@@ -284,6 +337,7 @@ def answer_context(
         "answer": "回答依据",
         "recommend": "推荐依据",
         "style": "表达偏好",
+        "context": "候选依据，结合当前问题判断用途",
     }
     preferences = {
         key: document["settings"][key]
@@ -321,30 +375,37 @@ def answer_context(
         return "<user-personalization>\n" + content + "\n</user-personalization>"
 
     injected = []
+    groups = {}
     for entry in sorted(selected, key=lambda s: list(uses).index(s["use"])):
-        fact = entry["fact"]
-        item = {
-            "memory_id": fact["memory_id"],
-            "用途": uses[entry["use"]],
-            "适用性": "条件成立时才用"
-            if entry["applicability"] == "conditional"
-            else "适用于本题",
-            "原文": {
-                k: v
-                for k, v in fact.items()
-                if k not in {"memory_id", "revision", "source", "slot", "valid_from"}
-                and v not in ("", [])
-            },
-        }
-        payload["依据"].append(item)
+        groups.setdefault(entry["fact"]["memory_id"], []).append(entry)
+    for entries in groups.values():
+        for entry in entries:
+            fact = entry["fact"]
+            payload["依据"].append(
+                {
+                    "memory_id": fact["memory_id"],
+                    "用途": uses[entry["use"]],
+                    "来源": fact.get("source", "unknown"),
+                    "适用性": "条件成立时才用"
+                    if entry["applicability"] == "conditional"
+                    else "适用于本题",
+                    "原文": {
+                        k: v
+                        for k, v in fact.items()
+                        if k not in {"memory_id", "revision", "source", "slot"}
+                        and v not in ("", [])
+                    },
+                }
+            )
         text = render()
         if (
             len(text) > memory_runtime.context_chars
             or count_tokens(text) > memory_runtime.context_tokens
         ):
-            payload["依据"].pop()
+            # 整卡预算：不能因尾部超限丢掉同卡否定，留下误导的正面偏好。
+            del payload["依据"][-len(entries) :]
         else:
-            injected.append(entry)
+            injected.extend(entries)
     text = render()
     if (
         len(text) > memory_runtime.context_chars

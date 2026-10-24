@@ -57,6 +57,19 @@ def service(tmp_path):
         "BUSINESS_MCP__URL": f"http://127.0.0.1:{mcp_port}/mcp",
     }
     user_id, farm_uid = str(uuid.uuid4()), str(uuid.uuid4())
+    # 服务断网时 finally 也可能失败；保留精确清单，禁止凭测试前缀扫库清理。
+    resources = tmp_path / "memory-resources.json"
+    resources.write_text(
+        json.dumps(
+            {
+                "database": identifier,
+                "redis_prefix": identifier,
+                "user_id": user_id,
+                "farm_uid": farm_uid,
+                "cleaned": False,
+            }
+        )
+    )
     timestamp = int(time.time())
     token = jwt.encode(
         {
@@ -163,12 +176,26 @@ def service(tmp_path):
             business.wait(timeout=20)
             # 只有本 fixture 创建的随机专属命名可被销毁。
             assert identifier.startswith("memory_qa_") and len(identifier) == 42
-            mongo.drop_database(identifier)
-            keys = list(redis.scan_iter(match=identifier + ":*"))
-            if keys:
-                redis.delete(*keys)
-            mongo.close()
-            redis.close()
+            try:
+                try:
+                    mongo.drop_database(identifier)
+                finally:
+                    # Mongo 断连也要尝试回收独立 Redis 前缀，避免一个失败跳过后续清理。
+                    keys = list(redis.scan_iter(match=identifier + ":*"))
+                    if keys:
+                        redis.delete(*keys)
+            finally:
+                mongo.close()
+                redis.close()
+            resources.write_text(
+                json.dumps(
+                    {
+                        "database": identifier,
+                        "redis_prefix": identifier,
+                        "cleaned": True,
+                    }
+                )
+            )
 
 
 def chat(http, message, conversation):

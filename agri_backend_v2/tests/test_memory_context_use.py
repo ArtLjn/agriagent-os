@@ -26,6 +26,7 @@ from agent.platforms.persistence.mongo import personalization_store as store
 
 @pytest.fixture
 def memory(monkeypatch):
+    monkeypatch.setattr(memory_runtime, "context_mode", "read")
     coll = Collection()
     monkeypatch.setattr(store, "collection", lambda: coll)
     monkeypatch.setattr(

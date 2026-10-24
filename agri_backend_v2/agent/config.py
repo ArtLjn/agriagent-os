@@ -15,6 +15,7 @@ import yaml
 
 # agent/config.yaml 的位置（与 agent/ 包同级）。
 _CONFIG_FILE = Path(__file__).resolve().parent / "config.yaml"
+DEFAULT_MEMORY_RAG_COLLECTION = "agent_user_memory"
 _SKILL_ROUTER_MODES = frozenset({"main_agent", "llm_router"})
 
 
@@ -133,6 +134,7 @@ class ContextCfg:
     skill_router_backend: str = "llm"
     skill_router_max_skills: int = 3
     skill_router_timeout_seconds: float = 12.0
+    estimate_steps: bool = False
     feature_flags: dict[str, bool] = field(default_factory=_default_feature_flags)
 
     @property
@@ -379,6 +381,7 @@ def _build_settings() -> Settings:
                 0.1, float(context_raw.get("skill_router_timeout_seconds", 12.0))
             ),
             feature_flags=feature_flags,
+            estimate_steps=bool(context_raw.get("estimate_steps", False)),
         ),
         environment=str(raw.get("environment", "development")),
         default_farm_id=int(raw.get("default_farm_id", 1)),
@@ -546,6 +549,10 @@ def _build_settings() -> Settings:
             if env := os.getenv(f"{prefix}{name.upper()}"):
                 settings.context.feature_flags[name] = _env_bool(env)
                 break
+    if os.getenv("CONTEXT__ESTIMATE_STEPS") is not None:
+        settings.context.estimate_steps = _env_bool(
+            os.environ["CONTEXT__ESTIMATE_STEPS"]
+        )
     if settings.context.skill_router_mode not in _SKILL_ROUTER_MODES:
         raise ValueError(
             "invalid_skill_router_mode: "
@@ -563,8 +570,15 @@ class MemoryRuntimeCfg:
     """记忆后台任务与独立检索预算，密钥仅通过环境注入。"""
 
     context_timeout: float = field(
-        default_factory=lambda: float(os.getenv("MEMORY_CONTEXT_TIMEOUT", "1.5"))
+        default_factory=lambda: float(os.getenv("MEMORY_CONTEXT_TIMEOUT", "3"))
     )
+    context_mode: str = field(
+        default_factory=lambda: os.getenv("MEMORY_CONTEXT_MODE", "retrieve")
+    )
+    retrieval_limit: int = 24
+    fusion_rank_constant: int = 60
+    context_card_limit: int = 12
+    duplicate_similarity: float = 0.85
     context_compile_timeout: float = field(
         default_factory=lambda: float(os.getenv("MEMORY_CONTEXT_COMPILE_TIMEOUT", "12"))
     )
@@ -572,7 +586,11 @@ class MemoryRuntimeCfg:
     context_selection_limit: int = 8
     context_search_limit: int = 2
     context_history_chars: int = 1500
-    index_batch_size: int = 3
+    retrieval_history_chars: int = 300
+    retrieval_query_chars: int = 800
+    index_batch_size: int = 48
+    index_concurrency: int = 4
+    index_cleanup_batch_size: int = 100
     assessment_timeout: float = field(
         default_factory=lambda: float(os.getenv("MEMORY_ASSESSMENT_TIMEOUT", "15"))
     )
@@ -588,10 +606,12 @@ class MemoryRuntimeCfg:
         default_factory=lambda: os.getenv("MEMORY_RAG_API_KEY", "")
     )
     rag_collection: str = field(
-        default_factory=lambda: os.getenv("MEMORY_RAG_COLLECTION", "agent_user_memory")
+        default_factory=lambda: os.getenv(
+            "MEMORY_RAG_COLLECTION", DEFAULT_MEMORY_RAG_COLLECTION
+        )
     )
     retrieve_timeout: float = field(
-        default_factory=lambda: float(os.getenv("MEMORY_RETRIEVE_TIMEOUT", "0.8"))
+        default_factory=lambda: float(os.getenv("MEMORY_RETRIEVE_TIMEOUT", "2"))
     )
     index_timeout: float = field(
         default_factory=lambda: float(os.getenv("MEMORY_INDEX_TIMEOUT", "30.0"))
@@ -616,6 +636,8 @@ class MemoryRuntimeCfg:
         """禁止把个人记忆写入已知业务知识库，并拒绝无效超时/门槛。"""
         if not self.rag_collection or self.rag_collection == "ticket_knowledge":
             raise ValueError("memory_collection_must_be_dedicated")
+        if self.context_mode not in {"retrieve", "read"}:
+            raise ValueError("memory_context_mode_invalid")
         for name in (
             "assessment_timeout",
             "context_timeout",

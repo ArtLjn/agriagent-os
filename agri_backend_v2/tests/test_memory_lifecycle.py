@@ -541,7 +541,7 @@ async def test_index_initializes_collection_and_cleans_deleted_revision(
     )
     document = await store.load("u")
     identifier = memory_index.doc_id(document["_id"], record)
-    entries = [{"_id": identifier, "owner": document["_id"], "status": "ready"}]
+    entries = []
 
     class Cursor:
         def sort(self, *_):
@@ -585,6 +585,16 @@ async def test_index_initializes_collection_and_cleans_deleted_revision(
     metadata = json.loads(payload["metadata_json"][0])
     assert metadata["owner"] == store.owner_key("u") and metadata["scope"] == "user"
     assert collection.update_one.call_args.args[1]["$set"]["index_pending"] is False
+    entries.append(
+        {
+            "_id": f"{memory_index.cfg.rag_collection}:{identifier}",
+            "doc_id": identifier,
+            "collection": memory_index.cfg.rag_collection,
+            "owner": document["_id"],
+            "memory_id": "one",
+            "status": "ready",
+        }
+    )
     await store.modify_memory("u", "f", "one")
     collection.find_one_and_update.return_value = None
     await memory_index.sync_one()

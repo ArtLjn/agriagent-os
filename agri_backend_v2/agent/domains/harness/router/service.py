@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from agent.domains.harness.tools.registry import SkillRegistry
-from agent.platforms.llm.client import chat
+from agent.platforms.llm.client import MODEL, bounded_completion
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +24,8 @@ _ROUTER_SYSTEM_PROMPT = """你是 Agent Harness 的 Skill Router。
 你的唯一职责是根据用户请求，从 Skill Metadata 中选择完成任务所需的 Skill。
 你不执行工具，不生成工具参数，不回答用户，不读取或推断未提供的业务事实。
 只返回 JSON 对象，格式必须是 {\"skills\":[\"skill_name\"],\"uncertain\":false}。
+普通聊天、个人兴趣、生活建议可以直接回答，不需要业务工具时返回 skills=[]、uncertain=false。
+不要为生活建议查询农事备忘录或工单；只有明确需要实时信息才选天气或搜索能力。
 选择覆盖完整请求的最小充分候选集合，允许多个 Skill，不得把复合请求压缩成单一能力。
 根据用户要查的对象、记录来源、读写动作和时间范围，结合 routing 的适用/排除说明与 actions 区分相近能力。
 历史只用于解释省略和指代；当前用户纠正或换题优先，不要被上一轮助手的推荐带偏。
@@ -75,7 +77,7 @@ class LlmSkillRouterBackend:
         llm_call: Callable[..., dict[str, Any]] | None = None,
     ) -> None:
         self.timeout_seconds = max(0.1, timeout_seconds)
-        self._llm_call = llm_call or chat
+        self._llm_call = llm_call
 
     async def choose(
         self,
@@ -93,10 +95,19 @@ class LlmSkillRouterBackend:
                 ),
             },
         ]
-        return await asyncio.wait_for(
-            asyncio.to_thread(self._llm_call, messages),
-            timeout=self.timeout_seconds,
-        )
+        async with asyncio.timeout(self.timeout_seconds):
+            if self._llm_call is not None:
+                return await asyncio.to_thread(self._llm_call, messages)
+            # 异步请求可取消，超时不遗留仍占用模型连接的同步线程。
+            response = await bounded_completion(
+                model=MODEL,
+                messages=messages,
+                temperature=0,
+                max_tokens=256,
+                response_format={"type": "json_object"},
+                timeout=self.timeout_seconds,
+            )
+            return {"content": response.choices[0].message.content or ""}
 
 
 class SkillRouter:
@@ -136,12 +147,6 @@ class SkillRouter:
                 response.get("content", "") if isinstance(response, dict) else "",
                 {item["name"] for item in catalog},
             )
-            if not selected:
-                return self._fallback(
-                    "router_no_skill",
-                    started,
-                    len(catalog),
-                )
             # 候选上限是成本约束，不代表后面的用户要求可以丢弃；不确定时保留全目录。
             if uncertain or len(selected) > self.max_skills:
                 return self._fallback(

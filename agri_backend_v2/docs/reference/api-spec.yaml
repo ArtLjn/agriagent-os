@@ -23,6 +23,15 @@ paths:
                         type: number
                       memory_build:
                         type: string
+                      memory_mode:
+                        type: string
+                        enum: [retrieve, read]
+                      memory_semantic_configured:
+                        type: boolean
+                        description: 仅表示语义服务配置存在，可用性以实际检索诊断为准。
+                      skill_router_mode:
+                        type: string
+                        enum: [main_agent, llm_router]
   /api/v2/memos:
     get:
       tags:
