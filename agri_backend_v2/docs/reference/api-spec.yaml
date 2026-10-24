@@ -15,6 +15,58 @@ info:
   description: 备忘录、管理监控与个性化推荐接口；完整接口以对应运行服务 /openapi.json 为准。所有请求需要 Bearer JWT。
   version: 2.0.0
 paths:
+  /api/v2/conversations:
+    get:
+      summary: 分页读取当前用户和农场的会话或草稿箱
+      description: 需要 conversation:read。默认返回未归档会话，始终排除已删除会话；旧数据视为未归档。
+      parameters:
+      - {name: archived, in: query, schema: {type: boolean, default: false}}
+      - {name: limit, in: query, schema: {type: integer, default: 20, minimum: 1, maximum: 100}}
+      - {name: cursor, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: items 包含 conversation_id、last_message、last_role、last_at、message_count、archived；返回 next_cursor 与 has_more。
+        '503':
+          description: conversation_storage_unavailable；存储故障不伪装为空列表。
+  /api/v2/conversations/{conversation_id}:
+    parameters:
+    - {name: conversation_id, in: path, required: true, schema: {type: string}}
+    patch:
+      summary: 归档到草稿箱或恢复会话
+      description: 需要 conversation:write，身份与农场仅来自 JWT。归档保留消息，恢复后可继续聊天。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [archived]
+              properties:
+                archived: {type: boolean}
+      responses:
+        '200':
+          description: 返回 conversation_id、archived。
+        '404':
+          description: 会话不存在、属于其他租户或已删除。
+        '409':
+          description: conversation_state_changed；并发删除后不能恢复。
+        '422':
+          description: 拒绝非布尔值及额外字段。
+        '503':
+          description: 会话存储暂不可用。
+    delete:
+      summary: 从草稿箱不可恢复地逻辑删除会话
+      description: 需要 conversation:write，必须先归档。保留删除标记防止迟到写入使会话重新出现；不清除已保存的个性化记忆或审计证据。删除后会话详情、消息、Turn 接口和新聊天均拒绝访问。
+      responses:
+        '200':
+          description: 返回 conversation_id 与 deleted=true；重复删除幂等成功。
+        '404':
+          description: 会话不存在或属于其他租户。
+        '409':
+          description: conversation_not_archived 或 conversation_state_changed。
+        '503':
+          description: 会话存储暂不可用。
   /api/v2/me/memory-learning/{turn_id}:
     get:
       summary: 查询当前用户某一轮的后台记忆学习状态

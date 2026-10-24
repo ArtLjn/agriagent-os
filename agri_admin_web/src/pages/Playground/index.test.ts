@@ -14,6 +14,7 @@ describe('buildConversationRows', () => {
     const rows = buildConversationRows(
       {
         empty: { messages: [], loading: false, traceLoading: false, timeline: null },
+        archived: { messages: ['历史'], loading: false, traceLoading: false, archived: true },
         active: { messages: [{ id: 'm1', role: 'user', content: '你好' }], loading: false, traceLoading: false, timeline: null },
         loading: { messages: [], loading: true, traceLoading: false, timeline: null },
       },

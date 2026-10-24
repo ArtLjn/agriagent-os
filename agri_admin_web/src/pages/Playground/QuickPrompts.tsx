@@ -93,7 +93,7 @@ export function QuickPrompts({ onSelect, disabled, userToken = null }: {
       ) : (
         <div className="pg-recommendations__status" role="status">暂时没有新问题，可以换一批或直接输入。</div>
       )}
-      <p className="pg-recommendations__note">点选一个问题，编辑后发送</p>
+      <p className="pg-recommendations__note">选一个你想问 AI 的问题，编辑后发送</p>
     </section>
   );
 }

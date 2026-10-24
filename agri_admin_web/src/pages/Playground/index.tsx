@@ -1,19 +1,17 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { isAxiosError } from 'axios';
-import { Input, Button, Space, Tooltip, message, Select } from 'antd';
+import { Input, Button, Tooltip, message, Select } from 'antd';
 import type { TextAreaRef } from 'antd/es/input/TextArea';
-import { SendOutlined, DeleteOutlined, CopyOutlined, PlusOutlined, MenuFoldOutlined, MenuUnfoldOutlined, LoadingOutlined, LinkOutlined, ProfileOutlined, ExperimentOutlined } from '@ant-design/icons';
+import { SendOutlined, DeleteOutlined, CopyOutlined, PlusOutlined, ExperimentOutlined } from '@ant-design/icons';
 import { listTraces, getTimeline, type TraceTimeline } from '../../api/admin';
 import {
   streamChat,
   approveTurn,
   listDevUsers,
-  listConversations,
   getConversationMessages,
   getConversationMessagesPage,
   getConversationTurnDetail,
   getConversationTurns,
-  type ConversationItem,
   type ConversationMessage,
   type ConversationTurnDetail,
   type ConversationTurnSummary,
@@ -23,7 +21,7 @@ import {
   type StreamTraceContext,
 } from '../../api/agent';
 import { palette } from '../../styles/theme';
-import { buildConversationRows } from './conversationRows';
+import { ConversationSidebar } from './ConversationSidebar';
 import { buildSessionDebugExport, type DebugExportMessage } from './sessionDebugExport';
 import { applyHistoricalPendingResolution, type PendingResolution } from './pendingPlanControls';
 import {
@@ -43,11 +41,8 @@ import { authStore } from '../../stores/authStore';
 import { getSsePresentationProfile, roleLabel, USER_ROLES } from '../../constants/roles';
 
 const CARD = palette.bgElevated;
-const TEXT = palette.text;
 const TEXT_DIM = palette.textMuted;
 const ACCENT = palette.accent;
-const SIDEBAR_BG = palette.bgElevated;
-const SIDEBAR_BORDER = palette.borderSoft;
 
 interface Message {
   id: string;
@@ -66,6 +61,7 @@ interface Message {
 }
 
 interface ChatSessionState {
+  archived?: boolean;
   messages: Message[];
   loading: boolean;
   traceLoading: boolean;
@@ -181,10 +177,19 @@ export default function Playground() {
   }));
   const [input, setInput] = useState('');
   const composerRef = useRef<TextAreaRef>(null);
-  const [conversations, setConversations] = useState<ConversationItem[]>([]);
+  const [conversationVersion, setConversationVersion] = useState(0);
+  const [userVersion, setUserVersion] = useState(0);
+  const userEpoch = useRef(0);
   const [devUsers, setDevUsers] = useState<DevUser[]>([]);
   const [selectedDevUser, setSelectedDevUser] = useState<DevUser | null>(null);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // 窄屏默认收起会话列表，避免两级导航挤占聊天宽度。
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.matchMedia('(max-width: 1100px)').matches);
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 1100px)');
+    const sync = (event: MediaQueryListEvent) => setSidebarCollapsed(event.matches);
+    query.addEventListener('change', sync);
+    return () => query.removeEventListener('change', sync);
+  }, []);
   const [llmContextOpen, setLlmContextOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   // 只有用户仍在底部时才自动跟随流式输出，避免把正在向上翻看的用户拽回底部。
@@ -202,7 +207,6 @@ export default function Playground() {
   const traceMetrics = buildPlaygroundTraceMetrics(timeline);
   const llmContextSnapshot = extractLatestLlmContextSnapshot(llmContextTimeline);
   const compressed = hasAutomaticCompression(traceMetrics);
-  const conversationRows = buildConversationRows(sessions, conversations);
   const timelineNodeCount = timeline?.rounds.reduce((sum, round) => sum + round.nodes.length, 0) ?? 0;
   const currentRequestId = timeline?.trace_id;
   const llmContextRequestId = llmContextTimeline?.trace_id;
@@ -214,10 +218,12 @@ export default function Playground() {
 
   const updateSession = useCallback((sid: string, updater: (state: ChatSessionState) => ChatSessionState) => {
     setSessions((prev) => {
-      const current = prev[sid] ?? emptySessionState();
+      // 归档移除或身份切换后，旧历史请求与 SSE 都不能重新创建本地会话。
+      if (userVersion !== userEpoch.current || !prev[sid]) return prev;
+      const current = prev[sid];
       return { ...prev, [sid]: updater(current) };
     });
-  }, []);
+  }, [userVersion]);
 
   const ensureSession = useCallback((sid: string) => {
     setSessions((prev) => (prev[sid] ? prev : { ...prev, [sid]: emptySessionState() }));
@@ -236,16 +242,6 @@ export default function Playground() {
     }));
   }, [updateSession]);
 
-  /* ── 加载会话列表 ── */
-  const loadConversations = useCallback(async (userToken = activeUserToken) => {
-    try {
-      const list = await listConversations(50, userToken);
-      setConversations(list);
-    } catch {
-      // 静默失败
-    }
-  }, [activeUserToken]);
-
   /* ── 加载 dev 用户列表（agri_backend_v2 agent /api/v2/dev-users）── */
   const loadDevUsers = useCallback(async () => {
     try {
@@ -260,24 +256,27 @@ export default function Playground() {
   useEffect(() => {
     void Promise.resolve().then(() => {
       loadDevUsers();
-      loadConversations();
     });
-  }, [loadDevUsers, loadConversations]);
+  }, [loadDevUsers]);
 
   useEffect(() => {
     setLlmContextOpen(false);
   }, [sessionId]);
 
   /* ── 切换会话 ── */
-  const switchConversation = useCallback(async (sid: string) => {
+  const switchConversation = useCallback(async (sid: string, archived = false) => {
+    const epoch = userEpoch.current;
+    if (sessions[sid]?.loading) { setSessionId(sid); return; }
     setSessionId(sid);
     stickToBottomRef.current = true;
-    updateSession(sid, () => ({ ...emptySessionState(), loading: true }));
+    ensureSession(sid);
+    updateSession(sid, () => ({ ...emptySessionState(), loading: true, archived }));
     try {
       const [page, turnPage] = await Promise.all([
         getConversationMessagesPage(sid, { userToken: activeUserToken }),
         getConversationTurns(sid, { userToken: activeUserToken }).catch(() => null),
       ]);
+      if (epoch !== userEpoch.current) return;
       const loaded: Message[] = page.items.map(mapHistoricalMessage);
       const resolved = applyHistoricalPendingResolution(loaded);
       updateSession(sid, (state) => ({
@@ -296,10 +295,11 @@ export default function Playground() {
         turns: turnPage?.items ?? [],
       }));
     } catch {
+      if (epoch !== userEpoch.current) return;
       updateSession(sid, (state) => ({ ...state, loading: false }));
       message.error('加载会话失败');
     }
-  }, [activeUserToken, updateSession]);
+  }, [activeUserToken, ensureSession, sessions, updateSession]);
 
   const loadOlderMessages = useCallback(async () => {
     const sid = sessionId;
@@ -543,7 +543,7 @@ export default function Playground() {
 
   const handleSend = useCallback(async (overrideMsg?: string): Promise<boolean> => {
     const userMsg = overrideMsg ?? input.trim();
-    if (!userMsg) return false;
+    if (!userMsg || activeSession.archived) return false;
     const targetSessionId = sessionId;
     const targetSession = sessions[targetSessionId] ?? emptySessionState();
     if (targetSession.loading) {
@@ -645,7 +645,7 @@ export default function Playground() {
       }
       await refreshLatestHistory(targetSessionId);
 
-      await loadConversations();
+      setConversationVersion((version) => version + 1);
       return true;
     } catch {
       updateSession(targetSessionId, (state) => {
@@ -664,7 +664,7 @@ export default function Playground() {
         traceLoading: false,
       }));
     }
-  }, [activeUserToken, input, presentationProfile, refreshLatestHistory, scrollToBottom, sessionId, sessions, updateSession, loadConversations, refreshSessionTimeline, selectedDevUser, viewerToken]);
+  }, [activeSession.archived, activeUserToken, input, presentationProfile, refreshLatestHistory, scrollToBottom, sessionId, sessions, updateSession, refreshSessionTimeline, selectedDevUser, viewerToken]);
 
   const handlePendingAction = useCallback(async (messageId: string, action: string) => {
     const targetSessionId = sessionId;
@@ -688,140 +688,20 @@ export default function Playground() {
 
   return (
     <div className="playground-workspace">
-      {/* ── 会话列表侧边栏 ── */}
-      <div
-        style={{
-          width: sidebarCollapsed ? 56 : 260,
-          background: SIDEBAR_BG,
-          borderRight: `1px solid ${SIDEBAR_BORDER}`,
-          display: 'flex',
-          flexDirection: 'column',
-          flexShrink: 0,
-          transition: 'width 200ms cubic-bezier(0.25, 1, 0.5, 1)',
-          overflow: 'hidden',
+      <ConversationSidebar
+        key={activeUserToken ?? 'self'} userToken={activeUserToken} sessionId={sessionId}
+        sessions={sessions} refreshVersion={conversationVersion} collapsed={sidebarCollapsed}
+        onCollapse={() => setSidebarCollapsed(!sidebarCollapsed)} onSelect={switchConversation}
+        onCopyId={copySessionId} onCopyJson={copySessionJson} onTrace={openTraceMonitor}
+        onRemove={(id) => {
+          setSessions((previous) => {
+            const next = { ...previous };
+            delete next[id];
+            return next;
+          });
+          if (sessionId === id) { setInput(''); createNewSession(); }
         }}
-      >
-        {/* 侧边栏头部 - 与 admin sider 高度对齐 */}
-        <div
-          style={{
-            height: 58,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: sidebarCollapsed ? '0 8px' : '0 12px 0 16px',
-            borderBottom: `1px solid ${SIDEBAR_BORDER}`,
-            flexShrink: 0,
-          }}
-        >
-          {!sidebarCollapsed && (
-            <span style={{ color: TEXT, fontSize: 13, fontWeight: 600, letterSpacing: 0.2 }}>
-              会话
-              <span style={{ color: TEXT_DIM, fontWeight: 400, marginLeft: 8, fontSize: 12 }}>
-                {conversationRows.length}
-              </span>
-            </span>
-          )}
-          <Tooltip title={sidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'} placement="right">
-            <Button
-              type="text"
-              aria-label={sidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'}
-              icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              style={{ color: TEXT_DIM, width: 32, height: 32 }}
-            />
-          </Tooltip>
-        </div>
-
-        {/* 会话列表 */}
-        <div className="surface-scroll" style={{ flex: 1, overflow: 'auto', padding: sidebarCollapsed ? '8px 6px' : '8px 8px' }}>
-          {conversationRows.map((conv) => {
-            const conversationId = conv.conversation_id;
-            const isActive = conversationId === sessionId;
-            const sessionState = sessions[conversationId];
-            const isRunning = Boolean(sessionState?.loading);
-            // 会话标题优先展示最近一条消息，机器 ID 只在 tooltip / 复制动作里出现
-            const title = conv.last_message?.trim() || (conv.local ? '新会话' : conversationId);
-            return (
-              <div
-                key={conversationId}
-                onClick={() => switchConversation(conversationId)}
-                className={`pg-session${isActive ? ' pg-session--active' : ''}`}
-                style={{
-                  padding: sidebarCollapsed ? '8px 0' : '8px 10px',
-                  display: sidebarCollapsed ? 'flex' : 'block',
-                  justifyContent: sidebarCollapsed ? 'center' : undefined,
-                  alignItems: sidebarCollapsed ? 'center' : undefined,
-                }}
-              >
-                {sidebarCollapsed ? (
-                  <Tooltip title={`${title} · ${conversationId}`} placement="right">
-                    <div className={`pg-session__dot${isActive ? ' pg-session__dot--active' : ''}`}>
-                      {conversationId.slice(-2)}
-                    </div>
-                  </Tooltip>
-                ) : (
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                      {isRunning && <LoadingOutlined style={{ color: ACCENT, fontSize: 11, flexShrink: 0 }} />}
-                      <div className="pg-session__title" title={conversationId}>
-                        {title}
-                      </div>
-                    </div>
-                    <div style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      gap: 4,
-                      marginTop: 4,
-                    }}>
-                      <div className="pg-session__meta">
-                        {new Date(conv.last_at).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                        {conv.message_count > 0 && ` · ${conv.message_count} 条`}
-                      </div>
-                      <span className="pg-session__actions">
-                        <Space size={0}>
-                          <Tooltip title="复制 Session ID">
-                            <Button
-                              type="text"
-                              size="small"
-                              icon={<CopyOutlined />}
-                              onClick={(e) => { e.stopPropagation(); void copySessionId(conversationId); }}
-                              style={{ color: TEXT_DIM, padding: '0 4px', minWidth: 24, height: 24 }}
-                            />
-                          </Tooltip>
-                          <Tooltip title="跳转链路追踪">
-                            <Button
-                              type="text"
-                              size="small"
-                              icon={<LinkOutlined />}
-                              onClick={(e) => { e.stopPropagation(); openTraceMonitor(conversationId); }}
-                              style={{ color: TEXT_DIM, padding: '0 4px', minWidth: 24, height: 24 }}
-                            />
-                          </Tooltip>
-                          <Tooltip title="复制调试 JSON">
-                            <Button
-                              type="text"
-                              size="small"
-                              icon={<ProfileOutlined />}
-                              onClick={(e) => { e.stopPropagation(); copySessionJson(conversationId); }}
-                              style={{ color: TEXT_DIM, padding: '0 4px', minWidth: 24, height: 24 }}
-                            />
-                          </Tooltip>
-                        </Space>
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-          {conversationRows.length === 0 && !sidebarCollapsed && (
-            <div style={{ textAlign: 'center', color: TEXT_DIM, fontSize: 12, padding: '24px 12px' }}>
-              暂无历史会话
-            </div>
-          )}
-        </div>
-      </div>
+      />
 
       {/* ── 主聊天区域 ── */}
       <div className="playground-chat">
@@ -834,18 +714,16 @@ export default function Playground() {
                 value={selectedDevUser?.user_id ?? ''}
                 onChange={(value) => {
                   const user = devUsers.find((u) => u.user_id === value) ?? null;
+                  userEpoch.current += 1;
+                  setUserVersion(userEpoch.current);
+                  setInput('');
                   setSelectedDevUser(user);
                   setLlmContextOpen(false);
                   // 切换用户后开启新会话，避免历史会话身份混淆
                   const sid = generateSessionId();
                   setSessionId(sid);
                   setSessions({ [sid]: emptySessionState() });
-                  setConversations([]);
-                  // 使用 dev-users 返回的 token 获取该用户自己的会话，避免展示管理员会话。
-                  const nextToken = user?.token ?? null;
-                  void loadConversations(nextToken).catch(() => {
-                    message.error('加载会话列表失败');
-                  });
+
                 }}
                 className="playground-user-select"
                 styles={{ popup: { root: { background: CARD } } }}
@@ -892,21 +770,24 @@ export default function Playground() {
                 disabled={Boolean(selectedDevUser)}
               />
               <span className="playground-toolbar__divider" />
-              <Button
-                type="text"
-                icon={<DeleteOutlined />}
-                onClick={handleClear}
-                className="playground-toolbar__danger"
-                style={{
-                  color: TEXT_DIM,
-                  height: 32,
-                  paddingInline: 10,
-                  borderRadius: 8,
-                  fontSize: 13,
-                }}
-              >
-                清空
-              </Button>
+              <Tooltip title="清空当前会话">
+                <Button
+                  type="text"
+                  icon={<DeleteOutlined />}
+                  aria-label="清空当前会话"
+                  onClick={handleClear}
+                  className="playground-toolbar__danger"
+                  style={{
+                    color: TEXT_DIM,
+                    height: 32,
+                    paddingInline: 10,
+                    borderRadius: 8,
+                    fontSize: 13,
+                  }}
+                >
+                  <span className="pg-toolbar-label">清空</span>
+                </Button>
+              </Tooltip>
               <Button
                 type="primary"
                 icon={<PlusOutlined />}
@@ -972,7 +853,7 @@ export default function Playground() {
               pendingAction={m.pendingAction}
               pendingPlan={m.pendingPlan}
               pendingResolution={m.pendingResolution}
-              onAction={(action) => { void handlePendingAction(m.id, action); }}
+              onAction={activeSession.archived ? undefined : (action) => { void handlePendingAction(m.id, action); }}
               onViewDetails={viewTurnDetails}
             />
           ))}
@@ -1090,7 +971,7 @@ export default function Playground() {
           )}
 
           {/* 输入区域 */}
-          <div className="playground-composer">
+          {activeSession.archived ? <div className="pg-archive-notice" role="status">此会话已归档。请在草稿箱恢复后继续聊天。</div> : <div className="playground-composer">
             <Input.TextArea
               ref={composerRef}
               value={input}
@@ -1120,7 +1001,7 @@ export default function Playground() {
                 发送
               </Button>
             </div>
-          </div>
+          </div>}
         </div>
       </div>
     </div>

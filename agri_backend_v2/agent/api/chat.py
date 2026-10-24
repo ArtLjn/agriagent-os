@@ -24,6 +24,10 @@ from agent.domains.harness.runtime.projection import (
 )
 from agent.domains.harness.runtime.turn import Turn
 from agent.platforms.persistence.mongo.chat_store import append_message
+from agent.platforms.persistence.mongo.conversation_catalog import (
+    ConversationLifecycleError,
+    require_access,
+)
 from agent.platforms.persistence.redis.coordination import (
     CoordinationError,
     TurnAdmissionError,
@@ -76,6 +80,22 @@ async def chat(
     identity = require_identity_permission(
         parse_identity(authorization), Permission.AGENT_INVOKE
     )
+    try:
+        await require_access(
+            conv_id,
+            user_id=identity["user_id"],
+            farm_id=identity["farm_id"],
+            writable=True,
+        )
+    except ConversationLifecycleError as exc:
+        raise HTTPException(
+            exc.status_code,
+            {
+                "code": exc.code,
+                "message": str(exc),
+                "meta": {"conversation_id": conv_id},
+            },
+        ) from exc
     viewer_identity = identity
     if viewer_authorization:
         viewer_identity = parse_identity(viewer_authorization)

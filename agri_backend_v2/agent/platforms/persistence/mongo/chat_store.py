@@ -31,6 +31,9 @@ from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
 
 from agent.config import settings
+from agent.platforms.persistence.mongo.conversation_catalog import (
+    list_conversations as list_conversations,  # noqa: PLC0414 -- 保留会话查询调用方的入口。
+)
 from agent.platforms.persistence.mongo.conversation_state import (
     _unavailable_result,
 )
@@ -653,94 +656,6 @@ async def close() -> None:
     _indexes_initialized = False
     _state_collection = None
     _state_indexes_initialized = False
-
-
-async def list_conversations(
-    limit: int = 20,
-    cursor: str | None = None,
-    *,
-    user_id: str | None = None,
-    farm_id: int | None = None,
-) -> dict[str, Any]:
-    """List conversations with pagination.
-
-    Aggregates by conversationId, returns the last message per conversation.
-    Cursor-based: pass the last conversation_id from the previous page.
-
-    Returns:
-        {
-            "items": [ {conversation_id, last_message, last_role, last_at, message_count}, ... ],
-            "next_cursor": str | null,
-            "has_more": bool
-        }
-    """
-    coll = get_collection()
-    if coll is None:
-        return {"items": [], "next_cursor": None, "has_more": False}
-
-    # First get all distinct conversation_ids sorted by last message time
-    match: dict[str, Any] = {
-        "farmId": farm_id if farm_id is not None else _DEFAULT_FARM_ID
-    }
-    if user_id:
-        match["userId"] = user_id
-    pipeline: list[dict[str, Any]] = [
-        {"$match": match},
-        {"$sort": {"createdAt": 1, "_id": 1}},
-        {
-            "$group": {
-                "_id": "$conversationId",
-                "last_msg": {"$last": "$content"},
-                "last_role": {"$last": "$role"},
-                "last_at": {"$last": "$createdAt"},
-                "message_count": {"$sum": 1},
-            }
-        },
-        {"$sort": {"last_at": -1, "_id": -1}},
-    ]
-
-    try:
-        if cursor:
-            # 游标代表排序边界，单纯排除该 ID 会把之前的会话反复返回。
-            anchor = await coll.find_one(
-                {**match, "conversationId": cursor},
-                sort=[("createdAt", -1), ("_id", -1)],
-            )
-            if anchor is None:
-                return {"items": [], "next_cursor": None, "has_more": False}
-            pipeline.append(
-                {
-                    "$match": {
-                        "$or": [
-                            {"last_at": {"$lt": anchor["createdAt"]}},
-                            {"last_at": anchor["createdAt"], "_id": {"$lt": cursor}},
-                        ]
-                    }
-                }
-            )
-        pipeline.append({"$limit": limit + 1})
-        results = await coll.aggregate(pipeline).to_list(length=limit + 1)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("list_conversations aggregation failed: %s", exc)
-        return {"items": [], "next_cursor": None, "has_more": False}
-
-    has_more = len(results) > limit
-    results = results[:limit]
-
-    items = []
-    for r in results:
-        items.append(
-            {
-                "conversation_id": r["_id"],
-                "last_message": (r.get("last_msg") or "")[:200],
-                "last_role": r.get("last_role", "user"),
-                "last_at": r.get("last_at"),
-                "message_count": r.get("message_count", 0),
-            }
-        )
-
-    next_cursor = items[-1]["conversation_id"] if has_more and items else None
-    return {"items": items, "next_cursor": next_cursor, "has_more": has_more}
 
 
 async def get_conversation(

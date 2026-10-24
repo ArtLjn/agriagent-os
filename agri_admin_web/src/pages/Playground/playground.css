@@ -15,8 +15,8 @@
   --pg-yellow: var(--app-orange);
   --pg-red: var(--app-red);
   --pg-purple: var(--app-purple);
-  /* 工具栏、消息、输入区共用同一列宽，保证上下边缘对齐 */
-  --pg-content-width: 860px;
+  /* 工具栏、消息、输入区共用同一列宽，保证上下边缘对齐；宽屏收在舒适阅读宽度，小屏铺满 */
+  --pg-content-width: min(900px, 100%);
   --pg-gutter: 24px;
   height: 100%;
   display: flex;
@@ -193,7 +193,7 @@
 .pg-approval-cancel:hover:not(:disabled) { background: var(--pg-surface-2); color: var(--pg-text); }
 
 /* ── 推荐问题：问题为主，来源用图标轻提示 ── */
-.pg-recommendations { width: 100%; max-width: 740px; margin-top: 32px; text-align: left; }
+.pg-recommendations { width: 100%; max-width: min(860px, 100%); margin-top: 32px; text-align: left; }
 .pg-recommendations__header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
 .pg-recommendations__header h2 { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 17px; font-weight: 600; color: var(--pg-text); }
 .pg-recommendations__spark { color: var(--pg-accent); font-size: 15px; }
@@ -314,11 +314,10 @@
 @media (max-width: 1180px) {
   .playground-workspace { --pg-gutter: 16px; }
 }
+@container (max-width: 860px) {
+  .playground-toolbar__danger .pg-toolbar-label { display: none; }
+}
 @media (max-width: 720px) {
-  .playground-workspace > div:first-child { width: 56px !important; }
-  .playground-workspace > div:first-child > div:first-child { justify-content: flex-end; padding: 0 8px !important; }
-  .playground-workspace > div:first-child > div:first-child > span { display: none; }
-  .playground-workspace > div:first-child .surface-scroll { display: none; }
   .playground-avatar { display: none; }
   .playground-run__body { padding: 14px 16px; }
   .playground-message--user .playground-message__content { max-width: 94%; }
@@ -344,3 +343,30 @@
   line-height: 1.6;
 }
 .memory-learning-notice--saved { color: var(--app-green); }
+
+
+/* 会话目录与草稿箱复用主题令牌，操作按钮在键盘聚焦时也可见。 */
+.pg-sidebar { width: 260px; flex-shrink: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--app-sidebar); border-right: 1px solid var(--pg-border-soft); transition: width 200ms ease; }
+.pg-sidebar--collapsed { width: 56px; }
+.pg-sidebar__header { height: 58px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px 0 16px; border-bottom: 1px solid var(--pg-border-soft); flex-shrink: 0; color: var(--pg-text); font-size: 13px; font-weight: 600; }
+.pg-sidebar--collapsed .pg-sidebar__header { padding: 0 8px; }
+.pg-sidebar__count { color: var(--pg-muted); font-weight: 400; margin-left: 8px; }
+.pg-sidebar__tabs { display: flex; gap: 4px; margin: 10px 10px 2px; border-bottom: 1px solid var(--pg-border-soft); }
+.pg-sidebar__tabs button { flex: 1; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; background: transparent; color: var(--pg-muted); padding: 7px 4px 8px; cursor: pointer; font: inherit; font-size: 12px; transition: color 120ms ease, border-color 120ms ease; }
+.pg-sidebar__tabs button:hover { color: var(--pg-text); }
+.pg-sidebar__tabs button[aria-selected="true"] { border-bottom-color: var(--pg-accent); color: var(--pg-text); }
+.pg-sidebar__hint { color: var(--pg-muted); font-size: 12px; text-align: center; padding: 8px; }
+.pg-sidebar__list { flex: 1; overflow: auto; padding: 8px; }
+.pg-sidebar--collapsed .pg-sidebar__list { padding: 8px 6px; }
+.pg-sidebar .pg-session { position: relative; padding: 0 0 26px; }
+.pg-sidebar--collapsed .pg-session { padding: 0; }
+.pg-session__select { border: 0; background: transparent; width: 100%; padding: 10px; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 6px; }
+.pg-session__select:disabled { cursor: wait; }
+.pg-session__select .pg-session__title { display: block; width: 100%; }
+.pg-sidebar--collapsed .pg-session__select { padding: 8px 0; align-items: center; }
+.pg-sidebar .pg-session__actions { position: absolute; bottom: 3px; right: 6px; display: flex; }
+.pg-session:focus-within .pg-session__actions { opacity: 1; }
+.pg-sidebar button:focus-visible { outline: 2px solid var(--pg-accent); outline-offset: -2px; }
+.pg-sidebar__delete-preview { color: var(--pg-muted); overflow-wrap: anywhere; }
+.pg-archive-notice { width: 100%; max-width: var(--pg-content-width); margin: 0 auto; border: 1px solid var(--pg-border); border-radius: 12px; padding: 18px; color: var(--pg-muted); text-align: center; }
+@media (hover: none) { .pg-sidebar .pg-session__actions { opacity: 1; } }

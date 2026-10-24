@@ -30,6 +30,7 @@ export interface ConversationItem {
   last_role: string;
   last_at: string;
   message_count: number;
+  archived?: boolean;
 }
 
 export interface ConversationMessage {
@@ -637,12 +638,25 @@ export async function* streamChat(
 export async function listConversations(
   limit = 50,
   userToken?: string | null,
-): Promise<ConversationItem[]> {
-  const res = await apiClient.get<{ items: ConversationItem[] }>('/agent/conversations', {
-    params: { limit },
+  options: { archived?: boolean; cursor?: string } = {},
+): Promise<{ items: ConversationItem[]; next_cursor?: string | null; has_more: boolean }> {
+  const res = await apiClient.get<{ items: ConversationItem[]; next_cursor?: string | null; has_more: boolean }>('/agent/conversations', {
+    params: { limit, ...options },
     headers: userToken ? { Authorization: `Bearer ${userToken}` } : undefined,
   });
-  return res.data.items ?? [];
+  return res.data;
+}
+
+export async function archiveConversation(conversationId: string, archived: boolean, userToken?: string | null): Promise<void> {
+  await apiClient.patch(`/agent/conversations/${encodeURIComponent(conversationId)}`, { archived }, {
+    headers: userToken ? { Authorization: `Bearer ${userToken}` } : undefined,
+  });
+}
+
+export async function deleteConversation(conversationId: string, userToken?: string | null): Promise<void> {
+  await apiClient.delete(`/agent/conversations/${encodeURIComponent(conversationId)}`, {
+    headers: userToken ? { Authorization: `Bearer ${userToken}` } : undefined,
+  });
 }
 
 // ── 对话消息 ──

@@ -11,22 +11,24 @@ import asyncio
 import json
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Self
 
 import httpx
 import pytest
 import pytest_asyncio
 
 from agent.api import approve, chat
+from agent.application import worker
+from agent.bootstrap.app import app
 from agent.domains.harness.runtime import engine as react
 from agent.domains.harness.runtime.turn import Turn
-from agent.application import worker
-from agent.platforms.persistence.redis.coordination import TurnAdmission, TurnLease
-from agent.platforms.persistence.redis.coordination import TurnLeaseLost
 from agent.domains.harness.tools.base import Skill, SkillResult
 from agent.domains.harness.tools.registry import SkillRegistry
-from agent.bootstrap.app import app
-
+from agent.platforms.persistence.redis.coordination import (
+    TurnAdmission,
+    TurnLease,
+    TurnLeaseLost,
+)
 
 TEST_IDENTITY = {
     "user_id": "integration-user",
@@ -45,7 +47,7 @@ class _FakeBusinessClient:
     def __init__(self, calls: list[tuple[str, dict[str, Any]]]) -> None:
         self.calls = calls
 
-    async def __aenter__(self) -> _FakeBusinessClient:
+    async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(self, *_args: object) -> None:
@@ -363,6 +365,7 @@ async def fake_runtime(monkeypatch: pytest.MonkeyPatch):
         chat, "parse_identity", lambda _authorization: dict(TEST_IDENTITY)
     )
     monkeypatch.setattr(chat, "ensure_mcp_credentials", lambda: None)
+    monkeypatch.setattr(chat, "require_access", no_op)
     monkeypatch.setattr(chat, "claim_idempotency", store.claim_idempotency)
     monkeypatch.setattr(chat, "admit_turn", store.admit_turn)
     monkeypatch.setattr(chat, "save_turn", store.save_turn)

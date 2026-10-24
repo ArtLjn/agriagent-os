@@ -7,11 +7,15 @@ import {
   getConversationTurnDetail,
   getConversationTurns,
   listConversations,
+  archiveConversation,
+  deleteConversation,
 } from './agent';
 
 vi.mock('./client', () => ({
   default: {
     get: vi.fn(),
+    patch: vi.fn(),
+    delete: vi.fn(),
   },
 }));
 
@@ -105,4 +109,17 @@ describe('会话身份 token', () => {
       },
     );
   });
+});
+
+
+it('草稿箱分页和生命周期操作传递当前身份及编码后的会话 ID', async () => {
+  mockedApiClient.get.mockResolvedValueOnce({ data: { items: [], has_more: false } });
+  await listConversations(50, 'dev-token', { archived: true, cursor: 'before' });
+  expect(mockedApiClient.get).toHaveBeenLastCalledWith('/agent/conversations', {
+    params: { limit: 50, archived: true, cursor: 'before' }, headers: { Authorization: 'Bearer dev-token' },
+  });
+  await archiveConversation('c/1', true, 'dev-token');
+  expect(mockedApiClient.patch).toHaveBeenCalledWith('/agent/conversations/c%2F1', { archived: true }, { headers: { Authorization: 'Bearer dev-token' } });
+  await deleteConversation('c/1', 'dev-token');
+  expect(mockedApiClient.delete).toHaveBeenCalledWith('/agent/conversations/c%2F1', { headers: { Authorization: 'Bearer dev-token' } });
 });
