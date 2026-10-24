@@ -81,6 +81,15 @@ context:
     candidate_tool_schema: false
     long_term_memory_observation: false
 
+memory:
+  # 环境变量 MEMORY_* 优先于本节；配置后重启 Agent，核对 health 与真实检索 Trace。
+  rag_url: "" # 本地可填写 https://rag.example.com，服务同机可用 http://127.0.0.1:8001
+  rag_api_key: "" # 仅填写未跟踪的 config.yaml，或使用 MEMORY_RAG_API_KEY 注入
+  rag_collection: "agent_user_memory_bge_m3"
+  context_mode: "retrieve" # retrieve | read
+  context_timeout: 8
+  retrieve_timeout: 5
+
 ai:
   model: "qwen3.6-35b-a3b"
   api_key: ""

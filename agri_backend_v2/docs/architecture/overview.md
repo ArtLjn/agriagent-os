@@ -4,7 +4,13 @@ last_updated: 2026-10-24
 ---
 # 运行架构与配置补充
 
+记忆检索统一从 `agent/config.yaml` 的 `memory` 节读取，部署环境 `MEMORY_*` 优先，未配置项保留默认值。字段对应关系直接使用大写前缀，例如 `memory.rag_url` 对应 `MEMORY_RAG_URL`，`rag_api_key`、`rag_collection`、`context_mode`、`context_timeout`、`retrieve_timeout` 同理。显式空的 URL 或密钥环境值可以关闭语义检索；非法模式、集合和非正预算在启动时拒绝。真实凭证只放未跟踪的配置或环境文件，样例不含密钥。
+
+`deploy/server-sync.sh` 保留生产 YAML 和 `.env`，不会将本地凭证覆盖到线上；发布时需单独核对配置并重启。服务同机时，线上 Agent 可经 `http://127.0.0.1:8001` 调用 QuillRAG；本地使用可达的 HTTPS 地址。两端指向同一模型和正式集合，不启动样本集合的全量索引。健康字段只证明配置存在，Chrome 与 Trace 还须验证真实召回成功。
+
 主链路与存储布局见 [系统设计](../design.md)。普通用户消息与学习事件在同一 Mongo 文档原子写入，后台消费者恢复投递并抽取归并，不依赖主对话成败。Mongo 保存权威原子事实，QuillRAG 索引可重建。学习故障不阻塞正常对话，任务有限重试后清除原文。
+
+归并同主题的新事实时仍须保留作用范围：全局个人偏好不能并入农场限定卡片，农场事实也不能扩散为全局事实。模型误选不同范围的 `merge` 目标时，按原范围独立新增，旧卡片不变；纠正、冲突和强化继续校验目标槽位与范围。对齐校验失败返回具体 `memory_alignment_*` 错误码，供后台任务和日志定位，避免仅留下 `ValueError`。
 
 本次自动学习默认开启，保留用户显式关闭设置。稳定观察直接生效，移除已无用途的 `MEMORY_MIN_TURNS`、`MEMORY_MIN_CONVERSATIONS`、`MEMORY_CANDIDATE_DAYS`，部署中旧值不再控制晋升或有效期。历史候选已有 expires_at 继续有效，新自动记忆没有候选审批和到期门槛。
 

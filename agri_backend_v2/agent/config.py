@@ -567,7 +567,7 @@ settings = _build_settings()
 
 @dataclass
 class MemoryRuntimeCfg:
-    """记忆后台任务与独立检索预算，密钥仅通过环境注入。"""
+    """记忆后台任务与独立检索预算；部署密钥保存在未跟踪配置或环境中。"""
 
     context_timeout: float = field(
         default_factory=lambda: float(os.getenv("MEMORY_CONTEXT_TIMEOUT", "3"))
@@ -656,4 +656,40 @@ class MemoryRuntimeCfg:
                 raise ValueError(f"memory_config_must_be_positive:{name}")
 
 
-memory_runtime = MemoryRuntimeCfg()
+def _build_memory_runtime() -> MemoryRuntimeCfg:
+    """统一 YAML 与部署环境的读取顺序，显式空环境值仍可关闭语义检索。"""
+    raw = _load_yaml().get("memory")
+    if raw is None:
+        raw = {}
+    if not isinstance(raw, dict):
+        raise ValueError("memory_config_must_be_mapping")
+    # 只开放部署参数，不把融合和事实核验的内部规则变为未校验配置。
+    converters = {
+        "rag_url": str,
+        "rag_api_key": str,
+        "rag_collection": str,
+        "context_mode": str,
+        "context_timeout": float,
+        "context_compile_timeout": float,
+        "assessment_timeout": float,
+        "retrieve_timeout": float,
+        "index_timeout": float,
+        "poll_seconds": float,
+        "lease_seconds": int,
+        "attempts": int,
+        "context_chars": int,
+        "review_bytes": int,
+        "context_tokens": int,
+        "extraction_chars": int,
+    }
+    if set(raw) - converters.keys():
+        raise ValueError("memory_config_unknown_fields")
+    values = {}
+    for name, convert in converters.items():
+        value = os.getenv(f"MEMORY_{name.upper()}", raw.get(name))
+        if value is not None:
+            values[name] = convert(value)
+    return MemoryRuntimeCfg(**values)
+
+
+memory_runtime = _build_memory_runtime()

@@ -332,8 +332,22 @@ async def align_candidates(
     )
     indexes = [item.candidate_index for item in result.alignments]
     if sorted(indexes) != list(range(len(candidates))):
-        raise ValueError("memory_alignment_incomplete")
+        raise MemoryError("memory_alignment_incomplete", "归并结果没有完整覆盖本轮事实")
     targets = {m["memory_id"]: m for m in existing}
+    for item in result.alignments:
+        target = targets.get(item.target_memory_id)
+        candidate = candidates[item.candidate_index]
+        if (
+            item.relation == "merge"
+            and target
+            and candidate.scope != target.get("scope", candidate.scope)
+        ):
+            # 同主题不代表同一作用范围。新增事实独立保存，既不缩小个人偏好的
+            # 可见范围，也不把农场限定事实提升为全局事实；旧目标保持原样。
+            item.relation = "new"
+            item.target_memory_id = None
+            item.target_slot = None
+            item.conditions_equivalent = False
     legacy_targets = {
         item.target_memory_id
         for item in result.alignments
@@ -348,7 +362,9 @@ async def align_candidates(
     aligned = []
     for item in result.alignments:
         if item.relation != "new" and item.target_memory_id not in targets:
-            raise ValueError("memory_alignment_unknown_target")
+            raise MemoryError(
+                "memory_alignment_unknown_target", "归并目标不在有效候选中"
+            )
         target = targets.get(item.target_memory_id)
         candidate = candidates[item.candidate_index]
         if target and candidate.scope != target.get("scope", candidate.scope):
@@ -359,11 +375,15 @@ async def align_candidates(
             }:
                 candidate = candidate.model_copy(update={"scope": target["scope"]})
             else:
-                raise ValueError("memory_alignment_scope_mismatch")
+                raise MemoryError(
+                    "memory_alignment_scope_mismatch", "归并不能跨越事实作用范围"
+                )
         if item.relation in {"reinforce", "contradict", "conflict"}:
             slots = {atom["slot"] for atom in (target or {}).get("atoms", [])}
             if item.target_slot not in slots:
-                raise ValueError("memory_alignment_unknown_fact")
+                raise MemoryError(
+                    "memory_alignment_unknown_fact", "归并引用了不存在的原子事实"
+                )
         elif item.target_slot:
             # 历史补充可指向当前对象作锚点，事实层按时间另开槽位；普通 merge 仍禁止覆盖。
             if not (
@@ -372,9 +392,13 @@ async def align_candidates(
                 and item.target_slot
                 in {a["slot"] for a in (target or {}).get("atoms", [])}
             ):
-                raise ValueError("memory_alignment_unexpected_fact")
+                raise MemoryError(
+                    "memory_alignment_unexpected_fact", "新增事实不能覆盖已有槽位"
+                )
         if item.merged_text:
-            raise ValueError("memory_alignment_whole_text_forbidden")
+            raise MemoryError(
+                "memory_alignment_whole_text_forbidden", "归并禁止重写整张记忆正文"
+            )
         if item.conditions_equivalent and item.target_slot:
             atom = next(a for a in target["atoms"] if a["slot"] == item.target_slot)
             # 条件是自然语言，不能用字符串不等判定新场景；归并器明确确认等价后复用既有表示。
