@@ -85,7 +85,7 @@ async def lifespan(app: FastAPI):
     await close()
 
 
-app = FastAPI(title="farm-manager agent", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="farm-manager agent", version="2.0.0", lifespan=lifespan)
 install_api_exception_handlers(app)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.include_router(api_router)

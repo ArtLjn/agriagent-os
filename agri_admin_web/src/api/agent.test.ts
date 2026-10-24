@@ -6,7 +6,6 @@ import {
   listAppSkills,
   mapSseToChunk,
   parseSseStream,
-  refreshDailyAdvice,
   streamChat,
 } from './agent';
 
@@ -48,7 +47,7 @@ describe('agent api', () => {
     ]);
   });
 
-  it('streamChat 透传 client_request_id 和 after_seq，并先发 trace meta', async () => {
+  it.each([false, true])('streamChat 透传请求标识和临时模式 %s，并先发 trace meta', async (temporary) => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -69,6 +68,7 @@ describe('agent api', () => {
     for await (const chunk of streamChat('你好', 'conv-8', null, {
       client_request_id: 'client-8',
       after_seq: 7,
+      temporary,
     })) chunks.push(chunk);
 
     expect(fetch).toHaveBeenCalledWith('/api/agent/chat?after_seq=7', expect.objectContaining({
@@ -76,6 +76,7 @@ describe('agent api', () => {
         message: '你好',
         conversation_id: 'conv-8',
         client_request_id: 'client-8',
+        temporary,
       }),
     }));
     expect(chunks[0]).toEqual({
@@ -167,41 +168,12 @@ describe('agent api', () => {
     expect(result.items[0].title).toBe('智能记账');
   });
 
-  it('强制刷新每日建议接口', async () => {
-    mockedApiClient.post.mockResolvedValueOnce({
-      data: {
-        cycle_id: 7,
-        advice: '重新生成的建议',
-        created_at: '2026-06-13T10:00:00',
-      },
-    });
+  it('后端缺少调试导出端点时保留显式失败供页面本地导出', async () => {
+    mockedApiClient.get.mockClear();
 
-    const result = await refreshDailyAdvice(7);
-
-    expect(mockedApiClient.post).toHaveBeenCalledWith('/agent/daily/refresh', null, {
-      params: { cycle_id: 7 },
-    });
-    expect(result.advice).toBe('重新生成的建议');
-  });
-
-  it('读取会话 debug export agri_backend_v2 并透传模拟用户', async () => {
-    mockedApiClient.get.mockResolvedValueOnce({
-      data: {
-        format: 'farm-manager.chat-session-debug.agri_backend_v2',
-        session: { session_id: 'sess-1' },
-        messages: [],
-        turns: [],
-        pending_plans: [],
-        events: [],
-        missing_event_segments: [],
-      },
-    });
-
-    const result = await getSessionDebugExport('sess-1', 'user-1');
-
-    expect(mockedApiClient.get).toHaveBeenCalledWith('/agent/conversations/sess-1/debug-export', {
-      params: { simulate_user_id: 'user-1' },
-    });
-    expect(result.format).toBe('farm-manager.chat-session-debug.agri_backend_v2');
+    await expect(getSessionDebugExport('sess-1', 'user-1')).rejects.toThrow(
+      'session debug export endpoint not available',
+    );
+    expect(mockedApiClient.get).not.toHaveBeenCalled();
   });
 });

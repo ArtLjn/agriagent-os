@@ -94,7 +94,7 @@ function ReflectionCheckCard({
           reason: {check.reason || '-'}
         </Typography.Text>
 
-        <InputSummary input={check.input} />
+        <InputSummary input={check.input ?? {}} />
 
         {check.issues.length > 0 ? (
           <Space direction="vertical" size={6} style={{ width: '100%' }}>

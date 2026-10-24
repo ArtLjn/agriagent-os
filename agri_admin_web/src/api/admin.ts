@@ -450,6 +450,7 @@ export interface TraceReflectionIssue {
   code?: string;
   severity?: string;
   message?: string;
+  evidence?: unknown;
 }
 
 export interface TraceReflectionCheck {

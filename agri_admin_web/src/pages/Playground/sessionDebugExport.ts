@@ -200,7 +200,7 @@ function extractSkillCalls(
           duration_ms: node.duration_ms,
           input_data: node.input_data,
           output_data: node.output_data,
-          error_message: node.error_message,
+          error_message: node.error_message ?? null,
         };
         if (node.step_index !== undefined) item.step_index = node.step_index;
         if (node.error_code !== undefined) item.error_code = node.error_code;
