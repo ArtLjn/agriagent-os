@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock
 import pytest
 from test_personalization import Collection
 
-from agent.domains.harness.memory import learning, tools
+from agent.domains.harness.memory import inference, learning, tools
 from agent.domains.harness.memory.personalization import (
     MemoryCreate,
     MemoryError,
@@ -189,7 +189,7 @@ async def test_relay_acknowledges_only_durable_queue_and_replays_same_message(
     assert enqueue.call_args.args[0].turn_id == "t"
     query = messages.find_one.call_args.args[0]
     assert query == {
-        "memoryLearningV2.status": "pending",
+        f"{chat_store.MEMORY_LEARNING_EVENT}.status": "pending",
         "role": "user",
         "messageKind": "prompt",
     }
@@ -351,8 +351,10 @@ async def test_conflicting_values_in_same_extraction_are_not_partially_committed
             )
         ),
     )
-    with pytest.raises(MemoryError, match="冲突"):
-        await learning.extract("以前喜欢葡萄，现在不喜欢葡萄")
+    monkeypatch.setattr(inference, "verify_extraction", AsyncMock())
+    candidates = await learning.extract("我喜欢葡萄，我不喜欢葡萄")
+    # 歧义候选完整进入提交边界，最终以冲突状态保存而非只提交其中一半。
+    assert len(candidates) == 2
 
 
 @pytest.mark.asyncio
@@ -402,7 +404,7 @@ async def test_extraction_review_blocks_loss_before_alignment(
     )
     monkeypatch.setattr(client._async_client.chat.completions, "create", create)
     align = AsyncMock(return_value=[])
-    monkeypatch.setattr(learning, "align_candidates", align)
+    monkeypatch.setattr(inference, "align_candidates", align)
     if failed_check:
         with pytest.raises(MemoryError, match="完整性"):
             await learning.extract(text, [{"text": "已有偏好"}])

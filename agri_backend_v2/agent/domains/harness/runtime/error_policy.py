@@ -50,6 +50,9 @@ def classify_exception(exc: Exception) -> ClassifiedError:
     message = str(exc)
     lowered = f"{error_code} {name} {message}".lower()
 
+    if error_code == "context_budget_exceeded":
+        return _classified(ErrorCategory.RESOURCE, error_code, message)
+
     if isinstance(status_code, int) and status_code in {408, 425, 429}:
         return _classified(ErrorCategory.TRANSIENT, "llm_transient_error", message)
     if isinstance(status_code, int) and status_code >= 500:

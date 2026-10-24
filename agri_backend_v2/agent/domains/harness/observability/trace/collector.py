@@ -114,11 +114,11 @@ def _get_event_collection():
     return chat_coll.database[_event_collection_name()]
 
 
-def _truncate(value: Any) -> Any:
+def _truncate(value: Any, *, preserve_context: bool = False) -> Any:
     """限制 trace 数据体积。"""
     trace_cfg = getattr(settings, "trace", None)
     limit = int(getattr(trace_cfg, "max_payload_chars", _MAX_TRACE_JSON_LEN))
-    return sanitize_payload(value, max_chars=limit)
+    return sanitize_payload(value, max_chars=limit, preserve_context=preserve_context)
 
 
 def record(
@@ -179,7 +179,11 @@ def record(
         "node_type": node_type,
         "node_name": node_name,
         "input_data": _truncate(input_data) if input_data is not None else None,
-        "output_data": _truncate(output_data) if output_data is not None else None,
+        "output_data": _truncate(
+            output_data, preserve_context=node_name == "final_llm_context"
+        )
+        if output_data is not None
+        else None,
         # Trace 节点和 SSE 事件必须共享 UTC 时间基准，否则合并时间线会把
         # 本地无时区时间与 UTC 时间按字面值比较，导致真实执行顺序错乱。
         "start_time": datetime.fromtimestamp(start_time, tz=UTC),
@@ -878,8 +882,12 @@ def trace_approval(
         output_data={"decision": decision, "reason": reason},
         duration_ms=duration_ms,
         phase="awaiting_approval",
-        status="error" if decision in {"rejected", "expired", "cancelled"} else "success",
-        error_message=reason if decision in {"rejected", "expired", "cancelled"} else None,
+        status="error"
+        if decision in {"rejected", "expired", "cancelled"}
+        else "success",
+        error_message=reason
+        if decision in {"rejected", "expired", "cancelled"}
+        else None,
         attributes={
             "tool_name": tool_name,
             "risk_level": risk_level,

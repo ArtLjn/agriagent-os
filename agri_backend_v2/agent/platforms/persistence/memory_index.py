@@ -67,11 +67,56 @@ async def retrieve(document: dict, farm_uid: str, query: str) -> list[str]:
                     ]
                 ]
             )
+            authoritative = document
+            if document.get("_partial_inline"):
+                # 旧内嵌模式正文最多 200 条；部分投影不能用来否决索引命中的其他有效记录。
+                authoritative = await store.collection().find_one(
+                    {"_id": document["_id"]}
+                ) or {"memories": []}
             valid = {
                 doc_id(document["_id"], m): m["memory_id"]
-                for m in visible_memories(document, farm_uid)
+                for m in visible_memories(authoritative, farm_uid)
                 if m["status"] == "active"
             }
+            if "memory_refs" in document:
+                from agent.platforms.persistence.mongo.memory_records import COLLECTION
+
+                hit_ids = [
+                    hit.get("doc_id")
+                    for response in results
+                    for hit in response.json().get("data", {}).get("results", [])
+                ]
+                cursor = (
+                    store.collection()
+                    .database[COLLECTION]
+                    .find(
+                        {
+                            "owner": document["_id"],
+                            "index_id": {"$in": hit_ids},
+                            "status": "active",
+                            "$or": [
+                                {"scope": "user"},
+                                {"scope": "user_farm", "farm_uid": farm_uid},
+                            ],
+                        }
+                    )
+                )
+                hits = [r async for r in cursor]
+                head = await store.collection().find_one(
+                    {"_id": document["_id"]},
+                    {
+                        "revision": 1,
+                        **{f"memory_refs.{r['memory_id']}": 1 for r in hits},
+                    },
+                )
+                references = (head or {}).get("memory_refs", {})
+                valid.update(
+                    {
+                        r["index_id"]: r["memory_id"]
+                        for r in hits
+                        if r["_id"] == references.get(r["memory_id"])
+                    }
+                )
             ids = []
             for response in results:
                 response.raise_for_status()
@@ -108,6 +153,9 @@ async def sync_one() -> None:
     )
     async with client(cfg.index_timeout) as http:
         if document:
+            from agent.platforms.persistence.mongo.memory_records import hydrate
+
+            document = await hydrate(coll, document)
             # QuillRAG 入库不会自动建集合；独立集合创建接口本身幂等。
             created = await http.post("/collections", json={"name": cfg.rag_collection})
             created.raise_for_status()
@@ -179,6 +227,10 @@ async def sync_one() -> None:
         # 独立清理历史版本，不受当前 collection 是否有可见文档影响。
         async for entry in manifest.find({}).sort("checked_at", 1).limit(100):
             current = await coll.find_one({"_id": entry["owner"]})
+            if current and "memory_refs" in current:
+                from agent.platforms.persistence.mongo.memory_records import hydrate
+
+                current = await hydrate(coll, current, ids=[entry["memory_id"]])
             live = current and any(
                 m["status"] == "active"
                 and (not m.get("expires_at") or m["expires_at"] > now())

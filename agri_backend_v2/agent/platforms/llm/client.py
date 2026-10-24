@@ -109,7 +109,7 @@ async def _repair_empty_stream_tool_calls(
         if call.get("arguments") or not parameters.get("properties"):
             continue
         logger.warning("stream tool arguments empty; repairing tool=%s", call["name"])
-        response = await _async_client.chat.completions.create(
+        response = await bounded_completion(
             model=MODEL,
             messages=[
                 *messages,
@@ -227,6 +227,11 @@ def chat(
 
     遇到可重试异常时最多重试 MAX_RETRIES 次。
     """
+    from agent.config import settings
+    from agent.domains.harness.context.budget import prepare_request
+
+    request_max_tokens = settings.context.response_reserve_tokens
+    messages, _ = prepare_request(messages, tools, max_tokens=request_max_tokens)
     logger.info(
         "LLM call: model=%s messages=%d tools=%d",
         MODEL,
@@ -237,6 +242,7 @@ def chat(
         "model": MODEL,
         "messages": messages,
         "temperature": temperature,
+        "max_tokens": request_max_tokens,
     }
     if tools:
         kwargs["tools"] = tools
@@ -311,6 +317,11 @@ async def chat_stream(
     重试策略：只在「还没 yield 任何内容」时重试。一旦开始 yield，
     说明 LLM 已经在生成，中断后重试会导致内容重复，前端无法处理。
     """
+    from agent.config import settings
+    from agent.domains.harness.context.budget import prepare_request
+
+    request_max_tokens = max_tokens or settings.context.response_reserve_tokens
+    messages, _ = prepare_request(messages, tools, max_tokens=request_max_tokens)
     logger.info(
         "LLM stream: model=%s messages=%d tools=%d",
         MODEL,
@@ -323,8 +334,7 @@ async def chat_stream(
         "temperature": temperature,
         "stream": True,
     }
-    if max_tokens is not None:
-        kwargs["max_tokens"] = max_tokens
+    kwargs["max_tokens"] = request_max_tokens
     if tools:
         kwargs["tools"] = tools
         kwargs["tool_choice"] = tool_choice or "auto"
@@ -470,3 +480,16 @@ async def chat_stream(
             "message": payload["message"],
             "data": payload,
         }
+
+
+async def bounded_completion(**request):
+    """结构化后台推理共用最终预算；证据超限应失败，不能截断后继续生成事实。"""
+    from agent.domains.harness.context.budget import prepare_request
+
+    request["messages"], _ = prepare_request(
+        request["messages"],
+        request.get("tools"),
+        max_tokens=request.get("max_tokens"),
+        compact=False,
+    )
+    return await _async_client.chat.completions.create(**request)

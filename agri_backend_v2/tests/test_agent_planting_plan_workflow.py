@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
+from typing import ClassVar
 
 import pytest
 
+from agent.domains.harness.observability.trace import collector
 from agent.domains.harness.runtime import engine as react
 from agent.domains.harness.runtime.turn import Turn
-from agent.domains.harness.observability.trace import collector
 from agent.domains.harness.tools import loader
 from agent.domains.harness.tools.base import Skill, SkillResult
 
@@ -15,7 +16,7 @@ from agent.domains.harness.tools.base import Skill, SkillResult
 class _PrepareSkill(Skill):
     """prepare_planting_plan：返回 ready + 指纹 + plan，声明 commit 后继动作。"""
 
-    _meta = {
+    _meta: ClassVar[dict] = {
         "name": "prepare_planting_plan",
         "description": "准备完整种植计划并返回审批摘要，不写入业务实体。",
         "risk_level": "read",
@@ -32,7 +33,7 @@ class _PrepareSkill(Skill):
     }
 
     # 固定的准备结果，测试用它断言 commit 收到的参数
-    prepared_result: dict = {
+    prepared_result: ClassVar[dict] = {
         "status": "ready",
         "client_request_id": "req-abc-123",
         "approval_fingerprint": "sha256:dummy-fingerprint",
@@ -75,7 +76,7 @@ class _CommitSkill(Skill):
     expose_to_model=false：模型看不到它，只能由 Runtime 在 prepare 审批通过后驱动。
     """
 
-    _meta = {
+    _meta: ClassVar[dict] = {
         "name": "commit_planting_plan",
         "description": "提交用户已批准的完整种植计划。",
         "risk_level": "write_confirm",
@@ -155,7 +156,7 @@ def _patch_react_runtime(
         react.tokenizer,
         "compute_usage",
         lambda messages, **kwargs: SimpleNamespace(
-            used=1, total=100, percent=1, level="ok"
+            used=1, total=100, percent=1, level="ok", decision="proceed"
         ),
     )
     monkeypatch.setattr(react.tokenizer, "must_compress", lambda usage: False)
@@ -271,7 +272,6 @@ async def test_commit_uses_prepare_arguments_not_model_reconstructed(
 ) -> None:
     async def fake_chat_stream(messages, tools, **kwargs):
         yield {"type": "done", "tool_calls": [_prepare_call()]}
-        return
 
     _, commit = _patch_react_runtime(monkeypatch, fake_chat_stream)
 
@@ -350,7 +350,6 @@ async def test_prepare_result_incomplete_ends_turn(
 
     async def fake_chat_stream(messages, tools, **kwargs):
         yield {"type": "done", "tool_calls": [_prepare_call()]}
-        return
 
     _, commit = _patch_react_runtime(
         monkeypatch, fake_chat_stream, prepare_skill=_BrokenPrepare()
@@ -372,7 +371,6 @@ async def test_rejected_approval_ends_turn_without_commit(
 ) -> None:
     async def fake_chat_stream(messages, tools, **kwargs):
         yield {"type": "done", "tool_calls": [_prepare_call()]}
-        return
 
     _, commit = _patch_react_runtime(monkeypatch, fake_chat_stream)
 
@@ -405,7 +403,7 @@ async def test_direct_commit_call_blocked_without_pending_approval(
     """
 
     class _NoPrepare(Skill):
-        _meta = {
+        _meta: ClassVar[dict] = {
             "name": "prepare_planting_plan",
             "description": "prepare",
             "risk_level": "read",
@@ -431,7 +429,6 @@ async def test_direct_commit_call_blocked_without_pending_approval(
                 }
             ],
         }
-        return
 
     _, commit = _patch_react_runtime(
         monkeypatch, fake_chat_stream, prepare_skill=_NoPrepare()
@@ -464,7 +461,7 @@ async def test_committed_write_uses_structured_fallback_when_reply_fails(
         # 收尾 LLM 失败
         yield {"type": "error", "message": "模型连接中断"}
 
-    _, commit = _patch_react_runtime(monkeypatch, fake_chat_stream)
+    _, _commit = _patch_react_runtime(monkeypatch, fake_chat_stream)
 
     turn = Turn(user_input="种 5 亩西瓜", max_steps=1)
     events = [event async for event in react.run_turn(turn, _approve)]

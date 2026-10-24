@@ -36,11 +36,67 @@ def collection():
     return source.database[COLLECTION_NAME]
 
 
-async def load(user_id: str) -> dict:
+async def load(
+    user_id: str,
+    *,
+    memory_ids: list[str] | None = None,
+    query: str | None = None,
+    farm_uid: str | None = None,
+    keys=(),
+    slots=(),
+    limit=60,
+) -> dict:
     """存储故障必须与没有配置区分，禁止将故障伪装为空记录。"""
     try:
         owner = owner_key(user_id)
-        doc = await collection().find_one({"_id": owner}) or new_document(owner)
+        from agent.platforms.persistence.mongo import memory_records
+
+        coll = collection()
+        for _attempt in range(3):
+            partial = memory_ids is not None or query is not None
+            doc = await coll.find_one(
+                {"_id": owner}, {"memory_refs": 0} if partial else None
+            ) or new_document(owner)
+            if doc.get("storage_version") == 3:
+                doc = await memory_records.hydrate(
+                    coll,
+                    doc,
+                    ids=memory_ids,
+                    query=query,
+                    farm_uid=farm_uid,
+                    keys=keys,
+                    slots=slots,
+                    limit=limit,
+                )
+                latest = await coll.find_one({"_id": owner}, {"revision": 1})
+                if latest and latest["revision"] == doc["revision"]:
+                    break
+            else:
+                break
+        else:
+            raise MemoryError("memory_version_conflict", "记忆读取期间发生变化，请重试")
+        if "memory_refs" not in doc:
+            if memory_ids is not None:
+                doc["memories"] = [
+                    m for m in doc["memories"] if m["memory_id"] in memory_ids
+                ]
+                doc["_partial_inline"] = True
+            if query is not None:
+                records = doc["memories"]
+                if farm_uid is not None:
+                    records = [
+                        m
+                        for m in records
+                        if m["scope"] == "user" or m.get("farm_uid") == farm_uid
+                    ]
+                doc["memories"] = memory_records.rank_records(
+                    [m for m in records if m["status"] != "deleted"],
+                    query=query,
+                    keys=keys,
+                    slots=slots,
+                    limit=limit,
+                )
+                doc["_partial_inline"] = True
         # 旧版默认关闭不等于用户主动关闭；显式选择始终优先于新版默认值。
         if "auto_learn_enabled" not in doc["field_sources"]:
             doc["settings"]["auto_learn_enabled"] = True
@@ -57,6 +113,20 @@ async def save(document: dict, expected: int) -> dict:
     document.update(revision=expected + 1, updated_at=now(), index_pending=True)
     try:
         coll = collection()
+        from agent.platforms.persistence.mongo import memory_records
+
+        if document.pop("_partial_inline", False):
+            previous = await coll.find_one({"_id": document["_id"]})
+            if previous and previous["revision"] != expected:
+                raise MemoryError("memory_version_conflict", "记忆已变化，请重新加载")
+            merged = {m["memory_id"]: m for m in (previous or {}).get("memories", [])}
+            merged.update({m["memory_id"]: m for m in document["memories"]})
+            document["memories"] = list(merged.values())
+        if (
+            "memory_refs" in document
+            or len(document["memories"]) > memory_records.INLINE_LIMIT
+        ):
+            return await memory_records.save(coll, document, expected)
         if expected == 0:
             await coll.insert_one(document)
         else:
@@ -74,7 +144,7 @@ async def save(document: dict, expected: int) -> dict:
 
 async def update_settings(user_id: str, patch: SettingsPatch) -> dict:
     """设置页和后续对话工具共用此入口，显式偏好只维护一份。"""
-    doc = await load(user_id)
+    doc = await load(user_id, memory_ids=[])
     if doc["revision"] != patch.expected_revision:
         raise MemoryError("memory_version_conflict", "设置已变化，请重新加载")
     changes = patch.model_dump(exclude_unset=True, exclude={"expected_revision"})
@@ -156,7 +226,7 @@ async def modify_memory(
     expected_revision: int | None = None,
 ) -> dict:
     """更新和删除都限定当前可见范围，删除正文仅留下最小重试屏障。"""
-    doc = await load(user_id)
+    doc = await load(user_id, memory_ids=[memory_id])
     record = next(
         (
             m
@@ -220,3 +290,59 @@ async def clear_memories(user_id: str, farm_uid: str) -> dict:
     doc["memory_control_changed_at"] = time.time()
     await save(doc, doc["revision"])
     return {"cleared": len(records), "memory_generation": doc["memory_generation"]}
+
+
+async def page_memories(user_id, farm_uid, *, page, page_size, **filters):
+    """管理页按数据库分页读取正文；总数与页面都受同一发布清单和可信范围限制。"""
+    from agent.domains.harness.memory.personalization import visible_memories
+    from agent.platforms.persistence.mongo import memory_records
+
+    head = await collection().find_one({"_id": owner_key(user_id)}) or new_document(
+        owner_key(user_id)
+    )
+    start = (page - 1) * page_size
+    if head.get("storage_version") == 3:
+        where = {
+            "owner": head["_id"],
+            "_id": {"$in": list(head["memory_refs"].values())},
+            "status": {"$ne": "deleted"},
+            "$or": [{"scope": "user"}, {"scope": "user_farm", "farm_uid": farm_uid}],
+        }
+        for key, value in filters.items():
+            if value is not None and key != "status":
+                where[f"record.{key}"] = value
+        # 过期由时间投影得出，不能拿原始 active 状态计数后再在页面上改成 expired。
+        expiry = {"record.expires_at": {"$lte": now(), "$type": "string"}}
+        status = filters.get("status")
+        if status == "expired":
+            where["$and"] = [{"$or": [{"status": "expired"}, expiry]}]
+        elif status is not None:
+            where.update(status=status, **{"$nor": [expiry]})
+        coll = collection().database[memory_records.COLLECTION]
+        total = await coll.count_documents(where)
+        rows = (
+            await coll.find(where, {"record": 1})
+            .sort("record.updated_at", -1)
+            .skip(start)
+            .limit(page_size)
+            .to_list(length=page_size)
+        )
+        latest = await collection().find_one({"_id": head["_id"]}, {"revision": 1})
+        if not latest or latest["revision"] != head["revision"]:
+            raise MemoryError("memory_version_conflict", "读取期间记忆已变化，请刷新")
+        items = visible_memories(
+            {"memories": [row["record"] for row in rows]}, farm_uid
+        )
+    else:
+        records = [
+            m
+            for m in visible_memories(head, farm_uid)
+            if all(
+                value is None
+                or m.get(key, "general" if key == "category" else None) == value
+                for key, value in filters.items()
+            )
+        ]
+        records.sort(key=lambda m: m["updated_at"], reverse=True)
+        total, items = len(records), records[start : start + page_size]
+    return {"items": items, "total": total, "page": page, "page_size": page_size}

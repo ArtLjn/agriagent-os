@@ -570,8 +570,12 @@ class MemoryRuntimeCfg:
         default_factory=lambda: float(os.getenv("MEMORY_ASSESSMENT_TIMEOUT", "15"))
     )
     review_memory_limit: int = 30
-    initial_confidence: float = 0.3
-    evidence_confidence_step: float = 0.2
+    review_bytes: int = field(
+        default_factory=lambda: int(os.getenv("MEMORY_REVIEW_BYTES", "12000"))
+    )
+    context_tokens: int = field(
+        default_factory=lambda: int(os.getenv("MEMORY_CONTEXT_TOKENS", "3000"))
+    )
     rag_url: str = field(default_factory=lambda: os.getenv("MEMORY_RAG_URL", ""))
     rag_api_key: str = field(
         default_factory=lambda: os.getenv("MEMORY_RAG_API_KEY", "")
@@ -614,6 +618,8 @@ class MemoryRuntimeCfg:
             "lease_seconds",
             "attempts",
             "context_chars",
+            "review_bytes",
+            "context_tokens",
             "extraction_chars",
         ):
             if getattr(self, name) <= 0:

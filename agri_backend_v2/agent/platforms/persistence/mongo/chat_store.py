@@ -59,7 +59,7 @@ logger = logging.getLogger(__name__)
 # 默认 farm_id（与 business 一致，archive 的 farms 表第 1 行）。
 _DEFAULT_FARM_ID = 1
 # 更换事实协议时同时更换事件字段，旧消费者只扫描旧字段，不能抢走新版任务。
-MEMORY_LEARNING_EVENT = "memoryLearningV2"
+MEMORY_LEARNING_EVENT = "memoryLearningV3"
 
 
 _client: AsyncIOMotorClient | None = None
@@ -359,7 +359,7 @@ async def ensure_indexes() -> None:
         )
         await coll.create_index(
             [(f"{MEMORY_LEARNING_EVENT}.status", 1), ("createdAt", 1)],
-            name="idx_messages_memory_outbox_v2",
+            name="idx_messages_memory_outbox_v3",
             partialFilterExpression={
                 f"{MEMORY_LEARNING_EVENT}.status": {"$exists": True}
             },

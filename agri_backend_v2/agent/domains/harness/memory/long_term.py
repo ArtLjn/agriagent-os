@@ -16,8 +16,8 @@ async def search(
     dependencies: list[str] | None = None,
 ) -> MemorySearchResult:
     """兼容旧调用方的全局个人记忆检索端口。"""
-    from agent.platforms.persistence.mongo import personalization_store
     from agent.domains.harness.memory.personalization import visible_memories
+    from agent.platforms.persistence.mongo import personalization_store
 
     # 旧入口没有可信 farm_uid，只允许全局个人记录，不能把旧数字 ID 视作授权。
     document = await personalization_store.load(user_id)
@@ -90,10 +90,10 @@ async def get_personalization_context(
     *, user_id: str, farm_uid: str, query: str = "", temporary: bool = False
 ) -> dict:
     """隔离持久化边界，存储故障返回空投影供主对话继续执行。"""
-    import logging
     import asyncio
-    from agent.config import memory_runtime
+    import logging
 
+    from agent.config import memory_runtime
     from agent.domains.harness.memory.personalization import MemoryError, context_text
     from agent.platforms.persistence.mongo import personalization_store
 
@@ -101,7 +101,9 @@ async def get_personalization_context(
         return {}
     try:
         async with asyncio.timeout(memory_runtime.context_timeout):
-            doc = await personalization_store.load(user_id)
+            doc = await personalization_store.load(
+                user_id, query=query, farm_uid=farm_uid
+            )
             from agent.platforms.persistence.memory_index import retrieve
 
             ids = (
@@ -110,8 +112,23 @@ async def get_personalization_context(
                 else []
             )
             # 远程检索期间可能发生删除；以返回后重新读取的版本为准。
+            control = await personalization_store.load(user_id, memory_ids=[])
+            if control["revision"] != doc["revision"]:
+                doc = await personalization_store.load(
+                    user_id, query=query, farm_uid=farm_uid
+                )
+                ids = []
             if ids:
-                doc = await personalization_store.load(user_id)
+                extra = await personalization_store.load(user_id, memory_ids=ids)
+                if extra["revision"] != doc["revision"]:
+                    doc = await personalization_store.load(
+                        user_id, query=query, farm_uid=farm_uid
+                    )
+                else:
+                    known = {m["memory_id"] for m in doc["memories"]}
+                    doc["memories"].extend(
+                        m for m in extra["memories"] if m["memory_id"] not in known
+                    )
             return {
                 "personalization": context_text(doc, farm_uid, query, ids),
                 "personalization_revision": doc["revision"],

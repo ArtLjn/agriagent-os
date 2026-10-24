@@ -38,6 +38,11 @@ _WRITE_CLAIM_PATTERNS = (
     ),
 )
 
+# 已保存的记忆是读取来源，不是本轮保存成功；只移除该引用短语，其他写声明仍独立核验。
+_MEMORY_READ_REFERENCE_PATTERN = re.compile(
+    r"(?:根据|依据|按照|查看|查询|读取|从)(?:你|您|我)?(?:已|已经)(?:保存|记录|存储)的(?:个人|长期)?记忆"
+)
+
 # ─── ProgressLedger ──────────────────────────────────────────
 
 # 滑动窗口大小（看最近 N 次调用判断是否死循环）
@@ -113,7 +118,7 @@ def resolve_step_budget(
 ) -> StepBudget:
     """解析受控决策轮预算，并保证估计值不能突破 Runtime 硬上限。"""
     if isinstance(fallback_steps, bool) or not isinstance(fallback_steps, int):
-        raise ValueError("fallback_steps 必须是整数")
+        raise ValueError("fallback_steps 必须是整数")  # noqa: TRY004 -- 保持既有预算参数的 ValueError 协议。
     if isinstance(estimated_steps, bool) or (
         estimated_steps is not None and not isinstance(estimated_steps, int)
     ):
@@ -124,9 +129,9 @@ def resolve_step_budget(
     ):
         raise ValueError("confidence 必须是 0 到 1 之间的数字或 None")
     if isinstance(minimum_steps, bool) or not isinstance(minimum_steps, int):
-        raise ValueError("minimum_steps 必须是整数")
+        raise ValueError("minimum_steps 必须是整数")  # noqa: TRY004 -- 保持既有预算参数的 ValueError 协议。
     if isinstance(maximum_steps, bool) or not isinstance(maximum_steps, int):
-        raise ValueError("maximum_steps 必须是整数")
+        raise ValueError("maximum_steps 必须是整数")  # noqa: TRY004 -- 保持既有预算参数的 ValueError 协议。
     if minimum_steps < MIN_STEP_BUDGET or maximum_steps < minimum_steps:
         raise ValueError("step budget 的 min/max 范围无效")
     if maximum_steps > MAX_STEP_BUDGET:
@@ -138,7 +143,7 @@ def resolve_step_budget(
     if confidence is not None and not 0.0 <= confidence <= 1.0:
         raise ValueError("confidence 必须位于 0 到 1 之间")
     if isinstance(safety_factor, bool) or not isinstance(safety_factor, (int, float)):
-        raise ValueError("safety_factor 必须是数字")
+        raise ValueError("safety_factor 必须是数字")  # noqa: TRY004 -- 保持既有预算参数的 ValueError 协议。
     if (
         not math.isfinite(safety_factor)
         or not MIN_SAFETY_FACTOR <= safety_factor <= MAX_SAFETY_FACTOR
@@ -518,6 +523,7 @@ def looks_like_write_request(text: str) -> bool:
 def claims_write_completion(content: str) -> bool:
     """判断回答是否声称写操作已经完成（而非查询结果）。"""
     normalized = re.sub(r"\s+", "", content or "")
+    normalized = _MEMORY_READ_REFERENCE_PATTERN.sub("", normalized)
     return any(pattern.search(normalized) for pattern in _WRITE_CLAIM_PATTERNS)
 
 

@@ -479,7 +479,9 @@ paths:
         按认证用户和农场隔离，支持 category 分类筛选；旧记录缺省 general。
         自动学习的新记录直接 active，无需逐条确认。返回主题卡片及可选 atoms 原子事实，旧记录首次涉及更新时无损拆分。
         atoms 包含 slot、text、source_type、source_message_ids、evidence_turns、evidence_count、revision、valid_from、last_observed_at、updated_at。
-        删除清除正文、atoms 与来源，保留重试屏障。实际自学习写入由后台任务 applied_count 表示。
+        atoms 还可包含 conditions、temporal_scope、time_evidence、state、history（最多5个旧版本）和 alternatives（最多3个冲突备选）；conflicted 不表示已确认事实。
+        支持独立正文存储的数据库分页，过期筛选按有效期投影，最多10000条有效卡片。
+        删除清除正文、atoms 的当前值、历史与冲突备选和来源，保留重试屏障。实际自学习写入由后台任务 applied_count 表示。
       operationId: list_memories_api_v2_me_memories_get
       parameters:
       - name: page
