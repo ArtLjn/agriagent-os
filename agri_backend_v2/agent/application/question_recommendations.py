@@ -38,6 +38,19 @@ REQUEST_TIMEOUT = 20
 MODEL_MAX_TOKENS = 1600
 MODEL_TEMPERATURE = 0.7
 MODEL_CONCURRENCY = 4
+# 通用对话本身能处理兴趣咨询，不应强制用户爱好匹配农业业务工具。
+GENERAL_CONVERSATION = "general_conversation"
+# 推荐会原样填入用户输入框，用明确的用户请求开头约束发问方向，避免生成 AI 对用户的访谈问题。
+USER_REQUEST_PREFIXES = (
+    "帮我",
+    "请帮我",
+    "给我",
+    "请给我",
+    "教我",
+    "请教我",
+    "我想了解",
+    "我想知道",
+)
 logger = get_logger(__name__)
 _cache: OrderedDict[str, tuple[float, dict]] = OrderedDict()
 _generation_slots = asyncio.Semaphore(MODEL_CONCURRENCY)
@@ -83,8 +96,8 @@ def profile_context(document: dict, farm_uid: str) -> dict:
     records = sorted(
         (record for record in records if record["status"] == "active"),
         key=lambda record: (
-            record.get("source_type") == "explicit",
             record.get("updated_at", ""),
+            record.get("source_type") == "explicit",
         ),
         reverse=True,
     )
@@ -109,11 +122,16 @@ def profile_context(document: dict, farm_uid: str) -> dict:
 
 @lru_cache(maxsize=1)
 def read_capabilities() -> list[dict]:
-    """从实际技能目录提取只读能力，推荐不能虚构新增工具或预填业务写操作。"""
+    """提取实际只读工具并补充通用问答，推荐不能虚构工具或预填业务写操作。"""
     registry = SkillRegistry.from_directory(
         Path(__file__).resolve().parents[1] / "tools"
     )
     return [
+        {
+            "name": GENERAL_CONVERSATION,
+            "description": "围绕用户的兴趣、日常习惯、学习、饮食和娱乐进行知识问答与讨论，不承诺实时事实或执行业务操作",
+        }
+    ] + [
         {"name": skill.name, "description": skill.description}
         for skill in registry.exposed()
         if skill.risk_level == "read"
@@ -132,7 +150,7 @@ def normalized_question(value: str) -> str:
 def validated_result(
     generated: GeneratedQuestions, context: dict, exclude: list[str]
 ) -> dict:
-    """只接受现有能力与已提供的记忆引用，返回界面标签而不泄露原始画像。"""
+    """只接受用户视角的快捷请求及有效能力、记忆引用，不向界面泄露画像。"""
     allowed = {item["name"] for item in context["capabilities"]}
     memories = {item["memory_id"] for item in context["profile"]["memories"]}
     seen = {normalized_question(question) for question in exclude}
@@ -141,6 +159,7 @@ def validated_result(
         normalized = normalized_question(item.question)
         if (
             not normalized
+            or not item.question.startswith(USER_REQUEST_PREFIXES)
             or normalized in seen
             or item.skill_name not in allowed
             or not set(item.memory_ids) <= memories
@@ -157,6 +176,8 @@ def validated_result(
         )
     if not items:
         raise MemoryError("recommendations_empty", "暂未生成新的问题，请稍后重试", 503)
+    # 让记忆驱动的问题排在前面，不能被通用业务问题挤出首屏。
+    items.sort(key=lambda item: item["basis"] != "memory")
     return {
         "items": items,
         "mode": "personalized"
@@ -187,9 +208,12 @@ async def generate(context: dict, instruction: str) -> GeneratedQuestions:
 
 async def recommend(user: dict, request: RecommendationRequest) -> dict:
     """每次读取最新画像；生成期间的删除、禁用和版本变更会阻止旧结果返回。"""
+    started = time.monotonic()
+    stage = "load_profile"
     try:
         async with asyncio.timeout(REQUEST_TIMEOUT):
             document = await store.load(user["user_id"])
+            stage = "prepare_context"
             profile = profile_context(document, user["farm_uid"])
             instruction = render_prompt("question_recommendations")
             context = {
@@ -197,6 +221,7 @@ async def recommend(user: dict, request: RecommendationRequest) -> dict:
                 "capabilities": read_capabilities(),
                 "exclude": request.exclude,
                 "count": QUESTION_LIMIT,
+                "user_request_prefixes": USER_REQUEST_PREFIXES,
             }
             # 包括签发域、可信用户/农场、画像版本、日期及提示词，不能共享用户推荐缓存。
             key = hashlib.sha256(
@@ -212,6 +237,7 @@ async def recommend(user: dict, request: RecommendationRequest) -> dict:
                     sort_keys=True,
                 ).encode()
             ).hexdigest()
+            stage = "wait_generation_slot"
             async with _generation_slots:
                 cached = _cache.get(key)
                 cache_hit = cached is not None and cached[0] > time.monotonic()
@@ -219,10 +245,12 @@ async def recommend(user: dict, request: RecommendationRequest) -> dict:
                     _cache.move_to_end(key)
                     result = cached[1]
                 else:
+                    stage = "generate_questions"
                     result = validated_result(
                         await generate(context, instruction), context, request.exclude
                     )
                 # 等待生成槽或模型期间可能关闭记忆；缓存命中也必须复核。
+                stage = "verify_profile"
                 current = await store.load(user["user_id"])
                 if (
                     current["revision"] != document["revision"]
@@ -248,6 +276,9 @@ async def recommend(user: dict, request: RecommendationRequest) -> dict:
             logging.WARNING,
             "question_recommendations_failed",
             code=type(exc).__name__,
+            duration_ms=round((time.monotonic() - started) * 1000),
+            labels={"stage": stage},
+            data={"timeout_seconds": REQUEST_TIMEOUT},
         )
         raise MemoryError(
             "recommendations_unavailable", "推荐暂时不可用，你仍可直接输入问题", 503

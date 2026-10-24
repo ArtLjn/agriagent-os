@@ -3,7 +3,7 @@
 import asyncio
 from copy import deepcopy
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from fastapi import FastAPI
@@ -51,7 +51,7 @@ def runtime(monkeypatch, document):
         return service.GeneratedQuestions(
             items=[
                 service.SuggestedQuestion(
-                    question="怎样判断番茄适合采收？",
+                    question="帮我判断番茄是否适合采收",
                     skill_name="web_search",
                     memory_ids=[m["memory_id"] for m in context["profile"]["memories"]],
                 )
@@ -152,24 +152,88 @@ def test_output_deduplicates_and_rejects_unknown_evidence_and_write_tools():
         "profile": {"memories": [{"memory_id": "one"}]},
     }
     candidates = [
-        {"question": "怎样查看茬口？", "skill_name": "read", "memory_ids": ["one"]},
-        {"question": "怎样查看茬口?", "skill_name": "read"},
+        {"question": "帮我查看茬口记录？", "skill_name": "read", "memory_ids": ["one"]},
+        {"question": "帮我查看茬口记录?", "skill_name": "read"},
         {"question": "帮我删除一个茬口", "skill_name": "delete_crop_cycle"},
         {
-            "question": "怎样管理其他农场？",
+            "question": "帮我查询其他农场记录",
             "skill_name": "read",
             "memory_ids": ["other"],
         },
-        {"question": "天气查询问题？", "skill_name": "read"},
-        {"question": "密码：不能向用户展示", "skill_name": "read"},
+        {"question": "帮我查询天气？", "skill_name": "read"},
+        {"question": "帮我查询密码：不能向用户展示", "skill_name": "read"},
     ]
     result = service.validated_result(
         service.GeneratedQuestions.model_validate({"items": candidates}),
         context,
-        ["天气查询问题"],
+        ["帮我查询天气"],
     )
     assert len(result["items"]) == 1
-    assert result["items"][0]["question"] == "怎样查看茬口？"
+    assert result["items"][0]["question"] == "帮我查看茬口记录？"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "interview",
+    ["你最喜欢哪款策略游戏？", "最近玩了什么游戏？", "需要我给你推荐菜谱吗？"],
+)
+async def test_recommendations_filter_interviews_and_keep_user_requests(
+    runtime, interview
+):
+    question = "帮我推荐几款适合长期玩的策略游戏，并比较它们的玩法"
+    runtime.side_effect = None
+    runtime.return_value = service.GeneratedQuestions(
+        items=[
+            service.SuggestedQuestion(
+                question=text, skill_name="web_search", memory_ids=["interest"]
+            )
+            for text in [interview, question]
+        ]
+    )
+    response = await service.recommend(principal(), service.RecommendationRequest())
+    assert [item["question"] for item in response["items"]] == [question]
+    assert response["mode"] == "personalized"
+
+
+@pytest.mark.asyncio
+async def test_interview_only_batch_is_not_cached_and_retry_can_succeed(runtime):
+    interview = service.GeneratedQuestions(
+        items=[
+            service.SuggestedQuestion(
+                question="你今天想吃什么？", skill_name="web_search"
+            )
+        ]
+    )
+    request = service.GeneratedQuestions(
+        items=[
+            service.SuggestedQuestion(
+                question="给我推荐三道清淡家常菜", skill_name="web_search"
+            )
+        ]
+    )
+    runtime.side_effect = [interview, request]
+    with pytest.raises(MemoryError) as failure:
+        await service.recommend(principal(), service.RecommendationRequest())
+    assert failure.value.code == "recommendations_empty"
+    assert not service._cache
+    response = await service.recommend(principal(), service.RecommendationRequest())
+    assert response["items"][0]["question"] == request.items[0].question
+    assert runtime.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_instruction_change_invalidates_existing_recommendation_cache(
+    runtime, monkeypatch
+):
+    await service.recommend(principal(), service.RecommendationRequest())
+    instruction = runtime.call_args.args[1]
+    context = runtime.call_args.args[0]
+    assert context["user_request_prefixes"] == service.USER_REQUEST_PREFIXES
+    monkeypatch.setattr(
+        service, "render_prompt", lambda _: instruction + "\n补充新的生成规则"
+    )
+    await service.recommend(principal(), service.RecommendationRequest())
+    assert runtime.await_count == 2
 
 
 @pytest.mark.asyncio
@@ -209,7 +273,7 @@ async def test_provider_contract_uses_json_and_never_executes_tools(monkeypatch)
             choices=[
                 SimpleNamespace(
                     message=SimpleNamespace(
-                        content='{"items":[{"question":"最近的农事记录有哪些？","skill_name":"query","memory_ids":[]}]}'
+                        content='{"items":[{"question":"帮我查询最近的农事记录","skill_name":"query","memory_ids":[]}]}'
                     )
                 )
             ]
@@ -304,3 +368,114 @@ def test_capability_catalog_only_contains_existing_read_tools():
     names = {item["name"] for item in service.read_capabilities()}
     assert {"get_farm_review", "get_payment_overview", "query_memos"} <= names
     assert not {"create_memo", "archive_memo", "update_memo"} & names
+
+
+def test_general_interests_do_not_require_business_tools(document):
+    document["memories"][0]["text"] = "喜欢策略游戏和清淡家常菜"
+    context = {
+        "profile": service.profile_context(document, "farm-a"),
+        "capabilities": service.read_capabilities(),
+    }
+    result = service.validated_result(
+        service.GeneratedQuestions(
+            items=[
+                service.SuggestedQuestion(
+                    question="帮我查询农场天气",
+                    skill_name="get_weather",
+                    memory_ids=[],
+                ),
+                service.SuggestedQuestion(
+                    question="教我在策略游戏里平衡资源积累和扩张",
+                    skill_name=service.GENERAL_CONVERSATION,
+                    memory_ids=["interest"],
+                ),
+            ]
+        ),
+        context,
+        [],
+    )
+    assert result["mode"] == "personalized"
+    assert result["items"][0]["question"] == "教我在策略游戏里平衡资源积累和扩张"
+    assert result["items"][0]["basis"] == "memory"
+    assert "memory_ids" not in result["items"][0]
+
+
+def test_recent_learned_interests_are_not_starved_by_old_explicit_memories(document):
+    old = document["memories"][0]
+    document["memories"] = [
+        {**old, "memory_id": f"old-{index}"} for index in range(service.MEMORY_LIMIT)
+    ]
+    document["memories"].append(
+        {
+            **old,
+            "memory_id": "recent",
+            "source_type": "learned",
+            "updated_at": "2026-10-24",
+            "text": "喜欢策略游戏",
+        }
+    )
+    selected = service.profile_context(document, "farm-a")["memories"]
+    assert selected[0]["memory_id"] == "recent"
+    assert len(selected) == service.MEMORY_LIMIT
+
+
+@pytest.mark.asyncio
+async def test_interests_update_invalidates_cache_and_drives_general_questions(
+    document, runtime
+):
+    await service.recommend(principal(), service.RecommendationRequest())
+    document["revision"] += 1
+    document["memories"][0]["text"] = "喜欢清淡家常菜"
+    runtime.side_effect = None
+    runtime.return_value = service.GeneratedQuestions(
+        items=[
+            service.SuggestedQuestion(
+                question="教我做清淡又有滋味的家常菜",
+                skill_name="web_search",
+                memory_ids=["interest"],
+            )
+        ]
+    )
+    response = await service.recommend(principal(), service.RecommendationRequest())
+    assert runtime.await_count == 2
+    assert (
+        runtime.call_args.args[0]["profile"]["memories"][0]["text"] == "喜欢清淡家常菜"
+    )
+    assert response["items"][0]["basis"] == "memory"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "stage",
+    ["load_profile", "wait_generation_slot", "generate_questions", "verify_profile"],
+)
+async def test_timeout_logs_stage_and_duration_without_user_data(
+    document, runtime, monkeypatch, stage
+):
+    event = Mock()
+    monkeypatch.setattr(service, "log_event", event)
+    if stage == "load_profile":
+        monkeypatch.setattr(
+            service.store, "load", AsyncMock(side_effect=TimeoutError())
+        )
+    elif stage == "verify_profile":
+        monkeypatch.setattr(
+            service.store,
+            "load",
+            AsyncMock(side_effect=[deepcopy(document), TimeoutError()]),
+        )
+    elif stage == "wait_generation_slot":
+        monkeypatch.setattr(service, "REQUEST_TIMEOUT", 0.01)
+        monkeypatch.setattr(service, "_generation_slots", asyncio.Semaphore(0))
+    else:
+        runtime.side_effect = TimeoutError()
+    with pytest.raises(MemoryError) as error:
+        await service.recommend(principal(), service.RecommendationRequest())
+    assert error.value.code == "recommendations_unavailable"
+    fields = event.call_args.kwargs
+    assert fields["code"] == "TimeoutError"
+    assert fields["labels"] == {"stage": stage}
+    assert fields["duration_ms"] >= 0
+    assert fields["data"] == {"timeout_seconds": service.REQUEST_TIMEOUT}
+    assert set(fields) == {"code", "labels", "duration_ms", "data"}
+    assert not service._cache

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock
+
 import pytest
 
 from agent.api import api_router, conversations, turns
-
 
 IDENTITY = {
     "user_id": "api-user",
@@ -18,6 +19,12 @@ IDENTITY = {
         "turn:approve turn:cancel"
     ),
 }
+
+
+@pytest.fixture(autouse=True)
+def lifecycle_access(monkeypatch):
+    """此文件验证响应契约；真实目录访问校验由 test_conversation_catalog 覆盖。"""
+    monkeypatch.setattr(conversations, "require_access", AsyncMock())
 
 
 def test_conversation_history_routes_register() -> None:

@@ -5,12 +5,13 @@ interface LocalSessionState {
   loading: boolean;
   traceLoading: boolean;
   timeline?: unknown;
+  archived?: boolean;
 }
 
 export type ConversationRow = ConversationItem & { local?: boolean };
 
 function hasVisibleLocalSession(state: LocalSessionState | undefined): boolean {
-  return Boolean(state && (state.messages.length > 0 || state.loading || state.traceLoading));
+  return Boolean(state && !state.archived && (state.messages.length > 0 || state.loading || state.traceLoading));
 }
 
 export function buildConversationRows(

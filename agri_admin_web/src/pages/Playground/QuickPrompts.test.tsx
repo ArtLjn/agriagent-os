@@ -7,7 +7,7 @@ vi.mock('../../api/questionRecommendations', () => ({ getQuestionRecommendations
 const api = vi.mocked(getQuestionRecommendations);
 const data: QuestionRecommendations = {
   mode: 'personalized',
-  items: [{ id: 'one', question: '番茄采收前需要注意什么？', basis: 'memory' }],
+  items: [{ id: 'one', question: '帮我梳理番茄采收前需要注意的事项', basis: 'memory' }],
 };
 
 beforeEach(() => { vi.clearAllMocks(); api.mockResolvedValue(data); });
@@ -26,7 +26,7 @@ describe('个性化推荐问题', () => {
   });
 
   it('长问题保留完整可访问名称和填入内容，加载骨架不可点击', async () => {
-    const question = '请结合最近保存的种植偏好，介绍番茄采收前的田间管理事项，以及如何检查灌溉、通风和采收记录？';
+    const question = '请帮我梳理番茄采收前的田间管理事项，包括如何检查灌溉、通风和采收记录，并按准备工作的先后顺序说明具体步骤。';
     api.mockResolvedValueOnce({ mode: 'personalized', items: [{ id: 'long', question, basis: 'memory' }] });
     const select = vi.fn();
     render(<QuickPrompts onSelect={select} />);
@@ -41,9 +41,9 @@ describe('个性化推荐问题', () => {
   it('换一批排除已展示问题，显示新的推荐', async () => {
     render(<QuickPrompts onSelect={vi.fn()} />);
     await screen.findByText(data.items[0].question);
-    api.mockResolvedValueOnce({ mode: 'explore', items: [{ id: 'two', question: '怎样回顾最近的农事？', basis: 'explore' }] });
+    api.mockResolvedValueOnce({ mode: 'explore', items: [{ id: 'two', question: '帮我回顾最近的农事记录', basis: 'explore' }] });
     fireEvent.click(screen.getByRole('button', { name: '换一批' }));
-    expect(await screen.findByText('怎样回顾最近的农事？')).toBeInTheDocument();
+    expect(await screen.findByText('帮我回顾最近的农事记录')).toBeInTheDocument();
     expect(api).toHaveBeenLastCalledWith([data.items[0].question], null, expect.any(AbortSignal));
     expect(screen.getByTitle('探索话题')).toBeInTheDocument();
     expect(screen.queryByText('结合你已保存的兴趣与偏好')).not.toBeInTheDocument();

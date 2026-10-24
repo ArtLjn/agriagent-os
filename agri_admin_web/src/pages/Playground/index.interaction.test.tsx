@@ -1,15 +1,17 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StreamChunk } from '../../api/agent';
 import Playground from './index';
 
-const api = vi.hoisted(() => ({ streamChat: vi.fn(), approveTurn: vi.fn(), getMemoryLearningStatus: vi.fn() }));
+const api = vi.hoisted(() => ({ streamChat: vi.fn(), approveTurn: vi.fn(), getMemoryLearningStatus: vi.fn(), listConversations: vi.fn(), archiveConversation: vi.fn(), deleteConversation: vi.fn(), listDevUsers: vi.fn() }));
 vi.mock('../../api/agent', () => ({
   streamChat: api.streamChat,
   approveTurn: api.approveTurn,
   getMemoryLearningStatus: api.getMemoryLearningStatus,
-  listDevUsers: vi.fn().mockResolvedValue([]),
-  listConversations: vi.fn().mockResolvedValue([]),
+  listDevUsers: api.listDevUsers,
+  listConversations: api.listConversations,
+  archiveConversation: api.archiveConversation,
+  deleteConversation: api.deleteConversation,
   getConversationMessages: vi.fn().mockResolvedValue([]),
   getConversationMessagesPage: vi.fn().mockResolvedValue({ items: [], has_more: false }),
   getConversationTurns: vi.fn().mockResolvedValue({ items: [] }),
@@ -20,12 +22,14 @@ vi.mock('../../api/questionRecommendations', () => ({
   RECOMMENDATION_HISTORY_LIMIT: 18,
   getQuestionRecommendations: vi.fn().mockResolvedValue({
     mode: 'personalized',
-    items: [{ id: 'tomato', question: '番茄采收前需要注意什么？', basis: 'memory' }],
+    items: [{ id: 'tomato', question: '帮我梳理番茄采收前需要注意的事项', basis: 'memory' }],
   }),
 }));
 
 beforeEach(() => {
   vi.clearAllMocks();
+  api.listConversations.mockResolvedValue({ items: [], has_more: false });
+  api.listDevUsers.mockResolvedValue([]);
   Object.defineProperty(Element.prototype, 'scrollTo', { configurable: true, value: vi.fn() });
   api.streamChat.mockImplementation(async function* (): AsyncGenerator<StreamChunk> {
     yield { type: 'step.started', data: { turn_id: 't-1', step_index: 1, status: 'running' } };
@@ -60,15 +64,60 @@ describe('Playground 执行界面交互', () => {
     }
   });
 
+  it('归档当前会话开启空白会话，草稿箱历史只读并可恢复', async () => {
+    let archived = false;
+    const row = { conversation_id: 'archive-flow', last_message: '用于归档的会话', last_role: 'user', last_at: '2026-10-24T00:00:00Z', message_count: 2 };
+    api.listConversations.mockImplementation(async (_limit, _token, options) => ({ items: options.archived === archived ? [row] : [], has_more: false }));
+    api.archiveConversation.mockImplementation(async (_id, value) => { archived = value; });
+    render(<Playground />);
+    fireEvent.click(await screen.findByRole('button', { name: '查看会话：用于归档的会话' }));
+    await waitFor(() => expect(screen.getByRole('textbox', { name: '对话输入' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: '归档到草稿箱' }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: '查看会话：用于归档的会话' })).not.toBeInTheDocument());
+    expect(screen.getByRole('textbox', { name: '对话输入' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('tab', { name: /草稿箱/ }));
+    fireEvent.click(await screen.findByRole('button', { name: '查看会话：用于归档的会话' }));
+    await screen.findByText('此会话已归档。请在草稿箱恢复后继续聊天。');
+    expect(screen.queryByRole('textbox', { name: '对话输入' })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: '恢复会话' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: '恢复会话' }));
+    await waitFor(() => expect(screen.getByRole('textbox', { name: '对话输入' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('tab', { name: '会话', exact: true }));
+    expect(await screen.findByRole('button', { name: '查看会话：用于归档的会话' })).toBeInTheDocument();
+  });
+
+  it('切换身份后旧流完成不能把旧会话重新加到列表', async () => {
+    let finish!: () => void;
+    const pending = new Promise<void>((resolve) => { finish = resolve; });
+    api.listDevUsers.mockResolvedValue([{ user_id: 'new-user', token: 'new-token', nickname: '另一个用户', role: 'user', farm_id: 7 }]);
+    api.streamChat.mockImplementation(async function* (): AsyncGenerator<StreamChunk> {
+      yield { type: 'content', data: '旧用户的回复' };
+      await pending;
+      yield { type: 'content', data: '迟到的回复' };
+    });
+    render(<Playground />);
+    fireEvent.change(screen.getByRole('textbox', { name: '对话输入' }), { target: { value: '旧用户的问题' } });
+    fireEvent.click(screen.getByRole('button', { name: '发送' }));
+    await screen.findByText('旧用户的回复');
+    fireEvent.mouseDown(screen.getByRole('combobox'));
+    fireEvent.click(await screen.findByText('另一个用户 (farm:7, user)'));
+    await waitFor(() => expect(screen.queryByText('旧用户的回复')).not.toBeInTheDocument());
+    await act(async () => { finish(); await pending; });
+    await waitFor(() => expect(screen.getByRole('textbox', { name: '对话输入' })).toBeEnabled());
+    expect(screen.queryByRole('button', { name: '查看会话：新会话' })).not.toBeInTheDocument();
+    expect(screen.queryByText('迟到的回复')).not.toBeInTheDocument();
+  });
+
   it('点击推荐填入输入框并聚焦，用户发送前不调用 Agent', async () => {
     render(<Playground />);
     fireEvent.click(await screen.findByRole('button', { name: /番茄采收前/ }));
     const input = screen.getByRole('textbox', { name: '对话输入' });
-    expect(input).toHaveValue('番茄采收前需要注意什么？');
+    expect(input).toHaveValue('帮我梳理番茄采收前需要注意的事项');
     expect(input).toHaveFocus();
     expect(api.streamChat).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: '发送' }));
     await waitFor(() => expect(api.streamChat).toHaveBeenCalled());
+    expect(api.streamChat.mock.calls[0][0]).toBe('帮我梳理番茄采收前需要注意的事项');
   });
 
   it('发送后在对话内联展示执行步骤，新会话不保留旧记录', async () => {

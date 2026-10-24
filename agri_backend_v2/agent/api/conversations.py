@@ -6,9 +6,16 @@ import logging
 from typing import Any
 
 from fastapi import Header, HTTPException, Query
+from pydantic import BaseModel, ConfigDict
 
 from agent.api import api_router
 from agent.auth import parse_identity, require_identity_permission
+from agent.domains.harness.observability.trace.safety import sanitize_payload
+from agent.domains.harness.observability.trace.store import (
+    get_trace_summary,
+    get_trace_timeline,
+    list_traces,
+)
 from agent.platforms.persistence.mongo.chat_store import (
     ConversationCursorError,
     get_conversation,
@@ -16,13 +23,12 @@ from agent.platforms.persistence.mongo.chat_store import (
     get_conversation_state,
     list_conversations,
 )
-from agent.platforms.persistence.redis.turn_store import get_turn, legacy_status_fields
-from agent.domains.harness.observability.trace.store import (
-    get_trace_summary,
-    get_trace_timeline,
-    list_traces,
+from agent.platforms.persistence.mongo.conversation_catalog import (
+    ConversationLifecycleError,
+    change_lifecycle,
+    require_access,
 )
-from agent.domains.harness.observability.trace.safety import sanitize_payload
+from agent.platforms.persistence.redis.turn_store import get_turn, legacy_status_fields
 from shared.roles import Permission, is_admin_role
 
 logger = logging.getLogger(__name__)
@@ -96,6 +102,7 @@ def _check_turn_scope(turn: dict[str, Any], identity: dict[str, Any]) -> None:
 async def conversations_list(
     limit: int = Query(default=20, ge=1, le=100),
     cursor: str | None = Query(default=None),
+    archived: bool = Query(default=False),
     authorization: str | None = Header(default=None),
 ) -> dict:
     """List conversations with pagination."""
@@ -106,14 +113,22 @@ async def conversations_list(
         return await list_conversations(
             limit=limit,
             cursor=cursor,
+            archived=archived,
             user_id=identity["user_id"],
             farm_id=identity["farm_id"],
         )
+    except ConversationLifecycleError as exc:
+        raise HTTPException(
+            exc.status_code,
+            {"code": exc.code, "message": str(exc), "meta": {"archived": archived}},
+        ) from exc
     except HTTPException:
         raise
     except Exception as exc:
         logger.warning("conversations list failed: %s", exc)
-        raise HTTPException(500, {"detail": str(exc), "code": "internal"})
+        raise HTTPException(
+            500, {"message": "会话服务暂不可用", "code": "internal", "meta": {}}
+        ) from exc
 
 
 @api_router.get("/conversations/{conversation_id}")
@@ -127,6 +142,9 @@ async def conversation_detail(
     try:
         identity = require_identity_permission(
             parse_identity(authorization), Permission.CONVERSATION_READ
+        )
+        await require_access(
+            conversation_id, user_id=identity["user_id"], farm_id=identity["farm_id"]
         )
         result = await get_conversation(
             conversation_id,
@@ -156,11 +174,22 @@ async def conversation_detail(
             "source_status": source_status,
             "context_source_status": source_status,
         }
+    except ConversationLifecycleError as exc:
+        raise HTTPException(
+            exc.status_code,
+            {
+                "code": exc.code,
+                "message": str(exc),
+                "meta": {"conversation_id": conversation_id},
+            },
+        ) from exc
     except HTTPException:
         raise
     except Exception as exc:
         logger.warning("conversation detail failed: %s", exc)
-        raise HTTPException(500, {"detail": str(exc), "code": "internal"})
+        raise HTTPException(
+            500, {"message": "会话服务暂不可用", "code": "internal", "meta": {}}
+        ) from exc
 
 
 @api_router.get("/conversations/{conversation_id}/messages")
@@ -174,6 +203,9 @@ async def conversation_messages(
     try:
         identity = require_identity_permission(
             parse_identity(authorization), Permission.CONVERSATION_READ
+        )
+        await require_access(
+            conversation_id, user_id=identity["user_id"], farm_id=identity["farm_id"]
         )
         state = await get_conversation_state(
             conversation_id,
@@ -221,11 +253,22 @@ async def conversation_messages(
         }
     except ConversationCursorError as exc:
         raise HTTPException(409, {"code": exc.code, "message": str(exc)}) from exc
+    except ConversationLifecycleError as exc:
+        raise HTTPException(
+            exc.status_code,
+            {
+                "code": exc.code,
+                "message": str(exc),
+                "meta": {"conversation_id": conversation_id},
+            },
+        ) from exc
     except HTTPException:
         raise
     except Exception as exc:
         logger.warning("conversation messages failed: %s", exc)
-        raise HTTPException(500, {"detail": str(exc), "code": "internal"})
+        raise HTTPException(
+            500, {"message": "会话服务暂不可用", "code": "internal", "meta": {}}
+        ) from exc
 
 
 @api_router.get("/conversations/{conversation_id}/turns")
@@ -239,6 +282,9 @@ async def conversation_turns(
     try:
         identity = require_identity_permission(
             parse_identity(authorization), Permission.CONVERSATION_READ
+        )
+        await require_access(
+            conversation_id, user_id=identity["user_id"], farm_id=identity["farm_id"]
         )
         messages = await get_conversation(
             conversation_id,
@@ -321,11 +367,22 @@ async def conversation_turns(
             "evidence_status": evidence_status,
             "evidence": trace_page.get("evidence"),
         }
+    except ConversationLifecycleError as exc:
+        raise HTTPException(
+            exc.status_code,
+            {
+                "code": exc.code,
+                "message": str(exc),
+                "meta": {"conversation_id": conversation_id},
+            },
+        ) from exc
     except HTTPException:
         raise
     except Exception as exc:
         logger.warning("conversation turns failed: %s", exc)
-        raise HTTPException(500, {"detail": str(exc), "code": "internal"})
+        raise HTTPException(
+            500, {"message": "会话服务暂不可用", "code": "internal", "meta": {}}
+        ) from exc
 
 
 @api_router.get("/conversations/{conversation_id}/turns/{turn_id}")
@@ -339,6 +396,9 @@ async def conversation_turn_detail(
     try:
         identity = require_identity_permission(
             parse_identity(authorization), Permission.CONVERSATION_READ
+        )
+        await require_access(
+            conversation_id, user_id=identity["user_id"], farm_id=identity["farm_id"]
         )
         runtime_turn = await get_turn(turn_id)
         if runtime_turn is not None:
@@ -448,11 +508,22 @@ async def conversation_turn_detail(
             "evidence": evidence,
             "source_status": trace_source_status,
         }
+    except ConversationLifecycleError as exc:
+        raise HTTPException(
+            exc.status_code,
+            {
+                "code": exc.code,
+                "message": str(exc),
+                "meta": {"conversation_id": conversation_id},
+            },
+        ) from exc
     except HTTPException:
         raise
     except Exception as exc:
         logger.warning("conversation turn detail failed: %s", exc)
-        raise HTTPException(500, {"detail": str(exc), "code": "internal"})
+        raise HTTPException(
+            500, {"message": "会话服务暂不可用", "code": "internal", "meta": {}}
+        ) from exc
 
 
 def _evidence_component_status(component: Any) -> str:
@@ -490,3 +561,63 @@ def _approval_snapshot(turn: dict[str, Any] | None) -> dict[str, Any] | None:
     if turn.get("approved") is True:
         return {"status": "approved"}
     return None
+
+
+class ConversationArchiveRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    archived: bool
+
+
+@api_router.patch("/conversations/{conversation_id}")
+async def conversation_archive(
+    conversation_id: str,
+    request: ConversationArchiveRequest,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """归档或恢复自己的会话，使用服务端身份限制用户和农场范围。"""
+    identity = require_identity_permission(
+        parse_identity(authorization), Permission.CONVERSATION_WRITE
+    )
+    try:
+        return await change_lifecycle(
+            conversation_id,
+            user_id=identity["user_id"],
+            farm_id=identity["farm_id"],
+            archived=request.archived,
+        )
+    except ConversationLifecycleError as exc:
+        raise HTTPException(
+            exc.status_code,
+            {
+                "code": exc.code,
+                "message": str(exc),
+                "meta": {"conversation_id": conversation_id},
+            },
+        ) from exc
+
+
+@api_router.delete("/conversations/{conversation_id}")
+async def conversation_delete(
+    conversation_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """只允许删除草稿箱中的会话；重复删除成功，恢复和旧链接读取均被拒绝。"""
+    identity = require_identity_permission(
+        parse_identity(authorization), Permission.CONVERSATION_WRITE
+    )
+    try:
+        return await change_lifecycle(
+            conversation_id,
+            user_id=identity["user_id"],
+            farm_id=identity["farm_id"],
+            delete=True,
+        )
+    except ConversationLifecycleError as exc:
+        raise HTTPException(
+            exc.status_code,
+            {
+                "code": exc.code,
+                "message": str(exc),
+                "meta": {"conversation_id": conversation_id},
+            },
+        ) from exc

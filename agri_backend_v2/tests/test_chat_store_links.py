@@ -88,7 +88,7 @@ async def test_conversation_messages_expose_turn_and_trace_links(monkeypatch) ->
             "meta": {"source": "agent_chat"},
         }
     ]
-    assert (("memoryLearningV2.status", 1), ("createdAt", 1)) in collection.indexes
+    assert (("memoryLearningV3.status", 1), ("createdAt", 1)) in collection.indexes
 
 
 @pytest.mark.asyncio
@@ -113,11 +113,12 @@ async def test_message_event_is_atomic_and_invisible_to_old_consumers(
     )
     document = collection.insert_one.call_args.args[0]
     assert "memoryLearning" not in document
+    assert "memoryLearningV2" not in document
     if role == "user":
-        assert document["memoryLearningV2"] == event
+        assert document["memoryLearningV3"] == event
         assert document["content"] == "喜欢青色"
     else:
-        assert "memoryLearningV2" not in document
+        assert "memoryLearningV3" not in document
 
 
 @pytest.mark.asyncio
@@ -148,8 +149,9 @@ async def test_conversation_cursor_excludes_previous_pages_and_preserves_tenant(
             rows = self.rows
             filters = [stage["$match"] for stage in pipeline if "$match" in stage]
             assert filters[0] == {"farmId": 7, "userId": "user-1"}
-            if len(filters) > 1:
-                boundary = filters[1]["$or"]
+            cursor_filters = [condition for condition in filters if "$or" in condition]
+            if cursor_filters:
+                boundary = cursor_filters[0]["$or"]
                 rows = [
                     row
                     for row in rows
