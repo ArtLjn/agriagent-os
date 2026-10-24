@@ -12,6 +12,14 @@ last_updated: 2026-10-24
 
 数据兼容与边界见 [自动学习与归并](../design/self-learning-memory.md)，完整既有配置见 [长期记忆实施记录](../spec/2026-10-20-agent-personalization-long-term-memory-plan.md)。
 
+记忆抽取、归并、完整性复核和工具审核共用 `agent/platforms/llm/structured.py`：由 Pydantic 生成强制工具输出协议，再按同一模型严格解析。当前 Qwen 网关实测忽略 `json_schema`，所以不能仅依赖该参数；结果工具只承载结构化数据，不进入业务执行器。完整内容通道 JSON 和旧抽取数组仍可兼容，截断、拒绝、多结果、重复键或字段类型错误统一失败，不自动修补事实。后台仍沿用既有有限重试，授权审核失败则拒绝写入。
+
+语义提示词位于 `agent/prompts/memory_*.md`，使用现有 `render_prompt` 加载；Python 中不保存提示词正文。输出字段、类型、枚举和长度来自模型定义，Markdown 只描述来源、时间、条件与授权等语义规则。
+
+QuillRAG 使用 Cloudflare BGE-M3 时，配置 `EMBEDDING_PROVIDER=openai`、`EMBEDDING_MODEL=@cf/baai/bge-m3`、`EMBEDDING_DIM=1024`、`EMBEDDING_BATCH_SIZE=64`。其客户端自行追加 `/v1/embeddings`，因此 `EMBEDDING_BASE_URL` 应为 `https://api.cloudflare.com/client/v4/accounts/<account_id>/ai`。Token 仅放部署环境的 `EMBEDDING_API_KEY`。模型切换必须重新嵌入已有正文，旧模型同维度也不能混用；先备份配置、元数据和原始向量，切换后检查真实 `actual_mode`，不能只看 HTTP 200。
+
+本次抽样验证集合为 `agent_user_memory_bge_m3_sample_1000`，包含 1000 条已有记忆，保留账号、农场和版本过滤。它用于受控验证，不修改 Mongo 原始记忆；测试进程显式指定 `MEMORY_RAG_COLLECTION`。不要对这个固定样本集合启动全量索引 Worker，否则会继续补齐原库全部记忆。正式运行仍按部署的 `MEMORY_RAG_COLLECTION` 选择集合。
+
 `MONGODB__DATABASE` 可覆盖 Agent 数据库名称，与已有 `REDIS__KEY_PREFIX` 配合隔离集成测试；常规部署不设置则继续使用 config.yaml。真实回归使用随机专属库并精确销毁，不指向用户库。
 
 本地与线上共享 Redis 时必须配置不同的 `REDIS__KEY_PREFIX`，否则旧执行 Worker 可以消费本地请求。新版记忆消息使用 `memoryLearningV3` 字段和 `agentMemoryLearningTasksV3` 租约集合；旧消费者仍只扫描旧字段/集合，不能抢走新版事件。旧队列由旧版本完成或在停旧进程后显式迁移，不自动重学旧消息。发布时同时升级入口与消费者，环境隔离不能只靠入口健康检查的源码指纹。

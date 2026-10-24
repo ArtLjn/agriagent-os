@@ -25,10 +25,16 @@ from shared.roles import UserRole
 
 logger = logging.getLogger(__name__)
 _STARTED_AT = time.time()
-_MEMORY_SOURCE = Path(__file__).resolve().parents[1] / "domains/harness/memory"
+_AGENT_SOURCE = Path(__file__).resolve().parents[1]
+_MEMORY_SOURCES = [
+    *(_AGENT_SOURCE / "domains/harness/memory").glob("*.py"),
+    *(_AGENT_SOURCE / "prompts").glob("memory_*.md"),
+    _AGENT_SOURCE / "platforms/llm/structured.py",
+]
 # 启动时固定指纹，不能每次请求读磁盘，否则旧进程会假装已加载新代码。
+# 模板移出 Python 后仍须参与指纹，否则部署检查无法发现漏发的提示词版本。
 _MEMORY_BUILD = hashlib.sha256(
-    b"".join(path.read_bytes() for path in sorted(_MEMORY_SOURCE.glob("*.py")))
+    b"".join(path.read_bytes() for path in sorted(_MEMORY_SOURCES))
 ).hexdigest()[:16]
 
 

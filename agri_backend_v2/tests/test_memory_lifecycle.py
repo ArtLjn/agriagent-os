@@ -59,9 +59,8 @@ async def test_memory_assessment_accepts_strict_json_with_optional_fence(
 async def test_memory_assessment_rejects_mixed_text_and_untyped_authorization(
     monkeypatch, raw
 ):
-    from pydantic import ValidationError
-
     from agent.platforms.llm import client
+    from agent.platforms.llm.structured import StructuredOutputError
 
     monkeypatch.setattr(
         client._async_client.chat.completions,
@@ -72,7 +71,7 @@ async def test_memory_assessment_rejects_mixed_text_and_untyped_authorization(
             )
         ),
     )
-    with pytest.raises(ValidationError):
+    with pytest.raises(StructuredOutputError, match="structured_output_invalid"):
         await _real_assess("我喜欢吃西瓜")
 
 
@@ -729,7 +728,9 @@ async def test_extraction_accepts_provider_envelope_and_normalizes_values(
     monkeypatch.setattr(client._async_client.chat.completions, "create", create)
     result = await learning.extract("我一向喜欢简短回答")
     assert result[0].text == "偏好简洁回答"
-    assert create.call_args.kwargs["response_format"] == {"type": "json_object"}
+    request = create.call_args.kwargs
+    assert request["tool_choice"]["function"]["name"] == "Extraction"
+    assert request["tools"][0]["function"]["strict"] is True
 
 
 @pytest.mark.asyncio
