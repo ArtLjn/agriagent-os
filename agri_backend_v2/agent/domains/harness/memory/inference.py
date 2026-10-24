@@ -384,6 +384,11 @@ async def align_candidates(
                 raise MemoryError(
                     "memory_alignment_unknown_fact", "归并引用了不存在的原子事实"
                 )
+        elif item.relation == "merge" and candidate.temporal_scope != "historical":
+            # merge 只追加候选自己的事实，不使用模型多填的旧对象槽位。
+            # 候选槽位若已存在，事实层仍拒绝覆盖；历史补充继续保留时间分支锚点。
+            item.target_slot = None
+            item.conditions_equivalent = False
         elif item.target_slot:
             # 历史补充可指向当前对象作锚点，事实层按时间另开槽位；普通 merge 仍禁止覆盖。
             if not (

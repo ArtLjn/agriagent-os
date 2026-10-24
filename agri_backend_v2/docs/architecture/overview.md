@@ -12,6 +12,8 @@ last_updated: 2026-10-24
 
 归并同主题的新事实时仍须保留作用范围：全局个人偏好不能并入农场限定卡片，农场事实也不能扩散为全局事实。模型误选不同范围的 `merge` 目标时，按原范围独立新增，旧卡片不变；纠正、冲突和强化继续校验目标槽位与范围。对齐校验失败返回具体 `memory_alignment_*` 错误码，供后台任务和日志定位，避免仅留下 `ValueError`。
 
+当前事实的 `merge` 只向主题卡片追加候选自己的槽位，忽略模型额外填写的旧对象 `target_slot`；候选槽位碰撞仍由事实层拒绝，不能借追加改写旧事实。历史补充保留原有目标锚点并独立保存时间分支，纠正和强化仍使用经校验的旧槽位。
+
 本次自动学习默认开启，保留用户显式关闭设置。稳定观察直接生效，移除已无用途的 `MEMORY_MIN_TURNS`、`MEMORY_MIN_CONVERSATIONS`、`MEMORY_CANDIDATE_DAYS`，部署中旧值不再控制晋升或有效期。历史候选已有 expires_at 继续有效，新自动记忆没有候选审批和到期门槛。
 
 沿用 `MEMORY_POLL_SECONDS=5`、`MEMORY_LEASE_SECONDS=120`、`MEMORY_ATTEMPTS=3`，读取预算 `MEMORY_CONTEXT_CHARS=3000`、原文上限 `MEMORY_EXTRACTION_CHARS=12000`。显式记忆审查预算由 `MEMORY_ASSESSMENT_TIMEOUT=15` 控制。无需新增服务，超过 200 张卡片的账号下次写入自动迁移独立正文存储；需要同步发布并重启 Agent 入口与消费者。

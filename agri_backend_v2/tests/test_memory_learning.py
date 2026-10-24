@@ -404,8 +404,9 @@ async def test_extraction_cannot_supply_a_merged_text_before_alignment(monkeypat
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("consistent", [True, False])
+@pytest.mark.parametrize("old_slot_reference", [None, "watermelon"])
 async def test_multiple_candidates_cannot_lose_each_others_merge(
-    monkeypatch, collection, consistent
+    monkeypatch, collection, consistent, old_slot_reference
 ):
     from agent.platforms.llm import client
 
@@ -418,6 +419,7 @@ async def test_multiple_candidates_cannot_lose_each_others_merge(
             "candidate_index": i,
             "target_memory_id": record["memory_id"],
             "relation": "merge",
+            "target_slot": old_slot_reference,
             "merged_text": None if consistent else "只喜欢葡萄",
         }
         for i in range(2)
@@ -451,6 +453,38 @@ async def test_multiple_candidates_cannot_lose_each_others_merge(
     records = (await store.load("u"))["memories"]
     assert len(records) == 1 and records[0]["text"] == merged
     assert records[0]["evidence_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_merge_cannot_replace_existing_slot_after_ignoring_extra_reference(
+    monkeypatch, collection
+):
+    await learning.apply_candidates(task(await store.load("u")), [fruit()])
+    doc = await store.load("u")
+    record = doc["memories"][0]
+    monkeypatch.setattr(
+        inference,
+        "structured_completion",
+        AsyncMock(
+            return_value=inference.Alignments(
+                alignments=[
+                    {
+                        "candidate_index": 0,
+                        "target_memory_id": record["memory_id"],
+                        "target_slot": "watermelon",
+                        "relation": "merge",
+                    }
+                ]
+            )
+        ),
+    )
+    aligned = await inference.align_candidates(
+        [fruit(text="不喜欢西瓜", evidence="我不喜欢西瓜")], [record]
+    )
+    with pytest.raises(MemoryError) as error:
+        await learning.apply_candidates(task(doc, "two", 2), aligned)
+    assert error.value.code == "memory_fact_conflict"
+    assert (await store.load("u"))["memories"] == doc["memories"]
 
 
 @pytest.mark.asyncio
