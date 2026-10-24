@@ -14,6 +14,7 @@ from test_personalization import Collection
 
 from agent.config import memory_runtime
 from agent.domains.harness.memory import inference, long_term
+from agent.domains.harness.memory import tools as memory_tools
 from agent.domains.harness.memory.personalization import (
     MemoryCreate,
     SettingsPatch,
@@ -21,6 +22,7 @@ from agent.domains.harness.memory.personalization import (
     new_document,
     rank_context_records,
 )
+from agent.domains.harness.runtime.turn import Turn
 from agent.platforms.persistence import memory_index
 from agent.platforms.persistence.mongo import personalization_store as store
 
@@ -173,6 +175,41 @@ def test_fast_render_budget_never_splits_positive_and_negative(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_lexical_only_project_survives_semantic_fusion_and_render(
+    memory, monkeypatch
+):
+    await store.create_memory(
+        "u",
+        "f",
+        MemoryCreate(
+            memory_id="project",
+            key="雾桥纸笺",
+            text="雾桥纸笺项目喜欢青绿色，不喜欢米白色",
+        ),
+    )
+    for index in range(20):
+        await store.create_memory(
+            "u",
+            "f",
+            MemoryCreate(
+                memory_id=f"color-{index}",
+                key=f"材料{index}",
+                text="挑选手工材料时偏爱低饱和度颜色",
+            ),
+        )
+    monkeypatch.setattr(
+        memory_index,
+        "retrieve",
+        AsyncMock(return_value=[f"color-{index}" for index in range(20)]),
+    )
+    result = await long_term.get_personalization_context(
+        user_id="u", farm_uid="f", query="雾桥纸笺项目的配色偏好"
+    )
+    assert "雾桥纸笺" in result["personalization"]
+    assert "喜欢青绿色，不喜欢米白色" in result["personalization"]
+
+
+@pytest.mark.asyncio
 async def test_index_write_concurrency_and_idempotent_version(monkeypatch):
     active = peak = 0
 
@@ -304,6 +341,92 @@ async def test_index_manifest_isolated_when_embedding_collection_changes(monkeyp
     keys = {call.args[0]["_id"] for call in manifest.update_one.call_args_list}
     assert len(keys) == 2
     assert {key.split(":")[0] for key in keys} == {"memory_google", "memory_ollama"}
+
+
+@pytest.mark.asyncio
+async def test_memory_tool_list_keeps_semantic_hit_outside_lexical_window(
+    memory, monkeypatch
+):
+    for index in range(12):
+        await store.create_memory(
+            "u",
+            "f",
+            MemoryCreate(
+                memory_id=f"noise-{index}",
+                key=f"music-{index}",
+                text=f"整理照片时喜欢听第{index}张唱片",
+            ),
+        )
+    await store.create_memory(
+        "u",
+        "f",
+        MemoryCreate(
+            memory_id="archive", key="归档", text="相片文件夹先按年份再按月份分类"
+        ),
+    )
+    original = store.load
+
+    async def lexical_window(*args, **kwargs):
+        doc = await original(*args, **kwargs)
+        if kwargs.get("query") is not None:
+            doc["memories"] = [
+                r for r in doc["memories"] if r["memory_id"] != "archive"
+            ]
+        return doc
+
+    monkeypatch.setattr(store, "load", lexical_window)
+    retrieve = AsyncMock(return_value=["archive"])
+    monkeypatch.setattr(memory_index, "retrieve", retrieve)
+    result = await memory_tools.execute(
+        Turn(user_id="u", farm_uid="f", user_input="相片如何归档"),
+        {"action": "list", "query": "整理照片"},
+        "read",
+    )
+    assert result["ok"] and result["memories"][0]["memory_id"] == "archive"
+    assert len(result["memories"]) <= memory_runtime.context_selection_limit
+    assert retrieve.call_args.args[1:] == ("f", "整理照片")
+
+
+@pytest.mark.asyncio
+async def test_memory_tool_semantic_lookup_respects_forgetting_owner_and_read_switch(
+    memory, monkeypatch
+):
+    for user, identifier in (("u", "deleted"), ("other", "foreign")):
+        await store.create_memory(
+            user,
+            "f",
+            MemoryCreate(memory_id=identifier, key="archive", text="相片按年月归档"),
+        )
+    await store.modify_memory("u", "f", "deleted")
+    retrieve = AsyncMock(return_value=["deleted", "foreign"])
+    monkeypatch.setattr(memory_index, "retrieve", retrieve)
+    turn = Turn(user_id="u", farm_uid="f", user_input="相片归档")
+    result = await memory_tools.execute(turn, {"action": "list"}, "read")
+    assert result["ok"] and result["memories"] == []
+    control = await store.load("u")
+    await store.update_settings(
+        "u",
+        SettingsPatch(expected_revision=control["revision"], use_saved_memories=False),
+    )
+    retrieve.reset_mock()
+    assert (await memory_tools.execute(turn, {"action": "list"}, "disabled"))[
+        "memories"
+    ] == []
+    retrieve.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_memory_tool_timeout_does_not_claim_empty_memory(monkeypatch):
+    monkeypatch.setattr(
+        long_term, "load_context_candidates", AsyncMock(side_effect=TimeoutError)
+    )
+    result = await memory_tools.execute(
+        Turn(user_id="u", farm_uid="f", user_input="相片归档"),
+        {"action": "list"},
+        "read",
+    )
+    assert not result["ok"] and result["code"] == "memory_retrieve_timeout"
+    assert "memories" not in result
 
 
 @pytest.mark.asyncio

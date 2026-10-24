@@ -287,6 +287,15 @@ def rank_context_records(
     remaining = {m["memory_id"]: m for m in records}
     terms = {key: query_terms(searchable_text(m)) for key, m in remaining.items()}
     selected = []
+    # 专名和刚更新的事实可能只由词项命中；两路各保留首选，避免权重把整路候选挤掉。
+    leaders = {
+        next((identifier for identifier in ids if identifier in remaining), None)
+        for ids in (lexical_ids, semantic_ids)
+    } - {None}
+    for identifier in sorted(leaders, key=lambda key: (-scores[key], key)):
+        if len(selected) >= memory_runtime.context_card_limit:
+            break
+        selected.append(remaining.pop(identifier))
     while remaining and len(selected) < memory_runtime.context_card_limit:
 
         def score(identifier):
