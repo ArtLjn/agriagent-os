@@ -231,6 +231,43 @@ def record(index):
 
 
 @pytest.mark.asyncio
+async def test_recent_preferences_survive_old_generic_candidates(
+    isolated_mongo, monkeypatch
+):
+    from agent.domains.harness.memory import long_term
+    from agent.platforms.persistence import memory_index
+
+    doc = new_document(store.owner_key("u"))
+    doc["memories"] = [record(i) for i in range(1000)]
+    for old in doc["memories"]:
+        old.update(text="平时喜欢吃青菜", last_observed_at=1)
+        old["atoms"][0]["text"] = old["text"]
+    for index, text in [(1000, "喜欢打王者荣耀"), (1001, "喜欢吃宫保鸡丁")]:
+        latest = record(index)
+        latest.update(text=text, last_observed_at=index)
+        latest["atoms"][0]["text"] = text
+        doc["memories"].append(latest)
+    unrelated = record(1002)
+    unrelated.update(text="请称呼我为小林", last_observed_at=2000)
+    unrelated["atoms"][0]["text"] = unrelated["text"]
+    doc["memories"].append(unrelated)
+    await store.save(doc, 0)
+
+    async def old_semantic(*args, diagnostics=None):
+        diagnostics.update(status="ready", hit_count=24)
+        return [f"memory-{i}" for i in range(24)]
+
+    monkeypatch.setattr(memory_index, "retrieve", old_semantic)
+    result = await long_term.load_context_candidates(
+        "u", "f", "我喜欢玩什么游戏、吃什么菜"
+    )
+    ids = {m["memory_id"] for m in result["memories"]}
+    assert {"memory-1000", "memory-1001"} <= ids
+    assert "memory-1002" not in ids
+    assert len(ids) <= memory_runtime.context_card_limit
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("size", [1000, 3000, 10000])
 async def test_real_mongo_scale_cas_delete_and_bounded_retrieval(isolated_mongo, size):
     doc = new_document(store.owner_key("u"))
