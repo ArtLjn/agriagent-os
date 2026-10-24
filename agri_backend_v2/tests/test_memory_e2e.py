@@ -237,9 +237,14 @@ def turn_id(events):
 
 def test_real_legacy_correction_restart_and_cross_session_recall(service):
     http, db, user_id, _farm_uid, restart = service
-    source = _ROOT / "agent/domains/harness/memory"
+    source = _ROOT / "agent"
+    sources = [
+        *(source / "domains/harness/memory").glob("*.py"),
+        *(source / "prompts").glob("memory_*.md"),
+        source / "platforms/llm/structured.py",
+    ]
     expected = hashlib.sha256(
-        b"".join(p.read_bytes() for p in sorted(source.glob("*.py")))
+        b"".join(p.read_bytes() for p in sorted(sources))
     ).hexdigest()[:16]
     assert http.get("/health").json()["runtime"]["memory_build"] == expected
     response = http.post(
