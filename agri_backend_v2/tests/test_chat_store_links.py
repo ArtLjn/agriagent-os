@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
 import pytest
 
 from agent.platforms.persistence.mongo import chat_store
@@ -85,7 +88,36 @@ async def test_conversation_messages_expose_turn_and_trace_links(monkeypatch) ->
             "meta": {"source": "agent_chat"},
         }
     ]
-    assert (("memoryLearning.status", 1), ("createdAt", 1)) in collection.indexes
+    assert (("memoryLearningV2.status", 1), ("createdAt", 1)) in collection.indexes
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "role,kind", [("user", "prompt"), ("assistant", "final_answer")]
+)
+async def test_message_event_is_atomic_and_invisible_to_old_consumers(
+    monkeypatch, role, kind
+):
+    collection = SimpleNamespace(
+        insert_one=AsyncMock(return_value=SimpleNamespace(inserted_id="m"))
+    )
+    monkeypatch.setattr(chat_store, "get_collection", lambda: collection)
+    monkeypatch.setattr(chat_store, "ensure_indexes", AsyncMock())
+    event = {"status": "pending", "farm_uid": "f", "observed_at": 1}
+    await chat_store.append_message(
+        conversation_id="c",
+        role=role,
+        message_kind=kind,
+        content="喜欢青色",
+        learning_event=event,
+    )
+    document = collection.insert_one.call_args.args[0]
+    assert "memoryLearning" not in document
+    if role == "user":
+        assert document["memoryLearningV2"] == event
+        assert document["content"] == "喜欢青色"
+    else:
+        assert "memoryLearningV2" not in document
 
 
 @pytest.mark.asyncio

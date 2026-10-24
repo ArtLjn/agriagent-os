@@ -193,7 +193,7 @@ def chat(http, message, conversation):
 def learned(db, turn_id):
     """实际任务必须完成，不能将无候选、入队成功或主对话完成当作记忆生效。"""
     for _ in range(240):
-        job = db.agentMemoryLearningTasks.find_one({"turn_id": turn_id})
+        job = db.agentMemoryLearningTasksV2.find_one({"turn_id": turn_id})
         if job and job["status"] in {"done", "failed"}:
             assert job["status"] == "done", {
                 k: job.get(k) for k in ("status", "error_code", "attempts")
@@ -278,7 +278,7 @@ def test_real_message_outbox_survives_assistant_failure_and_restart(service):
             "messageKind": "prompt",
             "content": "我一直偏好简洁的回答",
             "createdAt": "2026-10-24 10:00:00",
-            "memoryLearning": {
+            "memoryLearningV2": {
                 "status": "pending",
                 "farm_uid": farm_uid,
                 "observed_at": time.time(),

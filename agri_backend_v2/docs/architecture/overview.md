@@ -14,4 +14,6 @@ last_updated: 2026-10-24
 
 `MONGODB__DATABASE` 可覆盖 Agent 数据库名称，与已有 `REDIS__KEY_PREFIX` 配合隔离集成测试；常规部署不设置则继续使用 config.yaml。真实回归使用随机专属库并精确销毁，不指向用户库。
 
+本地与线上共享 Redis 时必须配置不同的 `REDIS__KEY_PREFIX`，否则旧执行 Worker 可以消费本地请求。新版记忆消息使用 `memoryLearningV2` 字段和 `agentMemoryLearningTasksV2` 租约集合；旧消费者仍只扫描旧字段/集合，不能抢走新版事件。旧队列由旧版本完成或在停旧进程后显式迁移，不自动重学旧消息。发布时同时升级入口与消费者，环境隔离不能只靠入口健康检查的源码指纹。
+
 发布后核对 `/api/v2/health.runtime.started_at` 与 `memory_build`（启动时计算的记忆模块源码指纹）；入口没有热重载，修改代码后必须重启。旧消息缺少学习事件时不自动补学，旧复合记忆仅在涉及更新时无损拆分，不需要全库迁移。

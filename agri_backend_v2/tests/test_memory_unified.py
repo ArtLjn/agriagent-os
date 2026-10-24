@@ -1,6 +1,7 @@
 """统一学习回归：事实粒度、事件恢复、原文边界和提交结果。"""
 
 import json
+import os
 import time
 from copy import deepcopy
 from types import SimpleNamespace
@@ -18,6 +19,8 @@ from agent.domains.harness.memory.personalization import (
 from agent.domains.harness.runtime.turn import Turn
 from agent.platforms.persistence.mongo import chat_store
 from agent.platforms.persistence.mongo import personalization_store as store
+
+_assess = tools.assess
 
 
 @pytest.fixture
@@ -166,7 +169,7 @@ async def test_relay_acknowledges_only_durable_queue_and_replays_same_message(
         "conversationId": "c",
         "turnId": "t",
         "content": "喜欢葡萄",
-        "memoryLearning": {"farm_uid": "f", "observed_at": 1},
+        chat_store.MEMORY_LEARNING_EVENT: {"farm_uid": "f", "observed_at": 1},
     }
     messages = SimpleNamespace(
         find_one=AsyncMock(return_value=message), update_one=AsyncMock()
@@ -178,10 +181,19 @@ async def test_relay_acknowledges_only_durable_queue_and_replays_same_message(
     messages.update_one.assert_not_called()
     await learning.relay_observation()
     assert (
-        messages.update_one.call_args.args[1]["$set"]["memoryLearning.status"]
+        messages.update_one.call_args.args[1]["$set"][
+            f"{chat_store.MEMORY_LEARNING_EVENT}.status"
+        ]
         == "queued"
     )
     assert enqueue.call_args.args[0].turn_id == "t"
+    query = messages.find_one.call_args.args[0]
+    assert query == {
+        "memoryLearningV2.status": "pending",
+        "role": "user",
+        "messageKind": "prompt",
+    }
+    assert learning.TASK_COLLECTION != "agentMemoryLearningTasks"
 
 
 @pytest.mark.asyncio
@@ -367,3 +379,95 @@ async def test_explicit_save_promotes_same_turn_background_fact_without_double_e
     atom = (await store.load("u"))["memories"][0]["atoms"][0]
     assert result["applied_count"] == 1
     assert atom["source_type"] == "explicit" and atom["evidence_count"] == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "failed_check", ["complete", "atomic", "grounded", "conditions_preserved", None]
+)
+async def test_extraction_review_blocks_loss_before_alignment(
+    monkeypatch, failed_check
+):
+    from agent.platforms.llm import client
+
+    text = "在松影书签项目里，我一直喜欢靛蓝色和琥珀色"
+    check = dict.fromkeys(learning.ExtractionCheck.model_fields, True)
+    if failed_check:
+        check[failed_check] = False
+    create = AsyncMock(
+        side_effect=[
+            response({"candidates": [candidate("colors", text).model_dump()]}),
+            response(check),
+        ]
+    )
+    monkeypatch.setattr(client._async_client.chat.completions, "create", create)
+    align = AsyncMock(return_value=[])
+    monkeypatch.setattr(learning, "align_candidates", align)
+    if failed_check:
+        with pytest.raises(MemoryError, match="完整性"):
+            await learning.extract(text, [{"text": "已有偏好"}])
+        align.assert_not_called()
+    else:
+        await learning.extract(text, [{"text": "已有偏好"}])
+        align.assert_awaited_once()
+    assert create.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_empty_extraction_still_checks_for_omitted_stable_facts(monkeypatch):
+    from agent.platforms.llm import client
+
+    check = dict.fromkeys(learning.ExtractionCheck.model_fields, True)
+    check["complete"] = False
+    monkeypatch.setattr(
+        client._async_client.chat.completions,
+        "create",
+        AsyncMock(side_effect=[response({"candidates": []}), response(check)]),
+    )
+    with pytest.raises(MemoryError, match="完整性"):
+        await learning.extract("我一直喜欢靛蓝色")
+
+
+@pytest.mark.skipif(os.getenv("AGENT_ROUTING_LIVE") != "1", reason="需开启真实模型回放")
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "project,colors",
+    [("松影书签", ("靛蓝色", "琥珀色")), ("星河陶杯", ("橙色", "紫色"))],
+)
+async def test_live_scoped_colors_keep_independent_facts_after_correction(
+    collection, project, colors
+):
+    initial = (
+        f"在‘{project}’这个个人手作项目里，我一直偏爱{colors[0]}和{colors[1]}的配色。"
+    )
+    correction = f"{project}的配色我现在不喜欢{colors[1]}了，{colors[0]}仍然喜欢。"
+    for index, text in enumerate((initial, correction), 1):
+        doc = await store.load("u")
+        candidates = await learning.extract(text, doc["memories"])
+        assert len(candidates) == 2, candidates
+        assert all(project in c.text for c in candidates), candidates
+        assert all(sum(color in c.text for color in colors) == 1 for c in candidates)
+        await learning.apply_candidates(
+            task(doc, str(index), index, text=text), candidates
+        )
+    memories = (await store.load("u"))["memories"]
+    assert len(memories) == 1 and len(memories[0]["atoms"]) == 2, memories
+    positive = next(a for a in memories[0]["atoms"] if colors[0] in a["text"])
+    negative = next(a for a in memories[0]["atoms"] if colors[1] in a["text"])
+    assert "不" not in positive["text"] and "不" in negative["text"], memories
+    assert positive["evidence_count"] == 2 and negative["evidence_count"] == 1
+    assert project in context_text(await store.load("u"), "f", query=f"{project}配色")
+
+    # 主模型错用旧证据、生成全段 update，也不能反向制造本轮显式请求。
+    assessment = await _assess(
+        correction,
+        command={
+            "action": "update",
+            "text": f"偏爱{colors[0]}的配色",
+            "evidence": initial,
+        },
+        recent_dialogue=[{"role": "user", "content": initial}],
+        known_memories=[{"text": initial}],
+    )
+    assert assessment.preference_statement and not assessment.requests_persistence
+    assert not assessment.authorized

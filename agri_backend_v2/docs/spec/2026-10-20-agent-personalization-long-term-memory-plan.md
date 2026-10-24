@@ -24,7 +24,7 @@ status: implemented-local
 
 - `agentUserPreferences`：`_id=JWT issuer:user_id`，包含 snake_case 的 settings、field_sources、memories、revision、memory_generation、learning_generation、index_pending。
 - 保留单用户聚合文档，通过 revision CAS 原子更新设置、记录和删除代次；无需 Mongo 多文档事务。最多 200 条非删除/非过期记录，删除屏障不占有效容量。删除正文和条件，保留标识，避免重试复活。历史屏障持续保留，长期高频写入场景应监测文档大小并迁移独立记录集合，不能无界扩容。
-- `agentMemoryLearningTasks`：按 owner + turn_id 幂等创建任务，记录本轮完整用户输入（超过 12000 字符直接跳过）、控制代次、租约、重试次数；成功、失效或最终失败后移除任务原文。来源引用为 `turn:<turn_id>`，可关联既有会话记录；尚无独立的证据全文查看接口。
+- `agentMemoryLearningTasksV2`：按 owner + turn_id 幂等创建任务，消费消息内的 `memoryLearningV2` 事件，与旧消费者隔离；记录本轮完整用户输入（超过 12000 字符直接跳过）、控制代次、租约、重试次数；成功、失效或最终失败后移除任务原文。来源引用为 `turn:<turn_id>`，可关联既有会话记录；尚无独立的证据全文查看接口。
 - `agentMemoryIndexManifest`：记录每个 owner + memory_id + revision 对应的不可变索引 ID，先登记再上传，旧版本异步删除。清单保留以修复并发旧上传；不在索引中存放未确认候选。
 
 ### 用户操作与运行链路
