@@ -2,12 +2,85 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
 import yaml
 
 from agent import config as config_module
+
+
+@pytest.fixture
+def memory_config_environment(monkeypatch):
+    """配置解析测试隔离真实部署环境，避免本机密钥影响覆盖顺序。"""
+    for key in list(os.environ):
+        if key.startswith("MEMORY_"):
+            monkeypatch.delenv(key)
+
+
+def test_memory_yaml_and_environment_precedence(monkeypatch, memory_config_environment):
+    monkeypatch.setattr(
+        config_module,
+        "_load_yaml",
+        lambda: {
+            "memory": {
+                "rag_url": "https://rag.example.com",
+                "rag_api_key": "yaml-test-key",
+                "rag_collection": "personal_test",
+                "context_mode": "read",
+                "context_timeout": 8,
+                "retrieve_timeout": 5,
+            }
+        },
+    )
+    cfg = config_module._build_memory_runtime()
+    assert cfg.rag_url == "https://rag.example.com"
+    assert cfg.rag_api_key == "yaml-test-key"
+    assert cfg.rag_collection == "personal_test"
+    assert cfg.context_mode == "read"
+    assert cfg.context_timeout == 8
+    assert cfg.retrieve_timeout == 5
+    monkeypatch.setenv("MEMORY_RAG_API_KEY", "environment-test-key")
+    monkeypatch.setenv("MEMORY_CONTEXT_MODE", "retrieve")
+    monkeypatch.setenv("MEMORY_RETRIEVE_TIMEOUT", "7.5")
+    cfg = config_module._build_memory_runtime()
+    assert cfg.rag_api_key == "environment-test-key"
+    assert cfg.context_mode == "retrieve"
+    assert cfg.retrieve_timeout == 7.5
+    assert cfg.rag_url == "https://rag.example.com"
+    monkeypatch.setenv("MEMORY_RAG_URL", "")
+    assert config_module._build_memory_runtime().rag_url == ""
+
+
+def test_memory_without_yaml_keeps_existing_defaults(
+    monkeypatch, memory_config_environment
+):
+    monkeypatch.setattr(config_module, "_load_yaml", lambda: {})
+    cfg = config_module._build_memory_runtime()
+    assert cfg.rag_url == ""
+    assert cfg.rag_api_key == ""
+    assert cfg.rag_collection == config_module.DEFAULT_MEMORY_RAG_COLLECTION
+    assert cfg.context_mode == "retrieve"
+    assert cfg.context_timeout == 3
+
+
+@pytest.mark.parametrize(
+    "value,code",
+    [
+        ([], "memory_config_must_be_mapping"),
+        ({"rag_endpoint": "invalid-field"}, "memory_config_unknown_fields"),
+        ({"rag_collection": "ticket_knowledge"}, "memory_collection_must_be_dedicated"),
+        ({"context_mode": "unknown"}, "memory_context_mode_invalid"),
+        ({"retrieve_timeout": 0}, "memory_config_must_be_positive"),
+    ],
+)
+def test_invalid_memory_yaml_fails_at_startup(
+    monkeypatch, memory_config_environment, value, code
+):
+    monkeypatch.setattr(config_module, "_load_yaml", lambda: {"memory": value})
+    with pytest.raises(ValueError, match=code):
+        config_module._build_memory_runtime()
 
 
 def _build_from(tmp_path: Path, monkeypatch, payload: dict | None = None):

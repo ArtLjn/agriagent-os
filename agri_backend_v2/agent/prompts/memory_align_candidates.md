@@ -15,6 +15,7 @@ conditions_equivalent 仅在候选与目标 atom 的适用条件语义完全相�
 只有用户明确给出新取值才 contradict；无法确定当前取值的矛盾使用 conflict 并引用目标 slot，不能靠最近写入或次数投票。
 旧事实 state=conflicted 时，用户明确澄清才 contradict，否则继续 conflict。
 新增事实按候选 scope；个人偏好可以纠正当前可见的农场范围同一事实，沿用目标 scope；农场限定观察不能覆盖全局事实。
+同主题但 scope 不同的新增对象不能 merge：应返回 new、target_memory_id=null、target_slot=null，按候选原本 scope 独立保存。例如全局“喜欢某道菜”不能并入农场范围的旧饮食主题，也不能反过来把农场限定偏好扩大为全局。
 旧记录没有 atoms 时只选择 target_memory_id，target_slot=null，服务端拆分后会重新对齐。
 不能返回或重写合并正文，merged_text=null；服务端按 slot 合成展示。
 每个候选恰好返回一次给定 candidate_index；选择最相关的一条目标记忆，不能为同一候选返回多个关联。

@@ -364,7 +364,7 @@ async def test_invalid_alignment_does_not_silently_overwrite(monkeypatch, alignm
             )
         ),
     )
-    with pytest.raises(ValueError, match="memory_alignment"):
+    with pytest.raises(MemoryError) as error:
         await learning.align_candidates(
             [fruit()],
             [
@@ -376,6 +376,7 @@ async def test_invalid_alignment_does_not_silently_overwrite(monkeypatch, alignm
                 }
             ],
         )
+    assert error.value.code.startswith("memory_alignment_")
 
 
 @pytest.mark.asyncio
@@ -441,14 +442,93 @@ async def test_multiple_candidates_cannot_lose_each_others_merge(
         fruit(slot="grape", text="喜欢葡萄"),
     ]
     if not consistent:
-        with pytest.raises(ValueError, match="whole_text_forbidden"):
+        with pytest.raises(MemoryError) as error:
             await learning.align_candidates(candidates, [record])
+        assert error.value.code == "memory_alignment_whole_text_forbidden"
         return
     aligned = await learning.align_candidates(candidates, [record])
     await learning.apply_candidates(task(doc, "two", 2), aligned)
     records = (await store.load("u"))["memories"]
     assert len(records) == 1 and records[0]["text"] == merged
     assert records[0]["evidence_count"] == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "old_scope,new_scope", [("user_farm", "user"), ("user", "user_farm")]
+)
+async def test_new_preference_across_scopes_preserves_both_records(
+    monkeypatch, collection, old_scope, new_scope
+):
+    await learning.apply_candidates(
+        task(await store.load("u")), [fruit(scope=old_scope)]
+    )
+    doc = await store.load("u")
+    previous = doc["memories"][0]
+    monkeypatch.setattr(
+        inference,
+        "structured_completion",
+        AsyncMock(
+            return_value=inference.Alignments(
+                alignments=[
+                    {
+                        "candidate_index": 0,
+                        "target_memory_id": previous["memory_id"],
+                        "relation": "merge",
+                    }
+                ]
+            )
+        ),
+    )
+    aligned = await inference.align_candidates(
+        [fruit(scope=new_scope, slot="grape", text="喜欢葡萄", evidence="我喜欢葡萄")],
+        doc["memories"],
+    )
+    assert aligned[0].relation == "new" and aligned[0].target_memory_id is None
+    assert aligned[0].scope == new_scope and aligned[0].target_slot is None
+    await learning.apply_candidates(task(doc, "two", 2), aligned)
+    records = (await store.load("u"))["memories"]
+    assert len(records) == 2
+    assert (
+        next(m for m in records if m["memory_id"] == previous["memory_id"]) == previous
+    )
+    added = next(m for m in records if m["memory_id"] != previous["memory_id"])
+    assert added["scope"] == new_scope and added["text"] == "喜欢葡萄"
+
+
+@pytest.mark.asyncio
+async def test_farm_correction_cannot_overwrite_global_preference(monkeypatch):
+    monkeypatch.setattr(
+        inference,
+        "structured_completion",
+        AsyncMock(
+            return_value=inference.Alignments(
+                alignments=[
+                    {
+                        "candidate_index": 0,
+                        "target_memory_id": "fruit",
+                        "target_slot": "watermelon",
+                        "relation": "contradict",
+                    }
+                ]
+            )
+        ),
+    )
+    with pytest.raises(MemoryError) as error:
+        await inference.align_candidates(
+            [fruit(scope="user_farm", text="不喜欢西瓜")],
+            [
+                {
+                    "memory_id": "fruit",
+                    "scope": "user",
+                    "key": "food.fruit",
+                    "text": "喜欢西瓜",
+                    "category": "preference",
+                    "atoms": [{"slot": "watermelon", "text": "喜欢西瓜"}],
+                }
+            ],
+        )
+    assert error.value.code == "memory_alignment_scope_mismatch"
 
 
 @pytest.mark.asyncio
