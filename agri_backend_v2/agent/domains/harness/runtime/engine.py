@@ -155,7 +155,22 @@ async def run_turn(
     )
 
     try:
+        memory_event = {
+            "type": "memory_context",
+            "data": {"stage": "start", "status": "running"},
+        }
+        turn.emit(memory_event["type"], memory_event["data"])
+        yield memory_event
         runtime = await _prepare_turn_runtime(turn)
+        memory_event = {
+            "type": "memory_context",
+            "data": {
+                "stage": "prepared",
+                **turn.memory_snapshot.get("personalization_diagnostics", {}),
+            },
+        }
+        turn.emit(memory_event["type"], memory_event["data"])
+        yield memory_event
 
         async for ev in _try_compress_context(turn):
             yield ev
@@ -211,6 +226,8 @@ async def _prepare_turn_runtime(
         _route_turn_skills(turn),
     )
     turn.memory_snapshot.update(personalization)
+    if turn.temporary:
+        turn.memory_snapshot["personalization_diagnostics"] = {"status": "temporary"}
     estimated_steps, confidence = (
         await _estimate_turn_budget(turn)
         if settings.context.estimate_steps
@@ -744,6 +761,8 @@ async def _run_single_reasoning_step(
     )
     turn.memory_snapshot.pop("personalization", None)
     turn.memory_snapshot.update(fresh)
+    if turn.temporary:
+        turn.memory_snapshot["personalization_diagnostics"] = {"status": "temporary"}
     turn.messages = [
         m
         for m in turn.messages
@@ -772,6 +791,7 @@ async def _run_single_reasoning_step(
         async for stream_item in _call_llm_stream(
             llm_messages,
             tools_schema,
+            memory_snapshot=turn.memory_snapshot,
         ):
             if isinstance(stream_item, _LlmResult):
                 llm_result = stream_item
@@ -997,6 +1017,7 @@ async def _call_llm_stream(
     *,
     tool_choice: str | dict[str, Any] | None = None,
     max_tokens: int | None = None,
+    memory_snapshot: dict | None = None,
 ) -> AsyncGenerator[dict | _LlmResult, None]:
     """流式 LLM 调用，同时转发增量和等待心跳。"""
     _llm_start = time.time()
@@ -1006,6 +1027,20 @@ async def _call_llm_stream(
     llm_messages, final_usage = prepare_request(
         llm_messages, tools_schema, max_tokens=max_tokens
     )
+    if memory_snapshot is not None:
+        from agent.domains.harness.memory.long_term import injection_diagnostics
+
+        # 和真实请求共用裁剪结果，检索命中不能冒充最终已进入模型上下文。
+        diagnostics = injection_diagnostics(
+            memory_snapshot, llm_messages, before_budget=original_messages
+        )
+        trace_record(
+            node_type="memory",
+            node_name="memory_context",
+            phase="reasoning",
+            output_data=diagnostics,
+        )
+        yield {"type": "memory_context", "data": diagnostics}
     # 观测面板必须读取裁剪后的真实请求，不能拿初始估算冒充最终预算。
     trace_record(
         node_type="prompt_budget",
@@ -3161,10 +3196,14 @@ async def _run_finalization(
                 [],
                 tool_choice="none",
                 max_tokens=finalization.FINALIZATION_MAX_TOKENS,
+                memory_snapshot=turn.memory_snapshot,
             ):
                 if isinstance(item, _LlmResult):
                     result = item
                 elif item["type"] == "heartbeat":
+                    yield item
+                elif item["type"] == "memory_context":
+                    turn.emit(item["type"], item["data"])
                     yield item
         if result is None or result.tool_calls or not result.full_content.strip():
             raise ValueError("finalization_invalid_response")

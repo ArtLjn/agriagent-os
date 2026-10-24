@@ -2,6 +2,7 @@ import { palette } from '../../styles/theme';
 import type { ExecutionEvent } from './executionEvents';
 
 export const eventMeta: Record<ExecutionEvent['type'], { label: string; color: string }> = {
+  memory_context: { label: '长时记忆', color: palette.accent },
   thought: { label: '思考', color: palette.purple },
   plan: { label: '执行计划', color: palette.accent },
   plan_step_done: { label: '计划步骤', color: palette.success },

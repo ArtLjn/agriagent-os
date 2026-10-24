@@ -116,6 +116,24 @@ def test_user_projection_hides_reasoning_and_internal_fields() -> None:
     assert projected is None
 
 
+def test_memory_diagnostics_are_only_visible_in_admin_projection():
+    event = {"type": "memory_context", "data": {"injection": {"text": "私人记忆"}}}
+    identity = {"user_id": "u"}
+    assert (
+        project_event(
+            event, profile="user", execution_identity=identity, viewer_identity=identity
+        )
+        is None
+    )
+    debug = project_event(
+        event,
+        profile="admin_debug",
+        execution_identity=identity,
+        viewer_identity={"user_id": "admin", "role": "admin"},
+    )
+    assert debug["data"] == event["data"]
+
+
 def test_user_projection_keeps_replay_identity_without_diagnostics() -> None:
     projected = project_event(
         {
@@ -141,7 +159,9 @@ def test_user_projection_keeps_replay_identity_without_diagnostics() -> None:
     }
 
 
-def test_admin_projection_keeps_diagnostic_envelope_but_redacts_sensitive_data() -> None:
+def test_admin_projection_keeps_diagnostic_envelope_but_redacts_sensitive_data() -> (
+    None
+):
     projected = project_event(
         {
             "type": "action",
@@ -238,12 +258,14 @@ async def test_turn_events_resolves_last_event_id_without_reexecuting_turn(
     )
     chunks = [chunk async for chunk in response.body_iterator]
 
-    assert 'id: evt-turn-8\n' in chunks[0]
+    assert "id: evt-turn-8\n" in chunks[0]
     assert '"seq": 8' in chunks[0]
 
 
 @pytest.mark.asyncio
-async def test_cancelled_queued_turn_persists_stop_reason_before_done(monkeypatch) -> None:
+async def test_cancelled_queued_turn_persists_stop_reason_before_done(
+    monkeypatch,
+) -> None:
     update = AsyncMock()
     publish = AsyncMock()
 

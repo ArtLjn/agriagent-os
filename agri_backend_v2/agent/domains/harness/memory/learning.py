@@ -26,10 +26,6 @@ from agent.domains.harness.memory.personalization import (
 )
 from agent.platforms.persistence.mongo import personalization_store as store
 
-logger = logging.getLogger(__name__)
-# 旧 Worker 不识别原子事实，滚动发布期间必须隔离租约集合，不能只在文档加版本号。
-TASK_COLLECTION = "agentMemoryLearningTasksV3"
-# 本地语义计算预算：任务租约涵盖抽取、旧记录拆分核对和归并的多次请求。
 from agent.domains.harness.memory.inference import (
     Candidate,
     ExtractionCheck,
@@ -39,6 +35,9 @@ from agent.domains.harness.memory.inference import (
     verify_extraction,
 )
 
+logger = logging.getLogger(__name__)
+# 旧 Worker 不识别原子事实，滚动发布期间必须隔离租约集合，不能只在文档加版本号。
+TASK_COLLECTION = "agentMemoryLearningTasksV3"
 _tasks: list[asyncio.Task] = []
 
 
@@ -127,6 +126,43 @@ async def relay_observation() -> None:
             {"_id": message["_id"], f"{MEMORY_LEARNING_EVENT}.status": "pending"},
             {"$set": {f"{MEMORY_LEARNING_EVENT}.status": outcome}},
         )
+
+
+async def learning_status(user_id: str, farm_uid: str, turn_id: str) -> dict:
+    """只返回当前身份的任务进度；入队、抽取成功和实际提交必须分开表达。"""
+    from agent.platforms.persistence.mongo.chat_store import (
+        MEMORY_LEARNING_EVENT,
+        get_collection,
+    )
+
+    task_id = hashlib.sha256(
+        f"{store.owner_key(user_id)}:{turn_id}".encode()
+    ).hexdigest()
+    task = await jobs().find_one(
+        {"_id": task_id, "user_id": user_id, "farm_uid": farm_uid},
+        {"status": 1, "applied_count": 1, "reason": 1, "error_code": 1},
+    )
+    if task:
+        return {
+            "status": task["status"],
+            "applied_count": task.get("applied_count", 0),
+            "reason": task.get("reason"),
+            "code": task.get("error_code"),
+        }
+    messages = get_collection()
+    if messages is None:
+        return {"status": "unavailable", "code": "memory_status_unavailable"}
+    message = await messages.find_one(
+        {
+            "userId": user_id,
+            "turnId": turn_id,
+            "role": "user",
+            f"{MEMORY_LEARNING_EVENT}.farm_uid": farm_uid,
+        },
+        {MEMORY_LEARNING_EVENT: 1},
+    )
+    event = (message or {}).get(MEMORY_LEARNING_EVENT, {})
+    return {"status": event.get("status", "not_observed"), "applied_count": 0}
 
 
 async def apply_candidates(task: dict, candidates: list[Candidate]) -> dict:

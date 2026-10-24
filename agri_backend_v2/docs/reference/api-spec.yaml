@@ -1,9 +1,51 @@
 openapi: 3.1.0
+x-stream-events:
+  memory_context:
+    visibility: admin_debug
+    description: Runtime 在开始检索、准备完成和最终请求预算裁剪后发布；普通用户投影不携带记忆正文。Redis 事件与 Trace 使用同一份最终证据。
+    stages: [start, prepared, complete]
+    fields:
+      retrieval: 实际 query、配置状态、集合、词项和语义命中数、融合数量、有界候选原文、版本与排名；不包含凭据。
+      prepared_count: 进入最终请求预算之前准备的事实数。
+      injected_count: 最终完整记忆块的事实数；块被修改且无法确定数量时为 null，缺少记忆块时为零。
+      injection: status、chars、text、truncated；文本来自实际请求，最多展示 4000 字符，不代表模型已经理解或使用。
+    injection_statuses: [included, modified, budget_omitted, not_in_request, not_prepared]
 info:
   title: Business 与 Agent 增量接口
   description: 备忘录、管理监控与个性化推荐接口；完整接口以对应运行服务 /openapi.json 为准。所有请求需要 Bearer JWT。
   version: 2.0.0
 paths:
+  /api/v2/me/memory-learning/{turn_id}:
+    get:
+      summary: 查询当前用户某一轮的后台记忆学习状态
+      description: 按 JWT 用户及农场隔离，只返回状态与提交数量；聊天 SSE 结束后仍可查询。响应 Cache-Control 为 no-store。queued/pending/running 不代表记忆已保存。
+      parameters:
+      - name: turn_id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 128
+      responses:
+        '200':
+          description: done 且 applied_count 大于零才表示该次学习实际提交了记忆；not_observed 不暴露其他账号是否存在同名任务。
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [not_observed, pending, queued, running, done, failed, disabled, temporary, sensitive, input_too_long, control_changed, unavailable]
+                  applied_count:
+                    type: integer
+                    minimum: 0
+                  reason:
+                    type: [string, 'null']
+                  code:
+                    type: [string, 'null']
+                required: [status]
   /api/v2/health:
     get:
       summary: Agent 运行状态与启动版本

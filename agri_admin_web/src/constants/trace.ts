@@ -11,6 +11,7 @@ export const NODE_TYPE_COLORS: Record<string, string> = {
   final_context: '#22b8cf',  // 青色 — Final 上下文边界
   output_guard: '#e0a23c',   // 琥珀 — 输出防泄漏
   error: '#e5534b',          // 红色 — 错误节点
+  memory: '#5ca38c',         // 记忆检索与注入
 };
 
 const NODE_TYPE_ALIASES: Record<string, string> = {
@@ -29,6 +30,7 @@ export const NODE_TYPE_LABELS: Record<string, string> = {
   final_context: 'Final 上下文',
   output_guard: '输出防泄漏',
   error: '错误',
+  memory: '长时记忆',
 };
 
 function normalizeNodeType(nodeType: string): string {

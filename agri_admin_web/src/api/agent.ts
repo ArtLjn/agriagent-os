@@ -8,6 +8,21 @@ export interface SseEvent {
   data: Record<string, unknown>;
 }
 
+export interface MemoryLearningStatus {
+  status: string;
+  applied_count?: number;
+  reason?: string | null;
+  code?: string | null;
+}
+
+export async function getMemoryLearningStatus(turnId: string, userToken?: string | null): Promise<MemoryLearningStatus> {
+  const response = await apiClient.get<MemoryLearningStatus>(
+    `/agent/me/memory-learning/${encodeURIComponent(turnId)}`,
+    { headers: userToken ? { Authorization: `Bearer ${userToken}` } : undefined },
+  );
+  return response.data;
+}
+
 // ── 对话相关类型 ──
 export interface ConversationItem {
   conversation_id: string;
@@ -171,6 +186,7 @@ export interface StreamTraceContext {
 // ── Stream Chunk（Playground 消费）──
 // 对齐 agri_backend_v2/agent/static/index.html 的 appendEvent 覆盖的事件类型。
 export type StreamChunk =
+  | { type: 'memory_context'; data: Record<string, unknown> }
   | { type: 'content'; data: string }
   | { type: 'final_content'; data: string }
   | { type: 'final_answer_start'; data: null }
@@ -404,6 +420,8 @@ function mapSsePayloadToChunk(event: SseEvent): StreamChunk | null {
         type: 'operation_committed',
         data: { result: data.result, ...data as Record<string, unknown> },
       };
+    case 'memory_context':
+      return { type: 'memory_context', data };
     case 'context_usage':
       return {
         type: 'context_usage',

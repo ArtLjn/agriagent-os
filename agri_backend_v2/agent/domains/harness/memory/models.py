@@ -30,6 +30,7 @@ class SessionView(TypedDict, total=False):
     farm_id: int
     farm_uid: str
     messages: list[dict[str, Any]]
+    recent_user_statements: list[str]
     recent_turns: list[dict[str, Any]]
     summary: str | None
     summary_revision: int

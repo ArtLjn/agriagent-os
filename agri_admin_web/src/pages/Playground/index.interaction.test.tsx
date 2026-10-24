@@ -3,10 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StreamChunk } from '../../api/agent';
 import Playground from './index';
 
-const api = vi.hoisted(() => ({ streamChat: vi.fn(), approveTurn: vi.fn() }));
+const api = vi.hoisted(() => ({ streamChat: vi.fn(), approveTurn: vi.fn(), getMemoryLearningStatus: vi.fn() }));
 vi.mock('../../api/agent', () => ({
   streamChat: api.streamChat,
   approveTurn: api.approveTurn,
+  getMemoryLearningStatus: api.getMemoryLearningStatus,
   listDevUsers: vi.fn().mockResolvedValue([]),
   listConversations: vi.fn().mockResolvedValue([]),
   getConversationMessages: vi.fn().mockResolvedValue([]),
@@ -37,6 +38,28 @@ beforeEach(() => {
 });
 
 describe('Playground 执行界面交互', () => {
+  it('流仍在生成时就按真实轮次展示后台学习状态', async () => {
+    let finish!: () => void;
+    const pending = new Promise<void>((resolve) => { finish = resolve; });
+    api.getMemoryLearningStatus.mockResolvedValue({ status: 'running' });
+    api.streamChat.mockImplementation(async function* (): AsyncGenerator<StreamChunk> {
+      yield { type: 'meta', data: { turn_id: 'learning-turn', trace_id: 'learning-trace', conversation_id: 'session' } };
+      yield { type: 'content', data: '正在处理你的问题' };
+      await pending;
+    });
+    render(<Playground />);
+    fireEvent.change(screen.getByRole('textbox', { name: '对话输入' }), { target: { value: '继续聊聊' } });
+    fireEvent.click(screen.getByRole('button', { name: '发送' }));
+    try {
+      expect(await screen.findByText('听到啦，正在整理你说的话…')).toBeInTheDocument();
+      expect(api.getMemoryLearningStatus).toHaveBeenCalledWith('learning-turn', null);
+      expect(screen.getByRole('textbox', { name: '对话输入' })).toBeDisabled();
+    } finally {
+      finish();
+      await waitFor(() => expect(screen.getByRole('textbox', { name: '对话输入' })).toBeEnabled());
+    }
+  });
+
   it('点击推荐填入输入框并聚焦，用户发送前不调用 Agent', async () => {
     render(<Playground />);
     fireEvent.click(await screen.findByRole('button', { name: /番茄采收前/ }));

@@ -326,3 +326,21 @@
 @media (prefers-reduced-motion: reduce) {
   .playground-workspace *, .playground-workspace *::before, .playground-workspace *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
 }
+/* 后台学习独立于回答流，轻量反馈只使用服务器返回的真实状态。 */
+.memory-learning-notice {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 10px 4px 0;
+  padding: 6px 11px;
+  border-radius: 12px;
+  color: var(--app-secondary);
+  background: var(--app-fill);
+  box-shadow: 0 3px 14px var(--app-glow);
+  text-shadow: 0 1px 5px var(--app-glow);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.memory-learning-notice--saved { color: var(--app-green); }

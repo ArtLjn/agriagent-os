@@ -1716,6 +1716,51 @@ async def _reject(_: str) -> tuple[bool, str]:
 
 
 @pytest.mark.asyncio
+async def test_memory_event_and_trace_match_budget_trimmed_provider_request(
+    monkeypatch,
+):
+    from agent.domains.harness.context import budget
+
+    _, usage = budget.prepare_request([], [])
+    actual = [{"role": "user", "content": "看电影"}]
+    prepared = "<user-personalization>电影偏好"
+    traces = []
+    monkeypatch.setattr(
+        budget, "prepare_request", lambda *args, **kwargs: (actual, usage)
+    )
+    monkeypatch.setattr(react, "trace_record", lambda **kwargs: traces.append(kwargs))
+    monkeypatch.setattr(react, "trace_llm_call", lambda **kwargs: None)
+
+    async def stream(messages, tools):
+        assert messages == actual
+        yield {"type": "done", "tool_calls": []}
+
+    monkeypatch.setattr(react, "chat_stream", stream)
+    items = [
+        item
+        async for item in react._call_llm_stream(
+            [{"role": "user", "content": prepared}, *actual],
+            [],
+            memory_snapshot={
+                "personalization": prepared,
+                "personalization_diagnostics": {"injected_count": 1},
+            },
+        )
+    ]
+    event = next(
+        item
+        for item in items
+        if isinstance(item, dict) and item["type"] == "memory_context"
+    )
+    assert event["data"]["injection"]["status"] == "budget_omitted"
+    assert event["data"]["injected_count"] == 0
+    assert (
+        next(t for t in traces if t["node_name"] == "memory_context")["output_data"]
+        == event["data"]
+    )
+
+
+@pytest.mark.asyncio
 async def test_llm_stream_forwards_deltas_and_final_result(monkeypatch) -> None:
     trace_calls = []
     snapshots = []

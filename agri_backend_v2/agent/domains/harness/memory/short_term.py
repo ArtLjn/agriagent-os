@@ -13,6 +13,8 @@ from agent.domains.harness.memory.models import SessionView
 logger = logging.getLogger(__name__)
 # 防止排队消息挤占完整轮次，同时为失败摘要保留有界的原文回退。
 SESSION_HISTORY_MESSAGE_LIMIT = 2000
+# 原话工作集独立于完整对话窗口与摘要；保留最近十二轮中的用户陈述供预算边界选取。
+SESSION_USER_EVIDENCE_TURN_LIMIT = 12
 
 
 def source_divergence(
@@ -147,6 +149,7 @@ def empty_session_view(
         "user_id": user_id,
         "farm_id": farm_id,
         "messages": [],
+        "recent_user_statements": [],
         "summary": None,
         "summary_revision": 0,
         "summary_status": "empty",
@@ -199,7 +202,7 @@ async def get_session_view(
 
         state = state or {}
         keep = settings.context.recent_turn_limit
-        limit = (keep + 1) * 2 + 1
+        limit = max(keep + 1, SESSION_USER_EVIDENCE_TURN_LIMIT) * 2 + 1
         while True:
             recent = await chat_store.load_recent(
                 conversation_id,
@@ -271,6 +274,13 @@ async def get_session_view(
             ),
             "messages": [
                 message for item in uncovered + turns[-keep:] for message in item
+            ],
+            # 最新一问一答由 latest_exchange 保留；这里只读更早原话，不引用助手推测。
+            "recent_user_statements": [
+                message["content"]
+                for item in turns[-SESSION_USER_EVIDENCE_TURN_LIMIT:-1]
+                for message in item
+                if message.get("role") == "user"
             ],
             "summary": state.get("summary"),
             "summary_revision": int(state.get("summary_revision", 0) or 0),

@@ -1,9 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
-import { appendExecutionEvent, executionEventFromChunk } from './executionEvents';
+import { appendExecutionEvent, executionEventFromChunk, memoryEventsFromTimeline } from './executionEvents';
 import { buildTimelineItems } from './executionTimelineModel';
 
 describe('executionEventFromChunk', () => {
+  it('实时与历史使用同一份最终注入证据，旧节点仍标记为准备阶段', () => {
+    const data = { stage: 'complete', injected_count: 0, injection: { status: 'budget_omitted' } };
+    expect(executionEventFromChunk({ type: 'memory_context', data })).toMatchObject({ type: 'memory_context', details: data });
+    const node = { node_type: 'memory', node_name: 'answer_memory_context', status: 'success', duration_ms: 1, token_usage: null, start_time: null, output_data: { stage: 'prepared', injected_count: 3 } };
+    expect(memoryEventsFromTimeline({ request_id: 't', rounds: [{ round_index: 0, nodes: [node, { ...node, node_name: 'memory_context', output_data: data }] }] }))
+      .toEqual([{ type: 'memory_context', details: data, event_id: 'memory:0' }]);
+    expect(memoryEventsFromTimeline({ request_id: 'old', rounds: [{ round_index: 0, nodes: [node] }] })[0])
+      .toMatchObject({ details: { stage: 'prepared' } });
+  });
   it('保留 SSE 事件的展示顺序和工具参数', () => {
     const thought = executionEventFromChunk({ type: 'thought', data: '先查找相关数据' });
     const action = executionEventFromChunk({

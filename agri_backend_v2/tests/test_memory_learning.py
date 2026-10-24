@@ -25,6 +25,52 @@ def collection(monkeypatch):
     return coll
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "status,count",
+    [("pending", 0), ("running", 0), ("done", 1), ("done", 0), ("failed", 0)],
+)
+async def test_learning_status_preserves_real_commit_state(monkeypatch, status, count):
+    find = AsyncMock(
+        return_value={
+            "status": status,
+            "applied_count": count,
+            "text": "不应泄漏",
+            "user_id": "u",
+        }
+    )
+    monkeypatch.setattr(learning, "jobs", lambda: SimpleNamespace(find_one=find))
+    result = await learning.learning_status("u", "f", "t")
+    assert result["status"] == status and result["applied_count"] == count
+    assert "text" not in result and "user_id" not in result
+    query = find.call_args.args[0]
+    assert query["user_id"] == "u" and query["farm_uid"] == "f"
+
+
+@pytest.mark.asyncio
+async def test_learning_status_falls_back_to_owned_message_event(monkeypatch):
+    from agent.platforms.persistence.mongo import chat_store
+
+    monkeypatch.setattr(
+        learning, "jobs", lambda: SimpleNamespace(find_one=AsyncMock(return_value=None))
+    )
+    lookup = AsyncMock(
+        return_value={chat_store.MEMORY_LEARNING_EVENT: {"status": "queued"}}
+    )
+    monkeypatch.setattr(
+        chat_store, "get_collection", lambda: SimpleNamespace(find_one=lookup)
+    )
+    result = await learning.learning_status("u", "f", "t")
+    assert result == {"status": "queued", "applied_count": 0}
+    query = lookup.call_args.args[0]
+    assert query["userId"] == "u" and query["turnId"] == "t"
+    assert query[f"{chat_store.MEMORY_LEARNING_EVENT}.farm_uid"] == "f"
+    lookup.return_value = None
+    assert (await learning.learning_status("other", "f", "t"))[
+        "status"
+    ] == "not_observed"
+
+
 def task(doc, turn="one", observed_at=1):
     return {
         "user_id": "u",
@@ -469,6 +515,30 @@ async def test_live_auto_learning_consolidates_fruit_without_confirmation(collec
 )
 async def test_live_learning_does_not_turn_temporary_tasks_into_profile(text):
     assert await learning.extract(text) == []
+
+
+@pytest.mark.skipif(
+    os.getenv("AGENT_ROUTING_LIVE") != "1", reason="仅显式开启真实模型回放"
+)
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "text,required,forbidden",
+    [
+        (
+            "我喜欢打王者荣耀，下午我先健健身，再炒个青椒鸡胸",
+            "王者荣耀",
+            ["健身", "鸡胸"],
+        ),
+        ("我一直喜欢下围棋，今晚去散步，之后煮面", "围棋", ["散步", "煮面"]),
+    ],
+)
+async def test_live_mixed_statement_only_learns_stable_preference(
+    text, required, forbidden
+):
+    candidates = await learning.extract(text)
+    assert len(candidates) == 1
+    assert required in candidates[0].text and candidates[0].scope == "user"
+    assert all(word not in candidates[0].text for word in forbidden)
 
 
 @pytest.mark.skipif(
