@@ -15,14 +15,18 @@ from pathlib import Path
 
 # 直接执行 ``python agent/bootstrap/app.py`` 时，Python 只会把
 # ``agent/bootstrap`` 放入 sys.path；包导入需要的是 ``agri_backend_v2``。
-# 使用模块方式启动时该路径通常已经存在，重复插入不会影响运行。
+# shared 项目根必须排在仓库根之前，否则 ``agri_backend_v2/shared`` 会作为
+# 命名空间包遮蔽真正的 ``shared/shared`` 包。
 _PACKAGE_ROOT = str(Path(__file__).resolve().parents[2])
-if _PACKAGE_ROOT not in sys.path:
-    sys.path.insert(0, _PACKAGE_ROOT)
+_SHARED_ROOT = str(Path(_PACKAGE_ROOT) / "shared")
+for _path in (_PACKAGE_ROOT, _SHARED_ROOT):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from shared.api_response import install_api_exception_handlers
 
 from agent.api import (  # noqa: F401
     api_router,
@@ -55,7 +59,6 @@ from agent.platforms.persistence.redis.redis_store import (
     close as close_redis,
 )
 from agent.prompts import render_system_prompt
-from shared.api_response import install_api_exception_handlers
 
 # 导入模块以注册管理端 Skill 路由；其余 API 模块沿用下方的显式导入方式。
 importlib.import_module("agent.api.admin_skills")
