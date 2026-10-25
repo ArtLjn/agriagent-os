@@ -4,6 +4,7 @@ version = "2.0.0"
 description = "farm-manager agent: ReAct loop + MCP client + SSE + HITL"
 requires-python = ">=3.11"
 dependencies = [
+    "farm-manager-shared",
     "fastmcp>=3.4",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
@@ -23,5 +24,8 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["agent"]
+
+[tool.uv.sources]
+farm-manager-shared = { workspace = true }
 
 # Run: uv run --package farm-manager-agent python -m agent.bootstrap.app

@@ -34,18 +34,18 @@ def _write_plugin(
 ) -> Path:
     plugin = root / name
     (plugin / "prompts").mkdir(parents=True)
-    (plugin / "tools" / "demo-skill").mkdir(parents=True)
+    (plugin / "skills" / "demo-skill").mkdir(parents=True)
     (plugin / "prompts" / "system.md").write_text("system", encoding="utf-8")
     if skill_md is not None:
-        (plugin / "tools" / "demo-skill" / "skill.md").write_text(
+        (plugin / "skills" / "demo-skill" / "skill.md").write_text(
             skill_md, encoding="utf-8"
         )
     payload = {
-        "schema_version": 1,
+        "schema_version": 2,
         "name": name,
         "display_name": "Demo",
         "system_prompt": "prompts/system.md",
-        "tools_dir": "tools",
+        "skills_dir": "skills",
     }
     payload.update(manifest or {})
     (plugin / "plugin.yaml").write_text(
@@ -55,12 +55,12 @@ def _write_plugin(
 
 
 def test_repo_farm_plugin_manifest_is_valid() -> None:
-    manifest = discover_plugin(resolve_plugin_root("plugins"), "farm")
+    manifest = discover_plugin(resolve_plugin_root("businesses"), "farm")
 
     assert manifest.name == "farm"
     assert manifest.display_name == "农场助理"
-    assert len(manifest.skill_dirs) == 16
-    assert manifest.system_prompt_source == "plugins/farm/prompts/system.md"
+    assert len(manifest.skill_paths) == 16
+    assert manifest.system_prompt_source == "businesses/farm/prompts/system.md"
 
 
 def test_discover_requires_exactly_one_plugin(tmp_path) -> None:
@@ -82,7 +82,7 @@ def test_discover_requires_exactly_one_plugin(tmp_path) -> None:
         ({"unknown": True}, "plugin_manifest_unknown_fields"),
         ({"name": "other"}, "plugin_name_mismatch"),
         ({"system_prompt": "../outside.md"}, "plugin_path_escape"),
-        ({"schema_version": 2}, "plugin_schema_version_invalid"),
+        ({"schema_version": 1}, "plugin_schema_version_invalid"),
     ],
 )
 def test_manifest_rejects_invalid_fields(tmp_path, manifest, error) -> None:
@@ -94,10 +94,10 @@ def test_manifest_rejects_invalid_fields(tmp_path, manifest, error) -> None:
 
 def test_plugin_without_skills_fails_fast(tmp_path) -> None:
     plugin = _write_plugin(tmp_path, "demo")
-    (plugin / "tools" / "demo-skill" / "skill.md").unlink()
-    (plugin / "tools" / "demo-skill").rmdir()
+    (plugin / "skills" / "demo-skill" / "skill.md").unlink()
+    (plugin / "skills" / "demo-skill").rmdir()
 
-    with pytest.raises(PluginError, match="plugin_tools_empty"):
+    with pytest.raises(PluginError, match="plugin_skills_empty"):
         discover_plugin(tmp_path, "demo")
 
 
@@ -115,10 +115,10 @@ def test_combined_loader_keeps_catalog_and_order() -> None:
 
 
 def test_broken_skill_directory_is_not_silently_skipped(tmp_path) -> None:
-    plugin = _write_plugin(tmp_path / "plugins", "demo", skill_md=None)
+    plugin = _write_plugin(tmp_path / "businesses", "demo", skill_md=None)
 
     with pytest.raises(loader.SkillLoadError, match="skill_source_missing"):
-        loader.load_registry([plugin / "tools"])
+        loader.load_registry([plugin / "skills"])
 
 
 def _operation_skill(
@@ -233,5 +233,5 @@ def test_system_prompt_is_loaded_from_active_plugin() -> None:
         encoding="utf-8"
     )
     system = next(item for item in prompts.inspect_prompts() if item["name"] == "system")
-    assert system["source"] == "plugins/farm/prompts/system.md"
+    assert system["source"] == "businesses/farm/prompts/system.md"
     assert system["active"] is True

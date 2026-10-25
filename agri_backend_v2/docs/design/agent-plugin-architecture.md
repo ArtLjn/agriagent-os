@@ -6,9 +6,12 @@ last_updated: 2026-10-25
 
 ## 背景
 
-`agent/` 的运行时已经通过 MCP 与 `business/` 解耦，但农场业务资源仍放在 `agent/` 包内：16 个业务技能目录在 `agent/tools/`，农业 system prompt 在 `agent/prompts/system.md`。换一个业务必须修改核心源码，无法只替换插件。
+`agent/` 的运行时通过 MCP 与业务服务解耦。农场业务资源统一放在
+`businesses/farm/`：`skills/` 放 16 个 Agent 技能声明，`prompts/` 放业务人格，
+`farm_business/` 放 REST + MCP 服务实现。
 
-本文定义单插件/部署模型下的最小插件边界：Agent 内核只负责通用能力，业务资源由 `plugins/<name>/` 提供，`business/` 继续作为独立 MCP 服务。
+本文定义单业务/部署模型下的项目边界：Agent 内核只负责通用能力，业务资源由
+`businesses/<name>/` 提供，每个业务项目自包含技能、提示词和服务实现。
 
 ## 目标与非目标
 
@@ -21,11 +24,10 @@ last_updated: 2026-10-25
 
 非目标：
 
-- 一个进程同时加载多个业务插件；
+- 一个进程同时加载多个业务项目；
 - `farm_uid` / `farm_id` 租户字段改名；
 - 多 MCP server 注册表；
-- wheel 打包与部署脚本改造；
-- 业务服务 `business/` 的任何改动。
+- wheel 打包与业务模板生成脚本（Phase 2）。
 
 ## 分层
 
@@ -38,12 +40,12 @@ last_updated: 2026-10-25
 └──────────────┬───────────────┘
                │ 读取 plugin.yaml
 ┌──────────────▼───────────────┐
-│ Plugin (plugins/farm/)       │
+│ Plugin (businesses/farm/)    │
 │ 业务技能声明 + 业务人格提示词 │
 └──────────────┬───────────────┘
                │ MCP
 ┌──────────────▼───────────────┐
-│ Business Service (business/) │
+│ Business Service (farm_business/) │
 │ REST + MCP，业务实现与鉴权    │
 └──────────────────────────────┘
 ```
@@ -92,42 +94,51 @@ agri_backend_v2/
 │       └── web-search/
 │           ├── skill.md
 │           └── scripts/main.py
-├── plugins/
-│   ├── __init__.py
-│   └── farm/                               # 农场业务插件（当前唯一 active）
-│       ├── plugin.yaml                     # 插件清单
-│       ├── __init__.py
+├── businesses/
+│   └── farm/                               # 农场业务项目（自包含）
+│       ├── pyproject.toml                  # farm-manager-business
+│       ├── plugin.yaml                     # Agent 插件清单
 │       ├── prompts/
 │       │   └── system.md                   # 业务人格与规则
-│       └── tools/                          # 16 个业务技能
-│           ├── __init__.py
-│           ├── farm-review/skill.md
-│           ├── farm-status/skill.md
-│           ├── location/
-│           │   ├── skill.md
-│           │   └── scripts/__init__.py
-│           ├── manage-cost/skill.md
-│           ├── manage-crop-cycle/skill.md
-│           ├── manage-crop-templates/skill.md
-│           ├── manage-debt/skill.md
-│           ├── manage-farm-logs/skill.md
-│           ├── manage-memos/skill.md
-│           ├── manage-planting-plan/skill.md
-│           ├── manage-planting-units/skill.md
-│           ├── manage-user-settings/skill.md
-│           ├── manage-work-orders/skill.md
-│           ├── manage-workers/skill.md
-│           ├── payment-overview/skill.md
-│           └── weather/
-│               ├── skill.md
-│               └── scripts/main.py
-└── business/                               # 业务服务，独立部署
-    ├── api/
-    ├── tools/
-    ├── services/
-    ├── models.py
-    ├── server.py
-    └── mcp_app.py
+│       ├── skills/                         # 16 个业务技能
+│       │   ├── farm-review/skill.md
+│       │   ├── farm-status/skill.md
+│       │   ├── location/skill.md
+│       │   ├── manage-cost/skill.md
+│       │   ├── manage-crop-cycle/skill.md
+│       │   ├── manage-crop-templates/skill.md
+│       │   ├── manage-debt/skill.md
+│       │   ├── manage-farm-logs/skill.md
+│       │   ├── manage-memos/skill.md
+│       │   ├── manage-planting-plan/skill.md
+│       │   ├── manage-planting-units/skill.md
+│       │   ├── manage-user-settings/skill.md
+│       │   ├── manage-work-orders/skill.md
+│       │   ├── manage-workers/skill.md
+│       │   ├── payment-overview/skill.md
+│       │   └── weather/
+│       │       ├── skill.md
+│       │       └── scripts/main.py
+│       ├── sql/farm_manager.sql            # 业务 DDL
+│       └── farm_business/                  # REST + MCP 服务
+│           ├── api/
+│           ├── tools/
+│           ├── services/
+│           ├── migrations/
+│           ├── scripts/
+│           ├── models.py
+│           ├── db.py
+│           ├── config.py
+│           ├── server.py
+│           └── mcp_app.py
+├── shared/                                 # 跨业务共享包
+│   ├── pyproject.toml
+│   └── shared/
+│       ├── api_response.py
+│       ├── roles.py
+│       ├── time.py
+│       └── location/regions.json
+└── tests/                                  # Agent + 跨边界测试
 ```
 
 ### 核心工具与业务工具的划分
@@ -135,31 +146,31 @@ agri_backend_v2/
 | 目录 | 归属 | 工具 |
 |---|---|---|
 | `agent/tools/` | 核心 | `calculate_arithmetic`、`web_search` |
-| `plugins/farm/tools/` | 农场插件 | 其余 16 个业务技能 |
+| `businesses/farm/skills/` | 农场业务项目 | 其余 16 个业务技能 |
 
 这两个核心工具的 `skill.md` 只使用通用场景描述，不包含农业或具体业务词汇；
-业务示例和业务实体由插件自己的技能或提示词提供。新业务复用 Agent 时，只需要新增
-`plugins/<name>/`，不需要复制这两个通用工具。
+业务示例和业务实体由业务项目自己的技能或提示词提供。新业务复用 Agent 时，
+只需要新增 `businesses/<name>/`，不需要复制这两个通用工具。
 
 ## plugin.yaml
 
 ```yaml
-schema_version: 1
+schema_version: 2
 name: farm
 display_name: 农场助理
 description: 农场经营管理助手
 system_prompt: prompts/system.md
-tools_dir: tools
+skills_dir: skills
 ```
 
 | 字段 | 必填 | 规则 |
 |---|---|---|
-| `schema_version` | 是 | 必须为 1 |
-| `name` | 是 | 必须与插件目录名一致 |
+| `schema_version` | 是 | 必须为 2 |
+| `name` | 是 | 必须与业务目录名一致 |
 | `display_name` | 是 | 管理端与日志展示名 |
-| `description` | 否 | 插件说明 |
-| `system_prompt` | 是 | 相对插件目录，不得逃逸，必须是已存在的文件 |
-| `tools_dir` | 是 | 相对插件目录，不得逃逸，必须存在且至少包含一个技能目录 |
+| `description` | 否 | 业务说明 |
+| `system_prompt` | 是 | 相对业务项目目录，不得逃逸，必须是已存在的文件 |
+| `skills_dir` | 是 | 相对业务项目目录，不得逃逸，必须存在且至少包含一个技能目录 |
 
 未知字段一律拒绝。清单解析集中在 `agent/plugins.py`，只依赖 `pathlib` 与 `yaml`，不 import loader 或 prompts，避免循环依赖。
 
@@ -169,7 +180,7 @@ MCP 地址不放进插件清单：它属于运行环境配置，继续由 `agent
 
 ```yaml
 plugins:
-  root: "plugins"    # 相对 agri_backend_v2 根目录，不依赖进程 CWD
+  root: "businesses" # 相对 agri_backend_v2 根目录，不依赖进程 CWD
   active: "farm"     # 可省略；省略时要求恰好一个 plugin.yaml
 ```
 
@@ -178,7 +189,7 @@ plugins:
 ### 技能加载
 
 - `SkillLoader(directory)` 保持单目录语义，`SkillRegistry.from_directory` 行为不变。
-- 组合入口 `load_registry()` / `load_all()` / `load_aggregate_skills()` 默认加载 `agent/tools` + 插件 `tools_dir`。
+- 组合入口 `load_registry()` / `load_all()` / `load_aggregate_skills()` 默认加载 `agent/tools` + 业务 `skills_dir`。
 - 两个目录下的技能目录合并后统一按目录名排序，保持现有 59 个展开技能、58 个 exposed 工具及工具顺序。
 - 任一技能目录加载失败都抛 `SkillLoadError`，不再静默跳过。
 - 插件技能数为 0 单独报错，避免被核心通用技能掩盖。
@@ -190,7 +201,7 @@ plugins:
 - 平台提示词继续放 `agent/prompts/`。
 - `render_system_prompt()` 从插件清单声明的路径读取 `system.md`。
 - 提示词缓存按 resolved path 区分，`reload()` 清空全部缓存。
-- `list_prompts()` 仍包含 `system`；`inspect_prompts()` 中 system 为 active，`source` 显示 `plugins/farm/prompts/system.md`；核心提示词 source 不变。
+- `list_prompts()` 仍包含 `system`；`inspect_prompts()` 中 system 为 active，`source` 显示 `businesses/farm/prompts/system.md`；核心提示词 source 不变。
 - `health.memory_build` 只覆盖 `memory_*.md` 等平台记忆文件，不包含业务 system prompt。
 
 ### 启动校验
@@ -261,8 +272,7 @@ operations:
 
 ## 部署注意
 
-以下事项属于本次范围之外，但上线前必须确认：
-
-- `deploy/server-sync.sh` 的备份/回滚路径清单需要加入 `plugins`，否则回滚时可能残留旧插件文件。
-- `agent/pyproject.toml` 的 hatch wheel 只打包 `agent`，顶层 `plugins/` 不会进入 wheel；源码部署可用，wheel 部署需额外配置。
+- `deploy/server-sync.sh` 已把 `businesses` 纳入备份/回滚清单，并保留对旧
+  `business`、`plugins` 目录和旧 `business/config.yaml` 的迁移兼容。
+- `agent/pyproject.toml` 的 hatch wheel 只打包 `agent`，顶层 `businesses/` 不会进入 wheel；源码部署可用，wheel 部署需额外配置。
 - `agent/config.yaml` 被 gitignore，生产环境需要补 `plugins` 节，或设置 `PLUGINS__ROOT` / `PLUGINS__ACTIVE`。

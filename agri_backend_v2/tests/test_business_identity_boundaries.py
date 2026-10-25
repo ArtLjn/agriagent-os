@@ -7,7 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from business.models import (
+from farm_business.models import (
     CropCycle,
     CropTemplate,
     Farm,
@@ -16,7 +16,7 @@ from business.models import (
     PlantingUnit,
     Worker,
 )
-from business.services import log_service, worker_service, work_order_service
+from farm_business.services import log_service, worker_service, work_order_service
 
 
 @pytest.fixture
@@ -140,7 +140,7 @@ def test_name_resolution_never_guesses_between_workers(
 def test_log_worker_reference_does_not_create_missing_worker(
     session_factory: sessionmaker[Session],
 ) -> None:
-    from business.services.log_service import _resolve_worker_ids
+    from farm_business.services.log_service import _resolve_worker_ids
 
     with session_factory.begin() as db:
         _add_farm_and_cycle(db)

@@ -153,7 +153,7 @@ def default_skill_dirs() -> list[Path]:
     directories = [_CORE_SKILLS_DIR]
     manifest = settings.plugins.manifest
     if manifest is not None:
-        directories.append(manifest.tools_dir)
+        directories.append(manifest.skills_dir)
     return directories
 
 

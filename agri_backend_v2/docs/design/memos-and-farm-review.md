@@ -1,6 +1,6 @@
 ---
 status: implemented
-last_updated: 2026-10-23
+last_updated: 2026-10-25
 ---
 # 备忘录与经营盘点
 
@@ -10,11 +10,11 @@ last_updated: 2026-10-23
 
 ## 业务与协议边界
 
-- `business/models.py` 的 `Memo` 映射 `memos` 表。
-- `business/services/memo_service.py` 统一处理内容校验、身份过滤、幂等创建和编辑。
-- `business/api/memos.py` 暴露 `/api/v2/memos` 的 GET、POST 与 `/{memo_id}` PATCH。
-- `business/tools/memos.py` 通过 MCP 提供相同能力，Agent 从 `plugins/farm/tools/manage-memos/skill.md` 自动加载四个单动作工具。
-- `business/tools/farm_review.py` 提供两个只读聚合工具：`get_farm_review` 和 `get_payment_overview`，各自有独立 skill。
+- `businesses/farm/farm_business/models.py` 的 `Memo` 映射 `memos` 表。
+- `businesses/farm/farm_business/services/memo_service.py` 统一处理内容校验、身份过滤、幂等创建和编辑。
+- `businesses/farm/farm_business/api/memos.py` 暴露 `/api/v2/memos` 的 GET、POST 与 `/{memo_id}` PATCH。
+- `businesses/farm/farm_business/tools/memos.py` 通过 MCP 提供相同能力，Agent 从 `businesses/farm/skills/manage-memos/skill.md` 自动加载四个单动作工具。
+- `businesses/farm/farm_business/tools/farm_review.py` 提供两个只读聚合工具：`get_farm_review` 和 `get_payment_overview`，各自有独立 skill。
 - 新文件分别属于业务服务、REST/MCP 外部协议和 Agent 技能边界；不增加通用仓库、任务队列或调度抽象。
 
 ## 权限与一致性
@@ -33,18 +33,18 @@ REST 通过 `require_permission` 注入主体，MCP 复用现有鉴权与权限�
 
 ## Tools 封装入口和调用方式
 
-这些技能采用项目已有的声明式 MCP 封装。`plugins/farm/tools/<目录>/skill.md` 是运行配置和使用说明，实际执行方法在 `agent/domains/harness/tools/base.py` 的 `OperationSkill.execute` / `McpSkill.execute`；不需要为每个工具再添加只做转发的 `scripts/main.py`。只有技能需要额外业务编排时才添加脚本。
+这些技能采用项目已有的声明式 MCP 封装。`businesses/farm/skills/<目录>/skill.md` 是运行配置和使用说明，实际执行方法在 `agent/domains/harness/tools/base.py` 的 `OperationSkill.execute` / `McpSkill.execute`；不需要为每个工具再添加只做转发的 `scripts/main.py`。只有技能需要额外业务编排时才添加脚本。
 
 | Agent 工具名 | Agent 定义 | Business 可执行方法 |
 |---|---|---|
-| `query_memos` | `plugins/farm/tools/manage-memos/skill.md` | `business/tools/memos.py::manage_memos(operation="query")` |
+| `query_memos` | `businesses/farm/skills/manage-memos/skill.md` | `businesses/farm/farm_business/tools/memos.py::manage_memos(operation="query")` |
 | `create_memo` | 同上 | `manage_memos(operation="create")` |
 | `update_memo` | 同上 | `manage_memos(operation="update")` |
 | `archive_memo` | 同上 | `manage_memos(operation="archive")` |
-| `get_farm_review` | `plugins/farm/tools/farm-review/skill.md` | `business/tools/farm_review.py::get_farm_review` |
-| `get_payment_overview` | `plugins/farm/tools/payment-overview/skill.md` | `business/tools/farm_review.py::get_payment_overview` |
+| `get_farm_review` | `businesses/farm/skills/farm-review/skill.md` | `businesses/farm/farm_business/tools/farm_review.py::get_farm_review` |
+| `get_payment_overview` | `businesses/farm/skills/payment-overview/skill.md` | `businesses/farm/farm_business/tools/farm_review.py::get_payment_overview` |
 
-实际调用链：`SkillLoader → SkillRegistry → Runtime 风险审批 → Skill.execute → SkillContext.call_mcp_tool → BusinessClient → Business MCP 方法 → 业务服务/数据库`。`business/server.py` 导入两个 tools 模块完成 MCP 注册；Agent 的目录加载器自动发现三个技能目录。Router 选择 `manage_memos` 后会展开四个操作，模型不需要填写内部 `operation`，身份也不能由模型覆盖。
+实际调用链：`SkillLoader → SkillRegistry → Runtime 风险审批 → Skill.execute → SkillContext.call_mcp_tool → BusinessClient → Business MCP 方法 → 业务服务/数据库`。`businesses/farm/farm_business/server.py` 导入两个 tools 模块完成 MCP 注册；Agent 的目录加载器自动发现三个技能目录。Router 选择 `manage_memos` 后会展开四个操作，模型不需要填写内部 `operation`，身份也不能由模型覆盖。
 
 下面是在运行时已有 `registry` 与 `ctx` 时的调用示例。`ctx` 由 Runtime 创建并持有已鉴权的 BusinessClient。写入前必须先走 Runtime 的审批流程，不能从 API 绕过审批直接调用 `execute`；工具执行本身不弹审批。
 
@@ -71,8 +71,8 @@ payments = await registry.require("get_payment_overview").execute({}, ctx)
 
 ## 发布和回滚
 
-1. 在 `agri_backend_v2` 下使用 Business 实际运行环境执行 `python -B -m scripts.migrate_memos` 只读检查；缺表时执行 `python -B -m scripts.migrate_memos --apply`。脚本仅执行 `business/migrations/20261023_memos_up.sql`，已有表只校验列、主键、幂等唯一约束、列表索引和关联外键，不覆盖数据。结构不兼容时中止，由管理员审核修复。
-2. `deploy/server-sync.sh` 在服务切换前自动执行该专项增量迁移，沿用配置及 `.env` 环境覆盖，失败时回滚代码并停止切换。MySQL 命名锁串行化重复部署；DDL 自动提交，代码回滚不删除新增表。新库初始化基线 `sql/farm_manager.sql` 同步包含相同 DDL。
+1. 在 `agri_backend_v2` 下使用 Business 实际运行环境执行 `python -B -m farm_business.scripts.migrate_memos` 只读检查；缺表时执行 `python -B -m farm_business.scripts.migrate_memos --apply`。脚本仅执行 `businesses/farm/farm_business/migrations/20261023_memos_up.sql`，已有表只校验列、主键、幂等唯一约束、列表索引和关联外键，不覆盖数据。结构不兼容时中止，由管理员审核修复。
+2. `deploy/server-sync.sh` 在服务切换前自动执行该专项增量迁移，沿用配置及 `.env` 环境覆盖，失败时回滚代码并停止切换。MySQL 命名锁串行化重复部署；DDL 自动提交，代码回滚不删除新增表。新库初始化基线 `businesses/farm/sql/farm_manager.sql` 同步包含相同 DDL。
 3. 重启 Agent 使新增 skill 被目录加载器发现。
 4. 应用启动不自动迁移，迁移属于发布步骤。2026-10-23 已在本地与线上共用的 farm_manager 数据库补建缺失表，重复执行与结构校验通过；服务器旧代码仍需正常发布，建表不等于前后端已更新。
 5. 回滚先停止相关流量并备份备忘录，撤回服务版本；down SQL 会删除表，仅在确认后执行。
@@ -89,7 +89,7 @@ payments = await registry.require("get_payment_overview").execute({}, ctx)
 
 侧栏“业务调试 → 提醒 / 备忘录”（`/memos`）和业务调试中心的同名页签（`/operations?tab=memos`）共用 `pages/Memos/index.tsx` 的 MemoPanel。面板提供搜索、分页、新建、编辑、置顶、归档、恢复和错误重试。只读取当前登录用户，Playground 模拟用户不会与管理员记录混在一起。创建网络失败保留输入和请求键；换筛选取消旧请求，避免迟到响应覆盖当前结果。
 
-`src/api/memos.ts` 封装 REST 请求和类型；新页面独立于已超长的 Operations 文件，并由独立路由与页签共同使用。`scripts/migrate_memos.py` 是发布脚本和运维 CLI 共用的数据库迁移边界，不属于请求时业务逻辑，禁止应用启动自动建表。
+`src/api/memos.ts` 封装 REST 请求和类型；新页面独立于已超长的 Operations 文件，并由独立路由与页签共同使用。`businesses/farm/farm_business/scripts/migrate_memos.py` 是发布脚本和运维 CLI 共用的数据库迁移边界，不属于请求时业务逻辑，禁止应用启动自动建表。
 
 REST 数据库异常返回 503，MCP 返回带 error/code/message/meta 的失败结果。缺表为 `memo_schema_not_ready`，其他存储失败为 `memo_storage_unavailable`；用户能看到修复提示，响应和业务日志均不包含 SQL、绑定参数或备忘录正文。
 

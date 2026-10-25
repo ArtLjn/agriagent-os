@@ -116,16 +116,16 @@ class PluginsCfg:
         return self.manifest.name if self.manifest else ""
 
     @property
-    def tools_dir(self) -> Path:
-        return self.manifest.tools_dir if self.manifest else Path()
+    def skills_dir(self) -> Path:
+        return self.manifest.skills_dir if self.manifest else Path()
 
     @property
     def system_prompt_path(self) -> Path:
         return self.manifest.system_prompt_path if self.manifest else Path()
 
     @property
-    def skill_dirs(self) -> list[Path]:
-        return self.manifest.skill_dirs if self.manifest else []
+    def skill_paths(self) -> list[Path]:
+        return self.manifest.skill_paths if self.manifest else []
 
 
 def _default_feature_flags() -> dict[str, bool]:
@@ -254,7 +254,7 @@ def _build_settings() -> Settings:
             "plugins_config_unknown_fields: " + ", ".join(unknown_plugin_fields)
         )
     plugin_root_value = (
-        os.getenv("PLUGINS__ROOT") or plugins_raw.get("root") or "plugins"
+        os.getenv("PLUGINS__ROOT") or plugins_raw.get("root") or "businesses"
     )
     plugin_active_value = (
         os.getenv("PLUGINS__ACTIVE") or plugins_raw.get("active") or ""

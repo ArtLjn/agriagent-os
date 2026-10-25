@@ -481,7 +481,13 @@ def validate_directory(skills_dir: Path) -> list[str]:
 def _default_skill_dirs() -> list[Path]:
     root = Path(__file__).resolve().parents[1]
     directories = [root / "agent" / "tools"]
-    directories.extend(sorted((root / "plugins").glob("*/tools")))
+    directories.extend(
+        sorted(
+            path
+            for path in (root / "businesses").glob("*/skills")
+            if not path.parent.name.startswith(("_", "."))
+        )
+    )
     return directories
 
 

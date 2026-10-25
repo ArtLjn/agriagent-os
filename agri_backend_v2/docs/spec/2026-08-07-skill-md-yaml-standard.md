@@ -123,5 +123,5 @@ Runtime 固定生成 `observation.status=needs_information`、`task_state.status
 PYTHONDONTWRITEBYTECODE=1 python agri_backend_v2/scripts/validate_skill_metadata.py
 ```
 
-不传目录时默认扫描 `agent/tools` 与所有 `plugins/*/tools`，并跨目录检查公开
+不传目录时默认扫描 `agent/tools` 与所有 `businesses/*/skills`，并跨目录检查公开
 `tool_name` 唯一性和空结果策略目标；传入目录时只校验该目录。

@@ -77,7 +77,7 @@ class AgentWebAuthTests(unittest.TestCase):
         settings.environment = "production"
         try:
             with self.assertRaises(HTTPException) as raised:
-                dev_users()
+                asyncio.run(dev_users())
             self.assertEqual(raised.exception.status_code, 404)
             self.assertEqual(raised.exception.detail["code"], "not_found")
         finally:

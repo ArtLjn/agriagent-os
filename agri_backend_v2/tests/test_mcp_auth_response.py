@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from business.mcp_auth import _error_body
+from farm_business.mcp_auth import _error_body
 
 
 def test_mcp_auth_error_body_contains_stable_code() -> None:

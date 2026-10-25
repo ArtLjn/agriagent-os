@@ -317,15 +317,16 @@ MongoDB 保存会话状态、长期记忆与 Trace；MySQL 保存经营实体与
 
 ```text
 agri_backend_v2/
-├── business/                  # REST / MCP、业务服务与 MySQL 数据访问
+├── businesses/
+│   └── farm/                  # 农场业务项目：skills、prompts、SQL 与 farm_business 服务
+├── shared/                    # 跨业务共享包（角色、API 响应、地区数据）
 ├── agent/
 │   ├── bootstrap/             # 应用入口与生命周期
 │   ├── domains/harness/       # 运行时、上下文、记忆、路由、审批与追踪
 │   ├── platforms/             # 模型、MCP 与持久化适配
-│   ├── tools/                 # Skill 定义与执行脚本
-│   └── prompts/               # 提示词模板
-├── sql/                       # 新环境数据库基线
-├── tests/                     # 后端测试
+│   ├── tools/                 # 核心通用能力：算术、联网搜索
+│   └── prompts/               # 平台提示词模板
+├── tests/                     # Agent 与跨边界测试
 └── docs/                      # 当前架构、协议与功能设计
 agri_admin_web/                 # React 管理后台
 agri_mobile_app/                # Flutter App
@@ -353,7 +354,7 @@ cd agriagent-os
 ```bash
 cd agri_backend_v2
 uv sync --all-packages
-cp -n business/config.example.yaml business/config.yaml
+cp -n businesses/farm/farm_business/config.example.yaml businesses/farm/farm_business/config.yaml
 cp -n agent/config.example.yaml agent/config.yaml
 ```
 
@@ -361,7 +362,7 @@ cp -n agent/config.example.yaml agent/config.yaml
 
 | 配置 | 填写位置与要求 |
 | --- | --- |
-| MySQL | `business/config.yaml` → `database.url`，指向开发数据库 |
+| MySQL | `businesses/farm/farm_business/config.yaml` → `database.url`，指向开发数据库 |
 | MongoDB | `agent/config.yaml` → `mongodb.uri`、`mongodb.database`，保存会话、记忆和 Trace |
 | 模型服务 | `agent/config.yaml` → `ai.base_url`、`ai.api_key`、`ai.model`，使用支持工具调用的 OpenAI 兼容服务 |
 | 用户鉴权 | 两份配置的 `auth.jwt_secret` 使用同一高强度随机密钥；保持 issuer / audience 与模板约定一致 |
@@ -370,20 +371,20 @@ cp -n agent/config.example.yaml agent/config.yaml
 
 部署时可使用 `JWT_SECRET`、`AGENT_SERVICE_TOKEN`、`AGENT_DELEGATION_SECRET` 覆盖 YAML；两个服务都需要收到对应值。真实密钥只保存在未跟踪的本地配置或部署环境中。
 
-在 MySQL 中创建一个空的开发数据库，再导入 [数据库基线](agri_backend_v2/sql/farm_manager.sql)。下面的命令在 `agri_backend_v2/` 中执行，替换连接参数后使用；现有数据库应通过增量迁移升级。
+在 MySQL 中创建一个空的开发数据库，再导入 [数据库基线](agri_backend_v2/businesses/farm/sql/farm_manager.sql)。下面的命令在 `agri_backend_v2/` 中执行，替换连接参数后使用；现有数据库应通过增量迁移升级。
 
 ```bash
-mysql -h <host> -u <user> -p <database> < sql/farm_manager.sql
+mysql -h <host> -u <user> -p <database> < businesses/farm/sql/farm_manager.sql
 ```
 
-首次创建管理员时，在 `business/config.yaml` 的 `auth` 下补充 `admin_phone` 和 `admin_password`，使用尚未注册的账号。Business 启动时会创建管理员及默认农场；留空会跳过初始化，已有同手机号用户不会被自动提升权限。
+首次创建管理员时，在 `businesses/farm/farm_business/config.yaml` 的 `auth` 下补充 `admin_phone` 和 `admin_password`，使用尚未注册的账号。Business 启动时会创建管理员及默认农场；留空会跳过初始化，已有同手机号用户不会被自动提升权限。
 
 ### 3. 启动双服务
 
 分别打开两个终端，均进入 `agri_backend_v2/` 后运行：
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 uv run --package farm-manager-business python -m business.server
+PYTHONDONTWRITEBYTECODE=1 uv run --package farm-manager-business python -m farm_business.server
 ```
 
 ```bash
@@ -483,7 +484,7 @@ Business 的 `health` 确认进程可响应，`readiness` 进一步检查 MySQL 
 
 | 组件 | 发布内容 | 运行时需要 |
 | --- | --- | --- |
-| Business | `agri_backend_v2/business/` 及共享代码 | MySQL、业务配置、鉴权与服务凭证 |
+| Business | `agri_backend_v2/businesses/farm/farm_business/` 及共享代码 | MySQL、业务配置、鉴权与服务凭证 |
 | Agent | `agri_backend_v2/agent/` 及共享代码、Skill、Prompt | 模型服务、MongoDB、Business MCP，按需启用 Redis / QuillRAG |
 | 管理后台 | `agri_admin_web/dist/` | 静态资源服务、前端路由回退与 API 反向代理 |
 | Flutter App | 对应平台的构建产物 | 可访问的 Business / Agent 地址 |
@@ -529,8 +530,8 @@ bash scripts/check-doc-freshness.sh
 
 ### 扩展一个业务能力
 
-1. **先定义业务边界**：在 `business/services/` 中实现权限范围内的业务规则，复用已有模型与事务边界。
-2. **暴露调用入口**：按需要增加 REST 路由与 `business/tools/` 中的 MCP 工具，两者调用相同业务服务。
+1. **先定义业务边界**：在 `businesses/farm/farm_business/services/` 中实现权限范围内的业务规则，复用已有模型与事务边界。
+2. **暴露调用入口**：按需要增加 REST 路由与 `businesses/farm/farm_business/tools/` 中的 MCP 工具，两者调用相同业务服务。
 3. **注册 Agent Skill**：在 `agent/tools/` 下维护 `skill.md`，写清参数、使用场景、风险等级和需要确认的操作；声明式 MCP 封装优先复用已有执行器。
 4. **接入客户端**：管理端沿用 API → 组件 → 页面依赖方向；移动端通过已有数据层连接业务接口。
 5. **补充回归与文档**：覆盖成功、权限、输入错误及重试场景；同步接口契约、配置或功能设计文档。

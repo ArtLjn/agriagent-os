@@ -17,10 +17,10 @@ import yaml
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _MANIFEST_NAME = "plugin.yaml"
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
 _NAME_RE = re.compile(r"^[a-z][a-z0-9-]*$")
 _REQUIRED_FIELDS = frozenset(
-    {"schema_version", "name", "display_name", "system_prompt", "tools_dir"}
+    {"schema_version", "name", "display_name", "system_prompt", "skills_dir"}
 )
 _OPTIONAL_FIELDS = frozenset({"description"})
 _ALLOWED_FIELDS = _REQUIRED_FIELDS | _OPTIONAL_FIELDS
@@ -44,15 +44,15 @@ class PluginManifest:
     description: str
     plugin_dir: Path
     system_prompt_path: Path
-    tools_dir: Path
+    skills_dir: Path
 
     @property
-    def skill_dirs(self) -> list[Path]:
+    def skill_paths(self) -> list[Path]:
         """返回按目录名排序的技能目录，排除隐藏和私有目录。"""
         return sorted(
             (
                 entry
-                for entry in self.tools_dir.iterdir()
+                for entry in self.skills_dir.iterdir()
                 if entry.is_dir() and not entry.name.startswith(("_", "."))
             ),
             key=lambda path: path.name,
@@ -71,7 +71,7 @@ def repo_root() -> Path:
 
 def resolve_plugin_root(value: str | Path | None) -> Path:
     """把配置中的插件根目录解析为绝对路径。"""
-    raw = Path(value or "plugins").expanduser()
+    raw = Path(value or "businesses").expanduser()
     return raw if raw.is_absolute() else (_REPO_ROOT / raw)
 
 
@@ -160,9 +160,11 @@ def load_manifest(plugin_dir: Path | str) -> PluginManifest:
             "plugin_system_prompt_missing", f"system_prompt 不存在: {system_prompt}"
         )
 
-    tools_dir = _resolve_within(plugin_path, raw["tools_dir"], "tools_dir")
-    if not tools_dir.is_dir():
-        raise PluginError("plugin_tools_missing", f"tools_dir 不存在: {tools_dir}")
+    skills_dir = _resolve_within(plugin_path, raw["skills_dir"], "skills_dir")
+    if not skills_dir.is_dir():
+        raise PluginError(
+            "plugin_skills_missing", f"skills_dir 不存在: {skills_dir}"
+        )
 
     manifest = PluginManifest(
         schema_version=_SCHEMA_VERSION,
@@ -171,11 +173,11 @@ def load_manifest(plugin_dir: Path | str) -> PluginManifest:
         description=description,
         plugin_dir=plugin_path,
         system_prompt_path=system_prompt,
-        tools_dir=tools_dir,
+        skills_dir=skills_dir,
     )
-    if not manifest.skill_dirs:
+    if not manifest.skill_paths:
         raise PluginError(
-            "plugin_tools_empty", f"插件技能目录为空: {manifest.tools_dir}"
+            "plugin_skills_empty", f"插件技能目录为空: {manifest.skills_dir}"
         )
     return manifest
 

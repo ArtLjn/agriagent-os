@@ -4,11 +4,7 @@ from datetime import date
 from pathlib import Path
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
-
-from business.models import (
+from farm_business.models import (
     CropCycle,
     CropTemplate,
     CycleStage,
@@ -17,8 +13,11 @@ from business.models import (
     PlantingPlanExecution,
     PlantingUnit,
 )
-from business.services import cycle_service, planting_plan_service
-from business.services.crop_service import normalize_crop_name
+from farm_business.services import cycle_service, planting_plan_service
+from farm_business.services.crop_service import normalize_crop_name
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 
 @pytest.fixture
@@ -181,9 +180,11 @@ def test_planting_plan_schema_uses_canonical_crop_cycle_id() -> None:
     }
 
     project_root = Path(__file__).resolve().parents[1]
-    baseline_ddl = (project_root / "sql" / "farm_manager.sql").read_text()
+    business_root = project_root / "businesses" / "farm"
+    baseline_ddl = (business_root / "sql" / "farm_manager.sql").read_text()
     create_migration = (
-        project_root / "business/migrations/20260809_planting_plan_executions_up.sql"
+        business_root
+        / "farm_business/migrations/20260809_planting_plan_executions_up.sql"
     ).read_text()
     for ddl in (baseline_ddl, create_migration):
         assert "crop_cycle_id INT NULL" in ddl
