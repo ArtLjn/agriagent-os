@@ -14,13 +14,13 @@ from agent.domains.harness.runtime.turn import Turn
 from agent.domains.harness.tools import loader as skill_loader
 from agent.domains.harness.tools.context import SkillContext
 from agent.platforms.mcp.client import BusinessClient
-from business.api import memos
-from business.api.deps import get_current_user
-from business.db import get_db
-from business.models import Memo
-from business.services import memo_service as service
-from business.tools import _headers, farm_review
-from business.tools import memos as memo_tools
+from farm_business.api import memos
+from farm_business.api.deps import get_current_user
+from farm_business.db import get_db
+from farm_business.models import Memo
+from farm_business.services import memo_service as service
+from farm_business.tools import _headers, farm_review
+from farm_business.tools import memos as memo_tools
 from shared.api_response import install_api_exception_handlers
 from shared.roles import Permission
 
@@ -320,8 +320,8 @@ async def test_farm_review_uses_complete_counts_and_bounded_preview(
 ):
     from datetime import datetime, timedelta
 
-    from business.models import FarmLog
-    from business.tools import farm_review
+    from farm_business.models import FarmLog
+    from farm_business.tools import farm_review
 
     with sessions.begin() as db:
         FarmLog.__table__.create(db.get_bind())
@@ -380,8 +380,8 @@ async def test_payment_overview_separates_directions_and_excludes_deleted(
 ):
     from datetime import datetime
 
-    from business.models import CostRecord, LaborEntry, Worker
-    from business.tools import farm_review
+    from farm_business.models import CostRecord, LaborEntry, Worker
+    from farm_business.tools import farm_review
 
     with sessions.begin() as db:
         for model in [CostRecord, Worker, LaborEntry]:
@@ -433,8 +433,8 @@ async def test_payment_overview_separates_directions_and_excludes_deleted(
 
 @pytest.mark.asyncio
 async def test_server_registers_new_mcp_tools_and_rest_routes():
-    from business import server
-    from business.mcp_app import mcp
+    from farm_business import server
+    from farm_business.mcp_app import mcp
 
     names = {tool.name for tool in await mcp.list_tools()}
     assert {"manage_memos", "get_farm_review", "get_payment_overview"} <= names

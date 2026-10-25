@@ -7,8 +7,8 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-from business.api import users
-from business.api.deps import get_current_admin
+from farm_business.api import users
+from farm_business.api.deps import get_current_admin
 
 
 def test普通用户不能访问管理员资源() -> None:

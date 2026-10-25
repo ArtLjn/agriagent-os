@@ -5,19 +5,19 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from farm_business.api import auth
+from farm_business.api import dev as business_dev
+from farm_business.api.users import AdminCreateUserRequest
+from farm_business.config import settings as business_settings
+from farm_business.services.tokens import create_access_token, decode_access_token
 from fastapi import HTTPException
 from pydantic import ValidationError
+from shared.roles import Permission, UserRole, scope_for_role
 
-from agent.api import health
 from agent.domains.harness.runtime.projection import (
     ProjectionPermissionError,
     resolve_presentation_profile,
 )
-from business.api import auth
-from business.api.users import AdminCreateUserRequest
-from business.config import settings as business_settings
-from business.services.tokens import create_access_token, decode_access_token
-from shared.roles import Permission, UserRole, scope_for_role
 
 
 def test_dev_role_uses_normal_user_scope() -> None:
@@ -205,19 +205,31 @@ class _FakeDb:
         return self.query_instance
 
 
+def test_business_dev_users_is_disabled_outside_development() -> None:
+    previous = business_dev.settings.environment
+    business_dev.settings.environment = "production"
+    try:
+        with pytest.raises(HTTPException) as raised:
+            business_dev.dev_users()
+        assert raised.value.status_code == 404
+        assert raised.value.detail["code"] == "not_found"
+    finally:
+        business_dev.settings.environment = previous
+
+
 def test_dev_users_query_filters_dev_role(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_db = _FakeDb()
-    previous = health.settings.environment
-    previous_secret = health.settings.auth.jwt_secret
-    health.settings.environment = "development"
-    health.settings.auth.jwt_secret = "role-test-secret"
-    monkeypatch.setattr("business.db.session_scope", lambda: fake_db)
+    previous = business_dev.settings.environment
+    previous_secret = business_dev.settings.auth.jwt_secret
+    business_dev.settings.environment = "development"
+    business_dev.settings.auth.jwt_secret = "role-test-secret"
+    monkeypatch.setattr(business_dev, "session_scope", lambda: fake_db)
     try:
-        assert health.dev_users() == {"users": [], "total": 0}
+        assert business_dev.dev_users() == {"users": [], "total": 0}
         conditions = [
             str(condition) for condition in fake_db.query_instance.filter_conditions
         ]
         assert any("users.role" in condition for condition in conditions)
     finally:
-        health.settings.environment = previous
-        health.settings.auth.jwt_secret = previous_secret
+        business_dev.settings.environment = previous
+        business_dev.settings.auth.jwt_secret = previous_secret

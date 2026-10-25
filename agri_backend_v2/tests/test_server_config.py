@@ -9,8 +9,8 @@ import uvicorn
 
 from agent import config as agent_config
 from agent.bootstrap import app as agent_server
-from business import config as business_config
-from business import server as business_server
+from farm_business import config as business_config
+from farm_business import server as business_server
 
 
 def _write_config(tmp_path: Path, payload: dict) -> Path:

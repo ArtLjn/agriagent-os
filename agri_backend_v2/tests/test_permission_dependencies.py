@@ -8,12 +8,12 @@ from fastapi.testclient import TestClient
 
 from agent import deps as agent_deps
 from agent.auth import require_identity_permission
-from business.api import api_router
-from business.api import deps as business_deps
-from business.api import users as users_api
-from business.mcp_auth import McpAuthFailure
-from business import mcp_auth
-from business.tools import (
+from farm_business.api import api_router
+from farm_business.api import deps as business_deps
+from farm_business.api import users as users_api
+from farm_business.mcp_auth import McpAuthFailure
+from farm_business import mcp_auth
+from farm_business.tools import (
     cost,
     crop_cycle,
     crop_templates,
@@ -28,8 +28,8 @@ from business.tools import (
     work_orders,
     workers,
 )
-from business.tools import _headers as mcp_headers
-from business.services.tokens import TokenExpiredError, TokenInvalidError
+from farm_business.tools import _headers as mcp_headers
+from farm_business.services.tokens import TokenExpiredError, TokenInvalidError
 from shared.api_response import install_api_exception_handlers
 from shared.roles import (
     Permission,

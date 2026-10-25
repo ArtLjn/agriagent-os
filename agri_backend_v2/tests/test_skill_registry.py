@@ -24,8 +24,15 @@ def test_shipped_routing_metadata_passes_standalone_validator():
     from scripts.validate_skill_metadata import validate_directories
 
     root = Path(__file__).parents[1]
-    directories = [root / "agent" / "tools", *(root / "plugins").glob("*/tools")]
-    assert not validate_directories(list(directories))
+    directories = [
+        root / "agent" / "tools",
+        *(
+            path
+            for path in (root / "businesses").glob("*/skills")
+            if not path.parent.name.startswith(("_", "."))
+        ),
+    ]
+    assert not validate_directories(directories)
 
 
 def test_require_returns_structured_missing_skill_error() -> None:

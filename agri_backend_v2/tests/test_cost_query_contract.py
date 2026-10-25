@@ -7,9 +7,9 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from business.models import CostRecord
-from business.services import cost_service
-from business.tools import cost
+from farm_business.models import CostRecord
+from farm_business.services import cost_service
+from farm_business.tools import cost
 
 
 @pytest.fixture

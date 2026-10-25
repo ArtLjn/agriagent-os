@@ -3,10 +3,9 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from farm_business.models import Memo
+from farm_business.scripts import migrate_memos as migration
 from sqlalchemy import create_engine, text
-
-from business.models import Memo
-from scripts import migrate_memos as migration
 
 
 def test_schema_check_detects_missing_or_incomplete_table():

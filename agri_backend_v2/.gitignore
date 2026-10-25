@@ -12,8 +12,8 @@ build/
 .idea/
 
 # Runtime data
-business/data/*.json
-!business/data/seed.json
+businesses/farm/farm_business/data/*.json
+!businesses/farm/farm_business/data/seed.json
 agent/data/memory.json
 agent/data/conversations/
 debug/
@@ -27,7 +27,7 @@ logs/
 
 # 配置（含真实密钥，不入库；各自项目独立的 config.yaml）
 config.yaml
-business/config.yaml
+businesses/farm/farm_business/config.yaml
 agent/config.yaml
 
 # OS

@@ -103,7 +103,7 @@ business_mcp:
 
 # 单插件/部署：root 相对 agri_backend_v2 根目录，active 省略时要求恰好一个 plugin.yaml
 plugins:
-  root: "plugins"
+  root: "businesses"
   active: "farm"
 
 auth:

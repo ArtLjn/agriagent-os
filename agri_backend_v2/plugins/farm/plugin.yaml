@@ -1,6 +1,0 @@
-schema_version: 1
-name: farm
-display_name: 农场助理
-description: 农场经营管理助手
-system_prompt: prompts/system.md
-tools_dir: tools

@@ -162,10 +162,10 @@ LLM 看来 mcp 和 local 都是 tool，只是底层实现不同。`skill_loader`
 
 ## 5. 模块边界
 
-### 5.1 v2/business/
+### 5.1 businesses/farm/farm_business/
 
 ```
-business/
+businesses/farm/farm_business/
 ├── server.py          # FastMCP 入口，启动 HTTP transport
 ├── mcp.py            # 共享 FastMCP 实例
 ├── tools/            # MCP tool 定义（薄壳，调用 services）
@@ -255,7 +255,7 @@ LLM chat(messages, tools) → 返回 tool_calls
 ## 8. 与旧 backend 的关系
 
 - `archive/backend/` 保留作为业务参考，不复用代码
-- 旧 skill 的业务逻辑（services 部分）参考迁移到 v2/business/services/
+- 旧 skill 的业务逻辑（services 部分）参考迁移到 v2/businesses/farm/farm_business/services/
 - 旧 skill.md 的描述文本可参考改写
 - 旧 schema/registry/metadata 抽象全部废弃
 
@@ -266,7 +266,7 @@ cd agri_backend_v2
 uv sync                                  # 装齐所有依赖
 
 # Terminal 1：business MCP server
-uv run --package farm-manager-business python -m business.server
+uv run --package farm-manager-business python -m farm_business.server
 
 # Terminal 2：agent FastAPI
 uv run --package farm-manager-agent python -m agent.bootstrap.app

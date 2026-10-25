@@ -317,13 +317,14 @@ Configure the model and index service using the [QuillRAG project guide](https:/
 
 | Path | Purpose |
 | --- | --- |
-| `agri_backend_v2/business/` | REST and MCP endpoints, business services, and MySQL access |
+| `agri_backend_v2/businesses/farm/` | Farm business project: skills, prompts, SQL baseline, and `farm_business` service |
+| `agri_backend_v2/businesses/farm/farm_business/` | REST and MCP endpoints, business services, and MySQL access |
+| `agri_backend_v2/shared/` | Cross-business shared package (roles, API responses, location data) |
 | `agri_backend_v2/agent/bootstrap/` | Application entry point and lifecycle |
 | `agri_backend_v2/agent/domains/harness/` | Runtime, context, memory, routing, approvals, and tracing |
 | `agri_backend_v2/agent/platforms/` | Model, MCP, and persistence adapters |
-| `agri_backend_v2/agent/tools/` | Skill definitions and execution scripts |
-| `agri_backend_v2/agent/prompts/` | Prompt templates |
-| `agri_backend_v2/sql/` | Database baseline for new environments |
+| `agri_backend_v2/agent/tools/` | Core capabilities: arithmetic and web search |
+| `agri_backend_v2/agent/prompts/` | Platform prompt templates |
 | `agri_backend_v2/tests/` | Backend tests |
 | `agri_backend_v2/docs/` | Current architecture, contracts, and feature designs |
 | `agri_admin_web/` | React admin console |
@@ -351,7 +352,7 @@ cd agriagent-os
 ```bash
 cd agri_backend_v2
 uv sync --all-packages
-cp -n business/config.example.yaml business/config.yaml
+cp -n businesses/farm/farm_business/config.example.yaml businesses/farm/farm_business/config.yaml
 cp -n agent/config.example.yaml agent/config.yaml
 ```
 
@@ -359,7 +360,7 @@ Fill in the two configuration files using the supplied templates:
 
 | Setting | Where to configure it |
 | --- | --- |
-| MySQL | `business/config.yaml` → `database.url`, pointing to a development database |
+| MySQL | `businesses/farm/farm_business/config.yaml` → `database.url`, pointing to a development database |
 | MongoDB | `agent/config.yaml` → `mongodb.uri` and `mongodb.database`, for conversations, memory, and Trace |
 | Model service | `agent/config.yaml` → `ai.base_url`, `ai.api_key`, and `ai.model`; use an OpenAI-compatible service with tool calling |
 | User authentication | Set the same strong random `auth.jwt_secret` in both files; keep issuer and audience values consistent with the templates |
@@ -368,20 +369,20 @@ Fill in the two configuration files using the supplied templates:
 
 Deployments can override YAML values with `JWT_SECRET`, `AGENT_SERVICE_TOKEN`, and `AGENT_DELEGATION_SECRET`. Both services must receive the corresponding values. Keep real credentials in untracked local configuration or the deployment environment.
 
-Create an empty development database in MySQL, then import the [database baseline](agri_backend_v2/sql/farm_manager.sql). Run the following from `agri_backend_v2/`, replacing the connection placeholders. Existing databases should be upgraded through incremental migrations.
+Create an empty development database in MySQL, then import the [database baseline](agri_backend_v2/businesses/farm/sql/farm_manager.sql). Run the following from `agri_backend_v2/`, replacing the connection placeholders. Existing databases should be upgraded through incremental migrations.
 
 ```bash
-mysql -h <host> -u <user> -p <database> < sql/farm_manager.sql
+mysql -h <host> -u <user> -p <database> < businesses/farm/sql/farm_manager.sql
 ```
 
-To create the first administrator, add `admin_phone` and `admin_password` under `auth` in `business/config.yaml`, using an account that has not already been registered. Business creates the administrator and a default farm at startup. Empty settings skip initialization; an existing user with the same phone number is not automatically promoted.
+To create the first administrator, add `admin_phone` and `admin_password` under `auth` in `businesses/farm/farm_business/config.yaml`, using an account that has not already been registered. Business creates the administrator and a default farm at startup. Empty settings skip initialization; an existing user with the same phone number is not automatically promoted.
 
 ### 3. Start both services
 
 Open two terminals, enter `agri_backend_v2/` in each, and run one command per terminal:
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 uv run --package farm-manager-business python -m business.server
+PYTHONDONTWRITEBYTECODE=1 uv run --package farm-manager-business python -m farm_business.server
 ```
 
 ```bash
@@ -481,7 +482,7 @@ Manage Business, Agent, and admin static assets as separate deployment units. Bu
 
 | Component | Deployment contents | Runtime dependencies |
 | --- | --- | --- |
-| Business | `agri_backend_v2/business/` and shared code | MySQL, business configuration, authentication, and service credentials |
+| Business | `agri_backend_v2/businesses/farm/farm_business/` and shared code | MySQL, business configuration, authentication, and service credentials |
 | Agent | `agri_backend_v2/agent/`, shared code, Skills, and Prompts | Model service, MongoDB, Business MCP, and optionally Redis / QuillRAG |
 | Admin console | `agri_admin_web/dist/` | Static hosting, client-side route fallback, and API reverse proxies |
 | Flutter app | Platform-specific build artifacts | Reachable Business and Agent endpoints |
@@ -527,8 +528,8 @@ Store screenshots in `archive/docs/assets/screenshots/`, using `admin-<page-or-s
 
 ### Adding a business capability
 
-1. **Define the domain boundary.** Implement scoped business rules in `business/services/`, reusing existing models and transaction boundaries.
-2. **Expose the operation.** Add REST routes and MCP tools in `business/tools/` as needed, both calling the same business service.
+1. **Define the domain boundary.** Implement scoped business rules in `businesses/farm/farm_business/services/`, reusing existing models and transaction boundaries.
+2. **Expose the operation.** Add REST routes and MCP tools in `businesses/farm/farm_business/tools/` as needed, both calling the same business service.
 3. **Register an Agent Skill.** Maintain a `skill.md` under `agent/tools/` with arguments, intended use, risk levels, and confirmation requirements. Prefer existing executors for declarative MCP wrappers.
 4. **Connect the clients.** Follow the admin API → components → pages dependency direction, and use the app's existing data layer for mobile integration.
 5. **Add regression coverage and documentation.** Cover success, authorization, invalid input, and retries; update the relevant API contract, configuration, or feature design.

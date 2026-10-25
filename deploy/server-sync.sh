@@ -11,6 +11,8 @@ REMOTE_ROOT="/root/workspace/farm-manager"
 REMOTE_DIR="${REMOTE_ROOT}/v2"
 AGENT_SERVICE_NAME="farm-manager"
 BUSINESS_SERVICE_NAME="farm-manager-business"
+BUSINESS_PROJECT="${BUSINESS_PROJECT:-farm}"
+BUSINESS_PACKAGE="${BUSINESS_PACKAGE:-farm_business}"
 AGENT_PORT=8000
 BUSINESS_PORT=9876
 
@@ -46,7 +48,7 @@ COPYFILE_DISABLE=1 tar --no-xattrs -czf "${ARCHIVE}" \
     --exclude='agri_backend_v2/.env' \
     --exclude='agri_backend_v2/.env.*' \
     --exclude='agri_backend_v2/agent/config.yaml' \
-    --exclude='agri_backend_v2/business/config.yaml' \
+    --exclude='agri_backend_v2/businesses/*/*/config.yaml' \
     --exclude='agri_backend_v2/._*' \
     --exclude='agri_backend_v2/.claude' \
     --exclude='agri_backend_v2/.git' \
@@ -60,7 +62,7 @@ scp -q -o ConnectTimeout=8 "${ARCHIVE}" "${SERVER}:${ARCHIVE}"
 # --- 2. 远程部署 ---
 log "远程部署 v2..."
 ssh "${SERVER}" \
-    "TIMESTAMP='${TIMESTAMP}' REMOTE_ROOT='${REMOTE_ROOT}' REMOTE_DIR='${REMOTE_DIR}' AGENT_SERVICE_NAME='${AGENT_SERVICE_NAME}' BUSINESS_SERVICE_NAME='${BUSINESS_SERVICE_NAME}' AGENT_PORT='${AGENT_PORT}' BUSINESS_PORT='${BUSINESS_PORT}' SERVER_HOST='${SERVER_HOST}' ARCHIVE='${ARCHIVE}' bash -s" <<'REMOTE_SCRIPT'
+    "TIMESTAMP='${TIMESTAMP}' REMOTE_ROOT='${REMOTE_ROOT}' REMOTE_DIR='${REMOTE_DIR}' AGENT_SERVICE_NAME='${AGENT_SERVICE_NAME}' BUSINESS_SERVICE_NAME='${BUSINESS_SERVICE_NAME}' BUSINESS_PROJECT='${BUSINESS_PROJECT}' BUSINESS_PACKAGE='${BUSINESS_PACKAGE}' AGENT_PORT='${AGENT_PORT}' BUSINESS_PORT='${BUSINESS_PORT}' SERVER_HOST='${SERVER_HOST}' ARCHIVE='${ARCHIVE}' bash -s" <<'REMOTE_SCRIPT'
 set -euo pipefail
 
 rlog()  { echo "  [$(date '+%H:%M:%S')] $*"; }
@@ -68,6 +70,10 @@ rdie()  { rlog "错误: $*" >&2; exit 1; }
 
 BACKUP_DIR="/tmp/farm-manager-v2-backup-${TIMESTAMP}"
 SYSTEMD_DIR="/etc/systemd/system"
+BUSINESS_DIR="businesses/${BUSINESS_PROJECT}"
+BUSINESS_CONFIG="${BUSINESS_DIR}/${BUSINESS_PACKAGE}/config.yaml"
+BUSINESS_MODULE="${BUSINESS_PACKAGE}.server"
+LEGACY_BUSINESS_CONFIG="business/config.yaml"
 OLD_PATHS=()
 
 rollback() {
@@ -77,7 +83,7 @@ rollback() {
     systemctl stop "${AGENT_SERVICE_NAME}" "${BUSINESS_SERVICE_NAME}" 2>/dev/null || true
 
     # 删除本次解压的代码，再恢复部署前的代码目录。
-    for path in agent business shared scripts sql docs tests pyproject.toml uv.lock providers.json; do
+    for path in agent businesses business plugins shared scripts sql docs tests pyproject.toml uv.lock providers.json; do
         rm -rf "${REMOTE_DIR}/${path}"
     done
     for path in "${OLD_PATHS[@]}"; do
@@ -94,6 +100,10 @@ rollback() {
     if [ -f "${BACKUP_DIR}/config/business.yaml" ]; then
         mkdir -p "${REMOTE_DIR}/business"
         cp "${BACKUP_DIR}/config/business.yaml" "${REMOTE_DIR}/business/config.yaml"
+    fi
+
+    if command -v uv >/dev/null 2>&1 && [ -f "${REMOTE_DIR}/uv.lock" ]; then
+        (cd "${REMOTE_DIR}" && uv sync --frozen --all-packages --no-dev >/dev/null 2>&1) || true
     fi
 
     for service in "${AGENT_SERVICE_NAME}" "${BUSINESS_SERVICE_NAME}"; do
@@ -133,10 +143,12 @@ rlog "备份旧 v2 代码..."
 if [ -f agent/config.yaml ]; then
     cp agent/config.yaml "${BACKUP_DIR}/config/agent.yaml"
 fi
-if [ -f business/config.yaml ]; then
-    cp business/config.yaml "${BACKUP_DIR}/config/business.yaml"
+if [ -f "${BUSINESS_CONFIG}" ]; then
+    cp "${BUSINESS_CONFIG}" "${BACKUP_DIR}/config/business.yaml"
+elif [ -f "${LEGACY_BUSINESS_CONFIG}" ]; then
+    cp "${LEGACY_BUSINESS_CONFIG}" "${BACKUP_DIR}/config/business.yaml"
 fi
-for path in agent business shared scripts sql docs tests pyproject.toml uv.lock providers.json; do
+for path in agent businesses business plugins shared scripts sql docs tests pyproject.toml uv.lock providers.json; do
     if [ -e "${REMOTE_DIR}/${path}" ]; then
         mv "${REMOTE_DIR}/${path}" "${BACKUP_DIR}/source/${path}"
         OLD_PATHS+=("${path}")
@@ -163,16 +175,18 @@ if [ -f "${BACKUP_DIR}/config/agent.yaml" ]; then
     cp "${BACKUP_DIR}/config/agent.yaml" "${REMOTE_DIR}/agent/config.yaml"
 fi
 if [ -f "${BACKUP_DIR}/config/business.yaml" ]; then
-    cp "${BACKUP_DIR}/config/business.yaml" "${REMOTE_DIR}/business/config.yaml"
+    mkdir -p "${REMOTE_DIR}/${BUSINESS_DIR}/${BUSINESS_PACKAGE}"
+    cp "${BACKUP_DIR}/config/business.yaml" "${REMOTE_DIR}/${BUSINESS_CONFIG}"
+    chmod 600 "${REMOTE_DIR}/${BUSINESS_CONFIG}"
 fi
 
 if [ ! -f "${REMOTE_DIR}/agent/config.yaml" ]; then
     rollback
     rdie "缺少 ${REMOTE_DIR}/agent/config.yaml，请先根据 config.example.yaml 创建并填写生产配置"
 fi
-if [ ! -f "${REMOTE_DIR}/business/config.yaml" ]; then
+if [ ! -f "${REMOTE_DIR}/${BUSINESS_CONFIG}" ]; then
     rollback
-    rdie "缺少 ${REMOTE_DIR}/business/config.yaml，请先根据 config.example.yaml 创建并填写生产配置"
+    rdie "缺少 ${REMOTE_DIR}/${BUSINESS_CONFIG}，请先根据 config.example.yaml 创建并填写生产配置"
 fi
 
 # --- 安装 v2 依赖 ---
@@ -195,7 +209,7 @@ if [ -z "${UV_BIN}" ]; then
     fi
 fi
 rlog "同步 v2 Business 和 Agent 依赖..."
-if ! "${UV_BIN}" sync --frozen --all-packages; then
+if ! "${UV_BIN}" sync --frozen --all-packages --no-dev; then
     rollback
     rdie "uv sync 失败"
 fi
@@ -214,14 +228,14 @@ BUSINESS_CHECK=(
 # 只执行已审核的备忘录增量迁移，不扫描或执行目录中的 down SQL。
 # MySQL DDL 自动提交；后续代码回滚保留备忘录表和已有数据。
 rlog "检查并补齐备忘录表..."
-if ! "${BUSINESS_CHECK[@]}" -m scripts.migrate_memos --apply; then
+if ! "${BUSINESS_CHECK[@]}" -m "${BUSINESS_PACKAGE}.scripts.migrate_memos" --apply; then
     rollback
     rdie "备忘录迁移失败，未切换服务"
 fi
 
 # 在切换 systemd 前确认 Business 能连接数据库，并完成必要的初始管理员检查。
 rlog "检查 Business 数据库..."
-if ! "${BUSINESS_CHECK[@]}" -c 'from business.db import check_connection; from business.services.auth_service import ensure_admin_user; check_connection(); ensure_admin_user()'; then
+if ! "${BUSINESS_CHECK[@]}" -c "from ${BUSINESS_PACKAGE}.db import check_connection; from ${BUSINESS_PACKAGE}.services.auth_service import ensure_admin_user; check_connection(); ensure_admin_user()"; then
     rollback
     rdie "Business 数据库检查失败"
 fi
@@ -234,7 +248,7 @@ write_unit() {
     local after="network.target"
     local factory_flag=""
     [ "${service}" = "${AGENT_SERVICE_NAME}" ] && after="${BUSINESS_SERVICE_NAME}.service"
-    [ "${service}" = "${BUSINESS_SERVICE_NAME}" ] && { module="business.server:create_app"; factory_flag="--factory"; }
+    [ "${service}" = "${BUSINESS_SERVICE_NAME}" ] && { module="${BUSINESS_MODULE}:create_app"; factory_flag="--factory"; }
 
     cat > "${SYSTEMD_DIR}/${service}.service" <<UNIT_EOF
 [Unit]
@@ -252,6 +266,7 @@ TimeoutStartSec=90
 Environment=PYTHONUNBUFFERED=1
 Environment=PYTHONPATH=${REMOTE_DIR}
 EnvironmentFile=-${REMOTE_DIR}/.env
+EnvironmentFile=-${REMOTE_DIR}/.v2-runtime.env
 StandardOutput=journal
 StandardError=journal
 
@@ -260,9 +275,16 @@ WantedBy=multi-user.target
 UNIT_EOF
 }
 
+# 运行时插件根覆盖 .env 中可能存在的旧值；后加载的 EnvironmentFile 优先。
+cat > "${REMOTE_DIR}/.v2-runtime.env" <<ENV_EOF
+PLUGINS__ROOT=businesses
+PLUGINS__ACTIVE=${BUSINESS_PROJECT}
+ENV_EOF
+chmod 600 "${REMOTE_DIR}/.v2-runtime.env"
+
 # farm-manager 这个服务名沿用旧脚本，保证 server-ctl.sh 仍可管理 Agent。
 rlog "更新 systemd 服务..."
-write_unit "${BUSINESS_SERVICE_NAME}" "Farm Manager v2 Business (REST + MCP)" "business.server" "${BUSINESS_PORT}"
+write_unit "${BUSINESS_SERVICE_NAME}" "Farm Manager v2 Business (REST + MCP)" "${BUSINESS_MODULE}" "${BUSINESS_PORT}"
 write_unit "${AGENT_SERVICE_NAME}" "Farm Manager v2 Agent (SSE API)" "agent.bootstrap.app:app" "${AGENT_PORT}"
 systemctl daemon-reload
 systemctl enable "${BUSINESS_SERVICE_NAME}" "${AGENT_SERVICE_NAME}" >/dev/null
