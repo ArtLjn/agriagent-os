@@ -82,6 +82,35 @@ parameters:
 新增能力应同时给出易混淆能力的边界，并加入相近意图回放。个人事项、已发生农事、未来作业单、
 天气预警分别来自不同来源，查询结果不得互相替代；某个来源为空也不能推断全部来源为空。
 
+## 空结果策略（2026-10-25）
+
+`operations.<op>.empty_result_policy` 声明同一动作重复返回空集合时的统一响应，
+避免 Runtime 为某个业务写死分支。只允许声明在 operation 级，顶层声明会失败。
+
+```yaml
+empty_result_policy:
+  observation:
+    code: system_template_catalog_empty   # snake_case
+    message: "..."                         # 非空
+    missing: [custom_template.stages]
+  next_allowed_action:
+    agent_tool_name: prepare_planting_plan # 已注册、exposed、非自身
+    arguments: null                        # 必须显式声明；null 或对象
+  task_state:
+    reason: empty_system_template_catalog  # snake_case
+    resume_policy: ask_user
+  trace:
+    progress_reason: empty_catalog_already_observed
+```
+
+Runtime 固定生成 `observation.status=needs_information`、`task_state.status=blocked`、
+`blocked_action` 和事件序列；触发条件仍是 `verify.has_empty_observation`（识别
+`items/templates/workers/records/results` 中的空列表）。策略只声明“空结果后的响应”，
+不声明“什么算空结果”。
+
+`code`、`reason`、`progress_reason` 使用非空 snake_case；`next_allowed_action.arguments`
+必须显式存在，省略会被校验拒绝。目标工具必须已注册、对模型暴露且不是当前动作自身。
+
 ## 缺参原则
 
 - 可以通过只读工具获得的信息由 Agent 自己查询，例如作物名称对应的模板 ID。
@@ -93,3 +122,6 @@ parameters:
 ```bash
 PYTHONDONTWRITEBYTECODE=1 python agri_backend_v2/scripts/validate_skill_metadata.py
 ```
+
+不传目录时默认扫描 `agent/tools` 与所有 `plugins/*/tools`，并跨目录检查公开
+`tool_name` 唯一性和空结果策略目标；传入目录时只校验该目录。

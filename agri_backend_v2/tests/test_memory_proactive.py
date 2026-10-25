@@ -577,12 +577,12 @@ async def test_live_main_model_uses_proactive_context(
 ):
     """已知候选的真实模型利用验收，与外部检索命中率和完整 SSE 链路分开统计。"""
     import json
-    from pathlib import Path
 
     from test_memory_context_use import seed
 
     from agent.domains.harness.memory.personalization import proactive_context
     from agent.platforms.llm.client import MODEL, bounded_completion
+    from agent.prompts import render_system_prompt
 
     document = await seed()
     plan = proactive_context(document, "f", query)
@@ -594,7 +594,7 @@ async def test_live_main_model_uses_proactive_context(
         max_tokens=650,
         timeout=30,
         messages=[
-            {"role": "system", "content": Path("agent/prompts/system.md").read_text()},
+            {"role": "system", "content": render_system_prompt()},
             {"role": "user", "content": context},
             {"role": "user", "content": query},
         ],

@@ -209,6 +209,14 @@ class Skill:
         """
         return None
 
+    @property
+    def empty_result_policy(self) -> dict[str, Any] | None:
+        """同一动作重复返回空集合时，Runtime 应采用的声明式响应。
+
+        仅 OperationSkill 从 operation 配置读取；普通 Skill 返回 None。
+        """
+        return None
+
     def dynamic_risk_level(self, params: dict[str, Any]) -> str:
         """根据实际参数返回风险等级。
 
@@ -455,6 +463,10 @@ class OperationSkill(McpSkill):
     @property
     def approval_followup(self) -> dict[str, Any] | None:
         return self._operation_config_meta.get("approval_followup")
+
+    @property
+    def empty_result_policy(self) -> dict[str, Any] | None:
+        return self._operation_config_meta.get("empty_result_policy")
 
     def dynamic_risk_level(self, params: dict[str, Any]) -> str:
         return self._operation_config_meta.get(

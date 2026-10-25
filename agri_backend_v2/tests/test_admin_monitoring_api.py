@@ -53,6 +53,7 @@ def test_regular_user_denied(client, monkeypatch):
 
 def test_prompt_reports_cached_version_and_reload(client, admin, monkeypatch, tmp_path):
     monkeypatch.setattr(prompts, "_PROMPTS_DIR", tmp_path)
+    monkeypatch.setattr(prompts, "_SYSTEM_PROMPT_PATH", tmp_path / "system.md")
     monkeypatch.setattr(prompts, "_cache", {})
     source = tmp_path / "system.md"
     source.write_text("系统提示词 {保持原文}")

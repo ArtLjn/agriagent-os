@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 
-from business.tools import crop_templates
 from agent.domains.harness.tools import loader
+from business.tools import crop_templates
 
 
 class _FakeDb:
@@ -111,7 +111,7 @@ def test_create_template_passes_complete_stage_contract_to_service(monkeypatch) 
 def test_create_template_schema_requires_stage_duration_and_order() -> None:
     skill = next(
         skill
-        for skill in loader.SkillLoader(loader._SKILLS_DIR).load_all()
+        for skill in loader.load_all()
         if skill.name == "create_crop_template"
     )
     stages = skill.parameters_schema["properties"]["stages"]
@@ -121,7 +121,7 @@ def test_create_template_schema_requires_stage_duration_and_order() -> None:
 
 
 def test_crop_template_operation_tools_keep_agent_to_business_mapping() -> None:
-    skills = loader.SkillLoader(loader._SKILLS_DIR).load_all()
+    skills = loader.load_all()
     by_name = {skill.name: skill for skill in skills}
 
     assert by_name["list_system_crop_templates"].mcp_tool == "manage_crop_cycle"
@@ -133,3 +133,13 @@ def test_crop_template_operation_tools_keep_agent_to_business_mapping() -> None:
     assert by_name["list_crop_templates"].data_scope == "farm_imported_templates"
     assert by_name["query_crop_templates"].mcp_tool == "manage_crop_templates"
     assert by_name["query_crop_templates"].operation == "query"
+    policy = by_name["list_system_crop_templates"].empty_result_policy
+    assert policy["observation"]["code"] == "system_template_catalog_empty"
+    assert policy["next_allowed_action"] == {
+        "agent_tool_name": "prepare_planting_plan",
+        "arguments": None,
+    }
+    assert policy["task_state"] == {
+        "reason": "empty_system_template_catalog",
+        "resume_policy": "ask_user",
+    }

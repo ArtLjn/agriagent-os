@@ -45,10 +45,12 @@ OPERATION_FIELDS = {
     "finalize_after_success",
     "expose_to_model",
     "approval_followup",
+    "empty_result_policy",
     "execution",
     "completion",
 }
 RISK_LEVELS = {"read", "write_confirm", "write_high", "mixed"}
+SNAKE_CASE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
 def parse_front_matter(path: Path) -> dict[str, Any]:
@@ -179,6 +181,7 @@ def validate_metadata(meta: dict[str, Any], source: str = "skill.md") -> list[st
         _validate_execution(config.get("execution"), path, errors)
         _validate_routing(config, path, errors)
         _validate_completion(config.get("completion"), path, errors)
+        _validate_empty_result_policy(config.get("empty_result_policy"), path, errors)
         followup = config.get("approval_followup")
         if followup is not None:
             if not isinstance(followup, dict):
@@ -280,14 +283,139 @@ def _validate_completion(completion: Any, source: str, errors: list[str]) -> Non
         errors.append(f"{source}: completion.finalize_after_success 必须是布尔值")
 
 
-def validate_directory(skills_dir: Path) -> list[str]:
-    errors: list[str] = []
-    public_tools: dict[str, Path] = {}
+def _validate_empty_result_policy(
+    policy: Any, source: str, errors: list[str]
+) -> None:
+    """校验 operation 级空结果策略的封闭结构。"""
+    if policy is None:
+        return
+    if not isinstance(policy, dict):
+        errors.append(f"{source}.empty_result_policy 必须是对象")
+        return
+    unknown = set(policy) - {
+        "observation",
+        "next_allowed_action",
+        "task_state",
+        "trace",
+    }
+    if unknown:
+        errors.append(f"{source}.empty_result_policy 包含未知字段: {sorted(unknown)}")
+    for key in ("observation", "next_allowed_action", "task_state"):
+        if key not in policy:
+            errors.append(f"{source}.empty_result_policy.{key} 必填")
+    observation = policy.get("observation")
+    if observation is not None:
+        if not isinstance(observation, dict):
+            errors.append(f"{source}.empty_result_policy.observation 必须是对象")
+        else:
+            unknown = set(observation) - {"code", "message", "missing"}
+            if unknown:
+                errors.append(
+                    f"{source}.empty_result_policy.observation 包含未知字段: "
+                    f"{sorted(unknown)}"
+                )
+            if not isinstance(observation.get("code"), str) or not SNAKE_CASE_RE.fullmatch(
+                observation.get("code", "")
+            ):
+                errors.append(
+                    f"{source}.empty_result_policy.observation.code 必须是 snake_case"
+                )
+            if (
+                not isinstance(observation.get("message"), str)
+                or not observation.get("message", "").strip()
+            ):
+                errors.append(
+                    f"{source}.empty_result_policy.observation.message 不能为空"
+                )
+            if not _is_string_list(observation.get("missing", [])):
+                errors.append(
+                    f"{source}.empty_result_policy.observation.missing "
+                    "必须是字符串列表"
+                )
+    next_action = policy.get("next_allowed_action")
+    if next_action is not None:
+        if not isinstance(next_action, dict):
+            errors.append(f"{source}.empty_result_policy.next_allowed_action 必须是对象")
+        else:
+            unknown = set(next_action) - {"agent_tool_name", "arguments"}
+            if unknown:
+                errors.append(
+                    f"{source}.empty_result_policy.next_allowed_action 包含未知字段: "
+                    f"{sorted(unknown)}"
+                )
+            if not isinstance(
+                next_action.get("agent_tool_name"), str
+            ) or not SNAKE_CASE_RE.fullmatch(next_action.get("agent_tool_name", "")):
+                errors.append(
+                    f"{source}.empty_result_policy.next_allowed_action."
+                    "agent_tool_name 必须是 snake_case"
+                )
+            if "arguments" not in next_action:
+                errors.append(
+                    f"{source}.empty_result_policy.next_allowed_action.arguments "
+                    "必须显式声明"
+                )
+            elif next_action["arguments"] is not None and not isinstance(
+                next_action["arguments"], dict
+            ):
+                errors.append(
+                    f"{source}.empty_result_policy.next_allowed_action.arguments "
+                    "必须是 null 或对象"
+                )
+    task_state = policy.get("task_state")
+    if task_state is not None:
+        if not isinstance(task_state, dict):
+            errors.append(f"{source}.empty_result_policy.task_state 必须是对象")
+        else:
+            unknown = set(task_state) - {"reason", "resume_policy"}
+            if unknown:
+                errors.append(
+                    f"{source}.empty_result_policy.task_state 包含未知字段: "
+                    f"{sorted(unknown)}"
+                )
+            if not isinstance(task_state.get("reason"), str) or not SNAKE_CASE_RE.fullmatch(
+                task_state.get("reason", "")
+            ):
+                errors.append(
+                    f"{source}.empty_result_policy.task_state.reason 必须是 snake_case"
+                )
+            if task_state.get("resume_policy") != "ask_user":
+                errors.append(
+                    f"{source}.empty_result_policy.task_state.resume_policy "
+                    "必须是 ask_user"
+                )
+    trace = policy.get("trace")
+    if trace is not None:
+        if not isinstance(trace, dict):
+            errors.append(f"{source}.empty_result_policy.trace 必须是对象")
+        else:
+            unknown = set(trace) - {"progress_reason"}
+            if unknown:
+                errors.append(
+                    f"{source}.empty_result_policy.trace 包含未知字段: "
+                    f"{sorted(unknown)}"
+                )
+            reason = trace.get("progress_reason")
+            if not isinstance(reason, str) or not SNAKE_CASE_RE.fullmatch(reason):
+                errors.append(
+                    f"{source}.empty_result_policy.trace.progress_reason "
+                    "必须是 snake_case"
+                )
+
+
+def _scan_directory(
+    skills_dir: Path,
+    errors: list[str],
+    public_tools: dict[str, Path],
+    exposed_tools: dict[str, bool],
+    policies: list[tuple[str, str | None, str]],
+) -> None:
+    """扫描单个目录并累计公开工具和空结果策略目标。"""
     for path in sorted(skills_dir.glob("*/skill.md")):
         try:
             meta = parse_front_matter(path)
             errors.extend(validate_metadata(meta, str(path)))
-            for config in (meta.get("operations") or {}).values():
+            for operation, config in (meta.get("operations") or {}).items():
                 if not isinstance(config, dict):
                     continue
                 tool_name = config.get("tool_name")
@@ -300,22 +428,73 @@ def validate_directory(skills_dir: Path) -> list[str]:
                     )
                 else:
                     public_tools[tool_name] = path
+                exposed_tools[tool_name] = config.get("expose_to_model", True) is not False
+                policy = config.get("empty_result_policy")
+                if isinstance(policy, dict):
+                    next_action = policy.get("next_allowed_action")
+                    target = (
+                        next_action.get("agent_tool_name")
+                        if isinstance(next_action, dict)
+                        else None
+                    )
+                    policies.append(
+                        (f"{path}: operations.{operation}", tool_name, str(target or ""))
+                    )
         except (OSError, ValueError, TypeError, yaml.YAMLError) as exc:
             errors.append(f"{path}: {exc}")
+
+
+def validate_directories(skills_dirs: list[Path]) -> list[str]:
+    """跨目录校验公开 tool_name 唯一性与空结果策略目标。"""
+    errors: list[str] = []
+    public_tools: dict[str, Path] = {}
+    exposed_tools: dict[str, bool] = {}
+    policies: list[tuple[str, str | None, str]] = []
+    for skills_dir in skills_dirs:
+        _scan_directory(
+            skills_dir, errors, public_tools, exposed_tools, policies
+        )
+    for source, own_tool, target in policies:
+        if not target:
+            continue
+        if target not in public_tools:
+            errors.append(
+                f"{source}.empty_result_policy.next_allowed_action.agent_tool_name "
+                f"未注册: {target}"
+            )
+            continue
+        if target == own_tool:
+            errors.append(
+                f"{source}.empty_result_policy.next_allowed_action 不能指向自身"
+            )
+        if not exposed_tools.get(target, True):
+            errors.append(
+                f"{source}.empty_result_policy.next_allowed_action 目标未暴露: {target}"
+            )
     return errors
 
 
+def validate_directory(skills_dir: Path) -> list[str]:
+    return validate_directories([skills_dir])
+
+
+def _default_skill_dirs() -> list[Path]:
+    root = Path(__file__).resolve().parents[1]
+    directories = [root / "agent" / "tools"]
+    directories.extend(sorted((root / "plugins").glob("*/tools")))
+    return directories
+
+
 def main() -> int:
-    skills_dir = (
-        Path(sys.argv[1])
-        if len(sys.argv) > 1
-        else Path(__file__).resolve().parents[1] / "agent" / "tools"
+    directories = (
+        [Path(sys.argv[1])] if len(sys.argv) > 1 else _default_skill_dirs()
     )
-    errors = validate_directory(skills_dir)
+    errors = validate_directories(directories)
     if errors:
         print("\n".join(errors), file=sys.stderr)
         return 1
-    print(f"skill metadata 校验通过: {len(list(skills_dir.glob('*/skill.md')))} 个")
+    total = sum(len(list(directory.glob("*/skill.md"))) for directory in directories)
+    print(f"skill metadata 校验通过: {total} 个")
     return 0
 
 

@@ -13,10 +13,17 @@ from pathlib import Path
 
 import yaml
 
+from agent.plugins import (
+    PluginManifest,
+    discover_plugin,
+    resolve_plugin_root,
+)
+
 # agent/config.yaml 的位置（与 agent/ 包同级）。
 _CONFIG_FILE = Path(__file__).resolve().parent / "config.yaml"
 DEFAULT_MEMORY_RAG_COLLECTION = "agent_user_memory"
 _SKILL_ROUTER_MODES = frozenset({"main_agent", "llm_router"})
+_PLUGIN_CONFIG_FIELDS = frozenset({"root", "active"})
 
 
 @dataclass
@@ -97,6 +104,30 @@ class TraceCfg:
     max_payload_chars: int = 32000
 
 
+@dataclass
+class PluginsCfg:
+    """单插件/部署配置：插件根目录与已校验的 active 清单。"""
+
+    root: Path = field(default_factory=lambda: resolve_plugin_root(None))
+    manifest: PluginManifest | None = None
+
+    @property
+    def active(self) -> str:
+        return self.manifest.name if self.manifest else ""
+
+    @property
+    def tools_dir(self) -> Path:
+        return self.manifest.tools_dir if self.manifest else Path()
+
+    @property
+    def system_prompt_path(self) -> Path:
+        return self.manifest.system_prompt_path if self.manifest else Path()
+
+    @property
+    def skill_dirs(self) -> list[Path]:
+        return self.manifest.skill_dirs if self.manifest else []
+
+
 def _default_feature_flags() -> dict[str, bool]:
     """返回 Context 迁移开关的默认值。"""
 
@@ -164,6 +195,7 @@ class Settings:
     business_mcp: BusinessMcpCfg = field(default_factory=BusinessMcpCfg)
     auth: AuthCfg = field(default_factory=AuthCfg)
     trace: TraceCfg = field(default_factory=TraceCfg)
+    plugins: PluginsCfg = field(default_factory=PluginsCfg)
     context: ContextCfg = field(default_factory=ContextCfg)
     environment: str = "development"
     default_farm_id: int = 1
@@ -213,6 +245,24 @@ def _build_settings() -> Settings:
     mcp_raw = raw.get("business_mcp", {}) or {}
     auth_raw = raw.get("auth", {}) or {}
     trace_raw = raw.get("trace", {}) or {}
+    plugins_raw = raw.get("plugins", {}) or {}
+    if not isinstance(plugins_raw, dict):
+        raise TypeError("plugins_config_must_be_mapping")
+    unknown_plugin_fields = sorted(set(plugins_raw) - _PLUGIN_CONFIG_FIELDS)
+    if unknown_plugin_fields:
+        raise ValueError(
+            "plugins_config_unknown_fields: " + ", ".join(unknown_plugin_fields)
+        )
+    plugin_root_value = (
+        os.getenv("PLUGINS__ROOT") or plugins_raw.get("root") or "plugins"
+    )
+    plugin_active_value = (
+        os.getenv("PLUGINS__ACTIVE") or plugins_raw.get("active") or ""
+    )
+    if not isinstance(plugin_active_value, str):
+        raise TypeError("plugins_active_must_be_string")
+    plugin_root = resolve_plugin_root(str(plugin_root_value))
+    plugin_manifest = discover_plugin(plugin_root, plugin_active_value.strip())
     context_raw, state_raw = _context_raw(raw)
     feature_flags_raw = dict(raw.get("feature_flags", {}) or {})
     feature_flags_raw.update(context_raw.get("feature_flags", {}) or {})
@@ -352,6 +402,7 @@ def _build_settings() -> Settings:
         trace=TraceCfg(
             max_payload_chars=max(1024, int(trace_raw.get("max_payload_chars", 32000))),
         ),
+        plugins=PluginsCfg(root=plugin_root, manifest=plugin_manifest),
         context=ContextCfg(
             conversation_state=state_cfg,
             summary_soft_ratio=float(context_raw.get("summary_soft_ratio", 0.60)),

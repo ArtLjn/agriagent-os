@@ -13,7 +13,7 @@ last_updated: 2026-10-23
 - `business/models.py` 的 `Memo` 映射 `memos` 表。
 - `business/services/memo_service.py` 统一处理内容校验、身份过滤、幂等创建和编辑。
 - `business/api/memos.py` 暴露 `/api/v2/memos` 的 GET、POST 与 `/{memo_id}` PATCH。
-- `business/tools/memos.py` 通过 MCP 提供相同能力，Agent 从 `agent/tools/manage-memos/skill.md` 自动加载四个单动作工具。
+- `business/tools/memos.py` 通过 MCP 提供相同能力，Agent 从 `plugins/farm/tools/manage-memos/skill.md` 自动加载四个单动作工具。
 - `business/tools/farm_review.py` 提供两个只读聚合工具：`get_farm_review` 和 `get_payment_overview`，各自有独立 skill。
 - 新文件分别属于业务服务、REST/MCP 外部协议和 Agent 技能边界；不增加通用仓库、任务队列或调度抽象。
 
@@ -33,16 +33,16 @@ REST 通过 `require_permission` 注入主体，MCP 复用现有鉴权与权限�
 
 ## Tools 封装入口和调用方式
 
-这些技能采用项目已有的声明式 MCP 封装。`agent/tools/<目录>/skill.md` 是运行配置和使用说明，实际执行方法在 `agent/domains/harness/tools/base.py` 的 `OperationSkill.execute` / `McpSkill.execute`；不需要为每个工具再添加只做转发的 `scripts/main.py`。只有技能需要额外业务编排时才添加脚本。
+这些技能采用项目已有的声明式 MCP 封装。`plugins/farm/tools/<目录>/skill.md` 是运行配置和使用说明，实际执行方法在 `agent/domains/harness/tools/base.py` 的 `OperationSkill.execute` / `McpSkill.execute`；不需要为每个工具再添加只做转发的 `scripts/main.py`。只有技能需要额外业务编排时才添加脚本。
 
 | Agent 工具名 | Agent 定义 | Business 可执行方法 |
 |---|---|---|
-| `query_memos` | `agent/tools/manage-memos/skill.md` | `business/tools/memos.py::manage_memos(operation="query")` |
+| `query_memos` | `plugins/farm/tools/manage-memos/skill.md` | `business/tools/memos.py::manage_memos(operation="query")` |
 | `create_memo` | 同上 | `manage_memos(operation="create")` |
 | `update_memo` | 同上 | `manage_memos(operation="update")` |
 | `archive_memo` | 同上 | `manage_memos(operation="archive")` |
-| `get_farm_review` | `agent/tools/farm-review/skill.md` | `business/tools/farm_review.py::get_farm_review` |
-| `get_payment_overview` | `agent/tools/payment-overview/skill.md` | `business/tools/farm_review.py::get_payment_overview` |
+| `get_farm_review` | `plugins/farm/tools/farm-review/skill.md` | `business/tools/farm_review.py::get_farm_review` |
+| `get_payment_overview` | `plugins/farm/tools/payment-overview/skill.md` | `business/tools/farm_review.py::get_payment_overview` |
 
 实际调用链：`SkillLoader → SkillRegistry → Runtime 风险审批 → Skill.execute → SkillContext.call_mcp_tool → BusinessClient → Business MCP 方法 → 业务服务/数据库`。`business/server.py` 导入两个 tools 模块完成 MCP 注册；Agent 的目录加载器自动发现三个技能目录。Router 选择 `manage_memos` 后会展开四个操作，模型不需要填写内部 `operation`，身份也不能由模型覆盖。
 

@@ -11,11 +11,11 @@ Provider 优先级（参考 archive/backend/app/skills/web_search/scripts/main.p
 from __future__ import annotations
 
 import asyncio
-from html.parser import HTMLParser
 import logging
 import os
 import re
-from typing import Any
+from html.parser import HTMLParser
+from typing import Any, ClassVar
 from urllib.parse import parse_qs, urlparse
 
 import httpx
@@ -68,7 +68,13 @@ def _strip_html(text: str) -> str:
 class _PageTextParser(HTMLParser):
     """提取网页正文候选文本，避免 fallback 只返回搜索引擎摘要。"""
 
-    _IGNORED_TAGS = {"script", "style", "noscript", "template", "svg"}
+    _IGNORED_TAGS: ClassVar[set[str]] = {
+        "script",
+        "style",
+        "noscript",
+        "template",
+        "svg",
+    }
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -157,11 +163,10 @@ async def _searchhub_search(
     enable_embedding_filter: bool | None = None,
     domain: str | None = None,
     region: str | None = None,
-    crop: str | None = None,
 ) -> dict[str, Any]:
     """调用 SearchHub /search 接口。
 
-    time_range / domain / region / crop 等高级参数仅在传入时加入 payload，
+    time_range / domain / region 等高级参数仅在传入时加入 payload，
     让 SearchHub 启用对应增强流程。enable_embedding_filter=None 时不传，
     由 SearchHub 运行时自动判断。
     """
@@ -182,8 +187,6 @@ async def _searchhub_search(
         payload["domain"] = domain
     if region:
         payload["region"] = region
-    if crop:
-        payload["crop"] = crop
 
     headers = {
         "Accept": "application/json",
@@ -423,15 +426,11 @@ class WebSearchSkill(Skill):
                 },
                 "domain": {
                     "type": "string",
-                    "description": "领域参数，如 agriculture",
+                    "description": "领域参数，如 finance、technology、policy",
                 },
                 "region": {
                     "type": "string",
                     "description": "地区参数，如 苏州",
-                },
-                "crop": {
-                    "type": "string",
-                    "description": "作物参数，如 西瓜",
                 },
             },
             "required": ["query"],
@@ -459,7 +458,6 @@ class WebSearchSkill(Skill):
         enable_embedding_filter = params.get("enable_embedding_filter")
         domain = params.get("domain")
         region = params.get("region")
-        crop = params.get("crop")
 
         # ── Try SearchHub first ────────────────────────────────
         base_url, api_key = _searchhub_config()
@@ -479,7 +477,6 @@ class WebSearchSkill(Skill):
                     enable_embedding_filter=enable_embedding_filter,
                     domain=domain,
                     region=region,
-                    crop=crop,
                 )
                 formatted = _format_searchhub(data, query)
                 if formatted["results"]:

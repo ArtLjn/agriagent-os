@@ -1883,10 +1883,11 @@ async def _prepare_skill_call(
         # 用户给出状态声明的下一动作，或明确给出不同动作，才清理临时阻断状态。
         turn.task_state = None
 
-    if getattr(
-        skill, "operation", ""
-    ) == "system_templates" and verify.has_empty_observation(tracker, skill.name, args):
-        async for ev in _emit_empty_catalog_repeat(turn, skill, tc["id"], args):
+    policy = skill.empty_result_policy
+    if policy is not None and verify.has_empty_observation(tracker, skill.name, args):
+        async for ev in _emit_empty_result_policy(
+            turn, skill, tc["id"], args, policy
+        ):
             yield ev
         prepared.proceed = False
         return
@@ -2136,24 +2137,31 @@ async def _emit_blocked_action_repeat(
         yield terminal_ev
 
 
-async def _emit_empty_catalog_repeat(
-    turn: Turn, skill: Skill, tool_call_id: str, args: dict
+async def _emit_empty_result_policy(
+    turn: Turn,
+    skill: Skill,
+    tool_call_id: str,
+    args: dict,
+    policy: dict,
 ) -> AsyncGenerator[dict, None]:
-    """将空目录重复查询转换为自定义模板准备指引并继续 ReAct。"""
-    message = (
-        "系统作物模板目录当前为空，请不要再次查询该目录。"
-        "当前用户已经提出完整种植目标时，请结合已有农业常识生成自定义模板草案，"
-        "直接调用 prepare_planting_plan 准备计划；不要改用无关模板。"
-    )
+    """按 operation 声明的 empty_result_policy 阻断重复空查询并继续 ReAct。"""
+    observation = policy["observation"]
+    next_allowed_action = policy["next_allowed_action"]
+    task_state_policy = policy["task_state"]
+    trace_policy = policy.get("trace") or {}
+
+    code = observation["code"]
+    message = observation["message"]
+    next_action = {
+        "agent_tool_name": next_allowed_action["agent_tool_name"],
+        "arguments": next_allowed_action["arguments"],
+    }
     result = {
         "status": "needs_information",
-        "code": "system_template_catalog_empty",
+        "code": code,
         "message": message,
-        "missing": ["custom_template.stages"],
-        "next_action": {
-            "agent_tool_name": "prepare_planting_plan",
-            "arguments": None,
-        },
+        "missing": list(observation.get("missing", [])),
+        "next_action": dict(next_action),
     }
     blocked_action = {
         "agent_tool_name": skill.name,
@@ -2162,14 +2170,10 @@ async def _emit_empty_catalog_repeat(
     }
     turn.task_state = {
         "status": "blocked",
-        "reason": "empty_system_template_catalog",
-        "resume_policy": "ask_user",
+        "reason": task_state_policy["reason"],
+        "resume_policy": task_state_policy["resume_policy"],
         "blocked_action": blocked_action,
-        "next_allowed_action": {
-            "agent_tool_name": "prepare_planting_plan",
-            # 自定义模板是当前用户目标的派生数据，不能在拦截时静态填充。
-            "arguments": None,
-        },
+        "next_allowed_action": dict(next_action),
     }
     trace_tool_call(
         skill.name,
@@ -2180,7 +2184,9 @@ async def _emit_empty_catalog_repeat(
         **_skill_control_metadata(skill),
         tool_call_id=tool_call_id,
         progress="blocked",
-        progress_reason="empty_catalog_already_observed",
+        progress_reason=trace_policy.get(
+            "progress_reason", "empty_result_already_observed"
+        ),
         status="blocked",
         step_index=turn.step_count,
     )
@@ -2189,7 +2195,7 @@ async def _emit_empty_catalog_repeat(
         result,
         error=None,
         error_info={
-            "code": "system_template_catalog_empty",
+            "code": code,
             "message": message,
             "phase": TurnPhase.TOOL_PREPARING.value,
             "tool_name": skill.name,

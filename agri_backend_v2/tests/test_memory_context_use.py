@@ -376,9 +376,9 @@ async def test_live_oracle_reading_comparison(
 ):
     """两组使用完全相同的已知正确候选；不以检索率替代最终回答利用。"""
     import time
-    from pathlib import Path
 
     from agent.platforms.llm.client import MODEL, bounded_completion
+    from agent.prompts import render_system_prompt
 
     doc = await seed()
     facts = context_candidates(doc, "f", query)
@@ -391,7 +391,7 @@ async def test_live_oracle_reading_comparison(
     ]
     compiled, injected = answer_context(doc, selected, "ready")
     original = context_text(doc, "f", query, [r["memory_id"] for r in doc["memories"]])
-    prompt = Path("agent/prompts/system.md").read_text()
+    prompt = render_system_prompt()
     results = {}
     for variant, context in (("original", original), ("compiled", compiled)):
         started = time.monotonic()

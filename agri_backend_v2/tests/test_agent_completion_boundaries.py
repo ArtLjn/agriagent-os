@@ -1,14 +1,12 @@
 """业务提交、个人记忆核验与只读续查的跨边界回归，不访问真实业务服务。"""
 
-from pathlib import Path
-
 import pytest
 from test_agent_step_budget import _answer, _ReadSkill, _runtime, _tool, _WorkOrderSkill
 
 from agent.domains.harness.memory import tools as memory_tools
 from agent.domains.harness.runtime import engine as react
 from agent.domains.harness.runtime.turn import StopReason, Turn
-from agent.domains.harness.tools.loader import SkillLoader
+from agent.domains.harness.tools import loader as skill_loader
 
 
 @pytest.fixture
@@ -164,8 +162,7 @@ async def test_read_fallback_keeps_only_successful_evidence(invalid_result):
 )
 async def test_shipped_overviews_allow_followup_query(monkeypatch, name):
     # 使用发布目录的真实元数据，执行仍用内存替身，防止再次加回强制收尾标记。
-    root = Path(__file__).resolve().parents[1] / "agent" / "tools"
-    source = next(skill for skill in SkillLoader(root).load_all() if skill.name == name)
+    source = next(skill for skill in skill_loader.load_all() if skill.name == name)
     overview, weather = _ReadSkill(), _ReadSkill()
     overview._meta = source._meta.copy()
     weather._meta["name"] = "get_weather"

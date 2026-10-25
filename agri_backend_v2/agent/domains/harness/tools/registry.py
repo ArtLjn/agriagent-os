@@ -6,6 +6,7 @@ Loader 负责从文件系统发现并实例化 Skill；Registry 负责运行时�
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,6 +18,15 @@ from agent.domains.harness.tools.base import (
     McpSkill,
     Skill,
 )
+
+_SNAKE_CASE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+_EMPTY_POLICY_FIELDS = frozenset(
+    {"observation", "next_allowed_action", "task_state", "trace"}
+)
+_EMPTY_OBSERVATION_FIELDS = frozenset({"code", "message", "missing"})
+_EMPTY_NEXT_ACTION_FIELDS = frozenset({"agent_tool_name", "arguments"})
+_EMPTY_TASK_STATE_FIELDS = frozenset({"reason", "resume_policy"})
+_EMPTY_TRACE_FIELDS = frozenset({"progress_reason"})
 
 
 class SkillRegistryError(ValueError):
@@ -62,6 +72,7 @@ class SkillRegistry:
             cls._validate_skill(skill)
             by_name[skill.name] = skill
         cls._validate_followups(loaded, by_name)
+        cls._validate_empty_result_policies(loaded, by_name)
         cls._validate_dependencies(loaded, by_name)
         return cls(_skills=loaded, _by_name=by_name)
 
@@ -205,6 +216,13 @@ class SkillRegistry:
                 skill.name,
                 "completion.finalize_after_success must be boolean",
             )
+        if "empty_result_policy" in skill._meta:
+            raise SkillRegistryError(
+                "empty_result_policy_top_level",
+                skill.name,
+                "empty_result_policy must be declared inside operations",
+            )
+        _validate_empty_result_policy_shape(skill)
 
     @staticmethod
     def _validate_followups(
@@ -227,6 +245,36 @@ class SkillRegistry:
                     "approval_followup_exposed",
                     target.name,
                     "approval follow-up must not be exposed to the model",
+                )
+
+    @staticmethod
+    def _validate_empty_result_policies(
+        skills: tuple[Skill, ...], by_name: dict[str, Skill]
+    ) -> None:
+        """校验策略目标真实存在且允许模型调用。"""
+        for skill in skills:
+            policy = skill.empty_result_policy
+            if not policy:
+                continue
+            target_name = policy["next_allowed_action"]["agent_tool_name"]
+            target = by_name.get(target_name)
+            if target is None:
+                raise SkillRegistryError(
+                    "empty_result_target_missing",
+                    skill.name,
+                    f"next action skill is not registered: {target_name}",
+                )
+            if target.name == skill.name:
+                raise SkillRegistryError(
+                    "empty_result_target_self",
+                    skill.name,
+                    "next action must not be the skill itself",
+                )
+            if not target.exposed:
+                raise SkillRegistryError(
+                    "empty_result_target_not_exposed",
+                    target.name,
+                    "next action must be exposed to the model",
                 )
 
     @staticmethod
@@ -383,3 +431,108 @@ class SkillRegistry:
                 sorted((skill.name, skill.risk_level) for skill in self._skills)
             ),
         }
+
+
+def _validate_empty_result_policy_shape(skill: Skill) -> None:
+    """校验策略自身的封闭结构与固定枚举。"""
+    policy = skill.empty_result_policy
+    if policy is None:
+        return
+    policy = _policy_mapping(skill, policy, "empty_result_policy", _EMPTY_POLICY_FIELDS)
+    for key in ("observation", "next_allowed_action", "task_state"):
+        if key not in policy:
+            raise SkillRegistryError(
+                "invalid_empty_result_policy",
+                skill.name,
+                f"empty_result_policy.{key} is required",
+            )
+
+    observation = _policy_mapping(
+        skill, policy["observation"], "observation", _EMPTY_OBSERVATION_FIELDS
+    )
+    _policy_snake_case(skill, observation.get("code"), "observation.code")
+    message = observation.get("message")
+    if not isinstance(message, str) or not message.strip():
+        raise SkillRegistryError(
+            "invalid_empty_result_policy",
+            skill.name,
+            "observation.message must be a non-empty string",
+        )
+    missing = observation.get("missing", [])
+    if not isinstance(missing, list) or any(
+        not isinstance(item, str) or not item.strip() for item in missing
+    ):
+        raise SkillRegistryError(
+            "invalid_empty_result_policy",
+            skill.name,
+            "observation.missing must be a list of non-empty strings",
+        )
+
+    next_action = _policy_mapping(
+        skill,
+        policy["next_allowed_action"],
+        "next_allowed_action",
+        _EMPTY_NEXT_ACTION_FIELDS,
+    )
+    _policy_snake_case(
+        skill, next_action.get("agent_tool_name"), "next_allowed_action.agent_tool_name"
+    )
+    if "arguments" not in next_action:
+        raise SkillRegistryError(
+            "invalid_empty_result_policy",
+            skill.name,
+            "next_allowed_action.arguments must be explicit (null or object)",
+        )
+    arguments = next_action["arguments"]
+    if arguments is not None and not isinstance(arguments, dict):
+        raise SkillRegistryError(
+            "invalid_empty_result_policy",
+            skill.name,
+            "next_allowed_action.arguments must be null or an object",
+        )
+
+    task_state = _policy_mapping(
+        skill, policy["task_state"], "task_state", _EMPTY_TASK_STATE_FIELDS
+    )
+    _policy_snake_case(skill, task_state.get("reason"), "task_state.reason")
+    if task_state.get("resume_policy") != "ask_user":
+        raise SkillRegistryError(
+            "invalid_empty_result_policy",
+            skill.name,
+            "task_state.resume_policy must be ask_user",
+        )
+
+    trace = policy.get("trace")
+    if trace is not None:
+        trace = _policy_mapping(skill, trace, "trace", _EMPTY_TRACE_FIELDS)
+        _policy_snake_case(
+            skill, trace.get("progress_reason"), "trace.progress_reason"
+        )
+
+
+def _policy_mapping(
+    skill: Skill, value: Any, field_name: str, allowed: frozenset[str]
+) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise SkillRegistryError(
+            "invalid_empty_result_policy",
+            skill.name,
+            f"{field_name} must be an object",
+        )
+    unknown = sorted(set(value) - allowed)
+    if unknown:
+        raise SkillRegistryError(
+            "invalid_empty_result_policy",
+            skill.name,
+            f"{field_name} contains unknown fields: {', '.join(unknown)}",
+        )
+    return value
+
+
+def _policy_snake_case(skill: Skill, value: Any, field_name: str) -> None:
+    if not isinstance(value, str) or not _SNAKE_CASE_RE.match(value):
+        raise SkillRegistryError(
+            "invalid_empty_result_policy",
+            skill.name,
+            f"{field_name} must be non-empty snake_case",
+        )

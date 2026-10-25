@@ -1,8 +1,15 @@
 ---
 status: implemented-local
-last_updated: 2026-10-24
+last_updated: 2026-10-25
 ---
 # 运行架构与配置补充
+
+Agent 采用单插件/部署模型：业务技能和业务 system prompt 位于 `plugins/<name>/`，
+`agent/config.yaml` 的 `plugins.root` 与 `plugins.active` 选择唯一启用的插件；
+也可用 `PLUGINS__ROOT` / `PLUGINS__ACTIVE` 覆盖。插件清单必须声明
+`system_prompt` 和 `tools_dir`，核心会与 `agent/tools` 的通用能力合并加载，
+任一技能加载失败或插件目录为空都会在启动时失败。完整目录与迁移边界见
+[插件化架构](../design/agent-plugin-architecture.md)。
 
 记忆检索统一从 `agent/config.yaml` 的 `memory` 节读取，部署环境 `MEMORY_*` 优先，未配置项保留默认值。字段对应关系直接使用大写前缀，例如 `memory.rag_url` 对应 `MEMORY_RAG_URL`，`rag_api_key`、`rag_collection`、`context_mode`、`context_timeout`、`retrieve_timeout` 同理。显式空的 URL 或密钥环境值可以关闭语义检索；非法模式、集合和非正预算在启动时拒绝。真实凭证只放未跟踪的配置或环境文件，样例不含密钥。
 
