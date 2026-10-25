@@ -10,7 +10,6 @@ import time
 import unicodedata
 from collections import OrderedDict
 from functools import lru_cache
-from pathlib import Path
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -20,7 +19,7 @@ from agent.domains.harness.memory.personalization import (
     MemoryError,
     visible_memories,
 )
-from agent.domains.harness.tools.registry import SkillRegistry
+from agent.domains.harness.tools import loader as skill_loader
 from agent.platforms.logging import get_logger, log_event
 from agent.platforms.persistence.mongo import personalization_store as store
 from agent.prompts import render_prompt
@@ -123,9 +122,7 @@ def profile_context(document: dict, farm_uid: str) -> dict:
 @lru_cache(maxsize=1)
 def read_capabilities() -> list[dict]:
     """提取实际只读工具并补充通用问答，推荐不能虚构工具或预填业务写操作。"""
-    registry = SkillRegistry.from_directory(
-        Path(__file__).resolve().parents[1] / "tools"
-    )
+    registry = skill_loader.load_registry()
     return [
         {
             "name": GENERAL_CONVERSATION,

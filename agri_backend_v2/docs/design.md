@@ -73,7 +73,7 @@ PYTHONDONTWRITEBYTECODE=1 python agri_backend_v2/scripts/validate_skill_metadata
 """<skill_name> skill 实现。"""
 from __future__ import annotations
 from typing import Any
-from agent.tools.base import Skill, SkillResult
+from agent.domains.harness.tools.base import Skill, SkillResult
 
 
 class <Name>Skill(Skill):

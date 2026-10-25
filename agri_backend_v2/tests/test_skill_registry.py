@@ -4,14 +4,13 @@ from pathlib import Path
 
 import pytest
 
+from agent.domains.harness.tools import loader
 from agent.domains.harness.tools.base import OperationSkill, Skill
 from agent.domains.harness.tools.registry import SkillRegistry, SkillRegistryError
 
 
 def test_from_directory_loads_current_skill_catalog() -> None:
-    skills_dir = Path(__file__).parents[1] / "agent" / "tools"
-
-    registry = SkillRegistry.from_directory(skills_dir)
+    registry = loader.load_registry()
     snapshot = registry.snapshot()
 
     assert len(registry.all()) == 59
@@ -22,9 +21,11 @@ def test_from_directory_loads_current_skill_catalog() -> None:
 
 
 def test_shipped_routing_metadata_passes_standalone_validator():
-    from scripts.validate_skill_metadata import validate_directory
+    from scripts.validate_skill_metadata import validate_directories
 
-    assert not validate_directory(Path(__file__).parents[1] / "agent" / "tools")
+    root = Path(__file__).parents[1]
+    directories = [root / "agent" / "tools", *(root / "plugins").glob("*/tools")]
+    assert not validate_directories(list(directories))
 
 
 def test_require_returns_structured_missing_skill_error() -> None:
@@ -86,9 +87,7 @@ def test_operation_routing_overrides_without_mutating_source():
 
 
 def test_shipped_memo_and_log_boundaries_reach_both_model_paths():
-    registry = SkillRegistry.from_directory(
-        Path(__file__).parents[1] / "agent" / "tools"
-    )
+    registry = loader.load_registry()
     schemas = {
         tool["function"]["name"]: tool["function"] for tool in registry.exposed_tools()
     }

@@ -182,6 +182,29 @@ class _SystemTemplatesSkill(_ReadSkill):
             }
         )
 
+    @property
+    def empty_result_policy(self) -> dict:
+        return {
+            "observation": {
+                "code": "system_template_catalog_empty",
+                "message": (
+                    "系统作物模板目录当前为空，请不要再次查询该目录。"
+                    "当前用户已经提出完整种植目标时，请结合已有农业常识生成自定义模板草案，"
+                    "直接调用 prepare_planting_plan 准备计划；不要改用无关模板。"
+                ),
+                "missing": ["custom_template.stages"],
+            },
+            "next_allowed_action": {
+                "agent_tool_name": "prepare_planting_plan",
+                "arguments": None,
+            },
+            "task_state": {
+                "reason": "empty_system_template_catalog",
+                "resume_policy": "ask_user",
+            },
+            "trace": {"progress_reason": "empty_catalog_already_observed"},
+        }
+
     async def execute(self, params: dict, ctx) -> SkillResult:
         return SkillResult(data={"count": 0, "templates": []})
 

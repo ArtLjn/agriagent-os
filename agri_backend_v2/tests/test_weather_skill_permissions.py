@@ -9,8 +9,13 @@ from agent.domains.harness.runtime.error_policy import (
     ErrorCategory,
 )
 from agent.domains.harness.runtime.turn import Turn
+from agent.domains.harness.tools import loader as skill_loader
 from agent.platforms.mcp.client import McpCallError
-from agent.tools.weather.scripts.main import WeatherSkill
+
+_weather_module = skill_loader.load_skill_module(
+    skill_loader.find_skill_dir("weather")
+)
+WeatherSkill = _weather_module.WeatherSkill
 
 
 class _WeatherContext:

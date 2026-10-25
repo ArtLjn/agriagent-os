@@ -1,7 +1,5 @@
 """备忘录的持久化、权限、幂等与 Agent 接入回归。"""
 
-from pathlib import Path
-
 import pytest
 import pytest_asyncio
 from fastapi import FastAPI
@@ -13,8 +11,8 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from agent.domains.harness.runtime.turn import Turn
+from agent.domains.harness.tools import loader as skill_loader
 from agent.domains.harness.tools.context import SkillContext
-from agent.domains.harness.tools.registry import SkillRegistry
 from agent.platforms.mcp.client import BusinessClient
 from business.api import memos
 from business.api.deps import get_current_user
@@ -50,7 +48,7 @@ def request(key="one", **changes):
 
 @pytest.fixture
 def skill_registry():
-    return SkillRegistry.from_directory(Path(__file__).parents[1] / "agent/tools")
+    return skill_loader.load_registry()
 
 
 @pytest_asyncio.fixture
@@ -309,7 +307,7 @@ def test_mcp_and_skill_operation_contract(sessions, monkeypatch):
         Permission.FARM_READ,
         Permission.FARM_WRITE,
     ]
-    registry = SkillRegistry.from_directory(Path(__file__).parents[1] / "agent/tools")
+    registry = skill_loader.load_registry()
     assert registry.require("create_memo").risk_level == "write_confirm"
     assert registry.require("query_memos").risk_level == "read"
     assert registry.require("get_farm_review").risk_level == "read"

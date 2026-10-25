@@ -2,7 +2,6 @@
 
 import os
 import time
-from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
@@ -369,7 +368,9 @@ async def test_live_correction_from_model_routing_through_learning(memory, monke
     monkeypatch.setattr(engine, "_call_llm_stream", _llm_stream)
 
     async def prepare(turn):
-        prompt = Path("agent/prompts/system.md").read_text()
+        from agent.prompts import render_system_prompt
+
+        prompt = render_system_prompt()
         turn.messages = [
             {"role": "system", "content": prompt},
             {"role": "user", "content": turn.user_input},

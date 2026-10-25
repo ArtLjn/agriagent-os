@@ -186,7 +186,7 @@ def _prepare_call() -> dict:
 
 
 def test_manage_planting_plan_declares_followup_and_hides_commit() -> None:
-    skill_dir = loader._SKILLS_DIR / "manage-planting-plan"
+    skill_dir = loader.find_skill_dir("manage-planting-plan")
     source = loader._load_skill(skill_dir)
     assert source is not None
     operations = {skill.name: skill for skill in source.operation_skills()}

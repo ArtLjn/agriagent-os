@@ -101,6 +101,11 @@ business_mcp:
   url: "http://127.0.0.1:9876/mcp"
   api_url: "http://127.0.0.1:9876/api/v2"
 
+# 单插件/部署：root 相对 agri_backend_v2 根目录，active 省略时要求恰好一个 plugin.yaml
+plugins:
+  root: "plugins"
+  active: "farm"
+
 auth:
   # 与 business 共享同一个 JWT secret，用于解析前端 Bearer token 中的 sub / farm_uid
   jwt_secret: ""

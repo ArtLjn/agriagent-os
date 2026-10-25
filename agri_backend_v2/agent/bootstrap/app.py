@@ -45,6 +45,7 @@ from agent.domains.harness.observability.trace import (
     start_trace_system,
     stop_trace_system,
 )
+from agent.domains.harness.tools import loader as skill_loader
 from agent.platforms.logging import get_logger, setup_logging
 from agent.platforms.persistence.mongo.chat_store import check_connection, close
 from agent.platforms.persistence.redis.redis_store import (
@@ -53,6 +54,7 @@ from agent.platforms.persistence.redis.redis_store import (
 from agent.platforms.persistence.redis.redis_store import (
     close as close_redis,
 )
+from agent.prompts import render_system_prompt
 from shared.api_response import install_api_exception_handlers
 
 # 导入模块以注册管理端 Skill 路由；其余 API 模块沿用下方的显式导入方式。
@@ -66,8 +68,21 @@ logger = get_logger(__name__)
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 
+def _validate_plugin_resources() -> None:
+    """启动前加载技能与业务提示词，缺少插件资源时 fail fast。"""
+    registry = skill_loader.load_registry()
+    system_prompt = render_system_prompt()
+    logger.info(
+        "plugin loaded: %s (%d skills, %d system prompt chars)",
+        settings.plugins.active or "<none>",
+        len(registry.all()),
+        len(system_prompt),
+    )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _validate_plugin_resources()
     await check_connection()
     await check_redis_connection()
     await start_trace_system()

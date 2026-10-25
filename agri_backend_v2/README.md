@@ -8,22 +8,39 @@ Harness Engineering 实现：业务和 Agent 拆成两个独立项目。Business
 v2/
 ├── pyproject.toml          # uv workspace
 ├── providers.json          # LLM provider 配置（OpenAI 兼容）
-├── business/               # MCP Server 子项目
+├── business/               # 业务服务：REST + MCP
 │   ├── server.py           # FastAPI + FastMCP 双协议入口
 │   ├── api/                # REST API（/api/v2）
 │   ├── tools/              # MCP tool 定义（每个 domain 一个文件）
-│   ├── services/           # 业务逻辑
-│   └── scripts/            # 本地验收脚本
-└── agent/                  # MCP Client 子项目
-    ├── main.py             # FastAPI + /chat SSE + /approve
-    ├── react.py            # ReAct loop 核心（Turn 贯穿）
-    ├── context.py          # LLM messages 组装
-    ├── hitl.py             # 写操作闸门
-    ├── memory.py           # 短期 + JSON 长期记忆
-    ├── sse.py              # SSE 事件 + middleware chain
-    ├── llm.py              # LLM 客户端
-    └── static/index.html   # 单文件 Web UI
+│   └── services/           # 业务逻辑
+├── plugins/
+│   └── farm/               # 农场业务插件
+│       ├── plugin.yaml     # 插件清单
+│       ├── prompts/        # 业务 system prompt
+│       └── tools/          # 16 个业务 skill
+└── agent/                  # 通用 Agent 内核
+    ├── api/ application/ bootstrap/
+    ├── domains/harness/    # runtime/context/memory/trace/router/tools
+    ├── platforms/          # llm/mcp/persistence
+    ├── prompts/            # 平台提示词
+    └── tools/              # 通用能力：算术、联网搜索
 ```
+
+## 业务插件
+
+`agent/` 不包含农场业务资源。业务技能和 system prompt 由 `plugins/farm/` 提供，
+`agent/config.yaml` 通过 `plugins.active` 选择唯一启用的插件：
+
+```yaml
+plugins:
+  root: "plugins"    # 相对 agri_backend_v2 根目录
+  active: "farm"     # 省略时要求恰好一个 plugin.yaml
+```
+
+换业务时新增 `plugins/<name>/plugin.yaml`、`prompts/system.md` 和 `tools/`，重启 Agent 即可。
+当前一次部署只加载一个插件。源码部署会同步整个 `agri_backend_v2/`；wheel 部署需额外携带
+`plugins/`，生产配置或 `PLUGINS__ROOT` / `PLUGINS__ACTIVE` 需指向实际插件目录。
+插件清单、加载链路和空结果策略见 [插件化架构](docs/design/agent-plugin-architecture.md)。
 
 ## 设计原则
 
