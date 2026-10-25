@@ -3,6 +3,17 @@
 Run: python -m farm_business.scripts.ensure_farm_log_workers
 """
 import logging
+import sys
+from pathlib import Path
+
+_BUSINESS_PROJECT = Path(__file__).resolve().parents[2]
+_SHARED_PROJECT = Path(__file__).resolve().parents[4] / "shared"
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+for _path in (_BUSINESS_PROJECT, _SHARED_PROJECT):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.append(str(_REPO_ROOT))
 
 from sqlalchemy import create_engine, text
 
