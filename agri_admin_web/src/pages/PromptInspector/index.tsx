@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Input,
@@ -10,9 +10,12 @@ import {
   Modal,
   Descriptions,
   message,
+  Space,
 } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { listPrompts, reloadPrompts, type PromptItem } from '../../api/admin';
+import { useBusinesses } from '../../businesses/businessContext';
+import { businessViews } from '../../businesses/registry';
 import { palette } from '../../styles/theme';
 import { PageShell } from '../../components/PageShell';
 
@@ -21,38 +24,76 @@ const BORDER = palette.border;
 const TEXT = palette.text;
 const TEXT_DIM = palette.textMuted;
 
+function statusTag(prompt: PromptItem) {
+  if (prompt.scope === 'platform') {
+    return <Tag>平台内置</Tag>;
+  }
+  return (
+    <Tag color={prompt.active ? 'success' : 'default'}>
+      {prompt.active ? '当前进程使用' : '只读预览'}
+    </Tag>
+  );
+}
+
 export default function PromptManagement() {
+  const { selectedName, selectedView } = useBusinesses();
   const [keyword, setKeyword] = useState('');
   const [loadFailed, setLoadFailed] = useState(false);
   const [prompts, setPrompts] = useState<PromptItem[]>([]);
+  const [viewedBusiness, setViewedBusiness] = useState<string | null>(selectedName);
+  const [activeBusiness, setActiveBusiness] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [reloadLoading, setReloadLoading] = useState(false);
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
   const [previewPrompt, setPreviewPrompt] = useState<PromptItem | null>(null);
+  const requestRef = useRef(0);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async (business: string | null) => {
+    const requestId = ++requestRef.current;
     setLoading(true);
     setLoadFailed(false);
     try {
-      const res = await listPrompts();
+      const res = await listPrompts(business);
+      if (requestId !== requestRef.current) return;
       setPrompts(res.items);
+      setViewedBusiness(res.business ?? business);
+      setActiveBusiness(res.active_business ?? null);
     } catch {
+      if (requestId !== requestRef.current) return;
+      setPrompts([]);
+      setViewedBusiness(business);
       setLoadFailed(true);
     } finally {
-      setLoading(false);
+      if (requestId === requestRef.current) {
+        setLoading(false);
+      }
     }
-  };
-
-  useEffect(() => {
-    fetchData();
   }, []);
 
+  useEffect(() => {
+    void fetchData(selectedName);
+    return () => {
+      requestRef.current += 1;
+    };
+  }, [fetchData, selectedName]);
+
+  const previewMode = Boolean(
+    activeBusiness && selectedName && selectedName !== activeBusiness,
+  );
+  const canReload = Boolean(
+    selectedName && activeBusiness && selectedName === activeBusiness,
+  );
+  const viewedLabel = selectedView?.displayName ?? viewedBusiness ?? '当前业务';
+  const activeLabel = businessViews.find((view) => view.name === activeBusiness)
+    ?.displayName ?? activeBusiness;
+
   const handleReload = async () => {
+    if (!canReload) return;
     setReloadLoading(true);
     try {
-      const res = await reloadPrompts();
+      const res = await reloadPrompts(selectedName);
       message.success(res.message || '重新加载成功');
-      await fetchData();
+      await fetchData(selectedName);
     } catch {
       // 错误已在 api client 中处理
     } finally {
@@ -72,18 +113,26 @@ export default function PromptManagement() {
       render: (v: string) => <span style={{ color: TEXT }}>{v}</span>,
     },
     {
-      title: '版本',
-      dataIndex: 'version',
-      width: 120,
-      render: (v: string) => <span style={{ color: TEXT_DIM }}>{v}</span>,
+      title: '范围',
+      dataIndex: 'scope',
+      width: 160,
+      render: (_: unknown, record: PromptItem) => (
+        record.scope === 'business'
+          ? <Tag color="processing">业务 · {record.business ?? selectedName ?? '—'}</Tag>
+          : <Tag>平台</Tag>
+      ),
     },
     {
       title: '状态',
       dataIndex: 'active',
-      width: 100,
-      render: (v: boolean) => (
-        <Tag color={v ? 'success' : 'default'}>{v ? '系统使用' : '可用模板'}</Tag>
-      ),
+      width: 130,
+      render: (_: unknown, record: PromptItem) => statusTag(record),
+    },
+    {
+      title: '版本',
+      dataIndex: 'version',
+      width: 120,
+      render: (v: string) => <span style={{ color: TEXT_DIM }}>{v}</span>,
     },
     {
       title: '内容长度',
@@ -108,23 +157,61 @@ export default function PromptManagement() {
   return (
     <PageShell
       title="Prompt 管理"
-      description="查看和检索当前运行的提示词模板。"
+      description="查看和检索当前业务视角的提示词模板；系统提示词随业务切换。"
       actions={
-        <Button
-          type="primary"
-          icon={<ReloadOutlined />}
-          loading={reloadLoading}
-          onClick={handleReload}
-        >
-          重新加载模板
-        </Button>
+        <Space size={8}>
+          <Tag bordered={false}>{viewedLabel}</Tag>
+          <Button
+            type="primary"
+            icon={<ReloadOutlined />}
+            loading={reloadLoading}
+            disabled={!canReload}
+            title={canReload ? undefined : '仅当前启用业务可重新加载'}
+            onClick={handleReload}
+          >
+            重新加载模板
+          </Button>
+        </Space>
       }
     >
+      {previewMode ? (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={`正在查看「${viewedLabel}」的系统提示词（未启用，只读预览）`}
+          description={`当前 Agent 进程使用「${activeLabel ?? '未知业务'}」；预览来自磁盘清单，不会改变运行时提示词。`}
+        />
+      ) : (
+        <Alert
+          type="info"
+          showIcon
+          message="查看当前运行模板；内容版本随模板变化。修改由源文件版本控制管理，重新加载仅作用于当前 Agent 进程的新建上下文。"
+          style={{ marginBottom: 16 }}
+        />
+      )}
 
-      <Alert type="info" showIcon message="查看当前运行模板；内容版本随模板变化。修改由源文件版本控制管理，重新加载仅作用于当前 Agent 进程的新建上下文。" style={{ marginBottom: 16 }} />
-      <Input.Search aria-label="搜索提示词" placeholder="搜索名称或内容" value={keyword} onChange={(event) => setKeyword(event.target.value)} style={{ marginBottom: 16, maxWidth: 400 }} />
-      {loadFailed && <Alert type="error" message="提示词加载失败" action={<Button onClick={fetchData}>重试</Button>} />}
-      {loading ? (
+      <Input.Search
+        aria-label="搜索提示词"
+        placeholder="搜索名称或内容"
+        value={keyword}
+        onChange={(event) => setKeyword(event.target.value)}
+        style={{ marginBottom: 16, maxWidth: 400 }}
+      />
+
+      {loadFailed ? (
+        <Alert
+          type="error"
+          showIcon
+          message="提示词加载失败"
+          description="请确认 Agent 服务已启动（默认 8000）且当前账号有管理权限。"
+          action={(
+            <Button onClick={() => void fetchData(selectedName)}>
+              重试
+            </Button>
+          )}
+        />
+      ) : loading ? (
         <div style={{ textAlign: 'center', padding: 64 }}>
           <Spin size="large" />
         </div>
@@ -170,14 +257,17 @@ export default function PromptManagement() {
               <Descriptions.Item label="名称">
                 {previewPrompt.name}
               </Descriptions.Item>
+              <Descriptions.Item label="范围">
+                {previewPrompt.scope === 'business'
+                  ? `业务 · ${previewPrompt.business ?? selectedName ?? '—'}`
+                  : '平台'}
+              </Descriptions.Item>
               <Descriptions.Item label="源文件">{previewPrompt.source}</Descriptions.Item>
               <Descriptions.Item label="版本">
                 {previewPrompt.version}
               </Descriptions.Item>
               <Descriptions.Item label="状态">
-                <Tag color={previewPrompt.active ? 'success' : 'default'}>
-                  {previewPrompt.active ? '系统使用' : '可用模板'}
-                </Tag>
+                {statusTag(previewPrompt)}
               </Descriptions.Item>
               <Descriptions.Item label="内容长度">
                 {previewPrompt.content_length.toLocaleString()} 字符

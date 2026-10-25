@@ -85,8 +85,9 @@ def test_invalid_memory_yaml_fails_at_startup(
 
 def _build_from(tmp_path: Path, monkeypatch, payload: dict | None = None):
     config_file = tmp_path / "agent-config.yaml"
-    if payload is not None:
-        config_file.write_text(yaml.safe_dump(payload), encoding="utf-8")
+    data = {"plugins": {"root": "businesses", "active": "farm"}}
+    data.update(payload or {})
+    config_file.write_text(yaml.safe_dump(data), encoding="utf-8")
     monkeypatch.setattr(config_module, "_CONFIG_FILE", config_file)
     return config_module._build_settings()
 

@@ -146,6 +146,11 @@ class SkillLoader:
         return skills
 
 
+def core_skills_dir() -> Path:
+    """返回 Agent 核心技能目录。"""
+    return _CORE_SKILLS_DIR
+
+
 def default_skill_dirs() -> list[Path]:
     """返回核心技能目录 + 当前启用插件的技能目录。"""
     from agent.config import settings

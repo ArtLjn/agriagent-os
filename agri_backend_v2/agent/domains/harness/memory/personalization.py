@@ -12,6 +12,18 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 MAX_MEMORIES = 10_000
 MAX_CONTEXT_MEMORIES = 5
 MAX_MEMORY_TEXT = 500
+BUSINESS_SETTING_FIELDS = (
+    "nickname",
+    "assistant_name",
+    "reply_style",
+    "detail_level",
+    "display_format",
+    "custom_instructions",
+    "loading_greeting_enabled",
+    "execution_detail_level",
+)
+# 记忆数据共享，因此记忆读写控制保持全局，避免一个业务关闭后影响另一个业务。
+GLOBAL_MEMORY_FIELDS = ("auto_learn_enabled", "use_saved_memories")
 MemoryCategory = Literal["profile", "preference", "work", "response", "general"]
 COLLECTION_NAME = "agentUserPreferences"
 REPLY_STYLE_GUIDANCE = {
@@ -50,7 +62,7 @@ def reject_sensitive_text(text: str) -> None:
 class Settings(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     nickname: str = Field(default="", max_length=20)
-    assistant_name: str = Field(default="田掌柜", max_length=20)
+    assistant_name: str = Field(default="田掌柜", min_length=1, max_length=20)
     reply_style: Literal["default", "friendly", "professional", "efficient"] = "default"
     detail_level: Literal["concise", "balanced", "detailed"] = "balanced"
     display_format: Literal["auto", "table", "list"] = "auto"
@@ -109,6 +121,7 @@ def new_document(owner: str) -> dict:
         "updated_at": now(),
         "settings": Settings().model_dump(),
         "field_sources": {},
+        "business_profiles": {},
         "memories": [],
     }
 
@@ -120,6 +133,40 @@ def public_settings(document: dict) -> dict:
             k: document[k]
             for k in ("revision", "memory_generation", "updated_at", "field_sources")
         },
+    }
+
+
+def apply_business_profile(
+    document: dict,
+    business: str | None,
+    default_assistant_name: str = "",
+) -> dict:
+    """把业务级助手设置合并到副本；记忆数据和记忆开关保持全局。"""
+    if not business:
+        return document
+    profile = (document.get("business_profiles") or {}).get(business) or {}
+    settings = dict(document["settings"])
+    sources = dict(document.get("field_sources") or {})
+    defaults = Settings().model_dump()
+    defaults["assistant_name"] = (
+        default_assistant_name or defaults["assistant_name"]
+    )
+    for key in BUSINESS_SETTING_FIELDS:
+        if key in profile:
+            settings[key] = profile[key]
+            sources[key] = "explicit"
+        elif sources.get(key) == "explicit":
+            # 兼容升级前的单业务显式设置，用户保存该业务后写入独立 profile。
+            settings[key] = document["settings"][key]
+            sources[key] = "explicit"
+        else:
+            settings[key] = defaults[key]
+            sources[key] = "default"
+    return {
+        **document,
+        "settings": settings,
+        "field_sources": sources,
+        "business": business,
     }
 
 

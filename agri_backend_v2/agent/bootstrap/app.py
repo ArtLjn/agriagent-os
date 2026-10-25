@@ -61,6 +61,7 @@ from agent.platforms.persistence.redis.redis_store import (
 from agent.prompts import render_system_prompt
 
 # 导入模块以注册管理端 Skill 路由；其余 API 模块沿用下方的显式导入方式。
+importlib.import_module("agent.api.admin_businesses")
 importlib.import_module("agent.api.admin_skills")
 importlib.import_module("agent.api.admin_prompts")
 importlib.import_module("agent.api.admin_tokens")

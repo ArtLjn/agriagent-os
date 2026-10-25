@@ -13,17 +13,18 @@ from functools import lru_cache
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+from shared.time import beijing_today
 
 from agent.domains.harness.memory.personalization import (
     SENSITIVE_PATTERN,
     MemoryError,
+    apply_business_profile,
     visible_memories,
 )
 from agent.domains.harness.tools import loader as skill_loader
 from agent.platforms.logging import get_logger, log_event
 from agent.platforms.persistence.mongo import personalization_store as store
 from agent.prompts import render_prompt
-from shared.time import beijing_today
 
 # 推荐是独立的轻量读请求，预算与缓存只影响推荐，不影响主对话。
 QUESTION_LIMIT = 6
@@ -119,9 +120,9 @@ def profile_context(document: dict, farm_uid: str) -> dict:
     }
 
 
-@lru_cache(maxsize=1)
-def read_capabilities() -> list[dict]:
-    """提取实际只读工具并补充通用问答，推荐不能虚构工具或预填业务写操作。"""
+@lru_cache(maxsize=4)
+def read_capabilities(business: str = "") -> list[dict]:
+    """提取实际只读工具并补充通用问答；缓存按当前业务区分。"""
     registry = skill_loader.load_registry()
     return [
         {
@@ -209,13 +210,21 @@ async def recommend(user: dict, request: RecommendationRequest) -> dict:
     stage = "load_profile"
     try:
         async with asyncio.timeout(REQUEST_TIMEOUT):
+            from agent.config import settings
+
+            manifest = settings.plugins.manifest
             document = await store.load(user["user_id"])
+            document = apply_business_profile(
+                document,
+                manifest.name if manifest else None,
+                manifest.assistant_name if manifest else "",
+            )
             stage = "prepare_context"
             profile = profile_context(document, user["farm_uid"])
             instruction = render_prompt("question_recommendations")
             context = {
                 "profile": profile,
-                "capabilities": read_capabilities(),
+                "capabilities": read_capabilities(settings.plugins.active),
                 "exclude": request.exclude,
                 "count": QUESTION_LIMIT,
                 "user_request_prefixes": USER_REQUEST_PREFIXES,
@@ -249,6 +258,11 @@ async def recommend(user: dict, request: RecommendationRequest) -> dict:
                 # 等待生成槽或模型期间可能关闭记忆；缓存命中也必须复核。
                 stage = "verify_profile"
                 current = await store.load(user["user_id"])
+                current = apply_business_profile(
+                    current,
+                    manifest.name if manifest else None,
+                    manifest.assistant_name if manifest else "",
+                )
                 if (
                     current["revision"] != document["revision"]
                     or profile_context(current, user["farm_uid"]) != profile

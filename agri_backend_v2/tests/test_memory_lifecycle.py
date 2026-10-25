@@ -15,6 +15,7 @@ from agent.domains.harness.memory.personalization import (
     MemoryCreate,
     MemoryError,
     SettingsPatch,
+    apply_business_profile,
 )
 from agent.platforms.persistence import memory_index
 from agent.platforms.persistence.mongo import personalization_store as store
@@ -101,7 +102,16 @@ async def test_tool_updates_settings_and_temporary_denies_storage(collection):
         "call",
     )
     assert result["persisted"]
-    assert (await store.load("u"))["settings"]["detail_level"] == "concise"
+    from agent.config import settings
+
+    manifest = settings.plugins.manifest
+    document = await store.load("u")
+    view = apply_business_profile(
+        document,
+        manifest.name if manifest else None,
+        manifest.assistant_name if manifest else "",
+    )
+    assert view["settings"]["detail_level"] == "concise"
     failed = await tools.execute(
         turn, {"action": "remember", "text": "测试", "evidence": "伪造的原文"}, "call"
     )

@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import yaml
 import uvicorn
+import yaml
+from farm_business import config as business_config
+from farm_business import server as business_server
 
 from agent import config as agent_config
 from agent.bootstrap import app as agent_server
-from farm_business import config as business_config
-from farm_business import server as business_server
 
 
 def _write_config(tmp_path: Path, payload: dict) -> Path:
@@ -23,7 +23,10 @@ def _write_config(tmp_path: Path, payload: dict) -> Path:
 def test_server_settings_read_yaml_and_environment_overrides(tmp_path, monkeypatch):
     agent_config_file = _write_config(
         tmp_path / "agent",
-        {"server": {"host": "192.0.2.10", "port": 18000}},
+        {
+            "server": {"host": "192.0.2.10", "port": 18000},
+            "plugins": {"root": "businesses", "active": "farm"},
+        },
     )
     business_config_file = _write_config(
         tmp_path / "business",

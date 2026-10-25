@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from agent.domains.harness.memory.personalization import (
     MemoryError,
     SettingsPatch,
+    apply_business_profile,
     public_settings,
     visible_memories,
 )
@@ -430,6 +431,14 @@ async def execute(turn, arguments: dict | str, call_id: str) -> dict:
                     "记忆检索超时，不能据此认定没有相关记忆",
                     503,
                 ) from exc
+            from agent.config import settings
+
+            manifest = settings.plugins.manifest
+            doc = apply_business_profile(
+                doc,
+                manifest.name if manifest else None,
+                manifest.assistant_name if manifest else "",
+            )
             return {
                 "ok": True,
                 "memory_revision": doc["revision"],
@@ -458,10 +467,22 @@ async def execute(turn, arguments: dict | str, call_id: str) -> dict:
             }
         doc = doc if doc is not None else await store.load(turn.user_id, memory_ids=[])
         if command.action == "configure":
+            from agent.config import settings
+
             patch = SettingsPatch.model_validate(
                 {**(command.preferences or {}), "expected_revision": doc["revision"]}
             )
-            result = public_settings(await store.update_settings(turn.user_id, patch))
+            manifest = settings.plugins.manifest
+            business = manifest.name if manifest else None
+            default_assistant_name = manifest.assistant_name if manifest else ""
+            updated = await store.update_settings(
+                turn.user_id, patch, business=business
+            )
+            result = public_settings(
+                apply_business_profile(
+                    updated, business, default_assistant_name
+                )
+            )
         elif command.action == "clear":
             result = await store.clear_memories(turn.user_id, turn.farm_uid)
         elif command.action in {"remember", "update"}:

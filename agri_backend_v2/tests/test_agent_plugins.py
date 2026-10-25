@@ -10,7 +10,12 @@ import yaml
 from agent.domains.harness.tools import loader
 from agent.domains.harness.tools.base import OperationSkill, Skill
 from agent.domains.harness.tools.registry import SkillRegistry, SkillRegistryError
-from agent.plugins import PluginError, discover_plugin, resolve_plugin_root
+from agent.plugins import (
+    PluginError,
+    discover_plugin,
+    list_plugins,
+    resolve_plugin_root,
+)
 
 _SKILL_MD = """---
 name: demo_skill
@@ -59,6 +64,7 @@ def test_repo_farm_plugin_manifest_is_valid() -> None:
 
     assert manifest.name == "farm"
     assert manifest.display_name == "农场助理"
+    assert manifest.assistant_name == "田掌柜"
     assert len(manifest.skill_paths) == 16
     assert manifest.system_prompt_source == "businesses/farm/prompts/system.md"
 
@@ -99,6 +105,26 @@ def test_plugin_without_skills_fails_fast(tmp_path) -> None:
 
     with pytest.raises(PluginError, match="plugin_skills_empty"):
         discover_plugin(tmp_path, "demo")
+
+
+def test_list_plugins_keeps_valid_and_invalid_entries(tmp_path) -> None:
+    _write_plugin(tmp_path, "beta")
+    _write_plugin(tmp_path, "alpha", manifest={"name": "other"})
+    _write_plugin(tmp_path, "_hidden")
+
+    scans = list_plugins(tmp_path)
+
+    assert [scan.name for scan in scans] == ["alpha", "beta"]
+    assert scans[0].manifest is None
+    assert scans[0].error_code == "plugin_name_mismatch"
+    assert scans[1].manifest is not None
+    assert scans[1].error_code is None
+    assert len(scans[1].manifest.skill_paths) == 1
+
+
+def test_list_plugins_requires_plugin_root(tmp_path) -> None:
+    with pytest.raises(PluginError, match="plugin_root_missing"):
+        list_plugins(tmp_path / "missing")
 
 
 def test_combined_loader_keeps_catalog_and_order() -> None:

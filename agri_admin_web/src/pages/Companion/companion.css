@@ -1,0 +1,224 @@
+.companion-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 28px;
+  border: 1px solid var(--app-border-soft);
+  border-radius: var(--app-radius);
+  background: linear-gradient(135deg, var(--app-accent-soft), var(--app-surface) 62%);
+}
+
+.companion-hero__eyebrow {
+  color: var(--app-tertiary);
+  font-size: 12px;
+}
+
+.companion-hero h2 {
+  margin: 8px 0 0;
+  color: var(--app-text);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.companion-hero p {
+  max-width: 560px;
+  margin: 8px 0 0;
+  color: var(--app-secondary);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.companion-hero__note {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 180px;
+  padding: 16px;
+  border: 1px solid var(--app-border-soft);
+  border-radius: var(--app-radius);
+  background: var(--app-surface);
+}
+
+.companion-hero__note span {
+  color: var(--app-tertiary);
+  font-size: 12px;
+}
+
+.companion-hero__note strong {
+  margin-top: 6px;
+  color: var(--app-text);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.companion-section {
+  margin-top: 28px;
+}
+
+.companion-section__head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.companion-section__head h3 {
+  margin: 0;
+  color: var(--app-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.companion-section__head span {
+  color: var(--app-tertiary);
+  font-size: 12px;
+}
+
+.companion-moods {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.companion-mood {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px;
+  border: 1px solid var(--app-border-soft);
+  border-radius: var(--app-radius);
+  background: var(--app-surface);
+  color: var(--app-text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.companion-mood:hover {
+  border-color: var(--app-border);
+  background: var(--app-fill);
+}
+
+.companion-mood:focus-visible {
+  outline: 2px solid var(--app-focus-ring);
+  outline-offset: 2px;
+}
+
+.companion-mood[data-selected="true"] {
+  border-color: var(--app-selected-border);
+  background: var(--app-selected-surface);
+}
+
+.companion-mood strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.companion-mood span {
+  color: var(--app-tertiary);
+  font-size: 12px;
+}
+
+.companion-mood[data-mood="happy"] strong { color: var(--app-green); }
+.companion-mood[data-mood="tired"] strong { color: var(--app-orange); }
+.companion-mood[data-mood="low"] strong { color: var(--app-purple); }
+.companion-mood[data-mood="anxious"] strong { color: var(--app-red); }
+
+.companion-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.companion-card {
+  padding: 20px;
+  border: 1px solid var(--app-border-soft);
+  border-radius: var(--app-radius);
+  background: var(--app-surface);
+}
+
+.companion-card__eyebrow {
+  color: var(--app-tertiary);
+  font-size: 12px;
+}
+
+.companion-card h3 {
+  margin: 6px 0 8px;
+  color: var(--app-text);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.companion-card p {
+  margin: 0 0 12px;
+  color: var(--app-secondary);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.companion-care-list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--app-secondary);
+  font-size: 13px;
+  line-height: 2;
+}
+
+.companion-recent {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.companion-recent__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--app-border-soft);
+  border-radius: 999px;
+  background: var(--app-surface);
+  font-size: 12px;
+}
+
+.companion-recent__item em {
+  color: var(--app-tertiary);
+  font-style: normal;
+}
+
+.companion-recent__item strong {
+  color: var(--app-text);
+  font-weight: 500;
+}
+
+.companion-empty {
+  margin: 0;
+  color: var(--app-tertiary);
+  font-size: 13px;
+}
+
+.companion-boundary {
+  margin: 28px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--app-border-soft);
+  color: var(--app-tertiary);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+@media (max-width: 900px) {
+  .companion-hero {
+    flex-direction: column;
+  }
+
+  .companion-moods {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .companion-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -10,7 +10,7 @@ export default function AssistantSettings() {
     <PageShell
       className="assistant-settings"
       title="助手设置"
-      description="管理称呼、表达方式与长期记忆，让田掌柜更了解你的习惯。"
+      description="管理称呼、表达方式与长期记忆；助手设置按业务保存，长期记忆与记忆开关全局共享。"
     >
 
       <Tabs

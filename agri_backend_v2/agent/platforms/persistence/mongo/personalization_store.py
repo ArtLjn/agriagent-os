@@ -10,6 +10,7 @@ from pymongo.errors import DuplicateKeyError, PyMongoError
 from agent.config import settings
 from agent.domains.harness.memory.facts import erase_memory
 from agent.domains.harness.memory.personalization import (
+    BUSINESS_SETTING_FIELDS,
     COLLECTION_NAME,
     MAX_MEMORIES,
     MemoryCreate,
@@ -102,6 +103,7 @@ async def load(
         # 旧版默认关闭不等于用户主动关闭；显式选择始终优先于新版默认值。
         if "auto_learn_enabled" not in doc["field_sources"]:
             doc["settings"]["auto_learn_enabled"] = True
+        doc.setdefault("business_profiles", {})
         return doc
     except PyMongoError as exc:
         raise MemoryError(
@@ -144,12 +146,22 @@ async def save(document: dict, expected: int) -> dict:
     return document
 
 
-async def update_settings(user_id: str, patch: SettingsPatch) -> dict:
-    """设置页和后续对话工具共用此入口，显式偏好只维护一份。"""
+async def update_settings(
+    user_id: str,
+    patch: SettingsPatch,
+    *,
+    business: str | None = None,
+) -> dict:
+    """设置页和后续对话工具共用此入口；业务字段写入独立 profile。"""
     doc = await load(user_id, memory_ids=[])
     if doc["revision"] != patch.expected_revision:
         raise MemoryError("memory_version_conflict", "设置已变化，请重新加载")
     changes = patch.model_dump(exclude_unset=True, exclude={"expected_revision"})
+    business_changes = {
+        key: changes.pop(key)
+        for key in BUSINESS_SETTING_FIELDS
+        if key in changes
+    }
     if (
         "auto_learn_enabled" in changes
         and changes["auto_learn_enabled"] != doc["settings"]["auto_learn_enabled"]
@@ -159,6 +171,13 @@ async def update_settings(user_id: str, patch: SettingsPatch) -> dict:
     for key in ("nickname", "assistant_name", "custom_instructions"):
         if key in changes:
             reject_sensitive_text(changes[key])
+        if key in business_changes:
+            reject_sensitive_text(business_changes[key])
+    if business and business_changes:
+        profile = doc.setdefault("business_profiles", {}).setdefault(business, {})
+        profile.update(business_changes)
+    elif not business:
+        changes.update(business_changes)
     doc["settings"] = Settings.model_validate(
         {**doc["settings"], **changes}
     ).model_dump()

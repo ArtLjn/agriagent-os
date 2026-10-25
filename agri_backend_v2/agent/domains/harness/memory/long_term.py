@@ -347,9 +347,10 @@ async def _publish_context(
     import asyncio
     import time
 
-    from agent.config import memory_runtime
+    from agent.config import memory_runtime, settings
     from agent.domains.harness.memory.personalization import (
         answer_context,
+        apply_business_profile,
         context_candidates,
     )
     from agent.domains.harness.observability.trace import record as trace_record
@@ -362,6 +363,12 @@ async def _publish_context(
             user_id,
             memory_ids=list({s["fact"]["memory_id"] for s in plan["selected"]}),
         )
+    manifest = settings.plugins.manifest
+    live = apply_business_profile(
+        live,
+        manifest.name if manifest else None,
+        manifest.assistant_name if manifest else "",
+    )
     selected_count = len(plan["selected"])
     if live["revision"] != control["revision"]:
         plan = {

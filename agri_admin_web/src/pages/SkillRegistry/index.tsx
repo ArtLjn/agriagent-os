@@ -13,6 +13,7 @@ import {
 } from '../../api/admin';
 import { palette } from '../../styles/theme';
 import { PageShell } from '../../components/PageShell';
+import { useBusinesses } from '../../businesses/businessContext';
 
 const CARD_BG = palette.bgElevated;
 const BORDER = palette.border;
@@ -28,6 +29,7 @@ const EMPTY_SUMMARY: SkillSummary = {
 };
 
 export default function SkillRegistry() {
+  const { selectedName } = useBusinesses();
   const [skills, setSkills] = useState<SkillItem[]>([]);
   const [summary, setSummary] = useState<SkillSummary>(EMPTY_SUMMARY);
   const [loading, setLoading] = useState(false);
@@ -52,7 +54,7 @@ export default function SkillRegistry() {
       }
     };
     fetchData();
-  }, []);
+  }, [selectedName]);
 
   const handleToggle = async (skill: SkillItem, enabled: boolean) => {
     setUpdatingSkill(skill.name);

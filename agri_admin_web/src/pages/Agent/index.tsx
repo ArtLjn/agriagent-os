@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { Tabs, Input, Button, Select, Space, Switch, message, Typography } from 'antd';
-import { SendOutlined, BulbOutlined, FileTextOutlined, HistoryOutlined } from '@ant-design/icons';
+import { SendOutlined, BulbOutlined, FileTextOutlined, HistoryOutlined, HeartOutlined } from '@ant-design/icons';
 import { approveTurn, streamChat, type PendingAction } from '../../api/agent';
 import { personalizationApi, type PersonalizationSettings } from '../../api/personalization';
 import { listCycles, type CropCycleListItem } from '../../api/cycles';
 import { PageShell } from '../../components/PageShell';
 import { MarkdownContent } from '../../components/MarkdownContent';
+import { useBusinesses } from '../../businesses/businessContext';
 import { palette } from '../../styles/theme';
 
 const BG = palette.bg;
@@ -21,12 +22,32 @@ function generateSessionId(): string {
 }
 
 export default function Agent() {
+  const { selectedName } = useBusinesses();
+  const isCompanion = selectedName === 'companion';
   const [cycles, setCycles] = useState<CropCycleListItem[]>([]);
   const [selectedCycle, setSelectedCycle] = useState<number | undefined>();
 
   useEffect(() => {
+    if (isCompanion) {
+      setCycles([]);
+      return;
+    }
     listCycles().then((res) => setCycles(res.items)).catch(() => {});
-  }, []);
+  }, [isCompanion]);
+
+  if (isCompanion) {
+    return (
+      <PageShell title="陪伴对话" description="慢慢说，今天想聊点什么都可以。">
+        <ChatTab
+          cycles={[]}
+          selectedCycle={undefined}
+          setSelectedCycle={() => {}}
+          showCycleSelect={false}
+          companion
+        />
+      </PageShell>
+    );
+  }
 
   return (
     <PageShell title="AI 助手" description="围绕种植、农事和经营数据，与田掌柜协作。">
@@ -86,7 +107,19 @@ function ChatBubble({ role, content, pendingAction, onAction }: { role: string; 
 }
 
 /* ── 对话 Tab ── */
-function ChatTab({ cycles, selectedCycle, setSelectedCycle }: { cycles: CropCycleListItem[]; selectedCycle?: number; setSelectedCycle: (v?: number) => void }) {
+function ChatTab({
+  cycles,
+  selectedCycle,
+  setSelectedCycle,
+  showCycleSelect = true,
+  companion = false,
+}: {
+  cycles: CropCycleListItem[];
+  selectedCycle?: number;
+  setSelectedCycle: (v?: number) => void;
+  showCycleSelect?: boolean;
+  companion?: boolean;
+}) {
   const [sessionId, setSessionId] = useState<string>(generateSessionId);
   const [temporary, setTemporary] = useState(() => new URLSearchParams(window.location.search).get('temporary') === '1');
   const [preferences, setPreferences] = useState<PersonalizationSettings | null>(null);
@@ -163,9 +196,11 @@ function ChatTab({ cycles, selectedCycle, setSelectedCycle }: { cycles: CropCycl
     <div style={{ display: 'flex', flexDirection: 'column', height: 'clamp(360px, calc(100dvh - 260px), 760px)' }}>
       <div style={{ marginBottom: 12 }}>
         <Space style={{ marginRight: 16 }}><Switch aria-label="临时对话" checked={temporary} disabled={loading} onChange={(value) => { setTemporary(value); setSessionId(generateSessionId()); setMessages([]); }} />临时对话</Space>
-        <Select placeholder="关联茬口（可选）" allowClear style={{ width: 220 }}
-          value={selectedCycle} onChange={setSelectedCycle}
-          options={cycles.map((c) => ({ value: c.id, label: c.name }))} />
+        {showCycleSelect && (
+          <Select placeholder="关联茬口（可选）" allowClear style={{ width: 220 }}
+            value={selectedCycle} onChange={setSelectedCycle}
+            options={cycles.map((c) => ({ value: c.id, label: c.name }))} />
+        )}
       </div>
 
       {/* 消息区域 */}
@@ -175,9 +210,19 @@ function ChatTab({ cycles, selectedCycle, setSelectedCycle }: { cycles: CropCycl
       }}>
         {messages.length === 0 && (
           <div style={{ textAlign: 'center', color: TEXT_DIM, padding: '60px 0' }}>
-            <div style={{ fontSize: 40, marginBottom: 16 }}>🌾</div>
-            <div style={{ fontSize: 16, marginBottom: 8 }}>{temporary ? "临时对话" : `你好，我是${preferences?.assistant_name || "农业技术顾问"}`}</div>
-            <div style={{ fontSize: 13 }}>可以问我天气、种植周期、农事记录、成本收支等问题</div>
+            <div style={{ fontSize: 40, marginBottom: 16 }}>
+              {companion ? <HeartOutlined /> : '🌾'}
+            </div>
+            <div style={{ fontSize: 16, marginBottom: 8 }}>
+              {temporary
+                ? '临时对话'
+                : `你好，我是${preferences?.assistant_name || (companion ? '陪伴助手' : '农业技术顾问')}`}
+            </div>
+            <div style={{ fontSize: 13 }}>
+              {companion
+                ? '可以聊聊今天的心情、想被怎样陪伴，或者只是打个招呼。'
+                : '可以问我天气、种植周期、农事记录、成本收支等问题'}
+            </div>
           </div>
         )}
         {messages.map((m, i) => (

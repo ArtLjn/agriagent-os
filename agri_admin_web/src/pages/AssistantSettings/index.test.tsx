@@ -8,6 +8,8 @@ import {
   type MemoryRecord,
   type PersonalizationSettings,
 } from "../../api/personalization";
+import { BusinessContext } from "../../businesses/businessContext";
+import { businessViews } from "../../businesses/registry";
 import AssistantSettings from "./index";
 
 vi.mock("../../api/personalization", () => ({
@@ -126,7 +128,7 @@ describe("AssistantSettings", () => {
         custom_instructions: "",
         loading_greeting_enabled: true,
         execution_detail_level: "concise",
-      });
+      }, "farm");
     });
     expect(await screen.findByText("设置已保存，下一轮对话生效")).toBeInTheDocument();
   });
@@ -163,6 +165,42 @@ describe("AssistantSettings", () => {
     });
     expect(await screen.findByText("已启用，这条记忆将用于后续对话")).toBeInTheDocument();
   });
+  it("按当前业务读取助手名称", async () => {
+    const companion = businessViews.find((view) => view.name === "companion");
+    if (!companion) throw new Error("companion view missing");
+    mockedApi.getSettings.mockResolvedValueOnce({
+      ...settings,
+      assistant_name: "陪伴助手",
+      business: "companion",
+      revision: 5,
+    });
+
+    render(
+      <AntdApp>
+        <BusinessContext.Provider
+          value={{
+            views: businessViews,
+            selectedName: "companion",
+            selectedView: companion,
+            runtimeItems: [],
+            runtimeActive: "companion",
+            loading: false,
+            switchingName: null,
+            error: null,
+            selectBusiness: async () => true,
+            refresh: () => {},
+            runtimeFor: () => undefined,
+          }}
+        >
+          <AssistantSettings />
+        </BusinessContext.Provider>
+      </AntdApp>,
+    );
+
+    expect(await screen.findByLabelText("助手名称")).toHaveValue("陪伴助手");
+    expect(mockedApi.getSettings).toHaveBeenCalledWith("companion");
+  });
+
   it("开启自动学习持久化控制，失败不伪装成功", async () => {
     const user = userEvent.setup();
     render(<AntdApp><AssistantSettings /></AntdApp>);

@@ -26,6 +26,7 @@ import {
   personalizationErrorMessage,
   type PersonalizationSettings,
 } from "../../api/personalization";
+import { useBusinesses } from "../../businesses/businessContext";
 import DemoNotice from "./DemoNotice";
 import PreviewCard from "./PreviewCard";
 import ProfileCard from "./ProfileCard";
@@ -47,6 +48,7 @@ const INSTRUCTION_SNIPPETS = [
 
 export default function PersonalizationPanel() {
   const { message } = App.useApp();
+  const { selectedName, selectedView } = useBusinesses();
   const [form] = Form.useForm<PersonalizationFormValues>();
   const [settings, setSettings] = useState<PersonalizationSettings | null>(null);
   const [preview, setPreview] = useState<PersonalizationFormValues | null>(null);
@@ -61,7 +63,7 @@ export default function PersonalizationPanel() {
     setLoading(true);
     setLoadError(null);
     try {
-      const data = await personalizationApi.getSettings();
+      const data = await personalizationApi.getSettings(selectedName);
       const values = toFormValues(data);
       setSettings(data);
       setPreview(values);
@@ -73,7 +75,7 @@ export default function PersonalizationPanel() {
     } finally {
       setLoading(false);
     }
-  }, [form]);
+  }, [form, selectedName]);
 
   useEffect(() => {
     void loadSettings();
@@ -101,7 +103,7 @@ export default function PersonalizationPanel() {
       const updated = await personalizationApi.updateSettings({
         expected_revision: settings.revision,
         ...values,
-      });
+      }, selectedName);
       const nextValues = toFormValues(updated);
       setSettings(updated);
       setPreview(nextValues);
@@ -146,6 +148,12 @@ export default function PersonalizationPanel() {
       {demo && (
         <DemoNotice description="后端个性化接口尚未接入，修改只在本次页面会话中生效。" />
       )}
+      <Alert
+        type="info"
+        showIcon
+        message={`助手设置仅作用于「${selectedView?.displayName ?? "当前业务"}」`}
+        description="称呼、助手名称、表达方式、详细程度、自定义指令和展示开关按业务保存；长期记忆与记忆读写开关全局共享。"
+      />
       {saveError && (
         <Alert
           type="error"

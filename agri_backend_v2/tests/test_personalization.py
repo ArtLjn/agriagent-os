@@ -14,6 +14,7 @@ from agent.domains.harness.memory.personalization import (
     MemoryError,
     MemoryPatch,
     SettingsPatch,
+    apply_business_profile,
     context_text,
     visible_memories,
 )
@@ -62,6 +63,70 @@ async def test_settings_cas_and_user_isolation(collection):
             "a", SettingsPatch(expected_revision=0, nickname="旧值")
         )
     assert (await store.load("a"))["settings"]["nickname"] == "农友"
+
+
+@pytest.mark.asyncio
+async def test_business_profile_isolates_assistant_name_and_instructions(collection):
+    doc = await store.update_settings(
+        "a",
+        SettingsPatch(
+            expected_revision=0,
+            nickname="老王",
+            assistant_name="小陪",
+            custom_instructions="慢慢说",
+            reply_style="friendly",
+            auto_learn_enabled=False,
+        ),
+        business="companion",
+    )
+
+    assert doc["settings"]["assistant_name"] == "田掌柜"
+    assert doc["settings"]["auto_learn_enabled"] is False
+    assert doc["business_profiles"]["companion"] == {
+        "nickname": "老王",
+        "assistant_name": "小陪",
+        "custom_instructions": "慢慢说",
+        "reply_style": "friendly",
+    }
+
+    farm = apply_business_profile(doc, "farm", "田掌柜")
+    companion = apply_business_profile(doc, "companion", "陪伴助手")
+    assert farm["settings"]["assistant_name"] == "田掌柜"
+    assert farm["settings"]["custom_instructions"] == ""
+    assert farm["settings"]["nickname"] == ""
+    assert farm["settings"]["reply_style"] == "default"
+    assert farm["settings"]["auto_learn_enabled"] is False
+    assert companion["settings"]["assistant_name"] == "小陪"
+    assert companion["settings"]["custom_instructions"] == "慢慢说"
+    assert companion["settings"]["nickname"] == "老王"
+    assert companion["settings"]["reply_style"] == "friendly"
+    assert companion["settings"]["auto_learn_enabled"] is False
+
+
+@pytest.mark.asyncio
+async def test_personalization_api_resolves_business_scope(collection, monkeypatch):
+    from agent.api import personalization as api
+
+    user = {"user_id": "a", "farm_uid": "farm"}
+    initial = await api.get_settings(user, "companion")
+    assert initial["business"] == "companion"
+    assert initial["assistant_name"] == "陪伴助手"
+
+    saved = await api.patch_settings(
+        SettingsPatch(
+            expected_revision=initial["revision"],
+            assistant_name="小陪",
+            custom_instructions="慢慢说",
+        ),
+        user,
+        "companion",
+    )
+    assert saved["assistant_name"] == "小陪"
+
+    farm = await api.get_settings(user, "farm")
+    assert farm["business"] == "farm"
+    assert farm["assistant_name"] == "田掌柜"
+    assert farm["custom_instructions"] == ""
 
 
 @pytest.mark.asyncio
@@ -166,7 +231,9 @@ async def test_api_auth_validation_and_failure(monkeypatch):
 async def test_learning_status_api_uses_authenticated_identity(monkeypatch):
     from fastapi import FastAPI
     from httpx import ASGITransport, AsyncClient
-    from agent.api import api_router, personalization as api
+
+    from agent.api import api_router
+    from agent.api import personalization as api
     from agent.domains.harness.memory import learning
 
     app = FastAPI()

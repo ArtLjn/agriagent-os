@@ -39,10 +39,10 @@
 | 领域 | 当前能力 |
 | --- | --- |
 | 农场经营 | 仪表盘、作物模板、种植周期、农事日志、收支与用工管理 |
-| 日常协作 | 提醒 / 备忘录、天气查询与预警、业务调试工作台 |
+| 日常协作 | 提醒 / 备忘录、天气查询与预警、业务调试工作台、陪伴关怀与心情记录 |
 | AI 助手 | 流式对话、工具路由与调用、操作审批、历史会话与草稿 |
-| 个性化与记忆 | 个性化设置、长期记忆、偏好自动学习、临时对话与记忆开关 |
-| 开发与运维 | Playground、Skill 注册表、Prompt 管理、Trace、Token 用量和用户额度 |
+| 个性化与记忆 | 按业务隔离的助手设置、长期记忆、偏好自动学习、临时对话与记忆开关 |
+| 开发与运维 | 业务中心与运行时切换、Playground、Skill 注册表、Prompt 管理、Trace、Token 用量和用户额度 |
 
 **当前版本：v2.0.0** · [更新日志](CHANGELOG.md) · [GitHub Release](https://github.com/ArtLjn/agriagent-os/releases/tag/v2.0.0)
 
@@ -467,7 +467,8 @@ Business 的 `health` 确认进程可响应，`readiness` 进一步检查 MySQL 
 | Agent | `GET /me/memories`、`POST /me/memories` | 查看与新增长期记忆 |
 | Agent | `POST /me/question-recommendations` | 生成首页快捷问题 |
 | Agent | `GET /traces`、`GET /traces/{trace_id}/nodes` | 请求链路与节点详情 |
-| Agent | `GET /admin/skills`、`GET /admin/prompts` | 已加载的工具与 Prompt |
+| Agent | `GET /admin/skills`、`GET /admin/prompts?business=<name>` | 已加载的工具，以及当前或指定业务的提示词 |
+| Agent | `GET /admin/businesses`、`PUT /admin/businesses/active` | 已安装业务、当前启用业务与进程内切换 |
 | Agent | `GET /admin/stats/tokens` | 模型调用用量统计 |
 
 客户端对受保护接口携带 `Authorization: Bearer <token>`。用户登录态、管理权限和 Agent → Business 的服务凭证是不同边界；服务凭证只保存在后端。会话、记忆与业务数据查询遵循当前身份及农场范围。

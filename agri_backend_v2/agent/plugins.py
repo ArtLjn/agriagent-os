@@ -22,7 +22,7 @@ _NAME_RE = re.compile(r"^[a-z][a-z0-9-]*$")
 _REQUIRED_FIELDS = frozenset(
     {"schema_version", "name", "display_name", "system_prompt", "skills_dir"}
 )
-_OPTIONAL_FIELDS = frozenset({"description"})
+_OPTIONAL_FIELDS = frozenset({"description", "assistant_name"})
 _ALLOWED_FIELDS = _REQUIRED_FIELDS | _OPTIONAL_FIELDS
 
 
@@ -36,11 +36,12 @@ class PluginError(ValueError):
 
 @dataclass(frozen=True)
 class PluginManifest:
-    """一次部署唯一启用的插件清单。"""
+    """单个业务插件清单。"""
 
     schema_version: int
     name: str
     display_name: str
+    assistant_name: str
     description: str
     plugin_dir: Path
     system_prompt_path: Path
@@ -62,6 +63,15 @@ class PluginManifest:
     def system_prompt_source(self) -> str:
         """管理端展示用的仓库相对路径。"""
         return display_path(self.system_prompt_path)
+
+
+@dataclass(frozen=True)
+class PluginScan:
+    """业务目录扫描结果；manifest 为空表示该目录清单不可用。"""
+
+    name: str
+    manifest: PluginManifest | None
+    error_code: str | None = None
 
 
 def repo_root() -> Path:
@@ -101,16 +111,7 @@ def discover_plugin(root: Path | str, active: str | None = None) -> PluginManife
             raise PluginError("plugin_missing", f"插件目录不存在: {plugin_dir}")
         return load_manifest(plugin_dir)
 
-    candidates = sorted(
-        (
-            entry
-            for entry in root_path.iterdir()
-            if entry.is_dir()
-            and not entry.name.startswith(("_", "."))
-            and (entry / _MANIFEST_NAME).is_file()
-        ),
-        key=lambda path: path.name,
-    )
+    candidates = _candidate_plugin_dirs(root_path)
     if not candidates:
         raise PluginError("plugin_missing", f"{root_path} 下没有找到 plugin.yaml")
     if len(candidates) > 1:
@@ -120,6 +121,51 @@ def discover_plugin(root: Path | str, active: str | None = None) -> PluginManife
             f"发现多个插件但未配置 plugins.active: {names}",
         )
     return load_manifest(candidates[0])
+
+
+def list_plugins(root: Path | str) -> list[PluginScan]:
+    """扫描业务根目录，单个坏清单只记录错误码，不阻断其他业务。"""
+    root_path = Path(root).expanduser().resolve()
+    if not root_path.is_dir():
+        raise PluginError("plugin_root_missing", f"插件根目录不存在: {root_path}")
+
+    scans: list[PluginScan] = []
+    for plugin_dir in _candidate_plugin_dirs(root_path):
+        try:
+            manifest = load_manifest(plugin_dir)
+        except PluginError as exc:
+            scans.append(
+                PluginScan(
+                    name=plugin_dir.name,
+                    manifest=None,
+                    error_code=exc.code,
+                )
+            )
+        except (OSError, UnicodeError):
+            scans.append(
+                PluginScan(
+                    name=plugin_dir.name,
+                    manifest=None,
+                    error_code="plugin_manifest_unreadable",
+                )
+            )
+        else:
+            scans.append(PluginScan(name=plugin_dir.name, manifest=manifest))
+    return scans
+
+
+def _candidate_plugin_dirs(root_path: Path) -> list[Path]:
+    """返回按目录名排序、包含 plugin.yaml 的可见业务目录。"""
+    return sorted(
+        (
+            entry
+            for entry in root_path.iterdir()
+            if entry.is_dir()
+            and not entry.name.startswith(("_", "."))
+            and (entry / _MANIFEST_NAME).is_file()
+        ),
+        key=lambda path: path.name,
+    )
 
 
 def load_manifest(plugin_dir: Path | str) -> PluginManifest:
@@ -152,6 +198,17 @@ def load_manifest(plugin_dir: Path | str) -> PluginManifest:
     if not isinstance(description, str):
         raise PluginError("plugin_description_invalid", "description 必须是字符串")
 
+    assistant_name = raw.get("assistant_name", display_name)
+    if not isinstance(assistant_name, str) or not assistant_name.strip():
+        raise PluginError(
+            "plugin_assistant_name_invalid", "assistant_name 必须是非空字符串"
+        )
+    assistant_name = assistant_name.strip()
+    if len(assistant_name) > 40:
+        raise PluginError(
+            "plugin_assistant_name_invalid", "assistant_name 不能超过 40 个字符"
+        )
+
     system_prompt = _resolve_within(
         plugin_path, raw["system_prompt"], "system_prompt"
     )
@@ -170,6 +227,7 @@ def load_manifest(plugin_dir: Path | str) -> PluginManifest:
         schema_version=_SCHEMA_VERSION,
         name=name,
         display_name=display_name,
+        assistant_name=assistant_name,
         description=description,
         plugin_dir=plugin_path,
         system_prompt_path=system_prompt,
@@ -235,8 +293,10 @@ def _resolve_within(base: Path, value: Any, field_name: str) -> Path:
 __all__ = [
     "PluginError",
     "PluginManifest",
+    "PluginScan",
     "discover_plugin",
     "display_path",
+    "list_plugins",
     "load_manifest",
     "repo_root",
     "resolve_plugin_root",

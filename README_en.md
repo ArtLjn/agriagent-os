@@ -39,10 +39,10 @@ This monorepo includes a **React admin console, a Flutter app, and separate Busi
 | Area | Current capabilities |
 | --- | --- |
 | Farm operations | Dashboard, crop templates, growing cycles, farm logs, income and expenses, and workforce management |
-| Daily planning | Reminders and memos, weather forecasts and alerts, and a business debugging workspace |
+| Daily planning | Reminders and memos, weather forecasts and alerts, a business debugging workspace, and companionship with mood check-ins |
 | AI assistant | Streaming conversations, tool routing and execution, action approvals, conversation history, and drafts |
-| Personalization and memory | Assistant preferences, long-term memory, automatic preference learning, temporary conversations, and memory controls |
-| Development and operations | Playground, Skill registry, Prompt management, Trace, token usage, and user quotas |
+| Personalization and memory | Per-business assistant settings, long-term memory, automatic preference learning, temporary conversations, and memory controls |
+| Development and operations | Business center and business switching, Playground, Skill registry, Prompt management, Trace, token usage, and user quotas |
 
 **Current release: v2.0.0** · [Changelog](CHANGELOG.md) · [GitHub Release](https://github.com/ArtLjn/agriagent-os/releases/tag/v2.0.0)
 
@@ -465,7 +465,8 @@ Common endpoints are listed below, relative to each service's `/api/v2` prefix:
 | Agent | `GET /me/memories`, `POST /me/memories` | Inspect and create long-term memories |
 | Agent | `POST /me/question-recommendations` | Generate suggested questions |
 | Agent | `GET /traces`, `GET /traces/{trace_id}/nodes` | Inspect request traces and execution nodes |
-| Agent | `GET /admin/skills`, `GET /admin/prompts` | Inspect loaded tools and Prompts |
+| Agent | `GET /admin/skills`, `GET /admin/prompts?business=<name>` | Inspect loaded tools and prompts for the active or selected business |
+| Agent | `GET /admin/businesses`, `PUT /admin/businesses/active` | Installed businesses, the active business, and in-process switching |
 | Agent | `GET /admin/stats/tokens` | Query model token usage |
 
 Clients send `Authorization: Bearer <token>` to protected endpoints. User authentication, administrator permissions, and Agent-to-Business service credentials are separate boundaries. Service credentials stay on the backend; conversation, memory, and business-data access follows the authenticated user and farm scope.

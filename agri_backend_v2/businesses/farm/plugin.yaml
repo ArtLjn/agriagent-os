@@ -1,6 +1,7 @@
 schema_version: 2
 name: farm
 display_name: 农场助理
+assistant_name: 田掌柜
 description: 农场经营管理助手
 system_prompt: prompts/system.md
 skills_dir: skills

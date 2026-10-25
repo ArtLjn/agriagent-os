@@ -274,10 +274,108 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v2/admin/businesses:
+    get:
+      summary: List Admin Businesses
+      description: 返回 businesses 目录下已安装业务的清单状态和当前进程启用的业务。需要 admin:debug；单个清单异常以 error_code 返回，不返回绝对路径。
+      operationId: list_admin_businesses_api_v2_admin_businesses_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: items 包含 name、display_name、description、skill_count、error_code；active 为当前启用业务，total 为条目数。
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  active:
+                    type: [string, 'null']
+                  total:
+                    type: integer
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        display_name:
+                          type: [string, 'null']
+                        description:
+                          type: [string, 'null']
+                        skill_count:
+                          type: integer
+                        error_code:
+                          type: [string, 'null']
+        '401':
+          description: missing_authorization
+        '403':
+          description: permission_denied
+        '503':
+          description: business_catalog_unavailable；业务根目录缺失或不可读。
+  /api/v2/admin/businesses/active:
+    put:
+      summary: Switch Active Business
+      description: 在当前 Agent 进程内切换业务插件，立即加载目标业务的 system prompt 与技能；重启后恢复部署配置。仅对当前运行进程生效。
+      operationId: switch_admin_business_api_v2_admin_businesses_active_put
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  pattern: '^[a-z][a-z0-9-]*$'
+                  maxLength: 64
+      responses:
+        '200':
+          description: active 为新启用业务，display_name 为展示名，skill_count 为技能目录数。
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  active:
+                    type: string
+                  display_name:
+                    type: string
+                  skill_count:
+                    type: integer
+        '401':
+          description: missing_authorization
+        '403':
+          description: permission_denied
+        '404':
+          description: business_not_found
+        '409':
+          description: business_manifest_invalid
+        '422':
+          description: business_skills_invalid 或 business_prompt_invalid
   /api/v2/admin/prompts:
     get:
       summary: List Admin Prompts
-      description: 返回运行时缓存中的模板，避免将磁盘内容误报为当前生效内容。
+      description: 返回运行时缓存中的模板；传 business 时只读预览该业务的 system prompt。平台提示词始终返回，预览不会改变运行时提示词。
       operationId: list_admin_prompts_api_v2_admin_prompts_get
       parameters:
       - name: authorization
@@ -288,22 +386,67 @@ paths:
           - type: string
           - type: 'null'
           title: Authorization
+      - name: business
+        in: query
+        required: false
+        description: 业务目录名；省略时使用当前启用业务。
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Business
       responses:
         '200':
-          description: Successful Response
+          description: items 包含 name、version、active、content、scope（platform/business）和 business；顶层返回 business 与 active_business。
           content:
             application/json:
-              schema: {}
+              schema:
+                type: object
+                properties:
+                  business:
+                    type: [string, 'null']
+                  active_business:
+                    type: [string, 'null']
+                  total:
+                    type: integer
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        version:
+                          type: string
+                        active:
+                          type: boolean
+                        content:
+                          type: string
+                        content_length:
+                          type: integer
+                        source:
+                          type: string
+                        scope:
+                          type: string
+                          enum: [platform, business]
+                        business:
+                          type: [string, 'null']
+        '404':
+          description: business_not_found
+        '409':
+          description: business_manifest_invalid
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+        '503':
+          description: business_catalog_unavailable 或 prompt_unavailable
   /api/v2/admin/prompts/reload:
     post:
       summary: Reload Admin Prompts
-      description: 重新读取当前进程的模板；不承诺更新已启动对话或其他工作进程。
+      description: 重新读取当前启用业务的模板；不承诺更新已启动对话或其他工作进程。非启用业务只读预览，不能重载。
       operationId: reload_admin_prompts_api_v2_admin_prompts_reload_post
       parameters:
       - name: authorization
@@ -314,12 +457,22 @@ paths:
           - type: string
           - type: 'null'
           title: Authorization
+      - name: business
+        in: query
+        required: false
+        description: 业务目录名；必须等于当前启用业务。
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Business
       responses:
         '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
+          description: 当前进程缓存已清空，新建上下文时生效。
+        '404':
+          description: business_not_found
+        '409':
+          description: business_not_active 或 business_manifest_invalid
         '422':
           description: Validation Error
           content:
@@ -532,12 +685,25 @@ paths:
           - type: string
           - type: 'null'
           title: Authorization
+      - name: business
+        in: query
+        required: false
+        description: 业务目录名；省略时使用当前启用业务。
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Business
       responses:
         '200':
-          description: Successful Response
+          description: 称呼、助手名称、表达方式、详细程度、自定义指令和展示开关按业务解析；记忆开关与长期记忆全局共享；business 返回解析到的业务。
           content:
             application/json:
               schema: {}
+        '404':
+          description: business_not_found
+        '409':
+          description: business_manifest_invalid
         '422':
           description: Validation Error
           content:
@@ -557,6 +723,15 @@ paths:
           - type: string
           - type: 'null'
           title: Authorization
+      - name: business
+        in: query
+        required: false
+        description: 业务目录名；助手设置写入该业务的 profile，记忆开关仍写入用户全局设置。
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Business
       requestBody:
         required: true
         content:
@@ -565,10 +740,14 @@ paths:
               $ref: '#/components/schemas/SettingsPatch'
       responses:
         '200':
-          description: Successful Response
+          description: 返回合并业务 profile 后的设置。
           content:
             application/json:
               schema: {}
+        '404':
+          description: business_not_found
+        '409':
+          description: business_manifest_invalid
         '422':
           description: Validation Error
           content:

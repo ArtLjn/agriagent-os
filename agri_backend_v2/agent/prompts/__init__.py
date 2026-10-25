@@ -44,9 +44,8 @@ def _template_path(name: str) -> Path:
     return _PROMPTS_DIR / f"{name}.md"
 
 
-def _load_template(name: str) -> str:
-    """加载并缓存 prompt 模板文件（.md）。"""
-    path = _template_path(name)
+def _read_template(path: Path) -> str:
+    """按 resolved path 读取并缓存模板文件。"""
     resolved = path.resolve()
     if resolved in _cache:
         return _cache[resolved]
@@ -56,6 +55,11 @@ def _load_template(name: str) -> str:
     _cache[resolved] = content
     logger.info("prompt loaded: %s (%d chars)", path, len(content))
     return content
+
+
+def _load_template(name: str) -> str:
+    """加载并缓存 prompt 模板文件（.md）。"""
+    return _read_template(_template_path(name))
 
 
 def render_prompt(name: str, **variables: Any) -> str:
@@ -88,27 +92,45 @@ def reload() -> None:
     _cache.clear()
 
 
-def inspect_prompts() -> list[dict]:
-    """展示实际加载模板及内容指纹，版本随提示词内容变化。"""
+def inspect_prompts(
+    system_prompt_path: Path | None = None,
+    *,
+    business: str | None = None,
+    system_active: bool = True,
+) -> list[dict]:
+    """展示模板及内容指纹；可指定其他业务的 system prompt 做只读预览。"""
+    from agent.config import settings
     from agent.plugins import display_path
+
+    preview_path = Path(system_prompt_path) if system_prompt_path is not None else None
+    viewed_business = business or settings.plugins.active or None
 
     items = []
     for name in list_prompts():
-        path = _template_path(name)
-        content = _load_template(name)
-        source = (
-            display_path(path)
-            if name == "system"
-            else f"agent/prompts/{name}.md"
+        is_system = name == "system"
+        is_preview = is_system and preview_path is not None
+        path = preview_path if is_preview else _template_path(name)
+        content = (
+            path.read_text(encoding="utf-8")
+            if is_preview
+            else _read_template(path)
         )
+        if is_system:
+            source = display_path(path)
+            if Path(source).is_absolute():
+                source = path.name
+        else:
+            source = f"agent/prompts/{name}.md"
         items.append(
             {
                 "name": name,
                 "version": hashlib.sha256(content.encode()).hexdigest()[:12],
-                "active": name == "system",
+                "active": is_system and system_active,
                 "content": content,
                 "content_length": len(content),
                 "source": source,
+                "scope": "business" if is_system else "platform",
+                "business": viewed_business if is_system else None,
             }
         )
     return items

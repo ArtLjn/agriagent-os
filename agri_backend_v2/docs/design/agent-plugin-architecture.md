@@ -158,6 +158,7 @@ agri_backend_v2/
 schema_version: 2
 name: farm
 display_name: 农场助理
+assistant_name: 田掌柜
 description: 农场经营管理助手
 system_prompt: prompts/system.md
 skills_dir: skills
@@ -168,6 +169,7 @@ skills_dir: skills
 | `schema_version` | 是 | 必须为 2 |
 | `name` | 是 | 必须与业务目录名一致 |
 | `display_name` | 是 | 管理端与日志展示名 |
+| `assistant_name` | 否 | 该业务的默认助手名称；省略时使用 `display_name` |
 | `description` | 否 | 业务说明 |
 | `system_prompt` | 是 | 相对业务项目目录，不得逃逸，必须是已存在的文件 |
 | `skills_dir` | 是 | 相对业务项目目录，不得逃逸，必须存在且至少包含一个技能目录 |
@@ -186,6 +188,30 @@ plugins:
 
 环境变量：`PLUGINS__ROOT`、`PLUGINS__ACTIVE`。
 
+本地同时存在多个业务目录时也必须显式配置 `plugins.active` 或
+`PLUGINS__ACTIVE`；否则 `discover_plugin` 会因候选歧义拒绝启动。部署脚本
+默认写入 `PLUGINS__ACTIVE=${BUSINESS_PROJECT}`。
+
+### 业务发现
+
+管理后台通过只读接口 `GET /api/v2/admin/businesses` 查看已安装业务：
+
+- `agent/plugins.py` 的 `list_plugins()` 扫描 `plugins.root` 下含
+  `plugin.yaml` 的目录，坏清单只记录稳定 `error_code`，不阻断其他业务；
+- `active` 取当前进程已加载的 `settings.plugins.active`，不在请求时重新发现；
+- 返回字段不含绝对路径或异常文本；根目录不可用返回 503。
+
+前端在 `agri_admin_web/src/businesses/registry.ts` 注册业务导航、首页和路由
+归属。管理后台的业务中心、切换器和五态语义见 [业务中心](business-center.md)。
+
+管理员可以通过 `PUT /api/v2/admin/businesses/active` 在当前 Agent 进程内切换
+业务插件。接口会先校验目标清单、技能注册表和 system prompt，通过后替换
+`settings.plugins.manifest` 并清空提示词缓存；新请求立即使用新业务资源，重启
+后恢复部署配置。该切换只影响 Agent 资源，不会切换 Business 服务地址或 MCP 工具。
+
+`businesses/companion/` 是无 Business 服务的本地技能示例，包含陪伴问候和状态
+建议两个 local skill；详见 [陪伴关怀业务](companion-business.md)。
+
 ### 技能加载
 
 - `SkillLoader(directory)` 保持单目录语义，`SkillRegistry.from_directory` 行为不变。
@@ -202,6 +228,10 @@ plugins:
 - `render_system_prompt()` 从插件清单声明的路径读取 `system.md`。
 - 提示词缓存按 resolved path 区分，`reload()` 清空全部缓存。
 - `list_prompts()` 仍包含 `system`；`inspect_prompts()` 中 system 为 active，`source` 显示 `businesses/farm/prompts/system.md`；核心提示词 source 不变。
+- 管理端可用 `GET /api/v2/admin/prompts?business=<name>` 只读预览已安装业务的
+  system prompt；`active_business` 表示当前进程实际使用的业务。非启用业务不能
+  重载；切换当前业务使用业务切换接口（进程内生效）或修改 `PLUGINS__ACTIVE`
+  并重启。
 - `health.memory_build` 只覆盖 `memory_*.md` 等平台记忆文件，不包含业务 system prompt。
 
 ### 启动校验

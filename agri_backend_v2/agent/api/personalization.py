@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 
 from fastapi import Depends, Header, HTTPException, Path, Query, Response
 from pymongo.errors import PyMongoError
+from shared.roles import Permission
 
 from agent.api import api_router
 from agent.application.question_recommendations import (
@@ -12,16 +13,18 @@ from agent.application.question_recommendations import (
     recommend,
 )
 from agent.auth import parse_identity, require_identity_permission
+from agent.config import settings
 from agent.domains.harness.memory.personalization import (
     MemoryCategory,
     MemoryCreate,
     MemoryError,
     MemoryPatch,
     SettingsPatch,
+    apply_business_profile,
     public_settings,
 )
 from agent.platforms.persistence.mongo import personalization_store as store
-from shared.roles import Permission
+from agent.plugins import PluginError, list_plugins
 
 
 async def identity(authorization: str | None = Header(default=None)):
@@ -40,9 +43,55 @@ async def identity(authorization: str | None = Header(default=None)):
 CurrentUser = Annotated[dict, Depends(identity)]
 
 
+def _resolve_settings_business(
+    business: str | None,
+) -> tuple[str | None, str]:
+    """解析要读取/编辑的业务，返回业务名与该业务的默认助手名称。"""
+    active = settings.plugins.manifest
+    requested = business.strip() if business else None
+    if requested is None or requested == settings.plugins.active:
+        if active is None:
+            return None, ""
+        return active.name, active.assistant_name
+
+    try:
+        scans = list_plugins(settings.plugins.root)
+    except (PluginError, OSError, UnicodeError) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "business_catalog_unavailable",
+                "message": "业务目录不可用",
+            },
+        ) from exc
+
+    entry = next((scan for scan in scans if scan.name == requested), None)
+    if entry is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "business_not_found", "message": "业务不存在"},
+        )
+    if entry.manifest is None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "business_manifest_invalid",
+                "message": "业务清单不可用",
+                "meta": {"error_code": entry.error_code},
+            },
+        )
+    return entry.name, entry.manifest.assistant_name
+
+
 @api_router.get("/me/personalization")
-async def get_settings(user: CurrentUser):
-    return public_settings(await store.load(user["user_id"], memory_ids=[]))
+async def get_settings(
+    user: CurrentUser,
+    business: str | None = Query(default=None),
+):
+    name, default_assistant_name = _resolve_settings_business(business)
+    document = await store.load(user["user_id"], memory_ids=[])
+    document = apply_business_profile(document, name, default_assistant_name)
+    return {**public_settings(document), "business": name}
 
 
 @api_router.post("/me/question-recommendations", response_model=RecommendationResponse)
@@ -55,8 +104,15 @@ async def question_recommendations(
 
 
 @api_router.patch("/me/personalization")
-async def patch_settings(body: SettingsPatch, user: CurrentUser):
-    return public_settings(await store.update_settings(user["user_id"], body))
+async def patch_settings(
+    body: SettingsPatch,
+    user: CurrentUser,
+    business: str | None = Query(default=None),
+):
+    name, default_assistant_name = _resolve_settings_business(business)
+    document = await store.update_settings(user["user_id"], body, business=name)
+    document = apply_business_profile(document, name, default_assistant_name)
+    return {**public_settings(document), "business": name}
 
 
 @api_router.get("/me/memories")

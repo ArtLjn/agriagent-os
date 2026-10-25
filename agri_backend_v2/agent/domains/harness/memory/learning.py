@@ -16,16 +16,6 @@ from agent.domains.harness.memory.facts import (
     MAX_FACTS_PER_MEMORY,
     update_atom,
 )
-from agent.domains.harness.memory.personalization import (
-    MAX_MEMORIES,
-    MAX_MEMORY_TEXT,
-    SENSITIVE_PATTERN,
-    MemoryError,
-    now,
-    visible_memories,
-)
-from agent.platforms.persistence.mongo import personalization_store as store
-
 from agent.domains.harness.memory.inference import (
     Candidate,
     ExtractionCheck,
@@ -34,6 +24,16 @@ from agent.domains.harness.memory.inference import (
     normalize_record,
     verify_extraction,
 )
+from agent.domains.harness.memory.personalization import (
+    MAX_MEMORIES,
+    MAX_MEMORY_TEXT,
+    SENSITIVE_PATTERN,
+    MemoryError,
+    apply_business_profile,
+    now,
+    visible_memories,
+)
+from agent.platforms.persistence.mongo import personalization_store as store
 
 logger = logging.getLogger(__name__)
 # 旧 Worker 不识别原子事实，滚动发布期间必须隔离租约集合，不能只在文档加版本号。
@@ -179,6 +179,14 @@ async def apply_candidates(task: dict, candidates: list[Candidate]) -> dict:
             [identifier, hashlib.sha256(f"{identifier}:{c.text}".encode()).hexdigest()]
         )
     doc = await store.load(task["user_id"], memory_ids=list(identifiers))
+    from agent.config import settings
+
+    manifest = settings.plugins.manifest
+    settings_view = apply_business_profile(
+        doc,
+        manifest.name if manifest else None,
+        manifest.assistant_name if manifest else "",
+    )
     explicit = task.get("source_type") == "explicit"
     if (
         (not explicit and not doc["settings"]["auto_learn_enabled"])
@@ -217,7 +225,7 @@ async def apply_candidates(task: dict, candidates: list[Candidate]) -> dict:
             "response.format": "display_format",
             "response.style": "reply_style",
         }.get(topic, topic)
-        if configured_key in doc["field_sources"]:
+        if settings_view["field_sources"].get(configured_key) == "explicit":
             continue
         scope_id = task["farm_uid"] if candidate.scope == "user_farm" else "user"
         memory_id = (

@@ -1,0 +1,9 @@
+[project]
+name = "companion-business"
+version = "0.1.0"
+description = "陪伴关怀业务插件资源（仅 Agent 本地技能）"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.uv]
+package = false

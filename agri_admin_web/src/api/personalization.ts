@@ -28,6 +28,7 @@ export interface PersonalizationSettings {
   memory_generation: number;
   revision: number;
   updated_at: string;
+  business?: string | null;
   field_sources?: Partial<Record<
     | "nickname"
     | "assistant_name"
@@ -166,18 +167,21 @@ export const personalizationApi = {
     const response = await apiClient.post<MemoryRecord>("/agent/me/memories", payload, silentConfig());
     return response.data;
   },
-  getSettings: () =>
+  getSettings: (business?: string | null) =>
     requestWithDemo(
-      () => apiClient.get<PersonalizationSettings>("/agent/me/personalization", silentConfig()),
+      () => apiClient.get<PersonalizationSettings>(
+        "/agent/me/personalization",
+        silentConfig(business ? { params: { business } } : {}),
+      ),
       () => personalizationDemoStore.getSettings(),
     ),
 
-  updateSettings: (payload: PersonalizationUpdatePayload) =>
+  updateSettings: (payload: PersonalizationUpdatePayload, business?: string | null) =>
     requestWithDemo(
       () => apiClient.patch<PersonalizationSettings>(
         "/agent/me/personalization",
         payload,
-        silentConfig(),
+        silentConfig(business ? { params: { business } } : {}),
       ),
       () => personalizationDemoStore.updateSettings(payload),
     ),

@@ -1,26 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Layout, Menu, Button, Tooltip } from 'antd';
+import { Layout, Menu, Button, Tooltip, message } from 'antd';
 import {
+  InfoCircleOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
-  BranchesOutlined,
-  BarChartOutlined,
-  MessageOutlined,
-  FileSearchOutlined,
-  SettingOutlined,
-  TeamOutlined,
   LogoutOutlined,
-  ExperimentOutlined,
-  CloudOutlined,
-  DollarOutlined,
-  FieldTimeOutlined,
-  FormOutlined,
   HomeOutlined,
-  ReadOutlined,
-  RobotOutlined,
-  ToolOutlined,
-  ControlOutlined,
-  DatabaseOutlined,
   UserOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -28,40 +13,16 @@ import { authStore } from '../stores/authStore';
 import { layout, palette } from '../styles/theme';
 import { useThemeMode } from '../theme/themeContext';
 import ThemeToggle from '../components/ThemeToggle';
-import { menuGroups, type AdminMenuIcon } from './adminMenu';
+import BusinessSwitcher from '../components/BusinessSwitcher';
+import { useBusinesses } from '../businesses/businessContext';
+import {
+  PLATFORM_ROUTE_PREFIXES,
+  matchesRoutePrefix,
+  menuGroupsFor,
+} from '../businesses/registry';
+import { iconByName } from './menuIcons';
 
 const { Sider, Content, Header } = Layout;
-
-const iconByName: Record<AdminMenuIcon, React.ReactNode> = {
-  agent: <RobotOutlined />,
-  branches: <BranchesOutlined />,
-  chart: <BarChartOutlined />,
-  cloud: <CloudOutlined />,
-  control: <ControlOutlined />,
-  database: <DatabaseOutlined />,
-  dollar: <DollarOutlined />,
-  experiment: <ExperimentOutlined />,
-  fieldTime: <FieldTimeOutlined />,
-  fileSearch: <FileSearchOutlined />,
-  form: <FormOutlined />,
-  home: <HomeOutlined />,
-  message: <MessageOutlined />,
-  read: <ReadOutlined />,
-  setting: <SettingOutlined />,
-  team: <TeamOutlined />,
-  tool: <ToolOutlined />,
-};
-
-const menuItems = [
-  ...menuGroups.map((group) => ({
-    key: group.key,
-    label: group.label,
-    children: group.children.map((item) => ({
-      ...item,
-      icon: iconByName[item.icon],
-    })),
-  })),
-];
 
 const pageTitles: Record<string, string> = {
   '/dashboard': '仪表盘',
@@ -76,6 +37,9 @@ const pageTitles: Record<string, string> = {
   '/users': '用户管理',
   '/memos': '提醒 / 备忘录',
   '/operations': '业务调试中心',
+  '/businesses': '业务中心',
+  '/companion': '陪伴空间',
+  '/companion/chat': '陪伴对话',
   '/dev/traces': '链路追踪',
   '/dev/tokens': 'Token 看板',
   '/dev/playground': 'Playground',
@@ -90,6 +54,16 @@ const SIDEBAR_COLLAPSE_QUERY = '(max-width: 1200px)';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { mode } = useThemeMode();
+  const {
+    views,
+    selectedName,
+    selectedView,
+    runtimeActive,
+    selectBusiness,
+  } = useBusinesses();
+
   const isFullScreen = location.pathname === '/dev/playground';
   const headerHeight = isFullScreen ? 52 : layout.headerHeight;
   const [sidebarState, setSidebarState] = useState(() => ({
@@ -107,23 +81,58 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     query.addEventListener('change', sync);
     return () => query.removeEventListener('change', sync);
   }, [isFullScreen]);
-  const { mode } = useThemeMode();
-  const navigate = useNavigate();
 
-  const currentTitle = pageTitles[location.pathname] || '田掌柜';
-  const collapseLabel = collapsed ? '展开侧边栏' : '折叠侧边栏';
-  const toggleSidebar = () => setSidebarState((current) => ({ ...current, collapsed: !current.collapsed }));
   const selectedKey = useMemo(() => {
     if (location.pathname.startsWith('/cycles/')) return '/cycles';
     if (location.pathname.startsWith('/crops/system')) return '/crops/system';
     return location.pathname;
   }, [location.pathname]);
+  const currentTitle = pageTitles[selectedKey] || '田掌柜';
+  const collapseLabel = collapsed ? '展开侧边栏' : '折叠侧边栏';
+  const toggleSidebar = () => setSidebarState((current) => ({ ...current, collapsed: !current.collapsed }));
+
+  // 只有“当前启用业务已知且视角不一致”时才阻断业务页面；接口失败时沿用旧行为。
+  const businessAccessBlocked = Boolean(
+    runtimeActive && selectedName && selectedName !== runtimeActive,
+  );
+  const runtimeView = useMemo(
+    () => views.find((view) => view.name === runtimeActive) ?? null,
+    [runtimeActive, views],
+  );
+
+  const menuGroups = useMemo(() => {
+    const combined = menuGroupsFor(selectedView);
+    if (!businessAccessBlocked || !selectedView) return combined;
+    const businessKeys = new Set(selectedView.groups.map((group) => group.key));
+    return combined.map((group) => (
+      businessKeys.has(group.key)
+        ? {
+            ...group,
+            disabled: true,
+            children: group.children.map((item) => ({ ...item, disabled: true })),
+          }
+        : group
+    ));
+  }, [businessAccessBlocked, selectedView]);
+
+  const menuItems = useMemo(() => menuGroups.map((group) => ({
+    key: group.key,
+    label: group.label,
+    disabled: group.disabled,
+    children: group.children.map((item) => ({
+      ...item,
+      icon: iconByName[item.icon],
+    })),
+  })), [menuGroups]);
+
   const activeParentKey = useMemo(() => (
     menuGroups.find((group) => group.children.some((item) => item.key === selectedKey))?.key
-  ), [selectedKey]);
+  ), [menuGroups, selectedKey]);
   const activeGroup = useMemo(() => (
-    menuGroups.find((group) => group.key === activeParentKey) ?? menuGroups[0]
-  ), [activeParentKey]);
+    menuGroups.find((group) => group.key === activeParentKey)
+    ?? menuGroups.find((group) => group.key === 'platform:manage')
+    ?? menuGroups[0]
+  ), [activeParentKey, menuGroups]);
   const collapsedMenuItems = useMemo(() => (
     activeGroup.children.map((item) => ({
       ...item,
@@ -140,6 +149,30 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
   const displayedOpenKeys = collapsed ? [] : menuState.openKeys;
   const visibleMenuItems = collapsed ? collapsedMenuItems : menuItems;
+
+  // 刷新后若保存的视角已不是当前部署业务，业务页面不能继续用当前后端渲染。
+  useEffect(() => {
+    if (!businessAccessBlocked) return;
+    if (!matchesRoutePrefix(location.pathname, PLATFORM_ROUTE_PREFIXES)) {
+      navigate('/businesses', { replace: true });
+    }
+  }, [businessAccessBlocked, location.pathname, navigate]);
+
+  const handleSelectBusiness = async (name: string) => {
+    const nextView = views.find((view) => view.name === name);
+    if (!nextView) return;
+    if (name === selectedName && name === runtimeActive) return;
+
+    const switched = await selectBusiness(name);
+    if (!switched) {
+      message.error('业务切换失败，请确认 Agent 服务可用');
+      return;
+    }
+    if (matchesRoutePrefix(location.pathname, PLATFORM_ROUTE_PREFIXES)) return;
+    if (!matchesRoutePrefix(location.pathname, nextView.routePrefixes)) {
+      navigate(nextView.homePath, { replace: true });
+    }
+  };
 
   return (
     <Layout className={`app-shell${isFullScreen ? ' app-shell--playground' : ''}`} style={{ height: '100dvh', background: 'transparent' }}>
@@ -186,7 +219,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             {!collapsed && (
               <div className="app-brand-copy">
                 <div className="app-brand-name">田掌柜</div>
-                <div className="app-brand-tagline">智能种植运营助手</div>
+                <div className="app-brand-tagline">
+                  {selectedName === 'companion' ? '日常陪伴与关怀' : '智能种植运营助手'}
+                </div>
               </div>
             )}
           </div>
@@ -208,6 +243,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           )}
         </div>
 
+        <BusinessSwitcher collapsed={collapsed} onSelect={handleSelectBusiness} />
+
         <div className="surface-scroll app-sidebar-navigation">
           {collapsed ? (
             <nav className="app-sidebar-collapsed-nav" aria-label={`${activeGroup.label}导航`}>
@@ -219,8 +256,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     aria-current={selectedKey === item.key ? 'page' : undefined}
                     className="app-sidebar-collapsed-nav-item"
                     data-active={selectedKey === item.key}
+                    disabled={item.disabled}
                     icon={item.icon}
-                    onClick={() => navigate(item.key)}
+                    onClick={() => {
+                      if (!item.disabled) navigate(item.key);
+                    }}
                   />
                 </Tooltip>
               ))}
@@ -315,6 +355,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             overflow: isFullScreen ? 'hidden' : 'auto',
           }}
         >
+          {businessAccessBlocked && (
+            <div className="app-business-scope-note" role="status">
+              <InfoCircleOutlined />
+              <span>
+                正在预览「{selectedView?.displayName ?? selectedName}」，当前部署启用的是
+                「{runtimeView?.displayName ?? runtimeActive}」。
+              </span>
+              <Button type="link" size="small" onClick={() => navigate('/businesses')}>
+                业务中心
+              </Button>
+            </div>
+          )}
           {children}
         </Content>
       </Layout>

@@ -1,5 +1,6 @@
 export type AdminMenuIcon =
   | 'agent'
+  | 'appstore'
   | 'branches'
   | 'chart'
   | 'cloud'
@@ -10,6 +11,7 @@ export type AdminMenuIcon =
   | 'fieldTime'
   | 'fileSearch'
   | 'form'
+  | 'heart'
   | 'home'
   | 'message'
   | 'read'
@@ -21,44 +23,30 @@ export interface AdminMenuItem {
   key: string;
   icon: AdminMenuIcon;
   label: string;
+  disabled?: boolean;
 }
 
 export interface AdminMenuGroup {
   key: string;
   icon: AdminMenuIcon;
   label: string;
+  disabled?: boolean;
   children: AdminMenuItem[];
 }
 
-export const menuGroups: AdminMenuGroup[] = [
+export const platformMenuGroups: AdminMenuGroup[] = [
   {
-    key: 'user-ops',
-    icon: 'team',
-    label: '业务运营',
+    key: 'platform:manage',
+    icon: 'appstore',
+    label: '平台管理',
     children: [
-      { key: '/dashboard', icon: 'home', label: '仪表盘' },
+      { key: '/businesses', icon: 'appstore', label: '业务中心' },
       { key: '/users', icon: 'team', label: '用户管理' },
-      { key: '/crops/system', icon: 'read', label: '系统模板' },
-    ],
-  },
-  {
-    key: 'assistant-workbench',
-    icon: 'control',
-    label: '业务调试',
-    children: [
-      { key: '/memos', icon: 'form', label: '提醒 / 备忘录' },
-      { key: '/operations', icon: 'control', label: '业务调试中心' },
-      { key: '/crops', icon: 'read', label: '作物模板' },
-      { key: '/cycles', icon: 'fieldTime', label: '种植周期' },
-      { key: '/logs', icon: 'form', label: '农事日志' },
-      { key: '/costs', icon: 'dollar', label: '成本记账' },
-      { key: '/weather', icon: 'cloud', label: '天气预报' },
-      { key: '/agent', icon: 'agent', label: 'AI 助手' },
       { key: '/assistant-settings', icon: 'setting', label: '助手设置' },
     ],
   },
   {
-    key: 'agent-platform',
+    key: 'platform:agent',
     icon: 'tool',
     label: 'Agent 开发',
     children: [
@@ -68,7 +56,7 @@ export const menuGroups: AdminMenuGroup[] = [
     ],
   },
   {
-    key: 'observability',
+    key: 'platform:observability',
     icon: 'chart',
     label: '运行监控',
     children: [
@@ -77,7 +65,7 @@ export const menuGroups: AdminMenuGroup[] = [
     ],
   },
   {
-    key: 'system-management',
+    key: 'platform:system',
     icon: 'setting',
     label: '系统管理',
     children: [

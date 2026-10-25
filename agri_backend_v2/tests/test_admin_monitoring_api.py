@@ -1,6 +1,7 @@
 """管理端提示词与真实 Token 聚合接口回归。"""
 
 from datetime import UTC, date, datetime
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -10,6 +11,7 @@ from fastapi.testclient import TestClient
 from agent import prompts
 from agent.api import admin_prompts, admin_tokens, api_router
 from agent.platforms.persistence.mongo import token_stats
+from agent.plugins import PluginScan
 
 
 @pytest.fixture
@@ -66,6 +68,101 @@ def test_prompt_reports_cached_version_and_reload(client, admin, monkeypatch, tm
     updated = client.get("/api/v2/admin/prompts").json()["items"][0]
     assert updated["content"] == "新内容"
     assert updated["version"] != item["version"]
+
+
+def test_prompt_preview_switches_business_without_activating_it(
+    client, admin, monkeypatch, tmp_path
+):
+    prompts_dir = tmp_path / "prompts"
+    prompts_dir.mkdir()
+    (prompts_dir / "platform_note.md").write_text("平台提示词", encoding="utf-8")
+    lab_prompt = tmp_path / "lab-system.md"
+    lab_prompt.write_text("实验业务提示词", encoding="utf-8")
+    monkeypatch.setattr(prompts, "_PROMPTS_DIR", prompts_dir)
+    monkeypatch.setattr(prompts, "_cache", {})
+    monkeypatch.setattr(
+        admin_prompts.settings.plugins,
+        "manifest",
+        SimpleNamespace(name="farm"),
+    )
+    monkeypatch.setattr(
+        admin_prompts,
+        "list_plugins",
+        lambda _root: [
+            PluginScan(
+                name="farm",
+                manifest=SimpleNamespace(system_prompt_path=tmp_path / "farm.md"),
+            ),
+            PluginScan(
+                name="lab",
+                manifest=SimpleNamespace(system_prompt_path=lab_prompt),
+            ),
+        ],
+    )
+
+    response = client.get("/api/v2/admin/prompts?business=lab")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["business"] == "lab"
+    assert data["active_business"] == "farm"
+    system = next(item for item in data["items"] if item["name"] == "system")
+    assert system["content"] == "实验业务提示词"
+    assert system["active"] is False
+    assert system["scope"] == "business"
+    assert system["business"] == "lab"
+    platform = next(
+        item for item in data["items"] if item["name"] == "platform_note"
+    )
+    assert platform["scope"] == "platform"
+    assert platform["business"] is None
+
+
+def test_prompt_preview_rejects_unknown_or_invalid_business(
+    client, admin, monkeypatch
+):
+    monkeypatch.setattr(admin_prompts, "list_plugins", lambda _root: [])
+    missing = client.get("/api/v2/admin/prompts?business=missing")
+    assert missing.status_code == 404
+    assert missing.json()["detail"]["code"] == "business_not_found"
+
+    monkeypatch.setattr(
+        admin_prompts,
+        "list_plugins",
+        lambda _root: [
+            PluginScan(
+                name="broken",
+                manifest=None,
+                error_code="plugin_manifest_unknown_fields",
+            )
+        ],
+    )
+    broken = client.get("/api/v2/admin/prompts?business=broken")
+    assert broken.status_code == 409
+    assert broken.json()["detail"]["code"] == "business_manifest_invalid"
+
+
+def test_prompt_reload_rejects_inactive_business(client, admin, monkeypatch):
+    monkeypatch.setattr(
+        admin_prompts.settings.plugins,
+        "manifest",
+        SimpleNamespace(name="farm"),
+    )
+    monkeypatch.setattr(
+        admin_prompts,
+        "list_plugins",
+        lambda _root: [
+            PluginScan(
+                name="lab",
+                manifest=SimpleNamespace(system_prompt_path=__file__),
+            )
+        ],
+    )
+
+    response = client.post("/api/v2/admin/prompts/reload?business=lab")
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "business_not_active"
 
 
 def test_pipeline_uses_beijing_bounds_and_llm_only():

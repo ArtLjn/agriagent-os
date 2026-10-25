@@ -44,7 +44,7 @@ def runtime(monkeypatch, document):
     monkeypatch.setattr(
         service,
         "read_capabilities",
-        lambda: [{"name": "web_search", "description": "查询知识"}],
+        lambda *_: [{"name": "web_search", "description": "查询知识"}],
     )
 
     async def generate(context, instruction):

@@ -21,8 +21,11 @@ import ConfigKeys from './pages/ConfigKeys';
 import Users from './pages/Users';
 import Operations from './pages/Operations';
 import Memos from './pages/Memos';
+import BusinessCenter from './pages/BusinessCenter';
+import CompanionSpace from './pages/Companion';
 import Login from './pages/Login';
 import { authStore } from './stores/authStore';
+import BusinessProvider from './businesses/BusinessProvider';
 import ThemeProvider from './theme/ThemeProvider';
 import { useThemeMode } from './theme/themeContext';
 import { adminThemes } from './theme/antdTheme';
@@ -41,32 +44,37 @@ function ThemedApp() {
     <ConfigProvider locale={zhCN} theme={adminThemes[mode]}>
       <AntdApp>
         <BrowserRouter>
-          <Routes>
-            <Route path="/login" element={<Login onLogin={() => window.location.href = '/'} />} />
-            <Route path="/" element={<AuthGuard><Navigate to="/dashboard" replace /></AuthGuard>} />
-            <Route path="/dashboard" element={<AuthGuard><Dashboard /></AuthGuard>} />
-            <Route path="/users" element={<AuthGuard><Users /></AuthGuard>} />
-            <Route path="/memos" element={<AuthGuard><Memos /></AuthGuard>} />
-            <Route path="/operations" element={<AuthGuard><Operations /></AuthGuard>} />
-            <Route path="/crops" element={<AuthGuard><Crops /></AuthGuard>} />
-            <Route path="/crops/system" element={<AuthGuard><SystemLibrary /></AuthGuard>} />
-            <Route path="/cycles" element={<AuthGuard><Cycles /></AuthGuard>} />
-            <Route path="/cycles/:id" element={<AuthGuard><CycleDetail /></AuthGuard>} />
-            <Route path="/logs" element={<AuthGuard><Logs /></AuthGuard>} />
-            <Route path="/costs" element={<AuthGuard><Costs /></AuthGuard>} />
-            <Route path="/agent" element={<AuthGuard><Agent /></AuthGuard>} />
-            <Route path="/assistant-settings" element={<AuthGuard><AssistantSettings /></AuthGuard>} />
-            <Route path="/weather" element={<AuthGuard><Weather /></AuthGuard>} />
-            <Route path="/dev/traces" element={<AuthGuard><TraceMonitor /></AuthGuard>} />
-            <Route path="/dev/tokens" element={<AuthGuard><TokenDashboard /></AuthGuard>} />
-            <Route path="/dev/playground" element={<AuthGuard><Playground /></AuthGuard>} />
-            <Route path="/dev/data-flywheel" element={<Navigate to="/dev/traces" replace />} />
-            <Route path="/dev/skills" element={<AuthGuard><SkillRegistry /></AuthGuard>} />
-            <Route path="/dev/prompts" element={<AuthGuard><PromptInspector /></AuthGuard>} />
-            <Route path="/dev/config" element={<AuthGuard><ConfigKeys /></AuthGuard>} />
-            <Route path="/dev/simulation" element={<Navigate to="/dev/playground" replace />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+          <BusinessProvider>
+            <Routes>
+              <Route path="/login" element={<Login onLogin={() => window.location.href = '/'} />} />
+              <Route path="/" element={<AuthGuard><Navigate to="/dashboard" replace /></AuthGuard>} />
+              <Route path="/businesses" element={<AuthGuard><BusinessCenter /></AuthGuard>} />
+              <Route path="/companion" element={<AuthGuard><CompanionSpace /></AuthGuard>} />
+              <Route path="/companion/chat" element={<AuthGuard><Agent /></AuthGuard>} />
+              <Route path="/dashboard" element={<AuthGuard><Dashboard /></AuthGuard>} />
+              <Route path="/users" element={<AuthGuard><Users /></AuthGuard>} />
+              <Route path="/memos" element={<AuthGuard><Memos /></AuthGuard>} />
+              <Route path="/operations" element={<AuthGuard><Operations /></AuthGuard>} />
+              <Route path="/crops" element={<AuthGuard><Crops /></AuthGuard>} />
+              <Route path="/crops/system" element={<AuthGuard><SystemLibrary /></AuthGuard>} />
+              <Route path="/cycles" element={<AuthGuard><Cycles /></AuthGuard>} />
+              <Route path="/cycles/:id" element={<AuthGuard><CycleDetail /></AuthGuard>} />
+              <Route path="/logs" element={<AuthGuard><Logs /></AuthGuard>} />
+              <Route path="/costs" element={<AuthGuard><Costs /></AuthGuard>} />
+              <Route path="/agent" element={<AuthGuard><Agent /></AuthGuard>} />
+              <Route path="/assistant-settings" element={<AuthGuard><AssistantSettings /></AuthGuard>} />
+              <Route path="/weather" element={<AuthGuard><Weather /></AuthGuard>} />
+              <Route path="/dev/traces" element={<AuthGuard><TraceMonitor /></AuthGuard>} />
+              <Route path="/dev/tokens" element={<AuthGuard><TokenDashboard /></AuthGuard>} />
+              <Route path="/dev/playground" element={<AuthGuard><Playground /></AuthGuard>} />
+              <Route path="/dev/data-flywheel" element={<Navigate to="/dev/traces" replace />} />
+              <Route path="/dev/skills" element={<AuthGuard><SkillRegistry /></AuthGuard>} />
+              <Route path="/dev/prompts" element={<AuthGuard><PromptInspector /></AuthGuard>} />
+              <Route path="/dev/config" element={<AuthGuard><ConfigKeys /></AuthGuard>} />
+              <Route path="/dev/simulation" element={<Navigate to="/dev/playground" replace />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </BusinessProvider>
         </BrowserRouter>
       </AntdApp>
     </ConfigProvider>

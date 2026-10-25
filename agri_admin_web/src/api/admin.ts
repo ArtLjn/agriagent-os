@@ -603,11 +603,15 @@ export interface PromptItem {
   active: boolean;
   content_length: number;
   content: string;
+  scope?: 'platform' | 'business';
+  business?: string | null;
 }
 
 export interface ListPromptsResponse {
   items: PromptItem[];
   total: number;
+  business?: string | null;
+  active_business?: string | null;
 }
 
 export interface ReloadPromptsResponse {
@@ -615,13 +619,23 @@ export interface ReloadPromptsResponse {
   message: string;
 }
 
-export async function listPrompts(): Promise<ListPromptsResponse> {
-  const res = await apiClient.get<ListPromptsResponse>('/agent/admin/prompts');
+export async function listPrompts(business?: string | null): Promise<ListPromptsResponse> {
+  const res = business
+    ? await apiClient.get<ListPromptsResponse>('/agent/admin/prompts', {
+        params: { business },
+      })
+    : await apiClient.get<ListPromptsResponse>('/agent/admin/prompts');
   return res.data;
 }
 
-export async function reloadPrompts(): Promise<ReloadPromptsResponse> {
-  const res = await apiClient.post<ReloadPromptsResponse>('/agent/admin/prompts/reload');
+export async function reloadPrompts(business?: string | null): Promise<ReloadPromptsResponse> {
+  const res = business
+    ? await apiClient.post<ReloadPromptsResponse>(
+        '/agent/admin/prompts/reload',
+        undefined,
+        { params: { business } },
+      )
+    : await apiClient.post<ReloadPromptsResponse>('/agent/admin/prompts/reload');
   return res.data;
 }
 
